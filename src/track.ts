@@ -16,6 +16,7 @@ import {
   segmentPolylineIntersections,
   resampleClosed,
   chaikinClosed,
+  trimSeamOverlap,
   selfIntersectsClosed,
   polygonArea,
 } from './geometry';
@@ -81,7 +82,9 @@ export function processStroke(raw: Vec[]): StrokeResult {
   if (dist(raw[0], raw[raw.length - 1]) > 0.25 * diag) {
     return { error: 'Контур не замкнут — конец штриха должен вернуться к началу.' };
   }
-  let poly = resampleClosed(raw, 0.5);
+  const maxTrim = Math.max(2, 0.12 * diag); // порог «мелкого» нахлёста концов
+  const closed = trimSeamOverlap(raw, maxTrim);
+  let poly = resampleClosed(closed, 0.5);
   poly = chaikinClosed(poly, 2);
   poly = resampleClosed(poly, 0.5);
   return { poly };

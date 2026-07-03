@@ -79,12 +79,27 @@ function toScreen(e: PointerEvent): Vec {
   return { x: e.clientX - r.left, y: e.clientY - r.top };
 }
 
-function toWorld(e: PointerEvent): Vec {
+function toWorld(e: PointerEvent, liftPx = 0): Vec {
   const p = toScreen(e);
   return {
     x: Math.max(0, Math.min(WORLD_W, p.x / cellPx)),
-    y: Math.max(0, Math.min(WORLD_H, p.y / cellPx)),
+    y: Math.max(0, Math.min(WORLD_H, (p.y - liftPx) / cellPx)),
   };
+}
+
+/** На сколько css-px поднять точку рисования над пальцем, чтобы линию было видно. */
+const TOUCH_DRAW_LIFT = 28;
+
+/**
+ * Смещение точки рисования вверх — только при freehand-рисовании края пальцем.
+ * Протяжка финиша и тап по стрелкам остаются точно под пальцем (лифт = 0).
+ */
+function drawLift(e: PointerEvent): number {
+  return e.pointerType === 'touch' &&
+    mode === 'edit' &&
+    (editor.phase === 'outer' || editor.phase === 'inner')
+    ? TOUCH_DRAW_LIFT
+    : 0;
 }
 
 function refreshCands(): void {
@@ -127,7 +142,7 @@ canvas.addEventListener('pointerdown', (e) => {
     if (touchId !== null) return;
     touchId = e.pointerId;
   }
-  const w = toWorld(e);
+  const w = toWorld(e, drawLift(e));
   if (mode === 'edit') {
     // Пользователь коснулся доски — мир «занят», фиксируем число клеток.
     worldLocked = true;
@@ -154,7 +169,7 @@ canvas.addEventListener('pointerdown', (e) => {
 
 canvas.addEventListener('pointermove', (e) => {
   if (e.pointerType === 'touch' && e.pointerId !== touchId) return;
-  const w = toWorld(e);
+  const w = toWorld(e, drawLift(e));
   if (mode === 'edit') {
     pointerMove(editor, w);
     redraw();
@@ -180,7 +195,7 @@ canvas.addEventListener('pointerup', (e) => {
     touchId = null;
   }
   if (mode === 'edit') {
-    pointerMove(editor, toWorld(e));
+    pointerMove(editor, toWorld(e, drawLift(e)));
     pointerUp(editor);
     updateUI();
     redraw();

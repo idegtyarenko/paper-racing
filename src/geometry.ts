@@ -142,6 +142,40 @@ export function chaikinClosed(poly: Polyline, iterations: number): Polyline {
   return pts;
 }
 
+/**
+ * Подрезка самопересечения на стыке открытого штриха. Ищет пересечение раннего
+ * сегмента (голова) с поздним (хвост); если суммарная длина отбрасываемых концов
+ * не превышает maxTrim — срезает нахлёст, возвращая контур [X, raw[i+1..j]], где
+ * X — точка пересечения. Иначе возвращает исходный штрих без изменений.
+ *
+ * Малый порог отсекает серединные петли (у них большая отбрасываемая дуга) и
+ * оставляет их валидатору — чинится только мелкий нахлёст концов кольца.
+ */
+export function trimSeamOverlap(raw: Vec[], maxTrim: number): Vec[] {
+  const n = raw.length;
+  if (n < 4) return raw;
+  const cum: number[] = [0];
+  for (let i = 0; i < n - 1; i++) cum.push(cum[i] + dist(raw[i], raw[i + 1]));
+  const total = cum[n - 1];
+
+  let best: { i: number; j: number; point: Vec } | null = null;
+  let bestTrim = maxTrim;
+  for (let i = 0; i < n - 1; i++) {
+    if (cum[i] >= bestTrim) break; // голова уже длиннее лучшего — дальше только хуже
+    for (let j = i + 2; j < n - 1; j++) {
+      const trim = cum[i] + (total - cum[j + 1]);
+      if (trim >= bestTrim) continue;
+      const hit = segSegIntersection(raw[i], raw[i + 1], raw[j], raw[j + 1]);
+      if (hit) {
+        best = { i, j, point: hit.point };
+        bestTrim = trim;
+      }
+    }
+  }
+  if (!best) return raw;
+  return [best.point, ...raw.slice(best.i + 1, best.j + 1)];
+}
+
 /** Проверка самопересечения замкнутой полилинии (несмежные рёбра). */
 export function selfIntersectsClosed(poly: Polyline): boolean {
   const n = poly.length;
