@@ -24,6 +24,29 @@
 /* Кнопка с центрированной подписью («← Назад»). */
 .button--center { text-align: center; }
 
+/* Плавающая кнопка подтверждения хода: у нижнего края поля, поверх canvas. */
+.confirm-move {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 5;
+  padding: 12px 28px;
+  min-height: 48px;
+  font-size: 17px;
+  font-weight: 700;
+  color: #fff;
+  background: #0a8a4f;
+  border: none;
+  border-radius: 999px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.confirm-move:active { background: #097843; }
+.confirm-move[hidden] { display: none; }
+
 /* Круглая кнопка-иконка («?» — правила). */
 .icon-button {
   flex: none;

@@ -13,7 +13,7 @@ import {
 } from './editor';
 import { GameState, Candidate, newGame, candidates, applyMove } from './game';
 import { render, AppView } from './render';
-import { bindButtons, updatePanel } from './ui';
+import { bindButtons, updatePanel, showConfirmMove } from './ui';
 
 const canvas = document.getElementById('board') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -87,8 +87,8 @@ function toWorld(e: PointerEvent, liftPx = 0): Vec {
   };
 }
 
-/** На сколько css-px поднять точку рисования над пальцем, чтобы линию было видно. */
-const TOUCH_DRAW_LIFT = 28;
+/** На сколько css-px поднять точку под пальцем, чтобы её было видно (рисование/прицел). */
+const TOUCH_LIFT = 28;
 
 /**
  * Смещение точки рисования вверх — только при freehand-рисовании края пальцем.
@@ -98,14 +98,21 @@ function drawLift(e: PointerEvent): number {
   return e.pointerType === 'touch' &&
     mode === 'edit' &&
     (editor.phase === 'outer' || editor.phase === 'inner')
-    ? TOUCH_DRAW_LIFT
+    ? TOUCH_LIFT
     : 0;
+}
+
+/** Экранная точка прицела для тач-гонки: положение пальца, поднятое на TOUCH_LIFT. */
+function aimScreen(e: PointerEvent): Vec {
+  const s = toScreen(e);
+  return { x: s.x, y: s.y - TOUCH_LIFT };
 }
 
 function refreshCands(): void {
   hover = null;
   selected = null;
   loupe = null;
+  showConfirmMove(false);
   if (game && game.phase === 'race' && game.players[game.current].skipTurns === 0) {
     cands = candidates(game);
   } else {
@@ -152,9 +159,10 @@ canvas.addEventListener('pointerdown', (e) => {
     updateUI();
   } else if (game && game.phase === 'race') {
     if (touch) {
-      // Прицеливание: показать лупу и подсветить ближайшего кандидата.
-      hover = findCandidate(w, touchTol());
-      loupe = toScreen(e);
+      // Прицеливание: точка прицела поднята над пальцем (как при рисовании),
+      // лупа центрируется на ней и подсвечивает ближайшего кандидата.
+      hover = findCandidate(toWorld(e, TOUCH_LIFT), touchTol());
+      loupe = aimScreen(e);
     } else {
       const c = findCandidate(w);
       if (c) {
@@ -175,8 +183,8 @@ canvas.addEventListener('pointermove', (e) => {
     redraw();
   } else if (e.pointerType === 'touch') {
     if (loupe) {
-      hover = findCandidate(w, touchTol());
-      loupe = toScreen(e);
+      hover = findCandidate(toWorld(e, TOUCH_LIFT), touchTol());
+      loupe = aimScreen(e);
       redraw();
     }
   } else {
@@ -200,18 +208,12 @@ canvas.addEventListener('pointerup', (e) => {
     updateUI();
     redraw();
   } else if (touch && game && game.phase === 'race') {
-    // Отпускание пальца: тот же кандидат второй раз подряд — ход;
-    // иначе — выбор с превью траектории; мимо кандидатов — сброс выбора.
+    // Отпускание пальца: выбрать кандидата (превью траектории + плавающая
+    // кнопка «Ходить»); мимо кандидатов — сброс выбора. Подтверждение — кнопкой.
     loupe = null;
     hover = null;
-    const c = findCandidate(toWorld(e), touchTol());
-    if (c && c === selected) {
-      applyMove(game, c);
-      refreshCands();
-      updateUI();
-    } else {
-      selected = c;
-    }
+    selected = findCandidate(toWorld(e, TOUCH_LIFT), touchTol());
+    showConfirmMove(!!selected);
     redraw();
   }
 });
@@ -248,6 +250,13 @@ bindButtons({
     updateUI();
     redraw();
   },
+  onConfirmMove: () => {
+    if (!selected || !game || game.phase !== 'race') return;
+    applyMove(game, selected);
+    refreshCands();
+    updateUI();
+    redraw();
+  },
   onNewRace: () => {
     if (!game) return;
     game = newGame(game.track);
@@ -260,6 +269,8 @@ bindButtons({
     game = null;
     cands = null;
     hover = null;
+    selected = null;
+    showConfirmMove(false);
     editor = newEditor();
     // Снять фиксацию: новая трасса берёт пропорции под текущую ориентацию.
     worldLocked = false;

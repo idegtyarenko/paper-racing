@@ -12,6 +12,7 @@ const raceButtons = document.getElementById('raceButtons')!;
 const backBtn = document.getElementById('backBtn') as HTMLButtonElement;
 const helpBtn = document.getElementById('helpBtn') as HTMLButtonElement;
 const newRaceBtn = document.getElementById('newRace') as HTMLButtonElement;
+const confirmMoveBtn = document.getElementById('confirmMove') as HTMLButtonElement;
 const overlay = document.getElementById('overlay')!;
 const rulesSheet = document.getElementById('rulesSheet')!;
 const raceDialog = document.getElementById('raceDialog')!;
@@ -24,8 +25,14 @@ const p1El = document.getElementById('p1')!;
 
 export interface PanelHandlers {
   onBack: () => void;
+  onConfirmMove: () => void;
   onNewRace: () => void;
   onNewTrack: () => void;
+}
+
+/** Показать/спрятать плавающую кнопку подтверждения хода (тач-прицеливание). */
+export function showConfirmMove(show: boolean): void {
+  confirmMoveBtn.hidden = !show;
 }
 
 /** Показать одну шторку оверлея, спрятав остальные. */
@@ -42,6 +49,7 @@ function closeOverlay(): void {
 
 export function bindButtons(h: PanelHandlers): void {
   backBtn.addEventListener('click', h.onBack);
+  confirmMoveBtn.addEventListener('click', h.onConfirmMove);
   helpBtn.addEventListener('click', () => openSheet(rulesSheet));
   newRaceBtn.addEventListener('click', () => openSheet(raceDialog));
   dlgSameTrack.addEventListener('click', () => { closeOverlay(); h.onNewRace(); });
@@ -143,7 +151,7 @@ export function updatePanel(
     ? ' Игрок 1 уже финишировал — нужно закончить дальше за линией!'
     : '';
   const hint = coarsePointer
-    ? 'Коснитесь точки, затем коснитесь её ещё раз для подтверждения.'
+    ? 'Коснитесь точки, затем нажмите «Ходить» для подтверждения.'
     : 'Кликните по одной из точек.';
   statusEl.textContent = `Ход: ${cur.name}. ${hint}${warn}`;
 }

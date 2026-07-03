@@ -6,6 +6,7 @@
 }
 
 .app__board {
+  position: relative; /* якорь для плавающей кнопки подтверждения хода */
   flex: 1;
   min-width: 0;
   background: #fbfaf4;
