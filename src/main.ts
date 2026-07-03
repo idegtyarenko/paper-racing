@@ -62,7 +62,10 @@ function toScreen(e: PointerEvent): Vec {
 
 function toWorld(e: PointerEvent): Vec {
   const p = toScreen(e);
-  return { x: p.x / cellPx, y: p.y / cellPx };
+  return {
+    x: Math.max(0, Math.min(WORLD_W, p.x / cellPx)),
+    y: Math.max(0, Math.min(WORLD_H, p.y / cellPx)),
+  };
 }
 
 function refreshCands(): void {
