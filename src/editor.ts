@@ -1,0 +1,206 @@
+// Фаза рисования трассы: стейт-машина outer → inner → finish → direction → ready.
+
+import {
+  Vec,
+  Polyline,
+  add,
+  sub,
+  scale,
+  normalize,
+  dist,
+  lerp,
+  distPointToSegment,
+} from './geometry';
+import {
+  FinishLine,
+  processStroke,
+  validateOuter,
+  validateInner,
+  clipFinishLine,
+} from './track';
+
+export type EditorPhase = 'outer' | 'inner' | 'finish' | 'direction' | 'ready';
+
+export interface Arrow {
+  from: Vec;
+  tip: Vec;
+  forward: Vec;
+}
+
+export interface EditorState {
+  phase: EditorPhase;
+  outer: Polyline | null;
+  inner: Polyline | null;
+  finish: FinishLine | null;
+  forward: Vec | null;
+  arrows: [Arrow, Arrow] | null;
+  /** Сырой freehand-штрих во время рисования края. */
+  stroke: Vec[];
+  drawing: boolean;
+  /** Протягивание финишной линии. */
+  dragStart: Vec | null;
+  dragEnd: Vec | null;
+  message: string;
+  error: boolean;
+}
+
+const MSG: Record<EditorPhase, string> = {
+  outer:
+    'Шаг 1 из 4. Нарисуйте ВНЕШНИЙ край трассы: зажмите кнопку мыши и обведите ' +
+    'замкнутый контур одним движением.',
+  inner: 'Шаг 2 из 4. Теперь нарисуйте ВНУТРЕННИЙ край трассы — внутри внешнего.',
+  finish:
+    'Шаг 3 из 4. Проведите линию старта/финиша поперёк дороги: зажмите кнопку ' +
+    'мыши с одной стороны дороги и отпустите с другой.',
+  direction: 'Шаг 4 из 4. Кликните по одной из зелёных стрелок — в какую сторону ехать.',
+  ready: 'Трасса готова! Нажмите «Старт!», чтобы начать гонку.',
+};
+
+export function newEditor(): EditorState {
+  return {
+    phase: 'outer',
+    outer: null,
+    inner: null,
+    finish: null,
+    forward: null,
+    arrows: null,
+    stroke: [],
+    drawing: false,
+    dragStart: null,
+    dragEnd: null,
+    message: MSG.outer,
+    error: false,
+  };
+}
+
+function setPhase(st: EditorState, phase: EditorPhase): void {
+  st.phase = phase;
+  st.message = MSG[phase];
+  st.error = false;
+}
+
+function fail(st: EditorState, message: string): void {
+  st.message = message;
+  st.error = true;
+}
+
+export function pointerDown(st: EditorState, p: Vec): void {
+  if (st.phase === 'outer' || st.phase === 'inner') {
+    st.drawing = true;
+    st.stroke = [p];
+  } else if (st.phase === 'finish') {
+    st.dragStart = p;
+    st.dragEnd = p;
+  } else if (st.phase === 'direction' && st.arrows) {
+    for (const arrow of st.arrows) {
+      if (distPointToSegment(p, arrow.from, arrow.tip) < 1.2) {
+        st.forward = arrow.forward;
+        setPhase(st, 'ready');
+        return;
+      }
+    }
+  }
+}
+
+export function pointerMove(st: EditorState, p: Vec): void {
+  if (st.drawing) {
+    const last = st.stroke[st.stroke.length - 1];
+    if (!last || dist(last, p) > 0.15) st.stroke.push(p);
+  } else if (st.phase === 'finish' && st.dragStart) {
+    st.dragEnd = p;
+  }
+}
+
+export function pointerUp(st: EditorState): void {
+  if (st.drawing) {
+    st.drawing = false;
+    const raw = st.stroke;
+    st.stroke = [];
+    const res = processStroke(raw);
+    if ('error' in res) {
+      fail(st, res.error);
+      return;
+    }
+    if (st.phase === 'outer') {
+      const err = validateOuter(res.poly);
+      if (err) {
+        fail(st, err);
+        return;
+      }
+      st.outer = res.poly;
+      setPhase(st, 'inner');
+    } else if (st.phase === 'inner' && st.outer) {
+      const err = validateInner(res.poly, st.outer);
+      if (err) {
+        fail(st, err);
+        return;
+      }
+      st.inner = res.poly;
+      setPhase(st, 'finish');
+    }
+  } else if (st.phase === 'finish' && st.dragStart && st.dragEnd) {
+    const a = st.dragStart;
+    const b = st.dragEnd;
+    st.dragStart = null;
+    st.dragEnd = null;
+    if (dist(a, b) < 1) {
+      fail(st, 'Линия слишком короткая — протяните её через всю дорогу.');
+      return;
+    }
+    const finish = clipFinishLine(a, b, st.outer!, st.inner!);
+    if (!finish) {
+      fail(st, 'Линия должна пересекать дорогу от края до края.');
+      return;
+    }
+    st.finish = finish;
+    computeArrows(st);
+    setPhase(st, 'direction');
+  }
+}
+
+function computeArrows(st: EditorState): void {
+  const f = st.finish!;
+  const m = lerp(f.a, f.b, 0.5);
+  const d = normalize(sub(f.b, f.a));
+  const n = { x: -d.y, y: d.x };
+  st.arrows = [
+    { from: add(m, scale(n, 1.2)), tip: add(m, scale(n, 4)), forward: n },
+    { from: add(m, scale(n, -1.2)), tip: add(m, scale(n, -4)), forward: scale(n, -1) },
+  ];
+}
+
+export function resetOuter(st: EditorState): void {
+  st.outer = null;
+  st.inner = null;
+  st.finish = null;
+  st.forward = null;
+  st.arrows = null;
+  st.drawing = false;
+  st.stroke = [];
+  st.dragStart = null;
+  st.dragEnd = null;
+  setPhase(st, 'outer');
+}
+
+export function resetInner(st: EditorState): void {
+  if (!st.outer) return;
+  st.inner = null;
+  st.finish = null;
+  st.forward = null;
+  st.arrows = null;
+  st.drawing = false;
+  st.stroke = [];
+  st.dragStart = null;
+  st.dragEnd = null;
+  setPhase(st, 'inner');
+}
+
+export function resetFinish(st: EditorState): void {
+  if (!st.inner) return;
+  st.finish = null;
+  st.forward = null;
+  st.arrows = null;
+  st.dragStart = null;
+  st.dragEnd = null;
+  setPhase(st, 'finish');
+}

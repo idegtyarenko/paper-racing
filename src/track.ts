@@ -1,0 +1,223 @@
+// Модель трассы: обработка нарисованных штрихов, валидация, финализация.
+
+import {
+  Vec,
+  Polyline,
+  add,
+  sub,
+  dot,
+  dist,
+  lerp,
+  scale,
+  normalize,
+  pointInPolygon,
+  distPointToPolyline,
+  distPointToSegment,
+  segmentPolylineIntersections,
+  resampleClosed,
+  chaikinClosed,
+  selfIntersectsClosed,
+  polygonArea,
+} from './geometry';
+
+export const WORLD_W = 64;
+export const WORLD_H = 40;
+
+/** Зазор до стенки: узлы ближе к краю не считаются частью дороги. */
+const WALL_CLEARANCE = 0.15;
+
+export interface FinishLine {
+  a: Vec;
+  b: Vec;
+}
+
+export interface Track {
+  outer: Polyline;
+  inner: Polyline;
+  finish: FinishLine;
+  /** Единичная нормаль финишной линии в направлении гонки. */
+  forward: Vec;
+  /** Узлы сетки, лежащие на дороге (ключи — см. key()). */
+  inside: Set<number>;
+  /** Стартовые узлы двух игроков, строго позади финишной линии. */
+  startPoints: [Vec, Vec];
+}
+
+const KEY_OFFSET = 128;
+
+export const key = (x: number, y: number): number =>
+  (x + KEY_OFFSET) * 4096 + (y + KEY_OFFSET);
+
+export const unkey = (k: number): Vec => ({
+  x: Math.floor(k / 4096) - KEY_OFFSET,
+  y: (k % 4096) - KEY_OFFSET,
+});
+
+export type StrokeResult = { poly: Polyline } | { error: string };
+
+/** Замыкание, ресемплинг и сглаживание сырого freehand-штриха. */
+export function processStroke(raw: Vec[]): StrokeResult {
+  if (raw.length < 8) {
+    return { error: 'Штрих слишком короткий — обведите замкнутый контур одним движением.' };
+  }
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of raw) {
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
+  }
+  const diag = Math.hypot(maxX - minX, maxY - minY);
+  if (diag < 4) {
+    return { error: 'Контур слишком маленький — нарисуйте крупнее.' };
+  }
+  if (dist(raw[0], raw[raw.length - 1]) > 0.25 * diag) {
+    return { error: 'Контур не замкнут — конец штриха должен вернуться к началу.' };
+  }
+  let poly = resampleClosed(raw, 0.5);
+  poly = chaikinClosed(poly, 2);
+  poly = resampleClosed(poly, 0.5);
+  return { poly };
+}
+
+export function validateOuter(outer: Polyline): string | null {
+  if (selfIntersectsClosed(outer)) {
+    return 'Внешний край пересекает сам себя — перерисуйте его.';
+  }
+  if (polygonArea(outer) < 100) {
+    return 'Трасса слишком маленькая — нарисуйте внешний край крупнее.';
+  }
+  return null;
+}
+
+export function validateInner(inner: Polyline, outer: Polyline): string | null {
+  if (selfIntersectsClosed(inner)) {
+    return 'Внутренний край пересекает сам себя — перерисуйте его.';
+  }
+  for (const p of inner) {
+    if (!pointInPolygon(p, outer)) {
+      return 'Внутренний край должен быть целиком внутри внешнего.';
+    }
+  }
+  for (let i = 0; i < inner.length; i++) {
+    const a = inner[i];
+    const b = inner[(i + 1) % inner.length];
+    if (segmentPolylineIntersections(a, b, outer).length > 0) {
+      return 'Края трассы пересекаются — перерисуйте внутренний край.';
+    }
+  }
+  return null;
+}
+
+/** Точка (не обязательно узел) лежит на дороге между краями. */
+export function onRoad(p: Vec, outer: Polyline, inner: Polyline): boolean {
+  return pointInPolygon(p, outer) && !pointInPolygon(p, inner);
+}
+
+function isRoadLatticePoint(p: Vec, outer: Polyline, inner: Polyline): boolean {
+  return (
+    onRoad(p, outer, inner) &&
+    distPointToPolyline(p, outer) > WALL_CLEARANCE &&
+    distPointToPolyline(p, inner) > WALL_CLEARANCE
+  );
+}
+
+/**
+ * Строит финишную линию по протяжке пользователя: линия продлевается в обе
+ * стороны, из пересечений с краями берётся участок дороги, содержащий
+ * середину протяжки. Концы выносятся на 0.25 клетки за стенки, чтобы закрыть
+ * численные щели. Протяжку не обязательно вести точно от стенки до стенки —
+ * достаточно задать направление поперёк дороги.
+ */
+export function clipFinishLine(
+  a: Vec,
+  b: Vec,
+  outer: Polyline,
+  inner: Polyline,
+): FinishLine | null {
+  const d = normalize(sub(b, a));
+  if (d.x === 0 && d.y === 0) return null;
+  const EXT = 200;
+  const A = sub(a, scale(d, EXT));
+  const B = add(b, scale(d, EXT));
+  const hits = [
+    ...segmentPolylineIntersections(A, B, outer),
+    ...segmentPolylineIntersections(A, B, inner),
+  ].sort((x, y) => x.t - y.t);
+  const mid = lerp(a, b, 0.5);
+  const tMid = dot(sub(mid, A), d) / dist(A, B);
+  for (let i = 0; i + 1 < hits.length; i++) {
+    if (hits[i].t <= tMid && tMid <= hits[i + 1].t) {
+      const p1 = hits[i].point;
+      const p2 = hits[i + 1].point;
+      if (dist(p1, p2) < 1) return null;
+      if (!onRoad(lerp(p1, p2, 0.5), outer, inner)) return null;
+      return { a: sub(p1, scale(d, 0.25)), b: add(p2, scale(d, 0.25)) };
+    }
+  }
+  return null;
+}
+
+/** Знаковое расстояние точки до финишной линии вдоль направления гонки. */
+export function sideOfFinish(track: Pick<Track, 'finish' | 'forward'>, p: Vec): number {
+  return dot(sub(p, track.finish.a), track.forward);
+}
+
+export type FinalizeResult = { track: Track } | { error: string };
+
+export function finalizeTrack(
+  outer: Polyline,
+  inner: Polyline,
+  finish: FinishLine,
+  forward: Vec,
+): FinalizeResult {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of outer) {
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
+  }
+  const x0 = Math.max(0, Math.floor(minX));
+  const x1 = Math.min(WORLD_W, Math.ceil(maxX));
+  const y0 = Math.max(0, Math.floor(minY));
+  const y1 = Math.min(WORLD_H, Math.ceil(maxY));
+
+  const inside = new Set<number>();
+  for (let x = x0; x <= x1; x++) {
+    for (let y = y0; y <= y1; y++) {
+      if (isRoadLatticePoint({ x, y }, outer, inner)) inside.add(key(x, y));
+    }
+  }
+  if (inside.size < 30) {
+    return {
+      error:
+        'Дорога слишком узкая: внутри трассы почти нет узлов сетки. ' +
+        'Перерисуйте края, оставив между ними больше места.',
+    };
+  }
+
+  const behind: Vec[] = [];
+  inside.forEach((k) => {
+    const p = unkey(k);
+    if (sideOfFinish({ finish, forward }, p) < -1e-9) behind.push(p);
+  });
+  behind.sort((p, q) => {
+    const dp = distPointToSegment(p, finish.a, finish.b);
+    const dq = distPointToSegment(q, finish.a, finish.b);
+    return dp - dq || p.y - q.y || p.x - q.x;
+  });
+  if (behind.length < 2) {
+    return { error: 'Позади стартовой линии нет места для двух болидов — сдвиньте линию.' };
+  }
+  return {
+    track: {
+      outer,
+      inner,
+      finish,
+      forward,
+      inside,
+      startPoints: [behind[0], behind[1]],
+    },
+  };
+}
