@@ -2,7 +2,7 @@
 
 import './styles/index.css';
 import { Vec, dist } from './geometry';
-import { WORLD_W, WORLD_H, finalizeTrack, setWorldSize } from './track';
+import { Track, WORLD_W, WORLD_H, finalizeTrack, setWorldSize } from './track';
 import {
   newEditor,
   pointerDown,
@@ -13,14 +13,21 @@ import {
 } from './editor';
 import { GameState, Candidate, newGame, candidates, applyMove } from './game';
 import { render, AppView } from './render';
-import { bindButtons, updatePanel, showConfirmMove } from './ui';
+import { bindButtons, updatePanel, showConfirmMove, PanelMode } from './ui';
 
 const canvas = document.getElementById('board') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
 const wrap = document.querySelector('.app__board')!;
 
-let mode: 'edit' | 'race' = 'edit';
+let mode: PanelMode = 'edit';
 let editor = newEditor();
+/**
+ * Готовая трасса, ожидающая выбора числа игроков (шаг «players»). Приходит либо
+ * из редактора после выбора направления, либо из «Новая гонка → та же трасса».
+ */
+let raceTrack: Track | null = null;
+/** Куда вернуться из шага выбора игроков по «Назад»: в редактор или в гонку. */
+let playersReturn: 'edit' | 'race' = 'edit';
 let game: GameState | null = null;
 let cands: Candidate[] | null = null;
 let hover: Candidate | null = null;
@@ -66,12 +73,14 @@ function resize(): void {
 }
 
 function redraw(): void {
-  const app: AppView = { mode, editor, game, cands, hover, selected, loupe, cellPx };
+  // Шаг выбора игроков рисуется как редактор: показываем готовую трассу-превью.
+  const viewMode = mode === 'race' ? 'race' : 'edit';
+  const app: AppView = { mode: viewMode, editor, game, cands, hover, selected, loupe, cellPx };
   render(ctx, app);
 }
 
 function updateUI(): void {
-  updatePanel(mode, editor, game);
+  updatePanel(mode, editor, game, raceTrack?.startPoints.length ?? 6);
 }
 
 function toScreen(e: PointerEvent): Vec {
@@ -155,7 +164,7 @@ canvas.addEventListener('pointerdown', (e) => {
     worldLocked = true;
     const arrowTol = touch ? Math.max(1.2, 24 / cellPx) : 1.2;
     pointerDown(editor, w, arrowTol);
-    if (editor.phase === 'ready') { startRace(); return; }
+    if (editor.phase === 'ready') { goToPlayers('edit'); return; }
     updateUI();
   } else if (game && game.phase === 'race') {
     if (touch) {
@@ -227,17 +236,37 @@ canvas.addEventListener('pointercancel', (e) => {
   redraw();
 });
 
-function startRace(): void {
-  if (editor.phase !== 'ready') return;
-  const res = finalizeTrack(editor.outer!, editor.inner!, editor.finish!, editor.forward!);
-  if ('error' in res) {
-    editor.message = res.error;
-    editor.error = true;
-    updateUI();
-    redraw();
-    return;
+/**
+ * Перейти к шагу выбора числа игроков. Из редактора («edit») сначала
+ * финализируем нарисованную трассу; если это не удалось — показываем ошибку и
+ * остаёмся в редакторе. Из гонки («race», кнопка «та же трасса») берём готовую
+ * трассу текущей гонки.
+ */
+function goToPlayers(from: 'edit' | 'race'): void {
+  if (from === 'edit') {
+    const res = finalizeTrack(editor.outer!, editor.inner!, editor.finish!, editor.forward!);
+    if ('error' in res) {
+      editor.message = res.error;
+      editor.error = true;
+      updateUI();
+      redraw();
+      return;
+    }
+    raceTrack = res.track;
+  } else {
+    if (!game) return;
+    raceTrack = game.track;
   }
-  game = newGame(res.track);
+  playersReturn = from;
+  mode = 'players';
+  updateUI();
+  redraw();
+}
+
+/** Выбрано число игроков — стартуем гонку на подготовленной трассе. */
+function startRace(playerCount: number): void {
+  if (!raceTrack) return;
+  game = newGame(raceTrack, playerCount);
   mode = 'race';
   refreshCands();
   updateUI();
@@ -257,16 +286,25 @@ bindButtons({
     updateUI();
     redraw();
   },
-  onNewRace: () => {
-    if (!game) return;
-    game = newGame(game.track);
-    refreshCands();
+  onChooseSameTrack: () => goToPlayers('race'),
+  onPlayersBack: () => {
+    if (playersReturn === 'race') {
+      // Вернуться к текущей гонке без изменений.
+      mode = 'race';
+    } else {
+      // Вернуться в редактор на шаг выбора направления.
+      mode = 'edit';
+      stepBack(editor); // ready → direction
+    }
+    raceTrack = null;
     updateUI();
     redraw();
   },
+  onPlayerCount: (n) => startRace(n),
   onNewTrack: () => {
     mode = 'edit';
     game = null;
+    raceTrack = null;
     cands = null;
     hover = null;
     selected = null;

@@ -37,13 +37,31 @@ export const WIN_CROSSINGS = 2;
 
 export interface GameState {
   track: Track;
-  players: [Player, Player];
-  current: 0 | 1;
+  players: Player[];
+  current: number;
   phase: "race" | "over";
-  winner: 0 | 1 | "draw" | null;
-  /** Игрок 0 финишировал в этом раунде; игрок 1 ещё доигрывает свой ход. */
-  pendingWinner: 0 | null;
+  winner: number | "draw" | null;
+  /**
+   * Сколько ходов осталось доиграть в решающем круге. Пока никто не финишировал —
+   * null. Как только кто-то пересёк финиш, остальные игроки этого же круга
+   * доигрывают свои ходы (это число), после чего победитель определяется по
+   * глубине заезда за линию среди всех финишировавших в решающем круге.
+   */
+  finalTurnsLeft: number | null;
 }
+
+/** Цвета и имена болидов по индексу игрока (до шести участников). */
+const COLORS = [
+  "#c62828",
+  "#1565c0",
+  "#2e7d32",
+  "#ef6c00",
+  "#6a1b9a",
+  "#00838f",
+];
+
+export const MAX_PLAYERS = COLORS.length;
+export const MIN_PLAYERS = 2;
 
 export interface Candidate {
   target: Vec;
@@ -54,10 +72,14 @@ export interface Candidate {
   inertial: boolean;
 }
 
-export function newGame(track: Track): GameState {
-  const mk = (i: 0 | 1): Player => ({
+export function newGame(track: Track, playerCount = 2): GameState {
+  const n = Math.max(
+    MIN_PLAYERS,
+    Math.min(MAX_PLAYERS, playerCount, track.startPoints.length),
+  );
+  const mk = (i: number): Player => ({
     name: `Игрок ${i + 1}`,
-    color: i === 0 ? "#c62828" : "#1565c0",
+    color: COLORS[i],
     pos: { ...track.startPoints[i] },
     vel: { x: 0, y: 0 },
     trail: [],
@@ -68,11 +90,11 @@ export function newGame(track: Track): GameState {
   });
   return {
     track,
-    players: [mk(0), mk(1)],
+    players: Array.from({ length: n }, (_, i) => mk(i)),
     current: 0,
     phase: "race",
     winner: null,
-    pendingWinner: null,
+    finalTurnsLeft: null,
   };
 }
 
@@ -109,14 +131,14 @@ function moveCrashes(track: Track, from: Vec, to: Vec): boolean {
 
 export function candidates(state: GameState): Candidate[] {
   const p = state.players[state.current];
-  const opp = state.players[1 - state.current];
+  const occupied = otherPositions(state);
   const out: Candidate[] = [];
   for (let ay = -1; ay <= 1; ay++) {
     for (let ax = -1; ax <= 1; ax++) {
       const target = { x: p.pos.x + p.vel.x + ax, y: p.pos.y + p.vel.y + ay };
       out.push({
         target,
-        blocked: target.x === opp.pos.x && target.y === opp.pos.y,
+        blocked: occupied.has(key(target.x, target.y)),
         crash: moveCrashes(state.track, p.pos, target),
         inertial: ax === 0 && ay === 0,
       });
@@ -125,13 +147,21 @@ export function candidates(state: GameState): Candidate[] {
   return out;
 }
 
+/** Клетки, занятые всеми игроками, кроме ходящего сейчас. */
+function otherPositions(state: GameState): Set<number> {
+  const occupied = new Set<number>();
+  state.players.forEach((pl, i) => {
+    if (i !== state.current) occupied.add(key(pl.pos.x, pl.pos.y));
+  });
+  return occupied;
+}
+
 function nearestFreeInsidePoint(state: GameState, q: Vec): Vec {
-  const opp = state.players[1 - state.current];
-  const oppKey = key(opp.pos.x, opp.pos.y);
+  const occupied = otherPositions(state);
   let best: Vec | null = null;
   let bestD = Infinity;
   state.track.inside.forEach((k) => {
-    if (k === oppKey) return;
+    if (occupied.has(k)) return;
     const p = unkey(k);
     const d = (p.x - q.x) ** 2 + (p.y - q.y) ** 2;
     const better =
@@ -207,43 +237,58 @@ export function applyMove(state: GameState, cand: Candidate): void {
 }
 
 /**
- * Смена хода и определение победителя. Игрок 0 всегда ходит первым в раунде.
- * Если он финишировал, игрок 1 доигрывает свой ход того же раунда — при
- * двойном финише сравнивается перпендикулярное расстояние за линией.
+ * Смена хода и определение победителя. Игроки ходят по кругу в порядке индексов.
+ * Как только кто-то финишировал, оставшиеся игроки этого же круга доигрывают
+ * свои ходы (те, кто ходил раньше финишировавшего, свой шанс в этом круге уже
+ * использовали). После этого среди всех финишировавших в решающем круге
+ * побеждает заехавший дальше за линию; при равенстве — ничья.
  * Вынужденные пропуски после аварии проходят автоматически: если ход перешёл
  * к игроку, который ещё отбывает пропуск, он тратит один пропуск и ход сразу
  * уходит дальше — участнику ничего нажимать не нужно.
  */
 function afterAction(state: GameState): void {
+  const n = state.players.length;
   const i = state.current;
-  const p = state.players[i];
-  const finished = p.crossings >= WIN_CROSSINGS;
+  const finished = state.players[i].crossings >= WIN_CROSSINGS;
 
-  if (i === 0) {
-    if (finished) state.pendingWinner = 0;
-    state.current = 1;
-  } else {
-    if (state.pendingWinner === 0) {
-      if (finished) {
-        const o0 = state.players[0].finishOvershoot ?? 0;
-        const o1 = p.finishOvershoot ?? 0;
-        state.winner = o1 > o0 ? 1 : o0 > o1 ? 0 : "draw";
-      } else {
-        state.winner = 0;
-      }
-      state.phase = "over";
-    } else if (finished) {
-      state.winner = 1;
-      state.phase = "over";
+  if (state.finalTurnsLeft !== null) {
+    // Решающий круг уже идёт: этот ход укоротил число оставшихся.
+    state.finalTurnsLeft -= 1;
+    if (state.finalTurnsLeft <= 0) {
+      decideWinner(state);
+      return;
     }
-    state.current = 0;
-  }
-
-  if (state.phase === "race") {
-    const next = state.players[state.current];
-    if (next.skipTurns > 0) {
-      next.skipTurns -= 1;
-      afterAction(state);
+  } else if (finished) {
+    // Первый финиш: остальные игроки круга (после текущего) доигрывают.
+    state.finalTurnsLeft = n - 1 - i;
+    if (state.finalTurnsLeft <= 0) {
+      decideWinner(state);
+      return;
     }
   }
+
+  state.current = (i + 1) % n;
+  const next = state.players[state.current];
+  if (next.skipTurns > 0) {
+    next.skipTurns -= 1;
+    afterAction(state);
+  }
+}
+
+/** Победитель решающего круга — максимальный заезд за линию среди финишировавших. */
+function decideWinner(state: GameState): void {
+  state.phase = "over";
+  let best = -Infinity;
+  let winner: number | "draw" | null = null;
+  state.players.forEach((p, i) => {
+    if (p.crossings < WIN_CROSSINGS) return;
+    const o = p.finishOvershoot ?? 0;
+    if (o > best + 1e-9) {
+      best = o;
+      winner = i;
+    } else if (Math.abs(o - best) <= 1e-9) {
+      winner = "draw";
+    }
+  });
+  state.winner = winner;
 }

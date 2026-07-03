@@ -20,13 +20,21 @@
       <div id="editButtons" class="panel__group">
         <button id="backBtn" class="button button--center">← Назад</button>
       </div>
+      <div id="playersButtons" class="panel__group" hidden>
+        <div id="playerCount" class="players-select">
+          <button type="button" class="count-btn" data-count="2">2</button>
+          <button type="button" class="count-btn" data-count="3">3</button>
+          <button type="button" class="count-btn" data-count="4">4</button>
+          <button type="button" class="count-btn" data-count="5">5</button>
+          <button type="button" class="count-btn" data-count="6">6</button>
+        </div>
+        <button id="playersBack" class="button button--center">← Назад</button>
+      </div>
       <div id="raceButtons" class="panel__group" hidden>
         <div class="winner">
           <div class="winner__trophy">🏆</div>
           <div class="winner__title"></div>
         </div>
-        <div class="player-card" id="p0"></div>
-        <div class="player-card" id="p1"></div>
         <button id="newRace" class="button">🔄 Новая гонка</button>
       </div>
     </aside>

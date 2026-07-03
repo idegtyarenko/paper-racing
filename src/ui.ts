@@ -8,8 +8,10 @@ const statusEl = document.querySelector('.status')!;
 /** Основной указатель устройства — палец (телефон/планшет). */
 const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
 const editButtons = document.getElementById('editButtons')!;
+const playersButtons = document.getElementById('playersButtons')!;
 const raceButtons = document.getElementById('raceButtons')!;
 const backBtn = document.getElementById('backBtn') as HTMLButtonElement;
+const playersBackBtn = document.getElementById('playersBack') as HTMLButtonElement;
 const helpBtn = document.getElementById('helpBtn') as HTMLButtonElement;
 const newRaceBtn = document.getElementById('newRace') as HTMLButtonElement;
 const confirmMoveBtn = document.getElementById('confirmMove') as HTMLButtonElement;
@@ -20,14 +22,22 @@ const dlgSameTrack = document.getElementById('dlgSameTrack') as HTMLButtonElemen
 const dlgNewTrack = document.getElementById('dlgNewTrack') as HTMLButtonElement;
 const winnerBanner = document.querySelector('.winner')!;
 const winnerWho = winnerBanner.querySelector('.winner__title') as HTMLElement;
-const p0El = document.getElementById('p0')!;
-const p1El = document.getElementById('p1')!;
+const playerCount = document.getElementById('playerCount')!;
+
+/** Режим панели: рисование трассы, выбор числа игроков, гонка. */
+export type PanelMode = 'edit' | 'players' | 'race';
 
 export interface PanelHandlers {
+  /** Шаг назад в редакторе трассы. */
   onBack: () => void;
   onConfirmMove: () => void;
-  onNewRace: () => void;
+  /** «Та же трасса» — перейти к повторному выбору числа игроков. */
+  onChooseSameTrack: () => void;
   onNewTrack: () => void;
+  /** Назад из шага выбора игроков. */
+  onPlayersBack: () => void;
+  /** Выбрано число игроков — сразу стартуем гонку. */
+  onPlayerCount: (n: number) => void;
 }
 
 /** Показать/спрятать плавающую кнопку подтверждения хода (тач-прицеливание). */
@@ -49,10 +59,16 @@ function closeOverlay(): void {
 
 export function bindButtons(h: PanelHandlers): void {
   backBtn.addEventListener('click', h.onBack);
+  playersBackBtn.addEventListener('click', h.onPlayersBack);
   confirmMoveBtn.addEventListener('click', h.onConfirmMove);
+  playerCount.querySelectorAll<HTMLButtonElement>('.count-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (!btn.disabled) h.onPlayerCount(Number(btn.dataset.count));
+    });
+  });
   helpBtn.addEventListener('click', () => openSheet(rulesSheet));
   newRaceBtn.addEventListener('click', () => openSheet(raceDialog));
-  dlgSameTrack.addEventListener('click', () => { closeOverlay(); h.onNewRace(); });
+  dlgSameTrack.addEventListener('click', () => { closeOverlay(); h.onChooseSameTrack(); });
   dlgNewTrack.addEventListener('click', () => { closeOverlay(); h.onNewTrack(); });
   overlay.querySelector('.overlay__backdrop')!.addEventListener('click', closeOverlay);
   overlay.querySelectorAll('[data-close]').forEach((b) =>
@@ -88,7 +104,27 @@ function playerInfo(p: Player, active: boolean, target: HTMLElement): void {
   if (p.skipTurns > 0) addLine(target, `⛔ пропуск ходов: ${p.skipTurns}`);
 }
 
-/** Отрисовка сообщения редактора: заметный «Шаг N из 4» + инструкция. */
+/**
+ * Пересобрать карточки игроков как прямых потомков #raceButtons (перед кнопкой
+ * «Новая гонка») — так они попадают в двухколоночную мобильную сетку панели.
+ */
+function renderPlayerCards(game: GameState): void {
+  raceButtons.querySelectorAll('.player-card').forEach((c) => c.remove());
+  game.players.forEach((p, i) => {
+    const card = document.createElement('div');
+    card.className = 'player-card';
+    playerInfo(p, game.phase === 'race' && game.current === i, card);
+    raceButtons.insertBefore(card, newRaceBtn);
+  });
+}
+
+/** Заметный шаг мастера: бейдж «Шаг N из M» + инструкция. */
+function renderStepStatus(badge: string, body: string): void {
+  statusEl.className = 'status status--step';
+  statusEl.replaceChildren(div('status__badge', badge), div('status__body', body));
+}
+
+/** Отрисовка сообщения редактора: заметный «Шаг N из 5» + инструкция. */
 function renderEditStatus(editor: EditorState): void {
   statusEl.className = 'status';
   if (editor.error) {
@@ -96,11 +132,11 @@ function renderEditStatus(editor: EditorState): void {
     statusEl.textContent = editor.message;
     return;
   }
-  statusEl.classList.add('status--step');
   const m = editor.message.match(/^(Шаг \d+ из \d+)\.\s*(.*)$/s);
   if (m) {
-    statusEl.replaceChildren(div('status__badge', m[1]), div('status__body', m[2]));
+    renderStepStatus(m[1], m[2]);
   } else {
+    statusEl.classList.add('status--step');
     statusEl.replaceChildren(div('status__body', editor.message));
   }
 }
@@ -119,25 +155,33 @@ function showWinner(game: GameState): void {
 }
 
 export function updatePanel(
-  mode: 'edit' | 'race',
+  mode: PanelMode,
   editor: EditorState,
   game: GameState | null,
+  playersMax = 6,
 ): void {
+  editButtons.hidden = mode !== 'edit';
+  playersButtons.hidden = mode !== 'players';
+  raceButtons.hidden = mode !== 'race';
+
   if (mode === 'edit') {
-    editButtons.hidden = false;
-    raceButtons.hidden = true;
     renderEditStatus(editor);
     backBtn.disabled = !canStepBack(editor);
     return;
   }
 
-  editButtons.hidden = true;
-  raceButtons.hidden = false;
+  if (mode === 'players') {
+    renderStepStatus('Шаг 5 из 5', 'Сколько игроков? Гонка начнётся сразу.');
+    playerCount.querySelectorAll<HTMLButtonElement>('.count-btn').forEach((btn) => {
+      btn.disabled = Number(btn.dataset.count) > playersMax;
+    });
+    return;
+  }
+
   statusEl.className = 'status';
   if (!game) return;
 
-  playerInfo(game.players[0], game.phase === 'race' && game.current === 0, p0El);
-  playerInfo(game.players[1], game.phase === 'race' && game.current === 1, p1El);
+  renderPlayerCards(game);
 
   if (game.phase === 'over') {
     showWinner(game);
@@ -147,8 +191,8 @@ export function updatePanel(
 
   winnerBanner.classList.remove('winner--shown');
   const cur = game.players[game.current];
-  const warn = game.pendingWinner === 0 && game.current === 1
-    ? ' Игрок 1 уже финишировал — нужно закончить дальше за линией!'
+  const warn = game.finalTurnsLeft !== null
+    ? ' Кто-то уже финишировал — постарайтесь заехать дальше за линию!'
     : '';
   const hint = coarsePointer
     ? 'Коснитесь точки, затем нажмите «Ходить» для подтверждения.'

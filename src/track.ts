@@ -47,9 +47,12 @@ export interface Track {
   forward: Vec;
   /** Узлы сетки, лежащие на дороге (ключи — см. key()). */
   inside: Set<number>;
-  /** Стартовые узлы двух игроков, строго позади финишной линии. */
-  startPoints: [Vec, Vec];
+  /** Стартовые узлы, строго позади финишной линии (ближайшие к ней — первыми). */
+  startPoints: Vec[];
 }
+
+/** Максимум стартовых позиций, которые готовит трасса (по числу игроков). */
+const MAX_START_POINTS = 6;
 
 const KEY_OFFSET = 128;
 
@@ -225,7 +228,7 @@ export function finalizeTrack(
     return dp - dq || p.y - q.y || p.x - q.x;
   });
   if (behind.length < 2) {
-    return { error: 'Позади стартовой линии нет места для двух болидов — сдвиньте линию.' };
+    return { error: 'Позади стартовой линии нет места для болидов — сдвиньте линию.' };
   }
   return {
     track: {
@@ -234,7 +237,7 @@ export function finalizeTrack(
       finish,
       forward,
       inside,
-      startPoints: [behind[0], behind[1]],
+      startPoints: behind.slice(0, MAX_START_POINTS),
     },
   };
 }

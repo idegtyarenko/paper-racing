@@ -1,0 +1,22 @@
+/* Шаг выбора числа игроков (2–6): ряд крупных кнопок-цифр. */
+.players-select {
+  display: flex;
+  gap: 6px;
+}
+
+/* Квадратная кнопка-цифра выбора числа игроков. */
+.count-btn {
+  flex: 1;
+  min-height: 52px;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid #b7b0a0;
+  background: #fff;
+  border-radius: 6px;
+  touch-action: manipulation;
+}
+
+.count-btn:hover:not(:disabled) { background: #f0ecdf; }
+.count-btn:active:not(:disabled) { background: #e6e0cf; }
+.count-btn:disabled { opacity: 0.35; cursor: default; }
