@@ -11,6 +11,10 @@ export interface AppView {
   game: GameState | null;
   cands: Candidate[] | null;
   hover: Candidate | null;
+  /** Кандидат, выбранный касанием и ждущий подтверждающего тапа. */
+  selected: Candidate | null;
+  /** Позиция пальца в css-пикселях canvas — включает «лупу» при прицеливании. */
+  loupe: Vec | null;
   cellPx: number;
 }
 
@@ -34,8 +38,40 @@ export function render(ctx: CanvasRenderingContext2D, app: AppView): void {
   if (app.mode === 'edit') {
     drawEditor(ctx, s, app.editor);
   } else if (app.game) {
-    drawRace(ctx, s, app.game, app.cands, app.hover);
+    drawRace(ctx, s, app.game, app.cands, app.hover ?? app.selected);
+    if (app.loupe) drawLoupe(ctx, app, w, h);
   }
+}
+
+/**
+ * «Лупа» для тач-прицеливания: увеличенный фрагмент сцены вокруг точки
+ * касания, вынесенный выше пальца, чтобы палец его не закрывал.
+ */
+function drawLoupe(ctx: CanvasRenderingContext2D, app: AppView, w: number, h: number): void {
+  const R = 64;
+  const ZOOM = 3;
+  const p = app.loupe!;
+  const cx = Math.min(Math.max(p.x, R + 4), Math.max(R + 4, w - R - 4));
+  const cy = Math.max(p.y - R - 36, R + 4);
+  const s2 = app.cellPx * ZOOM;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.fillStyle = PAPER;
+  ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+  // Мировая точка под пальцем — в центр лупы.
+  ctx.translate(cx - (p.x / app.cellPx) * s2, cy - (p.y / app.cellPx) * s2);
+  drawGrid(ctx, s2);
+  drawRace(ctx, s2, app.game!, app.cands, app.hover ?? app.selected);
+  ctx.restore();
+
+  ctx.strokeStyle = '#55524a';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, Math.PI * 2);
+  ctx.stroke();
 }
 
 function drawGrid(ctx: CanvasRenderingContext2D, s: number): void {

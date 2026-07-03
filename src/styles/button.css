@@ -1,15 +1,18 @@
 /* Кнопки панели. */
 .button {
   padding: 8px 10px;
+  min-height: 44px;
   font-size: 14px;
   cursor: pointer;
   text-align: left;
   border: 1px solid #b7b0a0;
   background: #fff;
   border-radius: 6px;
+  touch-action: manipulation;
 }
 
 .button:hover:not(:disabled) { background: #f0ecdf; }
+.button:active:not(:disabled) { background: #e6e0cf; }
 .button:disabled { opacity: 0.45; cursor: default; }
 
 /* Главная кнопка «Старт!». */

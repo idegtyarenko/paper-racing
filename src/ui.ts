@@ -4,6 +4,9 @@ import { EditorState, canStepBack } from './editor';
 import { GameState, Player } from './game';
 
 const statusEl = document.querySelector('.status')!;
+
+/** Основной указатель устройства — палец (телефон/планшет). */
+const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
 const editButtons = document.getElementById('editButtons')!;
 const raceButtons = document.getElementById('raceButtons')!;
 const startRaceBtn = document.getElementById('startRace') as HTMLButtonElement;
@@ -117,5 +120,8 @@ export function updatePanel(
   const warn = game.pendingWinner === 0 && game.current === 1
     ? ' Игрок 1 уже финишировал — нужно закончить дальше за линией!'
     : '';
-  statusEl.textContent = `Ход: ${cur.name}. Кликните по одной из точек.${warn}`;
+  const hint = coarsePointer
+    ? 'Коснитесь точки, затем коснитесь её ещё раз для подтверждения.'
+    : 'Кликните по одной из точек.';
+  statusEl.textContent = `Ход: ${cur.name}. ${hint}${warn}`;
 }

@@ -23,3 +23,43 @@
 }
 
 .panel__group[hidden] { display: none; }
+
+/* Телефон в портрете: панель во всю ширину под полем. */
+@media (max-width: 700px) {
+  .panel {
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    border-left: none;
+    border-top: 1px solid #d8d2c0;
+    padding: 12px;
+  }
+
+  .panel__title { font-size: 17px; }
+
+  /* Карточки игроков — в две колонки, чтобы экономить вертикаль. */
+  #raceButtons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+
+  #raceButtons > .winner,
+  #raceButtons > .button,
+  #raceButtons > .rules {
+    grid-column: 1 / -1;
+  }
+
+  #raceButtons[hidden] { display: none; }
+}
+
+/* Низкие ландшафтные экраны (телефон в альбомной ориентации). */
+@media (max-height: 500px) and (min-width: 701px) {
+  .panel {
+    width: 230px;
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .panel__title { font-size: 16px; }
+}

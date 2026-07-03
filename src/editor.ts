@@ -46,13 +46,13 @@ export interface EditorState {
 
 const MSG: Record<EditorPhase, string> = {
   outer:
-    'Шаг 1 из 4. Нарисуйте ВНЕШНИЙ край трассы: зажмите кнопку мыши и обведите ' +
-    'замкнутый контур одним движением.',
+    'Шаг 1 из 4. Нарисуйте ВНЕШНИЙ край трассы: обведите замкнутый контур ' +
+    'одним непрерывным движением — мышью или пальцем.',
   inner: 'Шаг 2 из 4. Теперь нарисуйте ВНУТРЕННИЙ край трассы — внутри внешнего.',
   finish:
-    'Шаг 3 из 4. Проведите линию старта/финиша поперёк дороги: зажмите кнопку ' +
-    'мыши с одной стороны дороги и отпустите с другой.',
-  direction: 'Шаг 4 из 4. Кликните по одной из зелёных стрелок — в какую сторону ехать.',
+    'Шаг 3 из 4. Проведите линию старта/финиша поперёк дороги: начните с одной ' +
+    'стороны дороги, протяните и отпустите с другой.',
+  direction: 'Шаг 4 из 4. Нажмите на одну из зелёных стрелок — в какую сторону ехать.',
   ready: 'Трасса готова! Нажмите «Старт!», чтобы начать гонку.',
 };
 
@@ -84,7 +84,7 @@ function fail(st: EditorState, message: string): void {
   st.error = true;
 }
 
-export function pointerDown(st: EditorState, p: Vec): void {
+export function pointerDown(st: EditorState, p: Vec, arrowTol = 1.2): void {
   if (st.phase === 'outer' || st.phase === 'inner') {
     st.drawing = true;
     st.stroke = [p];
@@ -93,7 +93,7 @@ export function pointerDown(st: EditorState, p: Vec): void {
     st.dragEnd = p;
   } else if (st.phase === 'direction' && st.arrows) {
     for (const arrow of st.arrows) {
-      if (distPointToSegment(p, arrow.from, arrow.tip) < 1.2) {
+      if (distPointToSegment(p, arrow.from, arrow.tip) < arrowTol) {
         st.forward = arrow.forward;
         setPhase(st, 'ready');
         return;
@@ -156,6 +156,14 @@ export function pointerUp(st: EditorState): void {
     computeArrows(st);
     setPhase(st, 'direction');
   }
+}
+
+/** Прерывание жеста (pointercancel): сбросить незавершённый штрих/линию. */
+export function pointerCancel(st: EditorState): void {
+  st.drawing = false;
+  st.stroke = [];
+  st.dragStart = null;
+  st.dragEnd = null;
 }
 
 function computeArrows(st: EditorState): void {

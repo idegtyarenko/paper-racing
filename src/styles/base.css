@@ -1,6 +1,7 @@
 /* Глобальный сброс и базовые стили элементов. */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
+body { height: 100dvh; }
 
 canvas {
   display: block;

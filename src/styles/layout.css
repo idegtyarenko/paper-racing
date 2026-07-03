@@ -10,3 +10,16 @@
   min-width: 0;
   background: #fbfaf4;
 }
+
+/* Узкие экраны (телефон в портрете): поле сверху, панель под ним. */
+@media (max-width: 700px) {
+  .app { flex-direction: column; }
+
+  .app__board {
+    flex: none;
+    width: 100%;
+    /* Пропорции мира 64×40 клеток — поле вписывается по ширине целиком. */
+    aspect-ratio: 64 / 40;
+    min-height: 0;
+  }
+}
