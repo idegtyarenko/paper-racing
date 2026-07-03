@@ -23,3 +23,22 @@
 
 /* Кнопка с центрированной подписью («← Назад»). */
 .button--center { text-align: center; }
+
+/* Круглая кнопка-иконка («?» — правила). */
+.icon-button {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid #b7b0a0;
+  background: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  touch-action: manipulation;
+}
+
+.icon-button:hover { background: #f0ecdf; }
+.icon-button:active { background: #e6e0cf; }

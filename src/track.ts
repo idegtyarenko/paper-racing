@@ -20,8 +20,15 @@ import {
   polygonArea,
 } from './geometry';
 
-export const WORLD_W = 64;
-export const WORLD_H = 40;
+// Размеры мира в клетках. Изменяемы: подбираются под пропорции доски при
+// первом resize (см. main.ts) и фиксируются, как только начата трасса.
+export let WORLD_W = 64;
+export let WORLD_H = 40;
+
+export function setWorldSize(w: number, h: number): void {
+  WORLD_W = w;
+  WORLD_H = h;
+}
 
 /** Зазор до стенки: узлы ближе к краю не считаются частью дороги. */
 const WALL_CLEARANCE = 0.15;

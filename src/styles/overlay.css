@@ -1,0 +1,52 @@
+/* Оверлей для шторок: правила и диалог «Новая гонка».
+   Bottom-sheet на узких экранах, центрированное модальное на десктопе. */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+}
+
+.overlay[hidden] { display: none; }
+
+.overlay__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.sheet {
+  position: relative;
+  margin: auto;
+  z-index: 1;
+  background: #f4f1e8;
+  border: 1px solid #d8d2c0;
+  border-radius: 12px;
+  padding: 18px;
+  width: min(360px, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sheet[hidden] { display: none; }
+
+.sheet__title { font-size: 18px; }
+
+/* Узкие экраны: шторка выезжает снизу на всю ширину. */
+@media (max-width: 700px) {
+  .overlay { align-items: flex-end; }
+
+  .sheet {
+    margin: 0;
+    width: 100%;
+    border-radius: 14px 14px 0 0;
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+    animation: sheet-up 0.18s ease-out;
+  }
+}
+
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: none; }
+}

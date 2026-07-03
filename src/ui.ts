@@ -10,8 +10,13 @@ const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
 const editButtons = document.getElementById('editButtons')!;
 const raceButtons = document.getElementById('raceButtons')!;
 const backBtn = document.getElementById('backBtn') as HTMLButtonElement;
+const helpBtn = document.getElementById('helpBtn') as HTMLButtonElement;
 const newRaceBtn = document.getElementById('newRace') as HTMLButtonElement;
-const newTrackBtn = document.getElementById('newTrack') as HTMLButtonElement;
+const overlay = document.getElementById('overlay')!;
+const rulesSheet = document.getElementById('rulesSheet')!;
+const raceDialog = document.getElementById('raceDialog')!;
+const dlgSameTrack = document.getElementById('dlgSameTrack') as HTMLButtonElement;
+const dlgNewTrack = document.getElementById('dlgNewTrack') as HTMLButtonElement;
 const winnerBanner = document.querySelector('.winner')!;
 const winnerWho = winnerBanner.querySelector('.winner__title') as HTMLElement;
 const p0El = document.getElementById('p0')!;
@@ -23,10 +28,31 @@ export interface PanelHandlers {
   onNewTrack: () => void;
 }
 
+/** Показать одну шторку оверлея, спрятав остальные. */
+function openSheet(sheet: HTMLElement): void {
+  rulesSheet.hidden = true;
+  raceDialog.hidden = true;
+  sheet.hidden = false;
+  overlay.hidden = false;
+}
+
+function closeOverlay(): void {
+  overlay.hidden = true;
+}
+
 export function bindButtons(h: PanelHandlers): void {
   backBtn.addEventListener('click', h.onBack);
-  newRaceBtn.addEventListener('click', h.onNewRace);
-  newTrackBtn.addEventListener('click', h.onNewTrack);
+  helpBtn.addEventListener('click', () => openSheet(rulesSheet));
+  newRaceBtn.addEventListener('click', () => openSheet(raceDialog));
+  dlgSameTrack.addEventListener('click', () => { closeOverlay(); h.onNewRace(); });
+  dlgNewTrack.addEventListener('click', () => { closeOverlay(); h.onNewTrack(); });
+  overlay.querySelector('.overlay__backdrop')!.addEventListener('click', closeOverlay);
+  overlay.querySelectorAll('[data-close]').forEach((b) =>
+    b.addEventListener('click', closeOverlay),
+  );
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeOverlay();
+  });
 }
 
 function div(className: string, text: string): HTMLDivElement {

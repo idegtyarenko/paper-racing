@@ -10,6 +10,14 @@
   overflow-y: auto;
 }
 
+/* Шапка панели: заголовок + кнопка-иконка «?». */
+.panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .panel__title {
   font-size: 20px;
   letter-spacing: 0.5px;
@@ -24,15 +32,16 @@
 
 .panel__group[hidden] { display: none; }
 
-/* Телефон в портрете: панель во всю ширину под полем. */
+/* Телефон в портрете: панель компактной полосой под полем — поле доминирует. */
 @media (max-width: 700px) {
   .panel {
     width: 100%;
-    flex: 1;
+    flex: 0 0 auto;
+    max-height: 45vh;
     min-height: 0;
     border-left: none;
     border-top: 1px solid #d8d2c0;
-    padding: 12px;
+    padding: 10px 12px;
   }
 
   .panel__title { font-size: 17px; }
@@ -45,8 +54,7 @@
   }
 
   #raceButtons > .winner,
-  #raceButtons > .button,
-  #raceButtons > .rules {
+  #raceButtons > .button {
     grid-column: 1 / -1;
   }
 

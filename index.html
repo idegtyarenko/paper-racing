@@ -9,7 +9,10 @@
   <div class="app">
     <div class="app__board"><canvas id="board"></canvas></div>
     <aside class="panel">
-      <h1 class="panel__title">🏁 Paper Racing</h1>
+      <header class="panel__header">
+        <h1 class="panel__title">🏁 Paper Racing</h1>
+        <button id="helpBtn" class="icon-button" aria-label="Правила" title="Правила">?</button>
+      </header>
       <div class="status"></div>
       <div id="editButtons" class="panel__group">
         <button id="backBtn" class="button button--center">← Назад</button>
@@ -21,18 +24,27 @@
         </div>
         <div class="player-card" id="p0"></div>
         <div class="player-card" id="p1"></div>
-        <button id="newRace" class="button">🔄 Новая гонка (та же трасса)</button>
-        <button id="newTrack" class="button">✏️ Новая трасса</button>
-        <div class="rules">
-          <h2 class="rules__title">Правила</h2>
-          <p class="rules__text">
-            Ходы: скорость меняется на ±1 клетку по каждой оси за ход.
-            Вылет за трассу — пропуск двух ходов и возврат с нулевой скоростью.
-            Побеждает первый, кто завершит круг.
-          </p>
-        </div>
+        <button id="newRace" class="button">🔄 Новая гонка</button>
       </div>
     </aside>
+  </div>
+  <div id="overlay" class="overlay" hidden>
+    <div class="overlay__backdrop"></div>
+    <div id="rulesSheet" class="sheet" hidden>
+      <h2 class="sheet__title">Правила</h2>
+      <p class="rules__text">
+        Ходы: скорость меняется на ±1 клетку по каждой оси за ход.
+        Вылет за трассу — пропуск двух ходов и возврат с нулевой скоростью.
+        Побеждает первый, кто завершит круг.
+      </p>
+      <button class="button button--center" data-close>Понятно</button>
+    </div>
+    <div id="raceDialog" class="sheet" hidden>
+      <h2 class="sheet__title">Новая гонка</h2>
+      <button id="dlgSameTrack" class="button button--center">🔄 Та же трасса</button>
+      <button id="dlgNewTrack" class="button button--center">✏️ Новая трасса</button>
+      <button class="button button--center" data-close>Отмена</button>
+    </div>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>

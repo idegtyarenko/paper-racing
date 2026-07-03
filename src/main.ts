@@ -2,7 +2,7 @@
 
 import './styles/index.css';
 import { Vec, dist } from './geometry';
-import { WORLD_W, WORLD_H, finalizeTrack } from './track';
+import { WORLD_W, WORLD_H, finalizeTrack, setWorldSize } from './track';
 import {
   newEditor,
   pointerDown,
@@ -29,6 +29,12 @@ let selected: Candidate | null = null;
 /** Тач: позиция пальца (css-px canvas) во время прицеливания — включает лупу. */
 let loupe: Vec | null = null;
 let cellPx = 16;
+/**
+ * Размеры мира зафиксированы: поле уже «занято» (начата трасса / идёт гонка),
+ * поэтому при повороте/ресайзе число клеток не пересчитывается — меняется лишь
+ * cellPx. Пока false, число клеток подбирается под пропорции доски.
+ */
+let worldLocked = false;
 
 /** Радиус попадания по кандидату в клетках: для пальца — не меньше 24 css-px. */
 function touchTol(): number {
@@ -38,11 +44,24 @@ function touchTol(): number {
 function resize(): void {
   const r = wrap.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
+  if (worldLocked) {
+    // Мир зафиксирован (идёт рисование/гонка): число клеток не трогаем при
+    // повороте/ресайзе — только вписываем фикс. сетку без искажений (letterbox).
+    cellPx = Math.min(r.width / WORLD_W, r.height / WORLD_H);
+  } else {
+    // Поле ещё пустое: подбираем число клеток под пропорции доски. ceil (а не
+    // min/floor) → сетка покрывает доску целиком, без пустой полосы.
+    const cell = Math.max(12, Math.min(22, Math.min(r.width, r.height) / 30));
+    setWorldSize(
+      Math.max(8, Math.ceil(r.width / cell)),
+      Math.max(8, Math.ceil(r.height / cell)),
+    );
+    cellPx = cell;
+  }
   canvas.width = Math.max(1, Math.round(r.width * dpr));
   canvas.height = Math.max(1, Math.round(r.height * dpr));
   canvas.style.width = `${r.width}px`;
   canvas.style.height = `${r.height}px`;
-  cellPx = Math.min(r.width / WORLD_W, r.height / WORLD_H);
   redraw();
 }
 
@@ -110,6 +129,8 @@ canvas.addEventListener('pointerdown', (e) => {
   }
   const w = toWorld(e);
   if (mode === 'edit') {
+    // Пользователь коснулся доски — мир «занят», фиксируем число клеток.
+    worldLocked = true;
     const arrowTol = touch ? Math.max(1.2, 24 / cellPx) : 1.2;
     pointerDown(editor, w, arrowTol);
     if (editor.phase === 'ready') { startRace(); return; }
@@ -225,8 +246,10 @@ bindButtons({
     cands = null;
     hover = null;
     editor = newEditor();
+    // Снять фиксацию: новая трасса берёт пропорции под текущую ориентацию.
+    worldLocked = false;
     updateUI();
-    redraw();
+    resize(); // пере-вывести мир под текущую ориентацию + redraw
   },
 });
 

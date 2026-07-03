@@ -1,20 +1,6 @@
-/* Правила гонки — показываются после старта. */
-.rules {
-  border-top: 1px solid #d8d2c0;
-  padding-top: 10px;
-}
-
-.rules__title {
-  font-size: 15px;
-  font-weight: 800;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
-  color: #55524a;
-  margin-bottom: 6px;
-}
-
+/* Текст правил в шторке. */
 .rules__text {
-  font-size: 12px;
+  font-size: 13px;
   color: #6b675d;
   line-height: 1.5;
 }
