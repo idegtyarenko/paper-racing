@@ -147,12 +147,17 @@ export function pointerUp(st: EditorState): void {
       fail(st, 'Линия слишком короткая — протяните её через всю дорогу.');
       return;
     }
-    const finish = clipFinishLine(a, b, st.outer!, st.inner!);
-    if (!finish) {
-      fail(st, 'Линия должна пересекать дорогу от края до края.');
+    const res = clipFinishLine(a, b, st.outer!, st.inner!);
+    if ('error' in res) {
+      fail(
+        st,
+        res.error === 'narrow'
+          ? 'Дорога слишком узкая в этом месте — проведите линию там, где она шире.'
+          : 'Линия должна пересекать дорогу от края до края.',
+      );
       return;
     }
-    st.finish = finish;
+    st.finish = res.finish;
     computeArrows(st);
     setPhase(st, 'direction');
   }

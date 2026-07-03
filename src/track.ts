@@ -139,14 +139,18 @@ function isRoadLatticePoint(p: Vec, outer: Polyline, inner: Polyline): boolean {
  * численные щели. Протяжку не обязательно вести точно от стенки до стенки —
  * достаточно задать направление поперёк дороги.
  */
+export type ClipFinishResult =
+  | { finish: FinishLine }
+  | { error: 'no-cross' | 'narrow' };
+
 export function clipFinishLine(
   a: Vec,
   b: Vec,
   outer: Polyline,
   inner: Polyline,
-): FinishLine | null {
+): ClipFinishResult {
   const d = normalize(sub(b, a));
-  if (d.x === 0 && d.y === 0) return null;
+  if (d.x === 0 && d.y === 0) return { error: 'no-cross' };
   const EXT = 200;
   const A = sub(a, scale(d, EXT));
   const B = add(b, scale(d, EXT));
@@ -160,12 +164,15 @@ export function clipFinishLine(
     if (hits[i].t <= tMid && tMid <= hits[i + 1].t) {
       const p1 = hits[i].point;
       const p2 = hits[i + 1].point;
-      if (dist(p1, p2) < 1) return null;
-      if (!onRoad(lerp(p1, p2, 0.5), outer, inner)) return null;
-      return { a: sub(p1, scale(d, 0.25)), b: add(p2, scale(d, 0.25)) };
+      // Середина отрезка между соседними пересечениями вне дороги —
+      // линия проходит по «пробелу» (мимо дороги), а не поперёк неё.
+      if (!onRoad(lerp(p1, p2, 0.5), outer, inner)) return { error: 'no-cross' };
+      // Дорога пересечена правильно, но слишком узка в этом месте.
+      if (dist(p1, p2) < 1) return { error: 'narrow' };
+      return { finish: { a: sub(p1, scale(d, 0.25)), b: add(p2, scale(d, 0.25)) } };
     }
   }
-  return null;
+  return { error: 'no-cross' };
 }
 
 /** Знаковое расстояние точки до финишной линии вдоль направления гонки. */
