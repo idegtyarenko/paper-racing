@@ -109,6 +109,7 @@ canvas.addEventListener('pointerdown', (e) => {
   if (mode === 'edit') {
     const arrowTol = touch ? Math.max(1.2, 24 / cellPx) : 1.2;
     pointerDown(editor, w, arrowTol);
+    if (editor.phase === 'ready') { startRace(); return; }
     updateUI();
   } else if (game && game.phase === 'race') {
     if (touch) {
@@ -185,23 +186,24 @@ canvas.addEventListener('pointercancel', (e) => {
   redraw();
 });
 
-bindButtons({
-  onStartRace: () => {
-    if (editor.phase !== 'ready') return;
-    const res = finalizeTrack(editor.outer!, editor.inner!, editor.finish!, editor.forward!);
-    if ('error' in res) {
-      editor.message = res.error;
-      editor.error = true;
-      updateUI();
-      redraw();
-      return;
-    }
-    game = newGame(res.track);
-    mode = 'race';
-    refreshCands();
+function startRace(): void {
+  if (editor.phase !== 'ready') return;
+  const res = finalizeTrack(editor.outer!, editor.inner!, editor.finish!, editor.forward!);
+  if ('error' in res) {
+    editor.message = res.error;
+    editor.error = true;
     updateUI();
     redraw();
-  },
+    return;
+  }
+  game = newGame(res.track);
+  mode = 'race';
+  refreshCands();
+  updateUI();
+  redraw();
+}
+
+bindButtons({
   onBack: () => {
     stepBack(editor);
     updateUI();

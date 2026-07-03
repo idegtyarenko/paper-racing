@@ -9,7 +9,6 @@ const statusEl = document.querySelector('.status')!;
 const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
 const editButtons = document.getElementById('editButtons')!;
 const raceButtons = document.getElementById('raceButtons')!;
-const startRaceBtn = document.getElementById('startRace') as HTMLButtonElement;
 const backBtn = document.getElementById('backBtn') as HTMLButtonElement;
 const newRaceBtn = document.getElementById('newRace') as HTMLButtonElement;
 const newTrackBtn = document.getElementById('newTrack') as HTMLButtonElement;
@@ -19,14 +18,12 @@ const p0El = document.getElementById('p0')!;
 const p1El = document.getElementById('p1')!;
 
 export interface PanelHandlers {
-  onStartRace: () => void;
   onBack: () => void;
   onNewRace: () => void;
   onNewTrack: () => void;
 }
 
 export function bindButtons(h: PanelHandlers): void {
-  startRaceBtn.addEventListener('click', h.onStartRace);
   backBtn.addEventListener('click', h.onBack);
   newRaceBtn.addEventListener('click', h.onNewRace);
   newTrackBtn.addEventListener('click', h.onNewTrack);
@@ -96,7 +93,6 @@ export function updatePanel(
     editButtons.hidden = false;
     raceButtons.hidden = true;
     renderEditStatus(editor);
-    startRaceBtn.disabled = editor.phase !== 'ready';
     backBtn.disabled = !canStepBack(editor);
     return;
   }
