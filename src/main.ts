@@ -16,7 +16,7 @@ import { bindButtons, updatePanel } from './ui';
 
 const canvas = document.getElementById('board') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
-const wrap = document.getElementById('boardWrap')!;
+const wrap = document.querySelector('.app__board')!;
 
 let mode: 'edit' | 'race' = 'edit';
 let editor = newEditor();

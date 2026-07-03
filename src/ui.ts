@@ -3,14 +3,14 @@
 import { EditorState, canStepBack } from './editor';
 import { GameState, Player } from './game';
 
-const statusEl = document.getElementById('status')!;
+const statusEl = document.querySelector('.status')!;
 const editButtons = document.getElementById('editButtons')!;
 const raceButtons = document.getElementById('raceButtons')!;
 const startRaceBtn = document.getElementById('startRace') as HTMLButtonElement;
 const backBtn = document.getElementById('backBtn') as HTMLButtonElement;
 const newRaceBtn = document.getElementById('newRace') as HTMLButtonElement;
 const newTrackBtn = document.getElementById('newTrack') as HTMLButtonElement;
-const winnerBanner = document.getElementById('winnerBanner')!;
+const winnerBanner = document.querySelector('.winner')!;
 const winnerWho = winnerBanner.querySelector('.winner__title') as HTMLElement;
 const p0El = document.getElementById('p0')!;
 const p1El = document.getElementById('p1')!;
