@@ -7,9 +7,8 @@ import {
   pointerDown,
   pointerMove,
   pointerUp,
-  resetOuter,
-  resetInner,
-  resetFinish,
+  stepBack,
+  canStepBack,
 } from './editor';
 import {
   GameState,
@@ -18,8 +17,6 @@ import {
   newGame,
   candidates,
   applyMove,
-  skipTurn,
-  WIN_CROSSINGS,
 } from './game';
 import { render, AppView } from './render';
 
@@ -30,12 +27,11 @@ const statusEl = document.getElementById('status')!;
 const editButtons = document.getElementById('editButtons')!;
 const raceButtons = document.getElementById('raceButtons')!;
 const startRaceBtn = document.getElementById('startRace') as HTMLButtonElement;
-const redrawOuterBtn = document.getElementById('redrawOuter') as HTMLButtonElement;
-const redrawInnerBtn = document.getElementById('redrawInner') as HTMLButtonElement;
-const redrawStartBtn = document.getElementById('redrawStart') as HTMLButtonElement;
-const continueBtn = document.getElementById('continueBtn') as HTMLButtonElement;
+const backBtn = document.getElementById('backBtn') as HTMLButtonElement;
 const newRaceBtn = document.getElementById('newRace') as HTMLButtonElement;
 const newTrackBtn = document.getElementById('newTrack') as HTMLButtonElement;
+const winnerBanner = document.getElementById('winnerBanner')!;
+const winnerWho = winnerBanner.querySelector('.who') as HTMLElement;
 const p0El = document.getElementById('p0')!;
 const p1El = document.getElementById('p1')!;
 
@@ -149,26 +145,8 @@ startRaceBtn.addEventListener('click', () => {
   redraw();
 });
 
-redrawOuterBtn.addEventListener('click', () => {
-  resetOuter(editor);
-  updateUI();
-  redraw();
-});
-redrawInnerBtn.addEventListener('click', () => {
-  resetInner(editor);
-  updateUI();
-  redraw();
-});
-redrawStartBtn.addEventListener('click', () => {
-  resetFinish(editor);
-  updateUI();
-  redraw();
-});
-
-continueBtn.addEventListener('click', () => {
-  if (!game) return;
-  skipTurn(game);
-  refreshCands();
+backBtn.addEventListener('click', () => {
+  stepBack(editor);
   updateUI();
   redraw();
 });
@@ -191,65 +169,72 @@ newTrackBtn.addEventListener('click', () => {
   redraw();
 });
 
-function lapText(p: Player): string {
-  if (p.crossings >= WIN_CROSSINGS) return 'финишировал 🏁';
-  if (p.crossings >= 1) return 'круг идёт';
-  return 'не стартовал';
-}
-
 function playerInfo(p: Player, active: boolean, el: HTMLElement): void {
   el.classList.toggle('active', active);
   const skip = p.skipTurns > 0 ? `<br>⛔ пропуск ходов: ${p.skipTurns}` : '';
   el.innerHTML =
     `<span class="dot" style="background:${p.color}"></span><b>${p.name}</b>` +
     `<br>скорость: (${p.vel.x}, ${p.vel.y})` +
-    `<br>круг: ${lapText(p)}` +
     `<br>аварии: ${p.crashes.length}${skip}`;
+}
+
+/** Отрисовка сообщения редактора: заметный «Шаг N из 4» + инструкция. */
+function renderEditStatus(): void {
+  statusEl.className = '';
+  if (editor.error) {
+    statusEl.classList.add('error');
+    statusEl.textContent = editor.message;
+    return;
+  }
+  statusEl.classList.add('step');
+  const m = editor.message.match(/^(Шаг \d+ из \d+)\.\s*(.*)$/s);
+  if (m) {
+    statusEl.innerHTML =
+      `<div class="step-badge">${m[1]}</div><div class="step-body">${m[2]}</div>`;
+  } else {
+    statusEl.innerHTML = `<div class="step-body">${editor.message}</div>`;
+  }
 }
 
 function updateUI(): void {
   if (mode === 'edit') {
     editButtons.hidden = false;
     raceButtons.hidden = true;
-    statusEl.textContent = editor.message;
-    statusEl.classList.toggle('error', editor.error);
+    renderEditStatus();
     startRaceBtn.disabled = editor.phase !== 'ready';
-    redrawOuterBtn.disabled = !editor.outer && !editor.drawing;
-    redrawInnerBtn.disabled = !editor.inner;
-    redrawStartBtn.disabled = !editor.finish;
+    backBtn.disabled = !canStepBack(editor);
     return;
   }
 
   editButtons.hidden = true;
   raceButtons.hidden = false;
-  statusEl.classList.remove('error');
+  statusEl.className = '';
   if (!game) return;
 
   playerInfo(game.players[0], game.phase === 'race' && game.current === 0, p0El);
   playerInfo(game.players[1], game.phase === 'race' && game.current === 1, p1El);
 
   if (game.phase === 'over') {
-    statusEl.textContent =
-      game.winner === 'draw'
-        ? 'Ничья! Оба финишировали одинаково далеко за линией.'
-        : `🏆 Победил ${game.players[game.winner!].name}!`;
-    continueBtn.hidden = true;
+    if (game.winner === 'draw') {
+      winnerWho.textContent = 'Ничья!';
+    } else {
+      const w = game.players[game.winner!];
+      winnerWho.innerHTML =
+        `Победил<br><span style="color:${w.color}">${w.name}</span>`;
+    }
+    winnerBanner.classList.add('show');
+    statusEl.textContent = '';
     newRaceBtn.hidden = false;
     return;
   }
 
+  winnerBanner.classList.remove('show');
   newRaceBtn.hidden = false;
   const cur = game.players[game.current];
-  if (cur.skipTurns > 0) {
-    statusEl.textContent = `${cur.name} пропускает ход после аварии (осталось: ${cur.skipTurns}).`;
-    continueBtn.hidden = false;
-  } else {
-    const warn = game.pendingWinner === 0 && game.current === 1
-      ? ' Игрок 1 уже финишировал — нужно закончить дальше за линией!'
-      : '';
-    statusEl.textContent = `Ход: ${cur.name}. Кликните по одной из точек.${warn}`;
-    continueBtn.hidden = true;
-  }
+  const warn = game.pendingWinner === 0 && game.current === 1
+    ? ' Игрок 1 уже финишировал — нужно закончить дальше за линией!'
+    : '';
+  statusEl.textContent = `Ход: ${cur.name}. Кликните по одной из точек.${warn}`;
 }
 
 window.addEventListener('resize', resize);

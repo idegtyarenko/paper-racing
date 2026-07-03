@@ -204,3 +204,28 @@ export function resetFinish(st: EditorState): void {
   st.dragEnd = null;
   setPhase(st, 'finish');
 }
+
+/** Единый шаг назад по стейт-машине рисования. */
+export function stepBack(st: EditorState): void {
+  switch (st.phase) {
+    case 'inner':
+      resetOuter(st);
+      break;
+    case 'finish':
+      resetInner(st);
+      break;
+    case 'direction':
+      resetFinish(st);
+      break;
+    case 'ready':
+      st.forward = null;
+      setPhase(st, 'direction');
+      break;
+    // 'outer' — это первый шаг, назад некуда.
+  }
+}
+
+/** Можно ли шагнуть назад из текущей фазы. */
+export function canStepBack(st: EditorState): boolean {
+  return st.phase !== 'outer';
+}

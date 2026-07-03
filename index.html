@@ -15,22 +15,51 @@
       display: flex; flex-direction: column; gap: 10px; overflow-y: auto;
     }
     h1 { font-size: 20px; letter-spacing: 0.5px; }
-    #status { min-height: 72px; font-size: 14px; line-height: 1.4; }
-    #status.error { color: #b3261e; font-weight: 600; }
+    #status { font-size: 14px; line-height: 1.4; }
+    #status:empty { display: none; }
+    /* Заметная подсказка «Шаг N из 4» в режиме рисования. */
+    #status.step {
+      background: #fff3cd; border: 1px solid #f0d98c; border-left: 6px solid #e0a800;
+      border-radius: 10px; padding: 14px 16px; color: #4a3d00;
+    }
+    #status.step .step-badge {
+      display: inline-block; font-size: 15px; font-weight: 800; letter-spacing: 0.4px;
+      text-transform: uppercase; color: #8a6d00; margin-bottom: 6px;
+    }
+    #status.step .step-body { font-size: 17px; font-weight: 600; line-height: 1.45; }
+    #status.error {
+      color: #b3261e; font-weight: 600; background: #fdecea; border: 1px solid #f3b7b0;
+      border-left: 6px solid #b3261e; border-radius: 10px; padding: 14px 16px; font-size: 16px;
+    }
     button {
       padding: 8px 10px; font-size: 14px; cursor: pointer; text-align: left;
       border: 1px solid #b7b0a0; background: #fff; border-radius: 6px;
     }
     button:hover:not(:disabled) { background: #f0ecdf; }
     button:disabled { opacity: 0.45; cursor: default; }
-    #startRace, #continueBtn { font-weight: 700; text-align: center; }
+    #startRace { font-weight: 700; text-align: center; }
+    #backBtn { text-align: center; }
     .pinfo {
       border: 2px solid transparent; border-radius: 8px; padding: 8px 10px;
       font-size: 13px; line-height: 1.5; background: #fff;
     }
     .pinfo.active { border-color: #55524a; }
     .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 5px; vertical-align: baseline; }
-    .hint { font-size: 12px; color: #6b675d; line-height: 1.4; }
+    /* Победитель после финиша — крупно. */
+    #winnerBanner { display: none; }
+    #winnerBanner.show {
+      display: block; text-align: center; padding: 20px 14px; border-radius: 12px;
+      background: #fff3cd; border: 2px solid #e0a800;
+    }
+    #winnerBanner .trophy { font-size: 40px; line-height: 1; }
+    #winnerBanner .who { font-size: 26px; font-weight: 800; margin-top: 8px; }
+    /* Правила гонки — показываются после старта. */
+    .rules { border-top: 1px solid #d8d2c0; padding-top: 10px; }
+    .rules h2 {
+      font-size: 15px; font-weight: 800; letter-spacing: 0.4px; text-transform: uppercase;
+      color: #55524a; margin-bottom: 6px;
+    }
+    .rules p { font-size: 12px; color: #6b675d; line-height: 1.5; }
     .col { display: flex; flex-direction: column; gap: 10px; }
     .col[hidden] { display: none; }
   </style>
@@ -43,21 +72,25 @@
       <div id="status"></div>
       <div id="editButtons" class="col">
         <button id="startRace">Старт!</button>
-        <button id="redrawOuter">↺ Перерисовать внешний край</button>
-        <button id="redrawInner">↺ Перерисовать внутренний край</button>
-        <button id="redrawStart">↺ Перерисовать линию старта</button>
-        <p class="hint">
-          Ходы: скорость меняется на ±1 клетку по каждой оси за ход.
-          Вылет за трассу — пропуск двух ходов и возврат с нулевой скоростью.
-          Побеждает первый, кто завершит круг.
-        </p>
+        <button id="backBtn">← Назад</button>
       </div>
       <div id="raceButtons" class="col" hidden>
+        <div id="winnerBanner">
+          <div class="trophy">🏆</div>
+          <div class="who"></div>
+        </div>
         <div class="pinfo" id="p0"></div>
         <div class="pinfo" id="p1"></div>
-        <button id="continueBtn">Продолжить (пропуск хода)</button>
         <button id="newRace">🔄 Новая гонка (та же трасса)</button>
         <button id="newTrack">✏️ Новая трасса</button>
+        <div class="rules">
+          <h2>Правила</h2>
+          <p>
+            Ходы: скорость меняется на ±1 клетку по каждой оси за ход.
+            Вылет за трассу — пропуск двух ходов и возврат с нулевой скоростью.
+            Побеждает первый, кто завершит круг.
+          </p>
+        </div>
       </div>
     </aside>
   </div>

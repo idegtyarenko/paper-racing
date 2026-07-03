@@ -206,19 +206,13 @@ export function applyMove(state: GameState, cand: Candidate): void {
   afterAction(state);
 }
 
-/** Пропуск хода после аварии — тоже действие игрока в раунде. */
-export function skipTurn(state: GameState): void {
-  if (state.phase !== "race") return;
-  const p = state.players[state.current];
-  if (p.skipTurns <= 0) return;
-  p.skipTurns -= 1;
-  afterAction(state);
-}
-
 /**
  * Смена хода и определение победителя. Игрок 0 всегда ходит первым в раунде.
  * Если он финишировал, игрок 1 доигрывает свой ход того же раунда — при
  * двойном финише сравнивается перпендикулярное расстояние за линией.
+ * Вынужденные пропуски после аварии проходят автоматически: если ход перешёл
+ * к игроку, который ещё отбывает пропуск, он тратит один пропуск и ход сразу
+ * уходит дальше — участнику ничего нажимать не нужно.
  */
 function afterAction(state: GameState): void {
   const i = state.current;
@@ -243,5 +237,13 @@ function afterAction(state: GameState): void {
       state.phase = "over";
     }
     state.current = 0;
+  }
+
+  if (state.phase === "race") {
+    const next = state.players[state.current];
+    if (next.skipTurns > 0) {
+      next.skipTurns -= 1;
+      afterAction(state);
+    }
   }
 }
