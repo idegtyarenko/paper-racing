@@ -1,4 +1,4 @@
-// Оркестрация: DOM, события мыши, переключение фаз редактор/гонка.
+// Оркестрация: события мыши на canvas, переключение фаз редактор/гонка.
 
 import { Vec, dist } from './geometry';
 import { WORLD_W, WORLD_H, finalizeTrack } from './track';
@@ -8,32 +8,14 @@ import {
   pointerMove,
   pointerUp,
   stepBack,
-  canStepBack,
 } from './editor';
-import {
-  GameState,
-  Candidate,
-  Player,
-  newGame,
-  candidates,
-  applyMove,
-} from './game';
+import { GameState, Candidate, newGame, candidates, applyMove } from './game';
 import { render, AppView } from './render';
+import { bindButtons, updatePanel } from './ui';
 
 const canvas = document.getElementById('board') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
 const wrap = document.getElementById('boardWrap')!;
-const statusEl = document.getElementById('status')!;
-const editButtons = document.getElementById('editButtons')!;
-const raceButtons = document.getElementById('raceButtons')!;
-const startRaceBtn = document.getElementById('startRace') as HTMLButtonElement;
-const backBtn = document.getElementById('backBtn') as HTMLButtonElement;
-const newRaceBtn = document.getElementById('newRace') as HTMLButtonElement;
-const newTrackBtn = document.getElementById('newTrack') as HTMLButtonElement;
-const winnerBanner = document.getElementById('winnerBanner')!;
-const winnerWho = winnerBanner.querySelector('.who') as HTMLElement;
-const p0El = document.getElementById('p0')!;
-const p1El = document.getElementById('p1')!;
 
 let mode: 'edit' | 'race' = 'edit';
 let editor = newEditor();
@@ -56,6 +38,10 @@ function resize(): void {
 function redraw(): void {
   const app: AppView = { mode, editor, game, cands, hover, cellPx };
   render(ctx, app);
+}
+
+function updateUI(): void {
+  updatePanel(mode, editor, game);
 }
 
 function toWorld(e: PointerEvent): Vec {
@@ -128,114 +114,45 @@ canvas.addEventListener('pointerup', (e) => {
   }
 });
 
-startRaceBtn.addEventListener('click', () => {
-  if (editor.phase !== 'ready') return;
-  const res = finalizeTrack(editor.outer!, editor.inner!, editor.finish!, editor.forward!);
-  if ('error' in res) {
-    editor.message = res.error;
-    editor.error = true;
+bindButtons({
+  onStartRace: () => {
+    if (editor.phase !== 'ready') return;
+    const res = finalizeTrack(editor.outer!, editor.inner!, editor.finish!, editor.forward!);
+    if ('error' in res) {
+      editor.message = res.error;
+      editor.error = true;
+      updateUI();
+      redraw();
+      return;
+    }
+    game = newGame(res.track);
+    mode = 'race';
+    refreshCands();
     updateUI();
     redraw();
-    return;
-  }
-  game = newGame(res.track);
-  mode = 'race';
-  refreshCands();
-  updateUI();
-  redraw();
+  },
+  onBack: () => {
+    stepBack(editor);
+    updateUI();
+    redraw();
+  },
+  onNewRace: () => {
+    if (!game) return;
+    game = newGame(game.track);
+    refreshCands();
+    updateUI();
+    redraw();
+  },
+  onNewTrack: () => {
+    mode = 'edit';
+    game = null;
+    cands = null;
+    hover = null;
+    editor = newEditor();
+    updateUI();
+    redraw();
+  },
 });
-
-backBtn.addEventListener('click', () => {
-  stepBack(editor);
-  updateUI();
-  redraw();
-});
-
-newRaceBtn.addEventListener('click', () => {
-  if (!game) return;
-  game = newGame(game.track);
-  refreshCands();
-  updateUI();
-  redraw();
-});
-
-newTrackBtn.addEventListener('click', () => {
-  mode = 'edit';
-  game = null;
-  cands = null;
-  hover = null;
-  editor = newEditor();
-  updateUI();
-  redraw();
-});
-
-function playerInfo(p: Player, active: boolean, el: HTMLElement): void {
-  el.classList.toggle('active', active);
-  const skip = p.skipTurns > 0 ? `<br>⛔ пропуск ходов: ${p.skipTurns}` : '';
-  el.innerHTML =
-    `<span class="dot" style="background:${p.color}"></span><b>${p.name}</b>` +
-    `<br>скорость: (${p.vel.x}, ${p.vel.y})` +
-    `<br>аварии: ${p.crashes.length}${skip}`;
-}
-
-/** Отрисовка сообщения редактора: заметный «Шаг N из 4» + инструкция. */
-function renderEditStatus(): void {
-  statusEl.className = '';
-  if (editor.error) {
-    statusEl.classList.add('error');
-    statusEl.textContent = editor.message;
-    return;
-  }
-  statusEl.classList.add('step');
-  const m = editor.message.match(/^(Шаг \d+ из \d+)\.\s*(.*)$/s);
-  if (m) {
-    statusEl.innerHTML =
-      `<div class="step-badge">${m[1]}</div><div class="step-body">${m[2]}</div>`;
-  } else {
-    statusEl.innerHTML = `<div class="step-body">${editor.message}</div>`;
-  }
-}
-
-function updateUI(): void {
-  if (mode === 'edit') {
-    editButtons.hidden = false;
-    raceButtons.hidden = true;
-    renderEditStatus();
-    startRaceBtn.disabled = editor.phase !== 'ready';
-    backBtn.disabled = !canStepBack(editor);
-    return;
-  }
-
-  editButtons.hidden = true;
-  raceButtons.hidden = false;
-  statusEl.className = '';
-  if (!game) return;
-
-  playerInfo(game.players[0], game.phase === 'race' && game.current === 0, p0El);
-  playerInfo(game.players[1], game.phase === 'race' && game.current === 1, p1El);
-
-  if (game.phase === 'over') {
-    if (game.winner === 'draw') {
-      winnerWho.textContent = 'Ничья!';
-    } else {
-      const w = game.players[game.winner!];
-      winnerWho.innerHTML =
-        `Победил<br><span style="color:${w.color}">${w.name}</span>`;
-    }
-    winnerBanner.classList.add('show');
-    statusEl.textContent = '';
-    newRaceBtn.hidden = false;
-    return;
-  }
-
-  winnerBanner.classList.remove('show');
-  newRaceBtn.hidden = false;
-  const cur = game.players[game.current];
-  const warn = game.pendingWinner === 0 && game.current === 1
-    ? ' Игрок 1 уже финишировал — нужно закончить дальше за линией!'
-    : '';
-  statusEl.textContent = `Ход: ${cur.name}. Кликните по одной из точек.${warn}`;
-}
 
 window.addEventListener('resize', resize);
 updateUI();
