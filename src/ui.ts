@@ -101,7 +101,7 @@ function playerInfo(p: Player, active: boolean, target: HTMLElement): void {
   target.replaceChildren(dot, name);
   addLine(target, `скорость: (${p.vel.x}, ${p.vel.y})`);
   addLine(target, `аварии: ${p.crashes.length}`);
-  if (p.skipTurns > 0) addLine(target, `⛔ пропуск ходов: ${p.skipTurns}`);
+  if (p.skipTurns > 0) addLine(target, `🔧 в боксах: ${p.skipTurns}`);
 }
 
 /**
@@ -143,13 +143,13 @@ function renderEditStatus(editor: EditorState): void {
 
 function showWinner(game: GameState): void {
   if (game.winner === 'draw') {
-    winnerWho.textContent = 'Ничья!';
+    winnerWho.textContent = 'Фотофиниш — ничья!';
   } else {
     const w = game.players[game.winner!];
     const name = document.createElement('span');
     name.style.color = w.color;
     name.textContent = w.name;
-    winnerWho.replaceChildren('Победил', document.createElement('br'), name);
+    winnerWho.replaceChildren('Клетчатый флаг!', document.createElement('br'), name);
   }
   winnerBanner.classList.add('winner--shown');
 }
@@ -171,7 +171,7 @@ export function updatePanel(
   }
 
   if (mode === 'players') {
-    renderStepStatus('Шаг 5 из 5', 'Сколько игроков? Гонка начнётся сразу.');
+    renderStepStatus('Шаг 5 из 5', 'Сколько болидов на старте? Жми число — и зелёный свет!');
     playerCount.querySelectorAll<HTMLButtonElement>('.count-btn').forEach((btn) => {
       btn.disabled = Number(btn.dataset.count) > playersMax;
     });
@@ -192,10 +192,10 @@ export function updatePanel(
   winnerBanner.classList.remove('winner--shown');
   const cur = game.players[game.current];
   const warn = game.finalTurnsLeft !== null
-    ? ' Кто-то уже финишировал — постарайтесь заехать дальше за линию!'
+    ? ' Кто-то уже под клетчатым флагом — тяни как можно дальше за линию!'
     : '';
   const hint = coarsePointer
-    ? 'Коснитесь точки, затем нажмите «Ходить» для подтверждения.'
-    : 'Кликните по одной из точек.';
-  statusEl.textContent = `Ход: ${cur.name}. ${hint}${warn}`;
+    ? 'Коснись точки и жми «Газу!», чтобы подтвердить манёвр.'
+    : 'Кликни по точке, куда рулить.';
+  statusEl.textContent = `За рулём: ${cur.name}. ${hint}${warn}`;
 }

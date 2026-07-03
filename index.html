@@ -9,12 +9,12 @@
   <div class="app">
     <div class="app__board">
       <canvas id="board"></canvas>
-      <button id="confirmMove" class="confirm-move" hidden>✓ Ходить</button>
+      <button id="confirmMove" class="confirm-move" hidden>✓ Газу!</button>
     </div>
     <aside class="panel">
       <header class="panel__header">
         <h1 class="panel__title">🏁 Paper Racing</h1>
-        <button id="helpBtn" class="icon-button" aria-label="Правила" title="Правила">?</button>
+        <button id="helpBtn" class="icon-button" aria-label="Регламент" title="Регламент">?</button>
       </header>
       <div class="status"></div>
       <div id="editButtons" class="panel__group">
@@ -35,25 +35,26 @@
           <div class="winner__trophy">🏆</div>
           <div class="winner__title"></div>
         </div>
-        <button id="newRace" class="button">🔄 Новая гонка</button>
+        <button id="newRace" class="button">🏁 Новый заезд</button>
       </div>
     </aside>
   </div>
   <div id="overlay" class="overlay" hidden>
     <div class="overlay__backdrop"></div>
     <div id="rulesSheet" class="sheet" hidden>
-      <h2 class="sheet__title">Правила</h2>
+      <h2 class="sheet__title">Регламент</h2>
       <p class="rules__text">
-        Ходы: скорость меняется на ±1 клетку по каждой оси за ход.
-        Вылет за трассу — пропуск двух ходов и возврат с нулевой скоростью.
-        Побеждает первый, кто завершит круг.
+        Каждый ход разгон меняется на ±1 клетку по каждой оси — рули плавно,
+        иначе занесёт. Вылетел за бортик — два хода в боксах на ремонт, потом
+        рестарт с нулевой скоростью. Первый, кто замкнёт круг, забирает
+        клетчатый флаг. 🏁
       </p>
-      <button class="button button--center" data-close>Понятно</button>
+      <button class="button button--center" data-close>К рулю!</button>
     </div>
     <div id="raceDialog" class="sheet" hidden>
-      <h2 class="sheet__title">Новая гонка</h2>
-      <button id="dlgSameTrack" class="button button--center">🔄 Та же трасса</button>
-      <button id="dlgNewTrack" class="button button--center">✏️ Новая трасса</button>
+      <h2 class="sheet__title">Новый заезд</h2>
+      <button id="dlgSameTrack" class="button button--center">🔄 По той же трассе</button>
+      <button id="dlgNewTrack" class="button button--center">✏️ Начертить новую</button>
       <button class="button button--center" data-close>Отмена</button>
     </div>
   </div>

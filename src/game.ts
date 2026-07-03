@@ -60,6 +60,9 @@ const COLORS = [
   "#00838f",
 ];
 
+/** Имена болидов по цвету — строго в порядке COLORS. */
+const NAMES = ["Красный", "Синий", "Зелёный", "Оранжевый", "Фиолетовый", "Бирюзовый"];
+
 export const MAX_PLAYERS = COLORS.length;
 export const MIN_PLAYERS = 2;
 
@@ -78,7 +81,7 @@ export function newGame(track: Track, playerCount = 2): GameState {
     Math.min(MAX_PLAYERS, playerCount, track.startPoints.length),
   );
   const mk = (i: number): Player => ({
-    name: `Игрок ${i + 1}`,
+    name: NAMES[i],
     color: COLORS[i],
     pos: { ...track.startPoints[i] },
     vel: { x: 0, y: 0 },

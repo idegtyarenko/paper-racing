@@ -69,7 +69,7 @@ export type StrokeResult = { poly: Polyline } | { error: string };
 /** Замыкание, ресемплинг и сглаживание сырого freehand-штриха. */
 export function processStroke(raw: Vec[]): StrokeResult {
   if (raw.length < 8) {
-    return { error: 'Штрих слишком короткий — обведите замкнутый контур одним движением.' };
+    return { error: 'Слишком короткий росчерк — обведи контур целиком, одним движением.' };
   }
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const p of raw) {
@@ -80,10 +80,10 @@ export function processStroke(raw: Vec[]): StrokeResult {
   }
   const diag = Math.hypot(maxX - minX, maxY - minY);
   if (diag < 4) {
-    return { error: 'Контур слишком маленький — нарисуйте крупнее.' };
+    return { error: 'Мелковато для трассы — черкни размашистее.' };
   }
   if (dist(raw[0], raw[raw.length - 1]) > 0.25 * diag) {
-    return { error: 'Контур не замкнут — конец штриха должен вернуться к началу.' };
+    return { error: 'Круг не замкнулся — доведи линию обратно к началу росчерка.' };
   }
   const maxTrim = Math.max(2, 0.12 * diag); // порог «мелкого» нахлёста концов
   const closed = trimSeamOverlap(raw, maxTrim);
@@ -95,28 +95,28 @@ export function processStroke(raw: Vec[]): StrokeResult {
 
 export function validateOuter(outer: Polyline): string | null {
   if (selfIntersectsClosed(outer)) {
-    return 'Внешний край пересекает сам себя — перерисуйте его.';
+    return 'Внешний бортик сам себя пересёк — перечерти его.';
   }
   if (polygonArea(outer) < 100) {
-    return 'Трасса слишком маленькая — нарисуйте внешний край крупнее.';
+    return 'Тесновато для гонки — сделай внешний бортик крупнее.';
   }
   return null;
 }
 
 export function validateInner(inner: Polyline, outer: Polyline): string | null {
   if (selfIntersectsClosed(inner)) {
-    return 'Внутренний край пересекает сам себя — перерисуйте его.';
+    return 'Внутренний бортик сам себя пересёк — перечерти его.';
   }
   for (const p of inner) {
     if (!pointInPolygon(p, outer)) {
-      return 'Внутренний край должен быть целиком внутри внешнего.';
+      return 'Внутренний бортик должен целиком уместиться внутри внешнего.';
     }
   }
   for (let i = 0; i < inner.length; i++) {
     const a = inner[i];
     const b = inner[(i + 1) % inner.length];
     if (segmentPolylineIntersections(a, b, outer).length > 0) {
-      return 'Края трассы пересекаются — перерисуйте внутренний край.';
+      return 'Бортики налезли друг на друга — перечерти внутренний.';
     }
   }
   return null;
@@ -212,8 +212,8 @@ export function finalizeTrack(
   if (inside.size < 30) {
     return {
       error:
-        'Дорога слишком узкая: внутри трассы почти нет узлов сетки. ' +
-        'Перерисуйте края, оставив между ними больше места.',
+        'Полотно слишком узкое — болидам не разъехаться. ' +
+        'Раздвинь бортики пошире.',
     };
   }
 
@@ -228,7 +228,7 @@ export function finalizeTrack(
     return dp - dq || p.y - q.y || p.x - q.x;
   });
   if (behind.length < 2) {
-    return { error: 'Позади стартовой линии нет места для болидов — сдвиньте линию.' };
+    return { error: 'За стартовой чертой негде выстроить болиды — сдвинь линию.' };
   }
   return {
     track: {
