@@ -1,8 +1,15 @@
 // Игровой движок: состояние гонки, кандидаты хода, аварии, финиш, победа.
 // Чистая логика без DOM.
 
-import { Vec, segSegIntersection, segmentPolylineIntersections } from './geometry';
-import { Track, key, unkey, sideOfFinish } from './track';
+import {
+  Vec,
+  dist,
+  lerp,
+  distPointToPolyline,
+  segSegIntersection,
+  segmentPolylineIntersections,
+} from "./geometry";
+import { Track, key, unkey, sideOfFinish, onRoad } from "./track";
 
 export interface TrailSeg {
   from: Vec;
@@ -32,8 +39,8 @@ export interface GameState {
   track: Track;
   players: [Player, Player];
   current: 0 | 1;
-  phase: 'race' | 'over';
-  winner: 0 | 1 | 'draw' | null;
+  phase: "race" | "over";
+  winner: 0 | 1 | "draw" | null;
   /** Игрок 0 финишировал в этом раунде; игрок 1 ещё доигрывает свой ход. */
   pendingWinner: 0 | null;
 }
@@ -50,7 +57,7 @@ export interface Candidate {
 export function newGame(track: Track): GameState {
   const mk = (i: 0 | 1): Player => ({
     name: `Игрок ${i + 1}`,
-    color: i === 0 ? '#c62828' : '#1565c0',
+    color: i === 0 ? "#c62828" : "#1565c0",
     pos: { ...track.startPoints[i] },
     vel: { x: 0, y: 0 },
     trail: [],
@@ -63,16 +70,40 @@ export function newGame(track: Track): GameState {
     track,
     players: [mk(0), mk(1)],
     current: 0,
-    phase: 'race',
+    phase: "race",
     winner: null,
     pendingWinner: null,
   };
 }
 
+/**
+ * Насколько игра «прощает» заезд за край трассы, в клетках. Ход, вылезший за
+ * стенку не глубже этого допуска (и путь, лишь задевающий стенку не глубже),
+ * аварией не считается — игрок может проскочить впритирку. Ноль вернул бы
+ * прежнюю строгость «точно по кромке».
+ */
+const FORGIVE = 0.15;
+
+/** Насколько глубоко точка зашла за край дороги: 0 на дороге, иначе — до ближайшей стенки. */
+function offRoadDepth(track: Track, p: Vec): number {
+  if (onRoad(p, track.outer, track.inner)) return 0;
+  return Math.min(
+    distPointToPolyline(p, track.outer),
+    distPointToPolyline(p, track.inner),
+  );
+}
+
+/**
+ * Ход — авария, только если где-то вдоль отрезка (включая конечную точку) он
+ * заходит за стенку глубже допуска FORGIVE. Точку хода густо семплим, чтобы
+ * ловить и заезды «насквозь» через газон, и глубокие срезы углов, но прощать
+ * касания впритирку. Стартовая точка всегда на дороге, поэтому её пропускаем.
+ */
 function moveCrashes(track: Track, from: Vec, to: Vec): boolean {
-  if (!track.inside.has(key(to.x, to.y))) return true;
-  if (segmentPolylineIntersections(from, to, track.outer).length > 0) return true;
-  if (segmentPolylineIntersections(from, to, track.inner).length > 0) return true;
+  const steps = Math.max(2, Math.ceil(dist(from, to) / 0.2));
+  for (let i = 1; i <= steps; i++) {
+    if (offRoadDepth(track, lerp(from, to, i / steps)) > FORGIVE) return true;
+  }
   return false;
 }
 
@@ -117,7 +148,7 @@ function nearestFreeInsidePoint(state: GameState, q: Vec): Vec {
 }
 
 export function applyMove(state: GameState, cand: Candidate): void {
-  if (state.phase !== 'race' || cand.blocked) return;
+  if (state.phase !== "race" || cand.blocked) return;
   const track = state.track;
   const p = state.players[state.current];
   const from = { ...p.pos };
@@ -177,7 +208,7 @@ export function applyMove(state: GameState, cand: Candidate): void {
 
 /** Пропуск хода после аварии — тоже действие игрока в раунде. */
 export function skipTurn(state: GameState): void {
-  if (state.phase !== 'race') return;
+  if (state.phase !== "race") return;
   const p = state.players[state.current];
   if (p.skipTurns <= 0) return;
   p.skipTurns -= 1;
@@ -202,14 +233,14 @@ function afterAction(state: GameState): void {
       if (finished) {
         const o0 = state.players[0].finishOvershoot ?? 0;
         const o1 = p.finishOvershoot ?? 0;
-        state.winner = o1 > o0 ? 1 : o0 > o1 ? 0 : 'draw';
+        state.winner = o1 > o0 ? 1 : o0 > o1 ? 0 : "draw";
       } else {
         state.winner = 0;
       }
-      state.phase = 'over';
+      state.phase = "over";
     } else if (finished) {
       state.winner = 1;
-      state.phase = 'over';
+      state.phase = "over";
     }
     state.current = 0;
   }
