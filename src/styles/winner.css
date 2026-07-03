@@ -1,0 +1,22 @@
+/* Баннер победителя после финиша. */
+.winner { display: none; }
+
+.winner--shown {
+  display: block;
+  text-align: center;
+  padding: 20px 14px;
+  border-radius: 12px;
+  background: #fff3cd;
+  border: 2px solid #e0a800;
+}
+
+.winner__trophy {
+  font-size: 40px;
+  line-height: 1;
+}
+
+.winner__title {
+  font-size: 26px;
+  font-weight: 800;
+  margin-top: 8px;
+}

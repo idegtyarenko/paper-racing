@@ -1,0 +1,25 @@
+/* Боковая панель управления. */
+.panel {
+  width: 300px;
+  padding: 16px;
+  background: #f4f1e8;
+  border-left: 1px solid #d8d2c0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+
+.panel__title {
+  font-size: 20px;
+  letter-spacing: 0.5px;
+}
+
+/* Вертикальная группа элементов (кнопки редактора / гонки). */
+.panel__group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.panel__group[hidden] { display: none; }

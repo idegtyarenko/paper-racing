@@ -4,88 +4,29 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Формула-1 на бумаге</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; }
-    #app { display: flex; height: 100%; font-family: system-ui, -apple-system, sans-serif; }
-    #boardWrap { flex: 1; min-width: 0; background: #fbfaf4; }
-    canvas { display: block; touch-action: none; user-select: none; -webkit-user-select: none; cursor: crosshair; }
-    #panel {
-      width: 300px; padding: 16px; background: #f4f1e8; border-left: 1px solid #d8d2c0;
-      display: flex; flex-direction: column; gap: 10px; overflow-y: auto;
-    }
-    h1 { font-size: 20px; letter-spacing: 0.5px; }
-    #status { font-size: 14px; line-height: 1.4; }
-    #status:empty { display: none; }
-    /* Заметная подсказка «Шаг N из 4» в режиме рисования. */
-    #status.step {
-      background: #fff3cd; border: 1px solid #f0d98c; border-left: 6px solid #e0a800;
-      border-radius: 10px; padding: 14px 16px; color: #4a3d00;
-    }
-    #status.step .step-badge {
-      display: inline-block; font-size: 15px; font-weight: 800; letter-spacing: 0.4px;
-      text-transform: uppercase; color: #8a6d00; margin-bottom: 6px;
-    }
-    #status.step .step-body { font-size: 17px; font-weight: 600; line-height: 1.45; }
-    #status.error {
-      color: #b3261e; font-weight: 600; background: #fdecea; border: 1px solid #f3b7b0;
-      border-left: 6px solid #b3261e; border-radius: 10px; padding: 14px 16px; font-size: 16px;
-    }
-    button {
-      padding: 8px 10px; font-size: 14px; cursor: pointer; text-align: left;
-      border: 1px solid #b7b0a0; background: #fff; border-radius: 6px;
-    }
-    button:hover:not(:disabled) { background: #f0ecdf; }
-    button:disabled { opacity: 0.45; cursor: default; }
-    #startRace { font-weight: 700; text-align: center; }
-    #backBtn { text-align: center; }
-    .pinfo {
-      border: 2px solid transparent; border-radius: 8px; padding: 8px 10px;
-      font-size: 13px; line-height: 1.5; background: #fff;
-    }
-    .pinfo.active { border-color: #55524a; }
-    .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 5px; vertical-align: baseline; }
-    /* Победитель после финиша — крупно. */
-    #winnerBanner { display: none; }
-    #winnerBanner.show {
-      display: block; text-align: center; padding: 20px 14px; border-radius: 12px;
-      background: #fff3cd; border: 2px solid #e0a800;
-    }
-    #winnerBanner .trophy { font-size: 40px; line-height: 1; }
-    #winnerBanner .who { font-size: 26px; font-weight: 800; margin-top: 8px; }
-    /* Правила гонки — показываются после старта. */
-    .rules { border-top: 1px solid #d8d2c0; padding-top: 10px; }
-    .rules h2 {
-      font-size: 15px; font-weight: 800; letter-spacing: 0.4px; text-transform: uppercase;
-      color: #55524a; margin-bottom: 6px;
-    }
-    .rules p { font-size: 12px; color: #6b675d; line-height: 1.5; }
-    .col { display: flex; flex-direction: column; gap: 10px; }
-    .col[hidden] { display: none; }
-  </style>
 </head>
 <body>
-  <div id="app">
-    <div id="boardWrap"><canvas id="board"></canvas></div>
-    <aside id="panel">
-      <h1>🏁 Формула-1</h1>
-      <div id="status"></div>
-      <div id="editButtons" class="col">
-        <button id="startRace">Старт!</button>
-        <button id="backBtn">← Назад</button>
+  <div id="app" class="app">
+    <div id="boardWrap" class="app__board"><canvas id="board"></canvas></div>
+    <aside id="panel" class="panel">
+      <h1 class="panel__title">🏁 Формула-1</h1>
+      <div id="status" class="status"></div>
+      <div id="editButtons" class="panel__group">
+        <button id="startRace" class="button button--primary">Старт!</button>
+        <button id="backBtn" class="button button--center">← Назад</button>
       </div>
-      <div id="raceButtons" class="col" hidden>
-        <div id="winnerBanner">
-          <div class="trophy">🏆</div>
-          <div class="who"></div>
+      <div id="raceButtons" class="panel__group" hidden>
+        <div id="winnerBanner" class="winner">
+          <div class="winner__trophy">🏆</div>
+          <div class="winner__title"></div>
         </div>
-        <div class="pinfo" id="p0"></div>
-        <div class="pinfo" id="p1"></div>
-        <button id="newRace">🔄 Новая гонка (та же трасса)</button>
-        <button id="newTrack">✏️ Новая трасса</button>
+        <div class="player-card" id="p0"></div>
+        <div class="player-card" id="p1"></div>
+        <button id="newRace" class="button">🔄 Новая гонка (та же трасса)</button>
+        <button id="newTrack" class="button">✏️ Новая трасса</button>
         <div class="rules">
-          <h2>Правила</h2>
-          <p>
+          <h2 class="rules__title">Правила</h2>
+          <p class="rules__text">
             Ходы: скорость меняется на ±1 клетку по каждой оси за ход.
             Вылет за трассу — пропуск двух ходов и возврат с нулевой скоростью.
             Побеждает первый, кто завершит круг.

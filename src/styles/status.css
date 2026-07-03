@@ -1,0 +1,44 @@
+/* Сообщения панели: обычный текст, «Шаг N из 4», ошибка. */
+.status {
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.status:empty { display: none; }
+
+/* Заметная подсказка «Шаг N из 4» в режиме рисования. */
+.status--step {
+  background: #fff3cd;
+  border: 1px solid #f0d98c;
+  border-left: 6px solid #e0a800;
+  border-radius: 10px;
+  padding: 14px 16px;
+  color: #4a3d00;
+}
+
+.status--error {
+  color: #b3261e;
+  font-weight: 600;
+  background: #fdecea;
+  border: 1px solid #f3b7b0;
+  border-left: 6px solid #b3261e;
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-size: 16px;
+}
+
+.status__badge {
+  display: inline-block;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #8a6d00;
+  margin-bottom: 6px;
+}
+
+.status__body {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.45;
+}

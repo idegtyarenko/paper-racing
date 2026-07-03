@@ -1,0 +1,22 @@
+/* Карточка игрока: имя, цвет, скорость, аварии. */
+.player-card {
+  border: 2px solid transparent;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  background: #fff;
+}
+
+/* Подсветка карточки игрока, чей сейчас ход. */
+.player-card--active { border-color: #55524a; }
+
+/* Цветная точка рядом с именем игрока. */
+.player-card__dot {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: baseline;
+}

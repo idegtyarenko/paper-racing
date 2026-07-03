@@ -1,0 +1,12 @@
+/* Корневая раскладка: холст слева, панель справа. */
+.app {
+  display: flex;
+  height: 100%;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.app__board {
+  flex: 1;
+  min-width: 0;
+  background: #fbfaf4;
+}

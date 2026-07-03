@@ -11,7 +11,7 @@ const backBtn = document.getElementById('backBtn') as HTMLButtonElement;
 const newRaceBtn = document.getElementById('newRace') as HTMLButtonElement;
 const newTrackBtn = document.getElementById('newTrack') as HTMLButtonElement;
 const winnerBanner = document.getElementById('winnerBanner')!;
-const winnerWho = winnerBanner.querySelector('.who') as HTMLElement;
+const winnerWho = winnerBanner.querySelector('.winner__title') as HTMLElement;
 const p0El = document.getElementById('p0')!;
 const p1El = document.getElementById('p1')!;
 
@@ -42,9 +42,9 @@ function addLine(target: HTMLElement, text: string): void {
 }
 
 function playerInfo(p: Player, active: boolean, target: HTMLElement): void {
-  target.classList.toggle('active', active);
+  target.classList.toggle('player-card--active', active);
   const dot = document.createElement('span');
-  dot.className = 'dot';
+  dot.className = 'player-card__dot';
   dot.style.background = p.color;
   const name = document.createElement('b');
   name.textContent = p.name;
@@ -56,18 +56,18 @@ function playerInfo(p: Player, active: boolean, target: HTMLElement): void {
 
 /** Отрисовка сообщения редактора: заметный «Шаг N из 4» + инструкция. */
 function renderEditStatus(editor: EditorState): void {
-  statusEl.className = '';
+  statusEl.className = 'status';
   if (editor.error) {
-    statusEl.classList.add('error');
+    statusEl.classList.add('status--error');
     statusEl.textContent = editor.message;
     return;
   }
-  statusEl.classList.add('step');
+  statusEl.classList.add('status--step');
   const m = editor.message.match(/^(Шаг \d+ из \d+)\.\s*(.*)$/s);
   if (m) {
-    statusEl.replaceChildren(div('step-badge', m[1]), div('step-body', m[2]));
+    statusEl.replaceChildren(div('status__badge', m[1]), div('status__body', m[2]));
   } else {
-    statusEl.replaceChildren(div('step-body', editor.message));
+    statusEl.replaceChildren(div('status__body', editor.message));
   }
 }
 
@@ -81,7 +81,7 @@ function showWinner(game: GameState): void {
     name.textContent = w.name;
     winnerWho.replaceChildren('Победил', document.createElement('br'), name);
   }
-  winnerBanner.classList.add('show');
+  winnerBanner.classList.add('winner--shown');
 }
 
 export function updatePanel(
@@ -100,7 +100,7 @@ export function updatePanel(
 
   editButtons.hidden = true;
   raceButtons.hidden = false;
-  statusEl.className = '';
+  statusEl.className = 'status';
   if (!game) return;
 
   playerInfo(game.players[0], game.phase === 'race' && game.current === 0, p0El);
@@ -112,7 +112,7 @@ export function updatePanel(
     return;
   }
 
-  winnerBanner.classList.remove('show');
+  winnerBanner.classList.remove('winner--shown');
   const cur = game.players[game.current];
   const warn = game.pendingWinner === 0 && game.current === 1
     ? ' Игрок 1 уже финишировал — нужно закончить дальше за линией!'

@@ -1,5 +1,6 @@
 // Оркестрация: события мыши на canvas, переключение фаз редактор/гонка.
 
+import './styles/index.css';
 import { Vec, dist } from './geometry';
 import { WORLD_W, WORLD_H, finalizeTrack } from './track';
 import {

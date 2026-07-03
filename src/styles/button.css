@@ -1,0 +1,22 @@
+/* Кнопки панели. */
+.button {
+  padding: 8px 10px;
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+  border: 1px solid #b7b0a0;
+  background: #fff;
+  border-radius: 6px;
+}
+
+.button:hover:not(:disabled) { background: #f0ecdf; }
+.button:disabled { opacity: 0.45; cursor: default; }
+
+/* Главная кнопка «Старт!». */
+.button--primary {
+  font-weight: 700;
+  text-align: center;
+}
+
+/* Кнопка с центрированной подписью («← Назад»). */
+.button--center { text-align: center; }

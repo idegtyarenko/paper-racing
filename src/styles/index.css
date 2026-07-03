@@ -1,0 +1,9 @@
+/* Агрегатор стилей: порядок от базовых к компонентам. */
+@import './base.css';
+@import './layout.css';
+@import './panel.css';
+@import './button.css';
+@import './status.css';
+@import './player-card.css';
+@import './winner.css';
+@import './rules.css';
