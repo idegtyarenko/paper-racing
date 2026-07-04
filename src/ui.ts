@@ -140,7 +140,7 @@ function renderStepStatus(badge: string, body: string): void {
   statusEl.replaceChildren(div('status__badge', badge), div('status__body', body));
 }
 
-/** Отрисовка сообщения редактора: заметный «Шаг N из 5» + инструкция. */
+/** Отрисовка сообщения редактора: заметный бейдж «Шаг N» + инструкция. */
 function renderEditStatus(editor: EditorState): void {
   statusEl.className = 'status';
   if (editor.error) {
@@ -148,7 +148,7 @@ function renderEditStatus(editor: EditorState): void {
     statusEl.textContent = editor.message;
     return;
   }
-  const m = editor.message.match(/^(Шаг \d+ из \d+)\.\s*(.*)$/s);
+  const m = editor.message.match(/^(Шаг \d+(?: из \d+)?)\.\s*(.*)$/s);
   if (m) {
     renderStepStatus(m[1], m[2]);
   } else {
