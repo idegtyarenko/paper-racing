@@ -292,10 +292,15 @@ function drawRace(
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.stroke();
       } else {
+        // Кандидаты — полупрозрачные, чтобы отличаться от болида и выбранной
+        // точки; наведённый/выбранный кандидат рисуем непрозрачным.
+        ctx.save();
+        ctx.globalAlpha = c === hover ? 1 : 0.4;
         ctx.fillStyle = p.color;
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fill();
+        ctx.restore();
       }
       if (c === hover && !c.blocked) {
         ctx.strokeStyle = p.color;
