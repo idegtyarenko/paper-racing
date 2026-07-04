@@ -68,8 +68,8 @@ const MSG: Record<EditorPhase, string> = {
     'Шаг 2 из 5. Бортики готовы! Хочешь — потяни любую точку кромки, чтобы ' +
     'подправить полотно. Когда доволен — жми «Далее».',
   finish:
-    'Шаг 3 из 5. Черкни линию старт/финиш поперёк полотна: начни у одного ' +
-    'бортика, протяни и отпусти у другого.',
+    'Шаг 3 из 5. Ткни в любую точку внутри трассы — черта старт/финиш ляжет ' +
+    'поперёк полотна ровно через это место.',
   direction: 'Шаг 4 из 5. Куда мчим? Ткни в зелёную стрелку — задай направление круга.',
   ready: 'Трасса готова! Осталось выбрать, сколько болидов на старте.',
 };
@@ -116,9 +116,9 @@ export function pointerDown(st: EditorState, p: Vec, tol = 1.2): void {
       st.dragEdge = pick.edge;
       st.dragIndex = pick.index;
     }
-  } else if (st.phase === 'finish') {
+  } else if (st.phase === 'finish' && st.width) {
     st.dragStart = p;
-    st.dragEnd = p;
+    previewFinish(st, p);
   } else if (st.phase === 'direction' && st.arrows) {
     for (const arrow of st.arrows) {
       if (distPointToSegment(p, arrow.from, arrow.tip) < tol) {
@@ -145,8 +145,9 @@ export function pointerMove(st: EditorState, p: Vec): void {
       st.outer = e.outer;
       st.inner = e.inner;
     }
-  } else if (st.phase === 'finish' && st.dragStart) {
-    st.dragEnd = p;
+  } else if (st.phase === 'finish' && st.dragStart && st.width) {
+    st.dragStart = p;
+    previewFinish(st, p);
   }
 }
 
@@ -183,22 +184,18 @@ export function pointerUp(st: EditorState): void {
   } else if (st.phase === 'adjust') {
     st.dragEdge = null;
     st.dragIndex = null;
-  } else if (st.phase === 'finish' && st.dragStart && st.dragEnd) {
-    const a = st.dragStart;
-    const b = st.dragEnd;
+  } else if (st.phase === 'finish' && st.dragStart && st.width) {
+    const p = st.dragStart;
     st.dragStart = null;
     st.dragEnd = null;
-    if (dist(a, b) < 1) {
-      fail(st, 'Черта коротковата — протяни её через всё полотно.');
-      return;
-    }
-    const res = clipFinishLine(a, b, st.outer!, st.inner!);
+    const res = clipPerpAt(st.width, p, st.outer!, st.inner!);
     if ('error' in res) {
+      st.finish = null;
       fail(
         st,
         res.error === 'narrow'
-          ? 'Здесь полотно узкое — проведи старт/финиш там, где пошире.'
-          : 'Старт/финиш должен рассекать полотно от бортика до бортика.',
+          ? 'Здесь полотно узкое — ткни туда, где пошире.'
+          : 'Ткни в точку внутри трассы — по ней проведём старт/финиш.',
       );
       return;
     }
@@ -206,6 +203,38 @@ export function pointerUp(st: EditorState): void {
     computeArrows(st);
     setPhase(st, 'direction');
   }
+}
+
+/** Направление поперёк трассы в точке p — нормаль ближайшей вершины осевой. */
+function perpDirAt(width: WidthModel, p: Vec): Vec {
+  let best = 0;
+  let bestD = Infinity;
+  for (let i = 0; i < width.center.length; i++) {
+    const d = dist(p, width.center[i]);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return width.outNormal[best];
+}
+
+/**
+ * Финишная линия через точку p, перпендикулярная осевой: берём нормаль
+ * ближайшей вершины осевой и обрезаем короткий отрезок вдоль неё по кромкам.
+ */
+function clipPerpAt(
+  width: WidthModel,
+  p: Vec,
+  outer: Polyline,
+  inner: Polyline,
+): ReturnType<typeof clipFinishLine> {
+  const d = perpDirAt(width, p);
+  return clipFinishLine(sub(p, d), add(p, d), outer, inner);
+}
+
+/** Обновить предпросмотр финишной линии по текущей точке касания. */
+function previewFinish(st: EditorState, p: Vec): void {
+  const res = clipPerpAt(st.width!, p, st.outer!, st.inner!);
+  st.finish = 'error' in res ? null : res.finish;
+  st.error = false;
 }
 
 /** Прерывание жеста (pointercancel): сбросить незавершённый штрих/линию/драг. */
@@ -216,6 +245,7 @@ export function pointerCancel(st: EditorState): void {
   st.dragEnd = null;
   st.dragEdge = null;
   st.dragIndex = null;
+  if (st.phase === 'finish') st.finish = null;
 }
 
 /** Подтвердить кромки и перейти к рисованию старт/финиша. */

@@ -189,15 +189,13 @@ function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): 
 
   if (ed.finish) drawFinishLine(ctx, s, ed.finish.a, ed.finish.b);
 
-  if (ed.phase === 'finish' && ed.dragStart && ed.dragEnd) {
+  // Точка касания в фазе старт/финиша — куда «пришпилена» перпендикулярная черта.
+  if (ed.phase === 'finish' && ed.dragStart) {
     ctx.save();
-    ctx.strokeStyle = '#777';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 4]);
+    ctx.fillStyle = ARROW_COLOR;
     ctx.beginPath();
-    ctx.moveTo(ed.dragStart.x * s, ed.dragStart.y * s);
-    ctx.lineTo(ed.dragEnd.x * s, ed.dragEnd.y * s);
-    ctx.stroke();
+    ctx.arc(ed.dragStart.x * s, ed.dragStart.y * s, Math.max(4, s * 0.22), 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
   }
 
