@@ -3,12 +3,14 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0; /* даёт карточке ужаться в узкой колонке (иначе распирает сетку) */
   border: 2px solid transparent;
   border-radius: 8px;
   padding: 5px 8px;
   font-size: 12px;
   background: #fff;
   white-space: nowrap;
+  overflow: hidden;
 }
 
 /* Подсветка карточки игрока, чей сейчас ход. */
@@ -22,11 +24,13 @@
   border-radius: 50%;
 }
 
-/* Имя игрока — жирное, при нехватке места усекается многоточием. */
+/* Имя игрока — жирное, занимает свободное место и при нехватке усекается
+   многоточием, чтобы статы справа всегда помещались. */
 .player-card__name {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  min-width: 0;
 }
 
 /* Статы иконками (скорость / аварии / боксы), прижаты к правому краю. */
