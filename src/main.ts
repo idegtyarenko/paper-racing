@@ -16,7 +16,14 @@ import { GameState, Candidate, newGame, candidates, applyMove } from './game';
 import { render, AppView } from './render';
 import { bindButtons, updatePanel, showConfirmMove, PanelMode } from './ui';
 import { localizeDom } from './localize';
-import { TOUCH_LIFT, CELL_MIN, CELL_MAX, TOUCH_TOL_PX } from './config';
+import {
+  TOUCH_LIFT,
+  CELL_MIN,
+  CELL_MAX,
+  TOUCH_TOL_PX,
+  ZOOM_MAX,
+  LOUPE_MAX_CELL_PX,
+} from './config';
 
 const canvas = document.getElementById('board') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -45,10 +52,46 @@ let cellPx = 16;
  * cellPx. Пока false, число клеток подбирается под пропорции доски.
  */
 let worldLocked = false;
+/** Пинч-зум трассы в гонке: множитель к вписанной сетке и смещение (css-px). */
+let zoom = 1;
+let panX = 0;
+let panY = 0;
+/** Активные тач-указатели (для распознавания пинча двумя пальцами). */
+const activePointers = new Map<number, Vec>();
+/** Снимок начала пинч-жеста; null — пинча нет. */
+let pinch:
+  | { d0: number; midX: number; midY: number; zoom0: number; panX0: number; panY0: number }
+  | null = null;
+
+/** Эффективный размер клетки на экране с учётом пинч-зума, css-px. */
+function effCell(): number {
+  return cellPx * zoom;
+}
 
 /** Радиус попадания по кандидату в клетках: для пальца — не меньше TOUCH_TOL_PX. */
 function touchTol(): number {
-  return Math.max(0.45, TOUCH_TOL_PX / cellPx);
+  return Math.max(0.45, TOUCH_TOL_PX / effCell());
+}
+
+/** Сбросить пинч-зум/пан (при старте гонки, новой трассе, ресайзе). */
+function resetView(): void {
+  zoom = 1;
+  panX = 0;
+  panY = 0;
+  pinch = null;
+}
+
+/**
+ * Ограничить пан так, чтобы трасса не «уезжала» из вида: пока доска целиком
+ * помещается по оси — держим её у левого/верхнего края (как без зума), иначе
+ * даём панорамировать в пределах [контейнер − доска, 0].
+ */
+function clampView(): void {
+  const r = wrap.getBoundingClientRect();
+  const boardW = WORLD_W * effCell();
+  const boardH = WORLD_H * effCell();
+  panX = boardW <= r.width ? 0 : Math.min(0, Math.max(r.width - boardW, panX));
+  panY = boardH <= r.height ? 0 : Math.min(0, Math.max(r.height - boardH, panY));
 }
 
 function resize(): void {
@@ -68,6 +111,8 @@ function resize(): void {
     );
     cellPx = cell;
   }
+  // Меняются пропорции сетки — начинаем с вписанного вида без зума.
+  resetView();
   canvas.width = Math.max(1, Math.round(r.width * dpr));
   canvas.height = Math.max(1, Math.round(r.height * dpr));
   canvas.style.width = `${r.width}px`;
@@ -78,7 +123,19 @@ function resize(): void {
 function redraw(): void {
   // Шаг выбора игроков рисуется как редактор: показываем готовую трассу-превью.
   const viewMode = mode === 'race' ? 'race' : 'edit';
-  const app: AppView = { mode: viewMode, editor, game, cands, hover, selected, loupe, cellPx };
+  const app: AppView = {
+    mode: viewMode,
+    editor,
+    game,
+    cands,
+    hover,
+    selected,
+    loupe,
+    cellPx,
+    zoom,
+    panX,
+    panY,
+  };
   render(ctx, app);
 }
 
@@ -93,9 +150,10 @@ function toScreen(e: PointerEvent): Vec {
 
 function toWorld(e: PointerEvent, liftPx = 0): Vec {
   const p = toScreen(e);
+  const s = effCell();
   return {
-    x: Math.max(0, Math.min(WORLD_W, p.x / cellPx)),
-    y: Math.max(0, Math.min(WORLD_H, (p.y - liftPx) / cellPx)),
+    x: Math.max(0, Math.min(WORLD_W, (p.x - panX) / s)),
+    y: Math.max(0, Math.min(WORLD_H, (p.y - liftPx - panY) / s)),
   };
 }
 
@@ -144,8 +202,59 @@ function findCandidate(w: Vec, tol = 0.45): Candidate | null {
   return best;
 }
 
-/** id активного тач-указателя: второй палец во время прицеливания игнорируем. */
+/** id активного тач-указателя (прицельный палец); второй палец уходит в пинч. */
 let touchId: number | null = null;
+
+/** Идёт ли гонка с активным игроком, по которому можно прицеливаться/зумить. */
+function racing(): boolean {
+  return mode === 'race' && game !== null && game.phase === 'race';
+}
+
+/** Два активных тач-указателя (для пинча). */
+function pinchPoints(): [Vec, Vec] {
+  const v = [...activePointers.values()];
+  return [v[0], v[1]];
+}
+
+/** Начать пинч-жест по текущим двум пальцам, прервав прицеливание. */
+function startPinch(): void {
+  const [a, b] = pinchPoints();
+  pinch = {
+    d0: Math.hypot(a.x - b.x, a.y - b.y) || 1,
+    midX: (a.x + b.x) / 2,
+    midY: (a.y + b.y) / 2,
+    zoom0: zoom,
+    panX0: panX,
+    panY0: panY,
+  };
+  touchId = null;
+  loupe = null;
+  hover = null;
+  selected = null;
+  showConfirmMove(false);
+}
+
+/** Пересчитать зум/пан по текущим двум пальцам: точка мира под центром жеста
+ *  остаётся под центром, расстояние между пальцами задаёт масштаб. */
+function updatePinch(): void {
+  if (!pinch) return;
+  const [a, b] = pinchPoints();
+  const d1 = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+  const mid1x = (a.x + b.x) / 2;
+  const mid1y = (a.y + b.y) / 2;
+  const nz = Math.max(1, Math.min(ZOOM_MAX, pinch.zoom0 * (d1 / pinch.d0)));
+  panX = mid1x - (pinch.midX - pinch.panX0) * (nz / pinch.zoom0);
+  panY = mid1y - (pinch.midY - pinch.panY0) * (nz / pinch.zoom0);
+  zoom = nz;
+  clampView();
+}
+
+/** Прицеливание пальцем: подсветить ближайшего кандидата; лупу показывать лишь
+ *  пока клетки мелкие — при достаточном зуме точки и так легко тапнуть. */
+function aimAt(e: PointerEvent): void {
+  hover = findCandidate(toWorld(e, TOUCH_LIFT), touchTol());
+  loupe = effCell() < LOUPE_MAX_CELL_PX ? aimScreen(e) : null;
+}
 
 canvas.addEventListener('pointerdown', (e) => {
   e.preventDefault();
@@ -154,8 +263,17 @@ canvas.addEventListener('pointerdown', (e) => {
     canvas.setPointerCapture(e.pointerId);
   } catch {}
   const touch = e.pointerType === 'touch';
+  if (touch) activePointers.set(e.pointerId, toScreen(e));
+
+  // Второй палец в гонке — начинаем пинч-зум (прерывая прицеливание).
+  if (touch && racing() && activePointers.size === 2) {
+    startPinch();
+    redraw();
+    return;
+  }
   if (touch) {
-    if (touchId !== null) return;
+    // Уже идёт пинч или уже есть прицельный палец — новый палец игнорируем.
+    if (pinch || touchId !== null) return;
     touchId = e.pointerId;
   }
   const w = toWorld(e, drawLift(e));
@@ -168,10 +286,7 @@ canvas.addEventListener('pointerdown', (e) => {
     updateUI();
   } else if (game && game.phase === 'race') {
     if (touch) {
-      // Прицеливание: точка прицела поднята над пальцем (как при рисовании),
-      // лупа центрируется на ней и подсвечивает ближайшего кандидата.
-      hover = findCandidate(toWorld(e, TOUCH_LIFT), touchTol());
-      loupe = aimScreen(e);
+      aimAt(e);
     } else {
       const c = findCandidate(w);
       if (c) {
@@ -185,17 +300,24 @@ canvas.addEventListener('pointerdown', (e) => {
 });
 
 canvas.addEventListener('pointermove', (e) => {
-  if (e.pointerType === 'touch' && e.pointerId !== touchId) return;
+  const touch = e.pointerType === 'touch';
+  if (touch) {
+    if (!activePointers.has(e.pointerId)) return;
+    activePointers.set(e.pointerId, toScreen(e));
+  }
+  if (pinch && activePointers.size >= 2) {
+    updatePinch();
+    redraw();
+    return;
+  }
+  if (touch && e.pointerId !== touchId) return;
   const w = toWorld(e, drawLift(e));
   if (mode === 'edit') {
     pointerMove(editor, w);
     redraw();
-  } else if (e.pointerType === 'touch') {
-    if (loupe) {
-      hover = findCandidate(toWorld(e, TOUCH_LIFT), touchTol());
-      loupe = aimScreen(e);
-      redraw();
-    }
+  } else if (touch) {
+    aimAt(e);
+    redraw();
   } else {
     const c = findCandidate(w);
     if (c !== hover) {
@@ -207,6 +329,15 @@ canvas.addEventListener('pointermove', (e) => {
 
 canvas.addEventListener('pointerup', (e) => {
   const touch = e.pointerType === 'touch';
+  if (touch) activePointers.delete(e.pointerId);
+
+  if (pinch) {
+    // Завершение пинча: когда пальцев осталось меньше двух — выходим из жеста.
+    // Палец, завершивший пинч, ход НЕ выбирает.
+    if (activePointers.size < 2) pinch = null;
+    redraw();
+    return;
+  }
   if (touch) {
     if (e.pointerId !== touchId) return;
     touchId = null;
@@ -228,7 +359,14 @@ canvas.addEventListener('pointerup', (e) => {
 });
 
 canvas.addEventListener('pointercancel', (e) => {
-  if (e.pointerType === 'touch' && e.pointerId !== touchId) return;
+  const touch = e.pointerType === 'touch';
+  if (touch) activePointers.delete(e.pointerId);
+  if (pinch) {
+    if (activePointers.size < 2) pinch = null;
+    redraw();
+    return;
+  }
+  if (touch && e.pointerId !== touchId) return;
   touchId = null;
   loupe = null;
   hover = null;
@@ -268,6 +406,7 @@ function startRace(playerCount: number): void {
   if (!raceTrack) return;
   game = newGame(raceTrack, playerCount);
   mode = 'race';
+  resetView();
   refreshCands();
   updateUI();
   redraw();

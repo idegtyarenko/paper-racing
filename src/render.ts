@@ -16,6 +16,10 @@ export interface AppView {
   /** Позиция пальца в css-пикселях canvas — включает «лупу» при прицеливании. */
   loupe: Vec | null;
   cellPx: number;
+  /** Пинч-зум трассы (1 — вписанная сетка). Смещение — в css-px canvas. */
+  zoom: number;
+  panX: number;
+  panY: number;
 }
 
 const INK = '#3a3a3a';
@@ -29,18 +33,23 @@ export function render(ctx: CanvasRenderingContext2D, app: AppView): void {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const w = ctx.canvas.width / dpr;
   const h = ctx.canvas.height / dpr;
-  const s = app.cellPx;
+  const s = app.cellPx * app.zoom;
 
   ctx.fillStyle = PAPER;
   ctx.fillRect(0, 0, w, h);
-  drawGrid(ctx, s);
 
+  // Сцена рисуется под пинч-зумом/паном; лупа — поверх, в экранных координатах.
+  ctx.save();
+  ctx.translate(app.panX, app.panY);
+  drawGrid(ctx, s);
   if (app.mode === 'edit') {
     drawEditor(ctx, s, app.editor);
   } else if (app.game) {
     drawRace(ctx, s, app.game, app.cands, app.hover ?? app.selected);
-    if (app.loupe) drawLoupe(ctx, app, w, h);
   }
+  ctx.restore();
+
+  if (app.mode !== 'edit' && app.game && app.loupe) drawLoupe(ctx, app, w, h);
 }
 
 /**
@@ -61,8 +70,10 @@ function drawLoupe(ctx: CanvasRenderingContext2D, app: AppView, w: number, h: nu
   ctx.clip();
   ctx.fillStyle = PAPER;
   ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
-  // Мировая точка под пальцем — в центр лупы.
-  ctx.translate(cx - (p.x / app.cellPx) * s2, cy - (p.y / app.cellPx) * s2);
+  // Мировая точка под пальцем (с учётом пинч-зума/пана) — в центр лупы.
+  const wx = (p.x - app.panX) / (app.cellPx * app.zoom);
+  const wy = (p.y - app.panY) / (app.cellPx * app.zoom);
+  ctx.translate(cx - wx * s2, cy - wy * s2);
   drawGrid(ctx, s2);
   drawRace(ctx, s2, app.game!, app.cands, app.hover ?? app.selected);
   ctx.restore();
