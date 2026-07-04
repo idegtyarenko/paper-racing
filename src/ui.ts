@@ -2,6 +2,7 @@
 
 import { EditorState, canStepBack } from './editor';
 import { GameState, Player } from './game';
+import { len } from './geometry';
 import { strings } from './strings';
 
 const statusEl = document.querySelector('.status')!;
@@ -91,22 +92,32 @@ function div(className: string, text: string): HTMLDivElement {
   return d;
 }
 
-/** Добавить текст с новой строки (<br> + текст). */
-function addLine(target: HTMLElement, text: string): void {
-  target.append(document.createElement('br'), text);
+/** Иконка-стат для карточки игрока (скорость / аварии / боксы). */
+function stat(text: string): HTMLSpanElement {
+  const s = document.createElement('span');
+  s.textContent = text;
+  return s;
 }
 
+/**
+ * Компактная карточка в одну строку: цветная точка, имя и статы иконками —
+ * скорость (одно число = длина вектора разгона), аварии и, если игрок стоит
+ * «в боксах» после вылета, число пропусков.
+ */
 function playerInfo(p: Player, active: boolean, target: HTMLElement): void {
   target.classList.toggle('player-card--active', active);
   const dot = document.createElement('span');
   dot.className = 'player-card__dot';
   dot.style.background = p.color;
   const name = document.createElement('b');
+  name.className = 'player-card__name';
   name.textContent = p.name;
-  target.replaceChildren(dot, name);
-  addLine(target, strings.race.speed(p.vel.x, p.vel.y));
-  addLine(target, strings.race.crashes(p.crashes.length));
-  if (p.skipTurns > 0) addLine(target, strings.race.pit(p.skipTurns));
+  const stats = document.createElement('span');
+  stats.className = 'player-card__stats';
+  const speed = Number(len(p.vel).toFixed(1));
+  stats.append(stat(strings.race.speed(speed)), stat(strings.race.crashes(p.crashes.length)));
+  if (p.skipTurns > 0) stats.append(stat(strings.race.pit(p.skipTurns)));
+  target.replaceChildren(dot, name, stats);
 }
 
 /**

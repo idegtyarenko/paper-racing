@@ -1,11 +1,14 @@
-/* Карточка игрока: имя, цвет, скорость, аварии. */
+/* Карточка игрока: имя, цвет, скорость, аварии — в одну компактную строку. */
 .player-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   border: 2px solid transparent;
   border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 13px;
-  line-height: 1.5;
+  padding: 5px 8px;
+  font-size: 12px;
   background: #fff;
+  white-space: nowrap;
 }
 
 /* Подсветка карточки игрока, чей сейчас ход. */
@@ -13,10 +16,23 @@
 
 /* Цветная точка рядом с именем игрока. */
 .player-card__dot {
-  display: inline-block;
-  width: 11px;
-  height: 11px;
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  margin-right: 5px;
-  vertical-align: baseline;
+}
+
+/* Имя игрока — жирное, при нехватке места усекается многоточием. */
+.player-card__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* Статы иконками (скорость / аварии / боксы), прижаты к правому краю. */
+.player-card__stats {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
 }
