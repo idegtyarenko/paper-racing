@@ -249,11 +249,22 @@ function updatePinch(): void {
   clampView();
 }
 
-/** Прицеливание пальцем: подсветить ближайшего кандидата; лупу показывать лишь
- *  пока клетки мелкие — при достаточном зуме точки и так легко тапнуть. */
+/** Показывать ли лупу при прицеливании: пока клетки мелкие. При достаточном
+ *  зуме точки и так легко тапнуть — лупа не нужна. */
+function loupeActive(): boolean {
+  return effCell() < LOUPE_MAX_CELL_PX;
+}
+
+/** Подъём точки прицела над пальцем — только когда есть лупа (иначе палец
+ *  закрыл бы точку). Без лупы пользователь тапает ровно в точку, лифт = 0. */
+function aimLift(): number {
+  return loupeActive() ? TOUCH_LIFT : 0;
+}
+
+/** Прицеливание пальцем: подсветить ближайшего кандидата и (если нужна) лупу. */
 function aimAt(e: PointerEvent): void {
-  hover = findCandidate(toWorld(e, TOUCH_LIFT), touchTol());
-  loupe = effCell() < LOUPE_MAX_CELL_PX ? aimScreen(e) : null;
+  hover = findCandidate(toWorld(e, aimLift()), touchTol());
+  loupe = loupeActive() ? aimScreen(e) : null;
 }
 
 canvas.addEventListener('pointerdown', (e) => {
@@ -352,7 +363,7 @@ canvas.addEventListener('pointerup', (e) => {
     // кнопка «Ходить»); мимо кандидатов — сброс выбора. Подтверждение — кнопкой.
     loupe = null;
     hover = null;
-    selected = findCandidate(toWorld(e, TOUCH_LIFT), touchTol());
+    selected = findCandidate(toWorld(e, aimLift()), touchTol());
     showConfirmMove(!!selected);
     redraw();
   }
