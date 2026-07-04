@@ -1,0 +1,92 @@
+/* Всплывашка «установить на телефон»: карточка у нижнего края экрана. */
+.install-prompt {
+  position: fixed;
+  left: 50%;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  transform: translate(-50%, calc(100% + 24px));
+  z-index: 9; /* ниже модального оверлея (10), поверх поля и панели */
+  width: min(440px, calc(100vw - 20px));
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #f4f1e8;
+  border: 1px solid #d8d2c0;
+  border-radius: 14px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22);
+  opacity: 0;
+  transition: transform 0.24s ease-out, opacity 0.24s ease-out;
+}
+
+/* Класс добавляется на следующий кадр — карточка выезжает снизу. */
+.install-prompt--in {
+  transform: translate(-50%, 0);
+  opacity: 1;
+}
+
+.install-prompt__icon {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+}
+
+.install-prompt__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.install-prompt__title {
+  font-size: 14px;
+  color: #3a3a3a;
+}
+
+.install-prompt__body {
+  font-size: 12px;
+  line-height: 1.35;
+  color: #6b6658;
+}
+
+/* Иконка «Поделиться» встроена в строку инструкции для iOS. */
+.install-prompt__share {
+  display: inline-flex;
+  vertical-align: -4px;
+  color: #0a8a4f;
+}
+
+.install-prompt__install {
+  flex: none;
+  padding: 9px 16px;
+  min-height: 40px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  background: #0a8a4f;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.install-prompt__install:active { background: #097843; }
+
+.install-prompt__close {
+  flex: none;
+  align-self: flex-start;
+  width: 26px;
+  height: 26px;
+  margin: -4px -4px 0 0;
+  font-size: 20px;
+  line-height: 1;
+  color: #8a8578;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.install-prompt__close:active { background: rgba(0, 0, 0, 0.06); }

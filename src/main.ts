@@ -16,6 +16,7 @@ import { GameState, Candidate, newGame, candidates, applyMove } from './game';
 import { render, AppView } from './render';
 import { bindButtons, updatePanel, showConfirmMove, PanelMode } from './ui';
 import { localizeDom } from './localize';
+import { initInstallPrompt } from './install-prompt';
 import {
   TOUCH_LIFT,
   CELL_MIN,
@@ -480,3 +481,6 @@ localizeDom();
 new ResizeObserver(resize).observe(wrap);
 updateUI();
 resize();
+
+// Предложить установить игру ярлыком на телефон (Android/Chromium и iOS Safari).
+initInstallPrompt();
