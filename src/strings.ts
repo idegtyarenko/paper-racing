@@ -67,7 +67,9 @@ export const strings = {
     hintTouch: 'Коснись точки и жми «Газу!», чтобы подтвердить манёвр.',
     hintMouse: 'Кликни по точке, куда рулить.',
     finalWarn: ' Кто-то уже под клетчатым флагом — тяни как можно дальше за линию!',
-    speed: (v: number): string => `⚡ ${v}`,
+    speed: (kmh: number): string => `⚡ ${kmh}`,
+    /** Единица скорости — прячется на узких (мобильных) карточках, чтобы не съедать имя. */
+    speedUnit: 'км/ч',
     crashes: (n: number): string => `💥 ${n}`,
     pit: (n: number): string => `🔧 ${n}`,
     winnerFlag: 'Клетчатый флаг!',

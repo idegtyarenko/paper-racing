@@ -1,5 +1,6 @@
 // Боковая панель: владеет её DOM-элементами и обновляет их по состоянию игры.
 
+import { KMH_PER_CELL } from './config';
 import { EditorState, canStepBack } from './editor';
 import { GameState, Player } from './game';
 import { len } from './geometry';
@@ -99,6 +100,17 @@ function stat(text: string): HTMLSpanElement {
   return s;
 }
 
+/** Стат скорости: число + отдельная единица «км/ч», которую CSS прячет на
+ *  узких карточках, чтобы освободить место под имя игрока. */
+function speedStat(kmh: number): HTMLSpanElement {
+  const s = stat(strings.race.speed(kmh));
+  const unit = document.createElement('span');
+  unit.className = 'player-card__unit';
+  unit.textContent = ` ${strings.race.speedUnit}`;
+  s.append(unit);
+  return s;
+}
+
 /**
  * Компактная карточка в одну строку: цветная точка, имя и статы иконками —
  * скорость (одно число = длина вектора разгона), аварии и, если игрок стоит
@@ -114,8 +126,10 @@ function playerInfo(p: Player, active: boolean, target: HTMLElement): void {
   name.textContent = p.name;
   const stats = document.createElement('span');
   stats.className = 'player-card__stats';
-  const speed = Number(len(p.vel).toFixed(1));
-  stats.append(stat(strings.race.speed(speed)), stat(strings.race.crashes(p.crashes.length)));
+  // Длину вектора разгона переводим в условные км/ч и округляем до десятков —
+  // как деления на реальном спидометре.
+  const kmh = Math.round((len(p.vel) * KMH_PER_CELL) / 10) * 10;
+  stats.append(speedStat(kmh), stat(strings.race.crashes(p.crashes.length)));
   if (p.skipTurns > 0) stats.append(stat(strings.race.pit(p.skipTurns)));
   target.replaceChildren(dot, name, stats);
 }
