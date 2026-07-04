@@ -25,6 +25,7 @@ export function localizeDom(root: ParentNode = document): void {
   });
   applyAttr(root, 'i18nTitle', 'data-i18n-title', 'title');
   applyAttr(root, 'i18nAriaLabel', 'data-i18n-aria-label', 'aria-label');
+  applyAttr(root, 'i18nPlaceholder', 'data-i18n-placeholder', 'placeholder');
 }
 
 function applyAttr(

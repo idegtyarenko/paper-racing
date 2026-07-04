@@ -1,0 +1,158 @@
+/* Экран лобби онлайн-игры: код, список игроков, поля ввода и всплывашка-тост. */
+
+/* Кнопка режима «С компьютером» с бейджем «Скоро». */
+.mode-soon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.mode-soon__badge {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #8a6d00;
+  background: #fff3cd;
+  border: 1px solid #f0d98c;
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+/* Блок с кодом игры. */
+.lobby__code {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid #d8d2c0;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.lobby__code-label {
+  font-size: 13px;
+  color: #6b6659;
+}
+
+.lobby__code-value {
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, monospace;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  color: #0a8a4f;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+/* Список подключившихся игроков. */
+.lobby__roster {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lobby__player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  padding: 6px 8px;
+  background: #fff;
+  border: 1px solid #e4dfce;
+  border-radius: 6px;
+}
+
+.lobby__dot {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.lobby__name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lobby__you {
+  margin-left: auto;
+  font-size: 12px;
+  color: #6b6659;
+}
+
+/* Текстовые поля диалогов (имя, код). */
+.field {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 16px;
+  border: 1px solid #b7b0a0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.field:focus {
+  outline: 2px solid #0a8a4f;
+  outline-offset: 1px;
+}
+
+.field--code {
+  text-transform: uppercase;
+  letter-spacing: 4px;
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, monospace;
+  font-weight: 700;
+  text-align: center;
+}
+
+.dialog-error {
+  color: #b3261e;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dialog-error[hidden] {
+  display: none;
+}
+
+/* Всплывающее уведомление (ссылка/код скопированы). */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 20;
+  background: rgba(30, 30, 30, 0.92);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 18px;
+  border-radius: 999px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  animation: toast-in 0.15s ease-out;
+}
+
+.toast[hidden] {
+  display: none;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}

@@ -67,6 +67,11 @@ export const MAX_PLAYERS = COLORS.length;
 // Минимум участников (см. MIN_PLAYERS в config) — реэкспорт.
 export { MIN_PLAYERS };
 
+/** Цвет болида по индексу места — для рендера ростера лобби в онлайне. */
+export function seatColor(i: number): string {
+  return COLORS[i % COLORS.length];
+}
+
 export interface Candidate {
   target: Vec;
   crash: boolean;

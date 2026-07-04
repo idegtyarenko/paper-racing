@@ -317,3 +317,22 @@ export function stepBack(st: EditorState): void {
 export function canStepBack(st: EditorState): boolean {
   return st.phase !== 'center';
 }
+
+/**
+ * Готовый editor-«снимок» из уже построенной трассы — для превью в лобби у гостя,
+ * который трассу не рисовал. Фаза `ready` рисует кромки и финиш без стрелок/тюнинга.
+ */
+export function editorFromTrack(t: {
+  outer: Polyline;
+  inner: Polyline;
+  finish: FinishLine;
+  forward: Vec;
+}): EditorState {
+  const st = newEditor();
+  st.phase = 'ready';
+  st.outer = t.outer;
+  st.inner = t.inner;
+  st.finish = t.finish;
+  st.forward = t.forward;
+  return st;
+}

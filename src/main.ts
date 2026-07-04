@@ -5,6 +5,7 @@ import { Vec, dist } from './geometry';
 import { Track, WORLD_W, WORLD_H, finalizeTrack, setWorldSize } from './track';
 import {
   newEditor,
+  editorFromTrack,
   pointerDown,
   pointerMove,
   pointerUp,
@@ -12,10 +13,26 @@ import {
   stepBack,
   confirmEdges,
 } from './editor';
-import { GameState, Candidate, newGame, candidates, applyMove } from './game';
+import { GameState, Candidate, newGame, candidates, applyMove, seatColor } from './game';
 import { render, AppView } from './render';
-import { bindButtons, updatePanel, showConfirmMove, PanelMode } from './ui';
+import {
+  bindButtons,
+  updatePanel,
+  showConfirmMove,
+  renderLobby,
+  openNameDialog,
+  openJoinDialog,
+  showJoinError,
+  showToast,
+  setOnlineEnabled,
+  closeOverlay,
+  PanelMode,
+} from './ui';
 import { localizeDom } from './localize';
+import { strings } from './strings';
+import { onlineAvailable } from './net';
+import * as session from './online';
+import { OnlineHandlers } from './online';
 import { initInstallPrompt } from './install-prompt';
 import {
   TOUCH_LIFT,
@@ -146,7 +163,28 @@ function redraw(): void {
 }
 
 function updateUI(): void {
-  updatePanel(mode, editor, game, raceTrack?.startPoints.length ?? 6);
+  const net = session.active() && game ? { yourTurn: myTurn() } : null;
+  updatePanel(mode, editor, game, raceTrack?.startPoints.length ?? 6, net);
+}
+
+/** Может ли этот клиент ходить сейчас: в локальной игре — всегда, в онлайне — на своём месте. */
+function myTurn(): boolean {
+  if (!session.active()) return true;
+  return game !== null && session.mySeat() === game.current;
+}
+
+/**
+ * Применить выбранный ход: локально мутируем стейт, а в онлайне ещё и отправляем
+ * его остальным. Не даём ходить не в свой ход / не в фазе гонки.
+ */
+function commitMove(cand: Candidate): void {
+  if (!game || game.phase !== 'race' || !myTurn()) return;
+  applyMove(game, cand);
+  refreshCands();
+  updateUI();
+  redraw();
+  if (session.active())
+    session.pushMove(game).catch(() => showToast(strings.online.error));
 }
 
 function toScreen(e: PointerEvent): Vec {
@@ -186,7 +224,12 @@ function refreshCands(): void {
   selected = null;
   loupe = null;
   showConfirmMove(false);
-  if (game && game.phase === 'race' && game.players[game.current].skipTurns === 0) {
+  if (
+    game &&
+    game.phase === 'race' &&
+    game.players[game.current].skipTurns === 0 &&
+    myTurn()
+  ) {
     cands = candidates(game);
   } else {
     cands = null;
@@ -300,7 +343,7 @@ canvas.addEventListener('pointerdown', (e) => {
     const tol = touch ? Math.max(1.2, TOUCH_TOL_PX / cellPx) : 1.2;
     pointerDown(editor, w, tol);
     if (editor.phase === 'ready') {
-      goToPlayers('edit');
+      goToMode('edit');
       return;
     }
     updateUI();
@@ -309,11 +352,7 @@ canvas.addEventListener('pointerdown', (e) => {
       aimAt(e);
     } else {
       const c = findCandidate(w);
-      if (c) {
-        applyMove(game, c);
-        refreshCands();
-        updateUI();
-      }
+      if (c) commitMove(c);
     }
   }
   redraw();
@@ -395,12 +434,12 @@ canvas.addEventListener('pointercancel', (e) => {
 });
 
 /**
- * Перейти к шагу выбора числа игроков. Из редактора («edit») сначала
- * финализируем нарисованную трассу; если это не удалось — показываем ошибку и
- * остаёмся в редакторе. Из гонки («race», кнопка «та же трасса») берём готовую
- * трассу текущей гонки.
+ * Перейти к шагу выбора режима игры. Из редактора («edit») сначала финализируем
+ * нарисованную трассу; если не удалось — показываем ошибку и остаёмся в редакторе.
+ * Из гонки («race», «та же трасса») берём готовую трассу текущей гонки. Если онлайн
+ * не настроен — сразу к выбору числа игроков (только локальная игра).
  */
-function goToPlayers(from: 'edit' | 'race'): void {
+function goToMode(from: 'edit' | 'race'): void {
   if (from === 'edit') {
     const res = finalizeTrack(
       editor.outer!,
@@ -421,12 +460,25 @@ function goToPlayers(from: 'edit' | 'race'): void {
     raceTrack = game.track;
   }
   playersReturn = from;
-  mode = 'players';
+  mode = onlineAvailable() ? 'mode' : 'players';
   updateUI();
   redraw();
 }
 
-/** Выбрано число игроков — стартуем гонку на подготовленной трассе. */
+/** Назад из шага настройки (режим/игроки): в редактор или к текущей гонке. */
+function backFromSetup(): void {
+  if (playersReturn === 'race') {
+    mode = 'race';
+  } else {
+    mode = 'edit';
+    stepBack(editor); // ready → direction
+  }
+  raceTrack = null;
+  updateUI();
+  redraw();
+}
+
+/** Выбрано число игроков — стартуем локальную гонку на подготовленной трассе. */
 function startRace(playerCount: number): void {
   if (!raceTrack) return;
   game = newGame(raceTrack, playerCount);
@@ -435,6 +487,185 @@ function startRace(playerCount: number): void {
   refreshCands();
   updateUI();
   redraw();
+}
+
+/** Сбросить всё к чистому редактору (новая трасса / выход из онлайна). */
+function resetToEdit(): void {
+  game = null;
+  raceTrack = null;
+  cands = null;
+  hover = null;
+  selected = null;
+  showConfirmMove(false);
+  editor = newEditor();
+  worldLocked = false; // новая трасса берёт пропорции под текущую ориентацию
+  mode = 'edit';
+  updateUI();
+  resize();
+}
+
+// ── Онлайн-режим ────────────────────────────────────────────────────────────────
+
+function savedName(): string {
+  return localStorage.getItem('pr-player-name') ?? '';
+}
+function rememberName(n: string): void {
+  localStorage.setItem('pr-player-name', n);
+}
+
+/** Разложить ошибку присоединения в понятный текст. */
+function joinErrorText(e: unknown): string {
+  const m = (e as { message?: string })?.message ?? '';
+  if (m.includes('game_not_found')) return strings.online.notFound;
+  if (m.includes('game_full')) return strings.online.full;
+  if (m.includes('game_started')) return strings.online.started;
+  return strings.online.error;
+}
+
+/** Перерисовать панель лобби по текущему ростеру сессии. */
+function renderLobbyPanel(): void {
+  const roster = session.getRoster();
+  const mine = session.mySeat();
+  renderLobby({
+    code: session.getCode() ?? '',
+    players: roster.map((r, i) => ({
+      name: r.name,
+      color: seatColor(i),
+      you: i === mine,
+    })),
+    canStart: session.canStart(),
+    isHost: session.isHost(),
+  });
+}
+
+const onlineHandlers: OnlineHandlers = {
+  onLobby: () => {
+    if (mode === 'lobby') renderLobbyPanel();
+  },
+  onGameState: (g) => {
+    game = g;
+    if (mode !== 'race') {
+      mode = 'race';
+      closeOverlay();
+      resetView();
+    }
+    refreshCands();
+    updateUI();
+    redraw();
+  },
+  onClosed: () => {
+    showToast(strings.online.closed);
+    resetToEdit();
+  },
+};
+
+/** Создать онлайн-игру (хост) с введённым именем и открыть лобби. */
+async function hostOnline(name: string): Promise<void> {
+  if (!raceTrack) return;
+  try {
+    await session.host(raceTrack, name, onlineHandlers);
+    mode = 'lobby';
+    updateUI();
+    renderLobbyPanel();
+    redraw();
+  } catch {
+    showToast(strings.online.error);
+  }
+}
+
+/**
+ * Присоединиться к онлайн-игре по коду. inJoinDialog — ошибку показываем прямо в
+ * диалоге входа (он остаётся открыт); иначе (вход по ссылке) — тостом.
+ */
+async function joinOnline(
+  code: string,
+  name: string,
+  inJoinDialog: boolean,
+): Promise<void> {
+  try {
+    await session.join(code, name, onlineHandlers);
+    closeOverlay();
+    const t = session.getTrack();
+    if (t) {
+      editor = editorFromTrack(t); // превью трассы хоста в лобби
+      raceTrack = null; // гость не владеет трассой
+      worldLocked = true; // размеры мира взяты у хоста — не пересчитывать
+    }
+    mode = 'lobby';
+    resize(); // подогнать сетку под мир хоста + redraw
+    updateUI();
+    renderLobbyPanel();
+  } catch (e) {
+    if (inJoinDialog) showJoinError(joinErrorText(e));
+    else showToast(joinErrorText(e));
+  }
+}
+
+/** Хост стартует онлайн-гонку: строит стейт с именами игроков и рассылает его. */
+async function startOnline(): Promise<void> {
+  if (!raceTrack || !session.canStart()) return;
+  const roster = session.getRoster();
+  const g = newGame(raceTrack, roster.length);
+  roster.forEach((r, i) => {
+    if (g.players[i]) g.players[i].name = r.name;
+  });
+  game = g;
+  mode = 'race';
+  resetView();
+  refreshCands();
+  updateUI();
+  redraw();
+  try {
+    await session.start(g);
+  } catch {
+    showToast(strings.online.error);
+  }
+}
+
+/** Выйти из лобби: освободить место на сервере и вернуться (хост — к выбору режима). */
+async function leaveLobby(): Promise<void> {
+  const wasHost = raceTrack !== null;
+  await session.leave();
+  if (wasHost) {
+    mode = 'mode';
+    updateUI();
+    redraw();
+  } else {
+    resetToEdit();
+  }
+}
+
+/** Поделиться ссылкой на игру (Web Share или копирование в буфер). */
+async function shareLink(): Promise<void> {
+  const code = session.getCode();
+  if (!code) return;
+  const url = `${location.origin}${import.meta.env.BASE_URL}?join=${code}`;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: strings.app.title, url });
+    } catch {
+      // Пользователь отменил шаринг — ничего не делаем.
+    }
+  } else {
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast(strings.online.copied);
+    } catch {
+      showToast(url);
+    }
+  }
+}
+
+/** Скопировать код игры в буфер. */
+async function copyCode(): Promise<void> {
+  const code = session.getCode();
+  if (!code) return;
+  try {
+    await navigator.clipboard.writeText(code);
+    showToast(strings.online.codeCopied);
+  } catch {
+    // Буфер недоступен — код и так виден на экране.
+  }
 }
 
 bindButtons({
@@ -449,51 +680,66 @@ bindButtons({
     redraw();
   },
   onConfirmMove: () => {
-    if (!selected || !game || game.phase !== 'race') return;
-    applyMove(game, selected);
-    refreshCands();
-    updateUI();
-    redraw();
+    if (selected) commitMove(selected);
   },
-  onChooseSameTrack: () => goToPlayers('race'),
+  onChooseSameTrack: () => goToMode('race'),
   onPlayersBack: () => {
-    if (playersReturn === 'race') {
-      // Вернуться к текущей гонке без изменений.
-      mode = 'race';
+    // С экрана числа игроков назад — к выбору режима (если онлайн доступен) или
+    // сразу в редактор/гонку (когда режимного шага не было).
+    if (onlineAvailable()) {
+      mode = 'mode';
+      updateUI();
+      redraw();
     } else {
-      // Вернуться в редактор на шаг выбора направления.
-      mode = 'edit';
-      stepBack(editor); // ready → direction
+      backFromSetup();
     }
-    raceTrack = null;
-    updateUI();
-    redraw();
   },
   onPlayerCount: (n) => startRace(n),
-  onNewTrack: () => {
-    mode = 'edit';
-    game = null;
-    raceTrack = null;
-    cands = null;
-    hover = null;
-    selected = null;
-    showConfirmMove(false);
-    editor = newEditor();
-    // Снять фиксацию: новая трасса берёт пропорции под текущую ориентацию.
-    worldLocked = false;
+  onNewTrack: () => resetToEdit(),
+  onModeLocal: () => {
+    mode = 'players';
     updateUI();
-    resize(); // пере-вывести мир под текущую ориентацию + redraw
+    redraw();
   },
+  onModeOnline: () => {
+    openNameDialog(strings.online.create, savedName(), (name) => {
+      rememberName(name);
+      hostOnline(name);
+    });
+  },
+  onModeBack: () => backFromSetup(),
+  onJoinByCode: () => {
+    openJoinDialog(savedName(), '', (code, name) => {
+      rememberName(name);
+      joinOnline(code, name, true);
+    });
+  },
+  onLobbyStart: () => startOnline(),
+  onLobbyShare: () => shareLink(),
+  onLobbyCopyCode: () => copyCode(),
+  onLobbyLeave: () => leaveLobby(),
 });
 
 // Заполнить статичные тексты разметки из strings до первого показа панели.
 localizeDom();
+
+// Онлайн-входы показываем только если бэкенд настроен (иначе — только локальная игра).
+setOnlineEnabled(onlineAvailable());
 
 // ResizeObserver вместо window.resize: обёртка меняет размер и при смене
 // раскладки (портрет/ландшафт на мобильных), а не только окна.
 new ResizeObserver(resize).observe(wrap);
 updateUI();
 resize();
+
+// Открыта ссылка-приглашение (?join=CODE) — спросить имя и подключиться к игре.
+const joinParam = new URLSearchParams(location.search).get('join');
+if (joinParam && onlineAvailable()) {
+  openNameDialog(strings.online.joinSubmit, savedName(), (name) => {
+    rememberName(name);
+    joinOnline(joinParam.toUpperCase(), name, false);
+  });
+}
 
 // Предложить установить игру ярлыком на телефон (Android/Chromium и iOS Safari).
 initInstallPrompt();

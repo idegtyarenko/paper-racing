@@ -11,6 +11,8 @@ const statusEl = document.querySelector('.status')!;
 /** Основной указатель устройства — палец (телефон/планшет). */
 const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
 const editButtons = document.getElementById('editButtons')!;
+const modeButtons = document.getElementById('modeButtons')!;
+const lobbyButtons = document.getElementById('lobbyButtons')!;
 const playersButtons = document.getElementById('playersButtons')!;
 const raceButtons = document.getElementById('raceButtons')!;
 const backBtn = document.getElementById('backBtn') as HTMLButtonElement;
@@ -28,8 +30,28 @@ const winnerBanner = document.querySelector('.winner')!;
 const winnerWho = winnerBanner.querySelector('.winner__title') as HTMLElement;
 const playerCount = document.getElementById('playerCount')!;
 
-/** Режим панели: рисование трассы, выбор числа игроков, гонка. */
-export type PanelMode = 'edit' | 'players' | 'race';
+// Онлайн-режим: кнопки выбора режима, лобби и диалоги.
+const modeLocalBtn = document.getElementById('modeLocal') as HTMLButtonElement;
+const modeOnlineBtn = document.getElementById('modeOnline') as HTMLButtonElement;
+const modeBackBtn = document.getElementById('modeBack') as HTMLButtonElement;
+const joinByCodeBtn = document.getElementById('joinByCode') as HTMLButtonElement;
+const lobbyCodeBtn = document.getElementById('lobbyCode') as HTMLButtonElement;
+const lobbyShareBtn = document.getElementById('lobbyShare') as HTMLButtonElement;
+const lobbyRoster = document.getElementById('lobbyRoster')!;
+const lobbyStartBtn = document.getElementById('lobbyStart') as HTMLButtonElement;
+const lobbyLeaveBtn = document.getElementById('lobbyLeave') as HTMLButtonElement;
+const nameDialog = document.getElementById('nameDialog')!;
+const nameInput = document.getElementById('nameInput') as HTMLInputElement;
+const nameConfirm = document.getElementById('nameConfirm') as HTMLButtonElement;
+const joinDialog = document.getElementById('joinDialog')!;
+const joinCodeInput = document.getElementById('joinCodeInput') as HTMLInputElement;
+const joinNameInput = document.getElementById('joinNameInput') as HTMLInputElement;
+const joinError = document.getElementById('joinError')!;
+const joinConfirm = document.getElementById('joinConfirm') as HTMLButtonElement;
+const toast = document.getElementById('toast')!;
+
+/** Режим панели: рисование трассы, выбор режима/числа игроков, лобби, гонка. */
+export type PanelMode = 'edit' | 'mode' | 'players' | 'lobby' | 'race';
 
 export interface PanelHandlers {
   /** Шаг назад в редакторе трассы. */
@@ -37,13 +59,29 @@ export interface PanelHandlers {
   /** Подтвердить кромки (фаза adjust) и перейти к старт/финишу. */
   onNext: () => void;
   onConfirmMove: () => void;
-  /** «Та же трасса» — перейти к повторному выбору числа игроков. */
+  /** «Та же трасса» — перейти к повторному выбору режима. */
   onChooseSameTrack: () => void;
   onNewTrack: () => void;
   /** Назад из шага выбора игроков. */
   onPlayersBack: () => void;
   /** Выбрано число игроков — сразу стартуем гонку. */
   onPlayerCount: (n: number) => void;
+  /** Шаг выбора режима: локальная игра. */
+  onModeLocal: () => void;
+  /** Шаг выбора режима: онлайн (открыть диалог имени → создать игру). */
+  onModeOnline: () => void;
+  /** Назад из шага выбора режима. */
+  onModeBack: () => void;
+  /** Открыть диалог входа по коду (с экрана рисования). */
+  onJoinByCode: () => void;
+  /** Хост стартует онлайн-гонку. */
+  onLobbyStart: () => void;
+  /** Поделиться ссылкой на игру. */
+  onLobbyShare: () => void;
+  /** Скопировать код игры. */
+  onLobbyCopyCode: () => void;
+  /** Выйти из лобби. */
+  onLobbyLeave: () => void;
 }
 
 /** Показать/спрятать плавающую кнопку подтверждения хода (тач-прицеливание). */
@@ -53,14 +91,126 @@ export function showConfirmMove(show: boolean): void {
 
 /** Показать одну шторку оверлея, спрятав остальные. */
 function openSheet(sheet: HTMLElement): void {
-  rulesSheet.hidden = true;
-  raceDialog.hidden = true;
+  overlay.querySelectorAll<HTMLElement>('.sheet').forEach((s) => (s.hidden = true));
   sheet.hidden = false;
   overlay.hidden = false;
 }
 
-function closeOverlay(): void {
+/** Спрятать оверлей со всеми шторками. */
+export function closeOverlay(): void {
   overlay.hidden = true;
+}
+
+// Колбэки подтверждения диалогов имени/кода (заполняются при открытии диалога).
+let nameCb: ((name: string) => void) | null = null;
+let joinCb: ((code: string, name: string) => void) | null = null;
+
+/** Диалог ввода имени (создание игры / вход по ссылке). */
+export function openNameDialog(
+  confirmLabel: string,
+  defaultName: string,
+  onConfirm: (name: string) => void,
+): void {
+  nameConfirm.textContent = confirmLabel;
+  nameInput.value = defaultName;
+  nameCb = onConfirm;
+  openSheet(nameDialog);
+  setTimeout(() => nameInput.focus(), 50);
+}
+
+function submitName(): void {
+  const v = nameInput.value.trim();
+  if (!v) {
+    nameInput.focus();
+    return;
+  }
+  const cb = nameCb;
+  closeOverlay();
+  cb?.(v);
+}
+
+/** Диалог входа по коду (код + имя). Оверлей не закрывается сам — это делает вызывающий. */
+export function openJoinDialog(
+  defaultName: string,
+  defaultCode: string,
+  onConfirm: (code: string, name: string) => void,
+): void {
+  joinCodeInput.value = defaultCode;
+  joinNameInput.value = defaultName;
+  joinError.hidden = true;
+  joinCb = onConfirm;
+  openSheet(joinDialog);
+  setTimeout(() => (defaultCode ? joinNameInput : joinCodeInput).focus(), 50);
+}
+
+function submitJoin(): void {
+  const code = joinCodeInput.value.trim().toUpperCase();
+  const name = joinNameInput.value.trim();
+  if (!code || !name) return;
+  joinError.hidden = true;
+  joinCb?.(code, name);
+}
+
+/** Показать ошибку в диалоге входа (не закрывая его). */
+export function showJoinError(msg: string): void {
+  joinError.textContent = msg;
+  joinError.hidden = false;
+}
+
+let toastTimer: number | undefined;
+
+/** Короткое всплывающее уведомление (ссылка/код скопированы и т.п.). */
+export function showToast(msg: string): void {
+  toast.textContent = msg;
+  toast.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => (toast.hidden = true), 1800);
+}
+
+/** Спрятать онлайн-входы, если бэкенд не настроен (играем только локально). */
+export function setOnlineEnabled(enabled: boolean): void {
+  modeOnlineBtn.hidden = !enabled;
+  joinByCodeBtn.hidden = !enabled;
+}
+
+export interface LobbyView {
+  code: string;
+  players: { name: string; color: string; you: boolean }[];
+  canStart: boolean;
+  isHost: boolean;
+}
+
+/** Отрисовать экран лобби: код, список игроков, кнопку «Начать» и статус. */
+export function renderLobby(v: LobbyView): void {
+  lobbyCodeBtn.textContent = v.code;
+  lobbyRoster.replaceChildren(
+    ...v.players.map((p) => {
+      const li = document.createElement('li');
+      li.className = 'lobby__player';
+      const dot = document.createElement('span');
+      dot.className = 'lobby__dot';
+      dot.style.background = p.color;
+      const name = document.createElement('span');
+      name.className = 'lobby__name';
+      name.textContent = p.name;
+      li.append(dot, name);
+      if (p.you) {
+        const you = document.createElement('span');
+        you.className = 'lobby__you';
+        you.textContent = strings.online.you;
+        li.append(you);
+      }
+      return li;
+    }),
+  );
+  lobbyStartBtn.hidden = !v.isHost;
+  lobbyStartBtn.disabled = !v.canStart;
+  const body = v.isHost
+    ? v.canStart
+      ? strings.online.lobbyHost
+      : strings.online.waiting
+    : strings.online.lobbyGuest;
+  renderStepStatus(strings.online.lobbyBadge, body);
 }
 
 export function bindButtons(h: PanelHandlers): void {
@@ -72,6 +222,24 @@ export function bindButtons(h: PanelHandlers): void {
     btn.addEventListener('click', () => {
       if (!btn.disabled) h.onPlayerCount(Number(btn.dataset.count));
     });
+  });
+  modeLocalBtn.addEventListener('click', h.onModeLocal);
+  modeOnlineBtn.addEventListener('click', h.onModeOnline);
+  modeBackBtn.addEventListener('click', h.onModeBack);
+  joinByCodeBtn.addEventListener('click', h.onJoinByCode);
+  lobbyStartBtn.addEventListener('click', () => {
+    if (!lobbyStartBtn.disabled) h.onLobbyStart();
+  });
+  lobbyShareBtn.addEventListener('click', h.onLobbyShare);
+  lobbyCodeBtn.addEventListener('click', h.onLobbyCopyCode);
+  lobbyLeaveBtn.addEventListener('click', h.onLobbyLeave);
+  nameConfirm.addEventListener('click', submitName);
+  nameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submitName();
+  });
+  joinConfirm.addEventListener('click', submitJoin);
+  joinNameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submitJoin();
   });
   helpBtn.addEventListener('click', () => openSheet(rulesSheet));
   newRaceBtn.addEventListener('click', () => openSheet(raceDialog));
@@ -194,13 +362,21 @@ function showWinner(game: GameState): void {
   winnerBanner.classList.add('winner--shown');
 }
 
+/** Онлайн-контекст текущего хода — для статуса гонки (чей ход, мой ли). */
+export interface NetTurn {
+  yourTurn: boolean;
+}
+
 export function updatePanel(
   mode: PanelMode,
   editor: EditorState,
   game: GameState | null,
   playersMax = 6,
+  net: NetTurn | null = null,
 ): void {
   editButtons.hidden = mode !== 'edit';
+  modeButtons.hidden = mode !== 'mode';
+  lobbyButtons.hidden = mode !== 'lobby';
   playersButtons.hidden = mode !== 'players';
   raceButtons.hidden = mode !== 'race';
 
@@ -208,6 +384,16 @@ export function updatePanel(
     renderEditStatus(editor);
     backBtn.disabled = !canStepBack(editor);
     nextBtn.hidden = editor.phase !== 'adjust';
+    return;
+  }
+
+  if (mode === 'mode') {
+    renderStepStatus(strings.modeSelect.promptBadge, strings.modeSelect.prompt);
+    return;
+  }
+
+  if (mode === 'lobby') {
+    // Содержимое лобби (код, ростер, статус) рисует renderLobby().
     return;
   }
 
@@ -232,6 +418,12 @@ export function updatePanel(
 
   winnerBanner.classList.remove('winner--shown');
   const cur = game.players[game.current];
+  if (net) {
+    statusEl.textContent = net.yourTurn
+      ? strings.online.yourTurn
+      : strings.online.turnOf(cur.name);
+    return;
+  }
   const warn = game.finalTurnsLeft !== null ? strings.race.finalWarn : '';
   const hint = coarsePointer ? strings.race.hintTouch : strings.race.hintMouse;
   statusEl.textContent = `${strings.race.driver(cur.name)} ${hint}${warn}`;

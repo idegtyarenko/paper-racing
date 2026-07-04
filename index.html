@@ -54,6 +54,64 @@
           <button id="backBtn" class="button button--center" data-i18n="buttons.back">
             ← Назад
           </button>
+          <button
+            id="joinByCode"
+            class="button button--center"
+            data-i18n="online.joinByCode"
+          >
+            🌐 Войти по коду игры
+          </button>
+        </div>
+        <div id="modeButtons" class="panel__group" hidden>
+          <button
+            id="modeLocal"
+            class="button button--center"
+            data-i18n="modeSelect.local"
+          >
+            📱 На одном устройстве
+          </button>
+          <button
+            id="modeOnline"
+            class="button button--center"
+            data-i18n="modeSelect.online"
+          >
+            🌐 Онлайн с друзьями
+          </button>
+          <button id="modeAI" class="button button--center mode-soon" disabled>
+            <span data-i18n="modeSelect.ai">🤖 С компьютером</span>
+            <span class="mode-soon__badge" data-i18n="modeSelect.soon">Скоро</span>
+          </button>
+          <button id="modeBack" class="button button--center" data-i18n="buttons.back">
+            ← Назад
+          </button>
+        </div>
+        <div id="lobbyButtons" class="panel__group" hidden>
+          <div class="lobby__code">
+            <span class="lobby__code-label" data-i18n="online.codeLabel">Код игры</span>
+            <button
+              id="lobbyCode"
+              type="button"
+              class="lobby__code-value"
+              data-i18n-title="online.codeCopied"
+            >
+              —
+            </button>
+          </div>
+          <button id="lobbyShare" class="button button--center" data-i18n="online.share">
+            🔗 Поделиться ссылкой
+          </button>
+          <ul id="lobbyRoster" class="lobby__roster"></ul>
+          <button
+            id="lobbyStart"
+            class="button button--primary"
+            data-i18n="online.start"
+            hidden
+          >
+            🏁 Начать игру
+          </button>
+          <button id="lobbyLeave" class="button button--center" data-i18n="online.leave">
+            ← Выйти
+          </button>
         </div>
         <div id="playersButtons" class="panel__group" hidden>
           <div id="playerCount" class="players-select">
@@ -111,7 +169,60 @@
           Отмена
         </button>
       </div>
+      <div id="nameDialog" class="sheet" hidden>
+        <h2 class="sheet__title" data-i18n="online.namePrompt">Как тебя зовут?</h2>
+        <input
+          id="nameInput"
+          class="field"
+          type="text"
+          maxlength="16"
+          autocomplete="off"
+          data-i18n-placeholder="online.namePlaceholder"
+          placeholder="Имя игрока"
+        />
+        <button id="nameConfirm" class="button button--primary" data-i18n="online.create">
+          Создать игру
+        </button>
+        <button class="button button--center" data-i18n="buttons.cancel" data-close>
+          Отмена
+        </button>
+      </div>
+      <div id="joinDialog" class="sheet" hidden>
+        <h2 class="sheet__title" data-i18n="online.joinTitle">Войти в игру</h2>
+        <input
+          id="joinCodeInput"
+          class="field field--code"
+          type="text"
+          maxlength="5"
+          autocomplete="off"
+          autocapitalize="characters"
+          spellcheck="false"
+          data-i18n-placeholder="online.codePlaceholder"
+          placeholder="Код игры"
+        />
+        <input
+          id="joinNameInput"
+          class="field"
+          type="text"
+          maxlength="16"
+          autocomplete="off"
+          data-i18n-placeholder="online.namePlaceholder"
+          placeholder="Имя игрока"
+        />
+        <div id="joinError" class="dialog-error" hidden></div>
+        <button
+          id="joinConfirm"
+          class="button button--primary"
+          data-i18n="online.joinSubmit"
+        >
+          Войти
+        </button>
+        <button class="button button--center" data-i18n="buttons.cancel" data-close>
+          Отмена
+        </button>
+      </div>
     </div>
+    <div id="toast" class="toast" hidden></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
