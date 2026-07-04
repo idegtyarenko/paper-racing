@@ -10,6 +10,7 @@ import {
   pointerUp,
   pointerCancel,
   stepBack,
+  confirmEdges,
 } from './editor';
 import { GameState, Candidate, newGame, candidates, applyMove } from './game';
 import { render, AppView } from './render';
@@ -106,7 +107,7 @@ const TOUCH_LIFT = 28;
 function drawLift(e: PointerEvent): number {
   return e.pointerType === 'touch' &&
     mode === 'edit' &&
-    (editor.phase === 'outer' || editor.phase === 'inner')
+    (editor.phase === 'center' || editor.phase === 'adjust')
     ? TOUCH_LIFT
     : 0;
 }
@@ -162,8 +163,8 @@ canvas.addEventListener('pointerdown', (e) => {
   if (mode === 'edit') {
     // Пользователь коснулся доски — мир «занят», фиксируем число клеток.
     worldLocked = true;
-    const arrowTol = touch ? Math.max(1.2, 24 / cellPx) : 1.2;
-    pointerDown(editor, w, arrowTol);
+    const tol = touch ? Math.max(1.2, 24 / cellPx) : 1.2;
+    pointerDown(editor, w, tol);
     if (editor.phase === 'ready') { goToPlayers('edit'); return; }
     updateUI();
   } else if (game && game.phase === 'race') {
@@ -276,6 +277,11 @@ function startRace(playerCount: number): void {
 bindButtons({
   onBack: () => {
     stepBack(editor);
+    updateUI();
+    redraw();
+  },
+  onNext: () => {
+    confirmEdges(editor);
     updateUI();
     redraw();
   },

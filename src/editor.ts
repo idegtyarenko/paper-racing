@@ -1,4 +1,6 @@
-// Фаза рисования трассы: стейт-машина outer → inner → finish → direction → ready.
+// Фаза рисования трассы: стейт-машина center → adjust → finish → direction → ready.
+// Пользователь проводит осевую линию, кромки откладываются автоматически, после
+// чего их можно подправить перетаскиванием.
 
 import {
   Vec,
@@ -10,16 +12,23 @@ import {
   dist,
   lerp,
   distPointToSegment,
+  selfIntersectsClosed,
+  polygonArea,
 } from './geometry';
 import {
   FinishLine,
   processStroke,
-  validateOuter,
-  validateInner,
   clipFinishLine,
 } from './track';
+import {
+  WidthModel,
+  generateEdges,
+  rebuildEdges,
+  pickEdge,
+  applyEdgeDrag,
+} from './centerline';
 
-export type EditorPhase = 'outer' | 'inner' | 'finish' | 'direction' | 'ready';
+export type EditorPhase = 'center' | 'adjust' | 'finish' | 'direction' | 'ready';
 
 export interface Arrow {
   from: Vec;
@@ -29,28 +38,35 @@ export interface Arrow {
 
 export interface EditorState {
   phase: EditorPhase;
+  /** Осевая линия трассы (замкнутая полилиния). */
+  center: Polyline | null;
+  /** Модель ширины: нормали и смещения кромок вдоль осевой. */
+  width: WidthModel | null;
   outer: Polyline | null;
   inner: Polyline | null;
   finish: FinishLine | null;
   forward: Vec | null;
   arrows: [Arrow, Arrow] | null;
-  /** Сырой freehand-штрих во время рисования края. */
+  /** Сырой freehand-штрих во время рисования осевой. */
   stroke: Vec[];
   drawing: boolean;
   /** Протягивание финишной линии. */
   dragStart: Vec | null;
   dragEnd: Vec | null;
+  /** Тюнинг кромок: какую сторону и вершину тянем. */
+  dragEdge: 'outer' | 'inner' | null;
+  dragIndex: number | null;
   message: string;
   error: boolean;
 }
 
 const MSG: Record<EditorPhase, string> = {
-  outer:
-    'Шаг 1 из 5. Обведи ВНЕШНИЙ бортик трассы — одним росчерком, не отрывая ' +
-    'руки. Мышью или пальцем.',
-  inner:
-    'Шаг 2 из 5. Теперь ВНУТРЕННИЙ бортик — обведи его внутри внешнего. ' +
-    'Между ними и помчат болиды.',
+  center:
+    'Шаг 1 из 5. Проведи ОСЕВУЮ линию трассы — одним росчерком, не отрывая ' +
+    'руки, замкни петлю. Бортики отложатся сами.',
+  adjust:
+    'Шаг 2 из 5. Бортики готовы! Хочешь — потяни любую точку кромки, чтобы ' +
+    'подправить полотно. Когда доволен — жми «Далее».',
   finish:
     'Шаг 3 из 5. Черкни линию старт/финиш поперёк полотна: начни у одного ' +
     'бортика, протяни и отпусти у другого.',
@@ -60,7 +76,9 @@ const MSG: Record<EditorPhase, string> = {
 
 export function newEditor(): EditorState {
   return {
-    phase: 'outer',
+    phase: 'center',
+    center: null,
+    width: null,
     outer: null,
     inner: null,
     finish: null,
@@ -70,7 +88,9 @@ export function newEditor(): EditorState {
     drawing: false,
     dragStart: null,
     dragEnd: null,
-    message: MSG.outer,
+    dragEdge: null,
+    dragIndex: null,
+    message: MSG.center,
     error: false,
   };
 }
@@ -86,16 +106,22 @@ function fail(st: EditorState, message: string): void {
   st.error = true;
 }
 
-export function pointerDown(st: EditorState, p: Vec, arrowTol = 1.2): void {
-  if (st.phase === 'outer' || st.phase === 'inner') {
+export function pointerDown(st: EditorState, p: Vec, tol = 1.2): void {
+  if (st.phase === 'center') {
     st.drawing = true;
     st.stroke = [p];
+  } else if (st.phase === 'adjust' && st.width) {
+    const pick = pickEdge(st.width, p, tol);
+    if (pick) {
+      st.dragEdge = pick.edge;
+      st.dragIndex = pick.index;
+    }
   } else if (st.phase === 'finish') {
     st.dragStart = p;
     st.dragEnd = p;
   } else if (st.phase === 'direction' && st.arrows) {
     for (const arrow of st.arrows) {
-      if (distPointToSegment(p, arrow.from, arrow.tip) < arrowTol) {
+      if (distPointToSegment(p, arrow.from, arrow.tip) < tol) {
         st.forward = arrow.forward;
         setPhase(st, 'ready');
         return;
@@ -108,6 +134,17 @@ export function pointerMove(st: EditorState, p: Vec): void {
   if (st.drawing) {
     const last = st.stroke[st.stroke.length - 1];
     if (!last || dist(last, p) > 0.15) st.stroke.push(p);
+  } else if (
+    st.phase === 'adjust' &&
+    st.width &&
+    st.dragEdge !== null &&
+    st.dragIndex !== null
+  ) {
+    if (applyEdgeDrag(st.width, st.dragEdge, st.dragIndex, p)) {
+      const e = rebuildEdges(st.width);
+      st.outer = e.outer;
+      st.inner = e.inner;
+    }
   } else if (st.phase === 'finish' && st.dragStart) {
     st.dragEnd = p;
   }
@@ -123,23 +160,29 @@ export function pointerUp(st: EditorState): void {
       fail(st, res.error);
       return;
     }
-    if (st.phase === 'outer') {
-      const err = validateOuter(res.poly);
-      if (err) {
-        fail(st, err);
+    if (st.phase === 'center') {
+      if (selfIntersectsClosed(res.poly)) {
+        fail(st, 'Осевая линия сама себя пересекла — перечерти её петлёй.');
         return;
       }
-      st.outer = res.poly;
-      setPhase(st, 'inner');
-    } else if (st.phase === 'inner' && st.outer) {
-      const err = validateInner(res.poly, st.outer);
-      if (err) {
-        fail(st, err);
+      if (polygonArea(res.poly) < 60) {
+        fail(st, 'Тесновато для гонки — сделай петлю осевой крупнее.');
         return;
       }
-      st.inner = res.poly;
-      setPhase(st, 'finish');
+      const gen = generateEdges(res.poly);
+      if ('error' in gen) {
+        fail(st, gen.error);
+        return;
+      }
+      st.center = res.poly;
+      st.width = gen.model;
+      st.outer = gen.outer;
+      st.inner = gen.inner;
+      setPhase(st, 'adjust');
     }
+  } else if (st.phase === 'adjust') {
+    st.dragEdge = null;
+    st.dragIndex = null;
   } else if (st.phase === 'finish' && st.dragStart && st.dragEnd) {
     const a = st.dragStart;
     const b = st.dragEnd;
@@ -165,12 +208,19 @@ export function pointerUp(st: EditorState): void {
   }
 }
 
-/** Прерывание жеста (pointercancel): сбросить незавершённый штрих/линию. */
+/** Прерывание жеста (pointercancel): сбросить незавершённый штрих/линию/драг. */
 export function pointerCancel(st: EditorState): void {
   st.drawing = false;
   st.stroke = [];
   st.dragStart = null;
   st.dragEnd = null;
+  st.dragEdge = null;
+  st.dragIndex = null;
+}
+
+/** Подтвердить кромки и перейти к рисованию старт/финиша. */
+export function confirmEdges(st: EditorState): void {
+  if (st.phase === 'adjust') setPhase(st, 'finish');
 }
 
 function computeArrows(st: EditorState): void {
@@ -184,7 +234,9 @@ function computeArrows(st: EditorState): void {
   ];
 }
 
-export function resetOuter(st: EditorState): void {
+export function resetCenter(st: EditorState): void {
+  st.center = null;
+  st.width = null;
   st.outer = null;
   st.inner = null;
   st.finish = null;
@@ -194,20 +246,22 @@ export function resetOuter(st: EditorState): void {
   st.stroke = [];
   st.dragStart = null;
   st.dragEnd = null;
-  setPhase(st, 'outer');
+  st.dragEdge = null;
+  st.dragIndex = null;
+  setPhase(st, 'center');
 }
 
-export function resetInner(st: EditorState): void {
-  if (!st.outer) return;
-  st.inner = null;
+/** Вернуться к тюнингу кромок, сохранив осевую и сгенерированное полотно. */
+export function resetAdjust(st: EditorState): void {
+  if (!st.width) return;
   st.finish = null;
   st.forward = null;
   st.arrows = null;
-  st.drawing = false;
-  st.stroke = [];
   st.dragStart = null;
   st.dragEnd = null;
-  setPhase(st, 'inner');
+  st.dragEdge = null;
+  st.dragIndex = null;
+  setPhase(st, 'adjust');
 }
 
 export function resetFinish(st: EditorState): void {
@@ -223,11 +277,11 @@ export function resetFinish(st: EditorState): void {
 /** Единый шаг назад по стейт-машине рисования. */
 export function stepBack(st: EditorState): void {
   switch (st.phase) {
-    case 'inner':
-      resetOuter(st);
+    case 'adjust':
+      resetCenter(st);
       break;
     case 'finish':
-      resetInner(st);
+      resetAdjust(st);
       break;
     case 'direction':
       resetFinish(st);
@@ -236,11 +290,11 @@ export function stepBack(st: EditorState): void {
       st.forward = null;
       setPhase(st, 'direction');
       break;
-    // 'outer' — это первый шаг, назад некуда.
+    // 'center' — это первый шаг, назад некуда.
   }
 }
 
 /** Можно ли шагнуть назад из текущей фазы. */
 export function canStepBack(st: EditorState): boolean {
-  return st.phase !== 'outer';
+  return st.phase !== 'center';
 }

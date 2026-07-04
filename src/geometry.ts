@@ -190,10 +190,34 @@ export function selfIntersectsClosed(poly: Polyline): boolean {
   return false;
 }
 
-export function polygonArea(poly: Polyline): number {
+/** Знаковая площадь замкнутой полилинии (>0 — обход против часовой стрелки). */
+export function signedArea(poly: Polyline): number {
   let s = 0;
   for (let i = 0; i < poly.length; i++) {
     s += cross(poly[i], poly[(i + 1) % poly.length]);
   }
-  return Math.abs(s) / 2;
+  return s / 2;
+}
+
+export function polygonArea(poly: Polyline): number {
+  return Math.abs(signedArea(poly));
+}
+
+/**
+ * Единичные нормали в каждой вершине замкнутой полилинии, повёрнутые наружу
+ * (от центра фигуры). Нормаль строится из усреднённого тангенса соседних рёбер.
+ */
+export function closedNormals(poly: Polyline): Vec[] {
+  const n = poly.length;
+  // Ориентация обхода определяет, куда смотрит «левая» нормаль тангенса.
+  const outward = signedArea(poly) > 0 ? -1 : 1;
+  const out: Vec[] = [];
+  for (let i = 0; i < n; i++) {
+    const prev = poly[(i - 1 + n) % n];
+    const next = poly[(i + 1) % n];
+    const t = normalize(sub(next, prev));
+    // Поворот тангенса на 90°, знак — наружу от фигуры.
+    out.push({ x: -t.y * outward, y: t.x * outward });
+  }
+  return out;
 }

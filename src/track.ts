@@ -17,8 +17,6 @@ import {
   resampleClosed,
   chaikinClosed,
   trimSeamOverlap,
-  selfIntersectsClosed,
-  polygonArea,
 } from './geometry';
 
 // Размеры мира в клетках. Изменяемы: подбираются под пропорции доски при
@@ -91,35 +89,6 @@ export function processStroke(raw: Vec[]): StrokeResult {
   poly = chaikinClosed(poly, 2);
   poly = resampleClosed(poly, 0.5);
   return { poly };
-}
-
-export function validateOuter(outer: Polyline): string | null {
-  if (selfIntersectsClosed(outer)) {
-    return 'Внешний бортик сам себя пересёк — перечерти его.';
-  }
-  if (polygonArea(outer) < 100) {
-    return 'Тесновато для гонки — сделай внешний бортик крупнее.';
-  }
-  return null;
-}
-
-export function validateInner(inner: Polyline, outer: Polyline): string | null {
-  if (selfIntersectsClosed(inner)) {
-    return 'Внутренний бортик сам себя пересёк — перечерти его.';
-  }
-  for (const p of inner) {
-    if (!pointInPolygon(p, outer)) {
-      return 'Внутренний бортик должен целиком уместиться внутри внешнего.';
-    }
-  }
-  for (let i = 0; i < inner.length; i++) {
-    const a = inner[i];
-    const b = inner[(i + 1) % inner.length];
-    if (segmentPolylineIntersections(a, b, outer).length > 0) {
-      return 'Бортики налезли друг на друга — перечерти внутренний.';
-    }
-  }
-  return null;
 }
 
 /** Точка (не обязательно узел) лежит на дороге между краями. */

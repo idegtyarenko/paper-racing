@@ -153,7 +153,31 @@ function drawArrow(ctx: CanvasRenderingContext2D, s: number, from: Vec, tip: Vec
 }
 
 function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): void {
+  // В фазе тюнинга — слабая осевая как подсказка, что кромки можно тянуть.
+  if (ed.phase === 'adjust' && ed.center) {
+    ctx.save();
+    ctx.strokeStyle = '#b9c3d1';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([s * 0.25, s * 0.25]);
+    strokePoly(ctx, s, ed.center, true);
+    ctx.restore();
+  }
+
   drawTrackEdges(ctx, s, ed.outer, ed.inner);
+
+  // Активная перетаскиваемая точка кромки.
+  if (ed.phase === 'adjust' && ed.dragEdge && ed.dragIndex !== null) {
+    const edge = ed.dragEdge === 'outer' ? ed.outer : ed.inner;
+    const pt = edge?.[ed.dragIndex];
+    if (pt) {
+      ctx.save();
+      ctx.fillStyle = ARROW_COLOR;
+      ctx.beginPath();
+      ctx.arc(pt.x * s, pt.y * s, Math.max(4, s * 0.22), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
 
   if (ed.drawing && ed.stroke.length > 1) {
     ctx.strokeStyle = INK;

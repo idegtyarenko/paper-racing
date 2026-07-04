@@ -11,6 +11,7 @@ const editButtons = document.getElementById('editButtons')!;
 const playersButtons = document.getElementById('playersButtons')!;
 const raceButtons = document.getElementById('raceButtons')!;
 const backBtn = document.getElementById('backBtn') as HTMLButtonElement;
+const nextBtn = document.getElementById('nextBtn') as HTMLButtonElement;
 const playersBackBtn = document.getElementById('playersBack') as HTMLButtonElement;
 const helpBtn = document.getElementById('helpBtn') as HTMLButtonElement;
 const newRaceBtn = document.getElementById('newRace') as HTMLButtonElement;
@@ -30,6 +31,8 @@ export type PanelMode = 'edit' | 'players' | 'race';
 export interface PanelHandlers {
   /** Шаг назад в редакторе трассы. */
   onBack: () => void;
+  /** Подтвердить кромки (фаза adjust) и перейти к старт/финишу. */
+  onNext: () => void;
   onConfirmMove: () => void;
   /** «Та же трасса» — перейти к повторному выбору числа игроков. */
   onChooseSameTrack: () => void;
@@ -59,6 +62,7 @@ function closeOverlay(): void {
 
 export function bindButtons(h: PanelHandlers): void {
   backBtn.addEventListener('click', h.onBack);
+  nextBtn.addEventListener('click', h.onNext);
   playersBackBtn.addEventListener('click', h.onPlayersBack);
   confirmMoveBtn.addEventListener('click', h.onConfirmMove);
   playerCount.querySelectorAll<HTMLButtonElement>('.count-btn').forEach((btn) => {
@@ -167,6 +171,7 @@ export function updatePanel(
   if (mode === 'edit') {
     renderEditStatus(editor);
     backBtn.disabled = !canStepBack(editor);
+    nextBtn.hidden = editor.phase !== 'adjust';
     return;
   }
 
