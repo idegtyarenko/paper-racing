@@ -9,17 +9,17 @@
   <div class="app">
     <div class="app__board">
       <canvas id="board"></canvas>
-      <button id="confirmMove" class="confirm-move" hidden>✓ Газу!</button>
+      <button id="confirmMove" class="confirm-move" data-i18n="buttons.confirmMove" hidden>✓ Газу!</button>
     </div>
     <aside class="panel">
       <header class="panel__header">
-        <h1 class="panel__title">🏁 Paper Racing</h1>
-        <button id="helpBtn" class="icon-button" aria-label="Регламент" title="Регламент">?</button>
+        <h1 class="panel__title" data-i18n="app.title">🏁 Paper Racing</h1>
+        <button id="helpBtn" class="icon-button" data-i18n-aria-label="buttons.rulesTitle" data-i18n-title="buttons.rulesTitle" aria-label="Регламент" title="Регламент">?</button>
       </header>
       <div class="status"></div>
       <div id="editButtons" class="panel__group">
-        <button id="nextBtn" class="button button--center" hidden>Далее →</button>
-        <button id="backBtn" class="button button--center">← Назад</button>
+        <button id="nextBtn" class="button button--center" data-i18n="buttons.next" hidden>Далее →</button>
+        <button id="backBtn" class="button button--center" data-i18n="buttons.back">← Назад</button>
       </div>
       <div id="playersButtons" class="panel__group" hidden>
         <div id="playerCount" class="players-select">
@@ -29,34 +29,34 @@
           <button type="button" class="count-btn" data-count="5">5</button>
           <button type="button" class="count-btn" data-count="6">6</button>
         </div>
-        <button id="playersBack" class="button button--center">← Назад</button>
+        <button id="playersBack" class="button button--center" data-i18n="buttons.back">← Назад</button>
       </div>
       <div id="raceButtons" class="panel__group" hidden>
         <div class="winner">
           <div class="winner__trophy">🏆</div>
           <div class="winner__title"></div>
         </div>
-        <button id="newRace" class="button">🏁 Новый заезд</button>
+        <button id="newRace" class="button" data-i18n="buttons.newRace">🏁 Новый заезд</button>
       </div>
     </aside>
   </div>
   <div id="overlay" class="overlay" hidden>
     <div class="overlay__backdrop"></div>
     <div id="rulesSheet" class="sheet" hidden>
-      <h2 class="sheet__title">Регламент</h2>
-      <p class="rules__text">
+      <h2 class="sheet__title" data-i18n="buttons.rulesTitle">Регламент</h2>
+      <p class="rules__text" data-i18n="rules.body">
         Каждый ход разгон меняется на ±1 клетку по каждой оси — рули плавно,
         иначе занесёт. Вылетел за бортик — два хода в боксах на ремонт, потом
         рестарт с нулевой скоростью. Первый, кто замкнёт круг, забирает
         клетчатый флаг. 🏁
       </p>
-      <button class="button button--center" data-close>К рулю!</button>
+      <button class="button button--center" data-i18n="buttons.toWheel" data-close>К рулю!</button>
     </div>
     <div id="raceDialog" class="sheet" hidden>
-      <h2 class="sheet__title">Новый заезд</h2>
-      <button id="dlgSameTrack" class="button button--center">🔄 По той же трассе</button>
-      <button id="dlgNewTrack" class="button button--center">✏️ Начертить новую</button>
-      <button class="button button--center" data-close>Отмена</button>
+      <h2 class="sheet__title" data-i18n="buttons.newRaceDialogTitle">Новый заезд</h2>
+      <button id="dlgSameTrack" class="button button--center" data-i18n="buttons.sameTrack">🔄 По той же трассе</button>
+      <button id="dlgNewTrack" class="button button--center" data-i18n="buttons.newTrack">✏️ Начертить новую</button>
+      <button class="button button--center" data-i18n="buttons.cancel" data-close>Отмена</button>
     </div>
   </div>
   <script type="module" src="/src/main.ts"></script>

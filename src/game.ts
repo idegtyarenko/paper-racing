@@ -10,6 +10,14 @@ import {
   segmentPolylineIntersections,
 } from "./geometry";
 import { Track, key, unkey, sideOfFinish, onRoad } from "./track";
+import { strings } from "./strings";
+import {
+  MIN_PLAYERS,
+  WIN_CROSSINGS,
+  CRASH_SKIP_TURNS,
+  OFFROAD_FORGIVE,
+  CRASH_SAMPLE_STEP,
+} from "./config";
 
 export interface TrailSeg {
   from: Vec;
@@ -31,9 +39,8 @@ export interface Player {
   finishOvershoot: number | null;
 }
 
-/** Круг завершён, когда счётчик достиг 2: первое пересечение — сразу после
- * старта из-за линии («круг начался»), второе — полный круг. */
-export const WIN_CROSSINGS = 2;
+// Число пересечений финиша для победы (см. WIN_CROSSINGS в config) — реэкспорт.
+export { WIN_CROSSINGS };
 
 export interface GameState {
   track: Track;
@@ -61,10 +68,11 @@ const COLORS = [
 ];
 
 /** Имена болидов по цвету — строго в порядке COLORS. */
-const NAMES = ["Красный", "Синий", "Зелёный", "Оранжевый", "Фиолетовый", "Бирюзовый"];
+const NAMES = strings.players.names;
 
 export const MAX_PLAYERS = COLORS.length;
-export const MIN_PLAYERS = 2;
+// Минимум участников (см. MIN_PLAYERS в config) — реэкспорт.
+export { MIN_PLAYERS };
 
 export interface Candidate {
   target: Vec;
@@ -101,14 +109,6 @@ export function newGame(track: Track, playerCount = 2): GameState {
   };
 }
 
-/**
- * Насколько игра «прощает» заезд за край трассы, в клетках. Ход, вылезший за
- * стенку не глубже этого допуска (и путь, лишь задевающий стенку не глубже),
- * аварией не считается — игрок может проскочить впритирку. Ноль вернул бы
- * прежнюю строгость «точно по кромке».
- */
-const FORGIVE = 0.15;
-
 /** Насколько глубоко точка зашла за край дороги: 0 на дороге, иначе — до ближайшей стенки. */
 function offRoadDepth(track: Track, p: Vec): number {
   if (onRoad(p, track.outer, track.inner)) return 0;
@@ -120,14 +120,14 @@ function offRoadDepth(track: Track, p: Vec): number {
 
 /**
  * Ход — авария, только если где-то вдоль отрезка (включая конечную точку) он
- * заходит за стенку глубже допуска FORGIVE. Точку хода густо семплим, чтобы
- * ловить и заезды «насквозь» через газон, и глубокие срезы углов, но прощать
- * касания впритирку. Стартовая точка всегда на дороге, поэтому её пропускаем.
+ * заходит за стенку глубже допуска OFFROAD_FORGIVE. Точку хода густо семплим,
+ * чтобы ловить и заезды «насквозь» через газон, и глубокие срезы углов, но
+ * прощать касания впритирку. Стартовая точка всегда на дороге, её пропускаем.
  */
 function moveCrashes(track: Track, from: Vec, to: Vec): boolean {
-  const steps = Math.max(2, Math.ceil(dist(from, to) / 0.2));
+  const steps = Math.max(2, Math.ceil(dist(from, to) / CRASH_SAMPLE_STEP));
   for (let i = 1; i <= steps; i++) {
-    if (offRoadDepth(track, lerp(from, to, i / steps)) > FORGIVE) return true;
+    if (offRoadDepth(track, lerp(from, to, i / steps)) > OFFROAD_FORGIVE) return true;
   }
   return false;
 }
@@ -225,7 +225,7 @@ export function applyMove(state: GameState, cand: Candidate): void {
     p.crashes.push(crashAt);
     p.pos = { ...resetTo };
     p.vel = { x: 0, y: 0 };
-    p.skipTurns = 2;
+    p.skipTurns = CRASH_SKIP_TURNS;
   } else {
     p.vel = { x: to.x - from.x, y: to.y - from.y };
     p.pos = to;

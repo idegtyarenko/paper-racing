@@ -15,6 +15,8 @@ import {
 import { GameState, Candidate, newGame, candidates, applyMove } from './game';
 import { render, AppView } from './render';
 import { bindButtons, updatePanel, showConfirmMove, PanelMode } from './ui';
+import { localizeDom } from './localize';
+import { TOUCH_LIFT, CELL_MIN, CELL_MAX, TOUCH_TOL_PX } from './config';
 
 const canvas = document.getElementById('board') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -44,9 +46,9 @@ let cellPx = 16;
  */
 let worldLocked = false;
 
-/** Радиус попадания по кандидату в клетках: для пальца — не меньше 24 css-px. */
+/** Радиус попадания по кандидату в клетках: для пальца — не меньше TOUCH_TOL_PX. */
 function touchTol(): number {
-  return Math.max(0.45, 24 / cellPx);
+  return Math.max(0.45, TOUCH_TOL_PX / cellPx);
 }
 
 function resize(): void {
@@ -59,7 +61,7 @@ function resize(): void {
   } else {
     // Поле ещё пустое: подбираем число клеток под пропорции доски. ceil (а не
     // min/floor) → сетка покрывает доску целиком, без пустой полосы.
-    const cell = Math.max(12, Math.min(22, Math.min(r.width, r.height) / 30));
+    const cell = Math.max(CELL_MIN, Math.min(CELL_MAX, Math.min(r.width, r.height) / 30));
     setWorldSize(
       Math.max(8, Math.ceil(r.width / cell)),
       Math.max(8, Math.ceil(r.height / cell)),
@@ -96,9 +98,6 @@ function toWorld(e: PointerEvent, liftPx = 0): Vec {
     y: Math.max(0, Math.min(WORLD_H, (p.y - liftPx) / cellPx)),
   };
 }
-
-/** На сколько css-px поднять точку под пальцем, чтобы её было видно (рисование/прицел). */
-const TOUCH_LIFT = 28;
 
 /**
  * Смещение точки рисования вверх — только при freehand-рисовании края пальцем.
@@ -163,7 +162,7 @@ canvas.addEventListener('pointerdown', (e) => {
   if (mode === 'edit') {
     // Пользователь коснулся доски — мир «занят», фиксируем число клеток.
     worldLocked = true;
-    const tol = touch ? Math.max(1.2, 24 / cellPx) : 1.2;
+    const tol = touch ? Math.max(1.2, TOUCH_TOL_PX / cellPx) : 1.2;
     pointerDown(editor, w, tol);
     if (editor.phase === 'ready') { goToPlayers('edit'); return; }
     updateUI();
@@ -322,6 +321,9 @@ bindButtons({
     resize(); // пере-вывести мир под текущую ориентацию + redraw
   },
 });
+
+// Заполнить статичные тексты разметки из strings до первого показа панели.
+localizeDom();
 
 // ResizeObserver вместо window.resize: обёртка меняет размер и при смене
 // раскладки (портрет/ландшафт на мобильных), а не только окна.

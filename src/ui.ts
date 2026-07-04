@@ -2,6 +2,7 @@
 
 import { EditorState, canStepBack } from './editor';
 import { GameState, Player } from './game';
+import { strings } from './strings';
 
 const statusEl = document.querySelector('.status')!;
 
@@ -103,9 +104,9 @@ function playerInfo(p: Player, active: boolean, target: HTMLElement): void {
   const name = document.createElement('b');
   name.textContent = p.name;
   target.replaceChildren(dot, name);
-  addLine(target, `скорость: (${p.vel.x}, ${p.vel.y})`);
-  addLine(target, `аварии: ${p.crashes.length}`);
-  if (p.skipTurns > 0) addLine(target, `🔧 в боксах: ${p.skipTurns}`);
+  addLine(target, strings.race.speed(p.vel.x, p.vel.y));
+  addLine(target, strings.race.crashes(p.crashes.length));
+  if (p.skipTurns > 0) addLine(target, strings.race.pit(p.skipTurns));
 }
 
 /**
@@ -147,13 +148,13 @@ function renderEditStatus(editor: EditorState): void {
 
 function showWinner(game: GameState): void {
   if (game.winner === 'draw') {
-    winnerWho.textContent = 'Фотофиниш — ничья!';
+    winnerWho.textContent = strings.race.draw;
   } else {
     const w = game.players[game.winner!];
     const name = document.createElement('span');
     name.style.color = w.color;
     name.textContent = w.name;
-    winnerWho.replaceChildren('Клетчатый флаг!', document.createElement('br'), name);
+    winnerWho.replaceChildren(strings.race.winnerFlag, document.createElement('br'), name);
   }
   winnerBanner.classList.add('winner--shown');
 }
@@ -176,7 +177,7 @@ export function updatePanel(
   }
 
   if (mode === 'players') {
-    renderStepStatus('Шаг 5 из 5', 'Сколько болидов на старте? Жми число — и зелёный свет!');
+    renderStepStatus(strings.players.promptBadge, strings.players.prompt);
     playerCount.querySelectorAll<HTMLButtonElement>('.count-btn').forEach((btn) => {
       btn.disabled = Number(btn.dataset.count) > playersMax;
     });
@@ -196,11 +197,7 @@ export function updatePanel(
 
   winnerBanner.classList.remove('winner--shown');
   const cur = game.players[game.current];
-  const warn = game.finalTurnsLeft !== null
-    ? ' Кто-то уже под клетчатым флагом — тяни как можно дальше за линию!'
-    : '';
-  const hint = coarsePointer
-    ? 'Коснись точки и жми «Газу!», чтобы подтвердить манёвр.'
-    : 'Кликни по точке, куда рулить.';
-  statusEl.textContent = `За рулём: ${cur.name}. ${hint}${warn}`;
+  const warn = game.finalTurnsLeft !== null ? strings.race.finalWarn : '';
+  const hint = coarsePointer ? strings.race.hintTouch : strings.race.hintMouse;
+  statusEl.textContent = `${strings.race.driver(cur.name)} ${hint}${warn}`;
 }

@@ -27,6 +27,8 @@ import {
   pickEdge,
   applyEdgeDrag,
 } from './centerline';
+import { strings } from './strings';
+import { MIN_CENTER_AREA } from './config';
 
 export type EditorPhase = 'center' | 'adjust' | 'finish' | 'direction' | 'ready';
 
@@ -60,19 +62,7 @@ export interface EditorState {
   error: boolean;
 }
 
-const MSG: Record<EditorPhase, string> = {
-  center:
-    'Шаг 1 из 5. Проведи ОСЕВУЮ линию трассы — одним росчерком, не отрывая ' +
-    'руки, замкни петлю. Бортики отложатся сами.',
-  adjust:
-    'Шаг 2 из 5. Бортики готовы! Хочешь — потяни любую точку кромки, чтобы ' +
-    'подправить полотно. Когда доволен — жми «Далее».',
-  finish:
-    'Шаг 3 из 5. Ткни в любую точку внутри трассы — черта старт/финиш ляжет ' +
-    'поперёк полотна ровно через это место.',
-  direction: 'Шаг 4 из 5. Куда мчим? Ткни в зелёную стрелку — задай направление круга.',
-  ready: 'Трасса готова! Осталось выбрать, сколько болидов на старте.',
-};
+const MSG: Record<EditorPhase, string> = strings.editor.step;
 
 export function newEditor(): EditorState {
   return {
@@ -163,11 +153,11 @@ export function pointerUp(st: EditorState): void {
     }
     if (st.phase === 'center') {
       if (selfIntersectsClosed(res.poly)) {
-        fail(st, 'Осевая линия сама себя пересекла — перечерти её петлёй.');
+        fail(st, strings.editor.errors.selfCross);
         return;
       }
-      if (polygonArea(res.poly) < 60) {
-        fail(st, 'Тесновато для гонки — сделай петлю осевой крупнее.');
+      if (polygonArea(res.poly) < MIN_CENTER_AREA) {
+        fail(st, strings.editor.errors.tooSmall);
         return;
       }
       const gen = generateEdges(res.poly);
@@ -194,8 +184,8 @@ export function pointerUp(st: EditorState): void {
       fail(
         st,
         res.error === 'narrow'
-          ? 'Здесь полотно узкое — ткни туда, где пошире.'
-          : 'Ткни в точку внутри трассы — по ней проведём старт/финиш.',
+          ? strings.editor.errors.finishNarrow
+          : strings.editor.errors.finishMiss,
       );
       return;
     }

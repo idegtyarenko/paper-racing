@@ -18,19 +18,24 @@ import {
   chaikinClosed,
   trimSeamOverlap,
 } from './geometry';
+import { strings } from './strings';
+import {
+  WORLD_W_DEFAULT,
+  WORLD_H_DEFAULT,
+  WALL_CLEARANCE,
+  MAX_START_POINTS,
+  MIN_ROAD_CELLS,
+} from './config';
 
 // Размеры мира в клетках. Изменяемы: подбираются под пропорции доски при
 // первом resize (см. main.ts) и фиксируются, как только начата трасса.
-export let WORLD_W = 64;
-export let WORLD_H = 40;
+export let WORLD_W = WORLD_W_DEFAULT;
+export let WORLD_H = WORLD_H_DEFAULT;
 
 export function setWorldSize(w: number, h: number): void {
   WORLD_W = w;
   WORLD_H = h;
 }
-
-/** Зазор до стенки: узлы ближе к краю не считаются частью дороги. */
-const WALL_CLEARANCE = 0.15;
 
 export interface FinishLine {
   a: Vec;
@@ -49,9 +54,6 @@ export interface Track {
   startPoints: Vec[];
 }
 
-/** Максимум стартовых позиций, которые готовит трасса (по числу игроков). */
-const MAX_START_POINTS = 6;
-
 const KEY_OFFSET = 128;
 
 export const key = (x: number, y: number): number =>
@@ -67,7 +69,7 @@ export type StrokeResult = { poly: Polyline } | { error: string };
 /** Замыкание, ресемплинг и сглаживание сырого freehand-штриха. */
 export function processStroke(raw: Vec[]): StrokeResult {
   if (raw.length < 8) {
-    return { error: 'Слишком короткий росчерк — обведи контур целиком, одним движением.' };
+    return { error: strings.track.strokeShort };
   }
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const p of raw) {
@@ -78,10 +80,10 @@ export function processStroke(raw: Vec[]): StrokeResult {
   }
   const diag = Math.hypot(maxX - minX, maxY - minY);
   if (diag < 4) {
-    return { error: 'Мелковато для трассы — черкни размашистее.' };
+    return { error: strings.track.strokeTiny };
   }
   if (dist(raw[0], raw[raw.length - 1]) > 0.25 * diag) {
-    return { error: 'Круг не замкнулся — доведи линию обратно к началу росчерка.' };
+    return { error: strings.track.notClosed };
   }
   const maxTrim = Math.max(2, 0.12 * diag); // порог «мелкого» нахлёста концов
   const closed = trimSeamOverlap(raw, maxTrim);
@@ -178,12 +180,8 @@ export function finalizeTrack(
       if (isRoadLatticePoint({ x, y }, outer, inner)) inside.add(key(x, y));
     }
   }
-  if (inside.size < 30) {
-    return {
-      error:
-        'Полотно слишком узкое — болидам не разъехаться. ' +
-        'Раздвинь бортики пошире.',
-    };
+  if (inside.size < MIN_ROAD_CELLS) {
+    return { error: strings.track.tooNarrow };
   }
 
   const behind: Vec[] = [];
@@ -197,7 +195,7 @@ export function finalizeTrack(
     return dp - dq || p.y - q.y || p.x - q.x;
   });
   if (behind.length < 2) {
-    return { error: 'За стартовой чертой негде выстроить болиды — сдвинь линию.' };
+    return { error: strings.track.noStartRoom };
   }
   return {
     track: {

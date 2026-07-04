@@ -23,10 +23,11 @@ import {
   smoothClosed,
 } from './geometry';
 import { WORLD_W, WORLD_H } from './track';
+import { strings } from './strings';
+import { WIDTH_MIN, WIDTH_MAX } from './config';
 
-/** Диапазон полной ширины трассы, клетки. */
-export const WIDTH_MIN = 2;
-export const WIDTH_MAX = 6;
+// Диапазон полной ширины трассы (клетки) — реэкспорт из config для внешних импортов.
+export { WIDTH_MIN, WIDTH_MAX };
 
 /** Нижний предел половины ширины: у́же — и на дороге не останется клеток. */
 const HALF_MIN = 0.7;
@@ -275,11 +276,7 @@ export function generateEdges(centerRaw: Polyline): GenerateResult {
       model.inW[i] = Math.max(HALF_MIN, model.inW[i] * 0.85);
     }
   }
-  return {
-    error:
-      'Трасса налезает сама на себя — веди осевую посвободнее и ' +
-      'не подводи петли близко друг к другу.',
-  };
+  return { error: strings.centerline.selfOverlap };
 }
 
 /** Перестроить кромки модели (после правки outW/inW). */
