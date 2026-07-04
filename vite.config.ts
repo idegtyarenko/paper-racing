@@ -10,6 +10,7 @@ export default defineConfig({
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Paper Racing',
+        short_name: 'Paper Racing',
         description: 'Гонки по клеточкам: черти трассу и обгоняй соперников.',
         lang: 'ru',
         display: 'standalone',
