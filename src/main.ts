@@ -591,10 +591,12 @@ async function joinOnline(
       raceTrack = null; // гость не владеет трассой
       worldLocked = true; // размеры мира взяты у хоста — не пересчитывать
     }
-    mode = 'lobby';
+    // Реконнект в уже идущую гонку: onGameState уже перевёл в режим race —
+    // не сбрасываем обратно в лобби. Иначе (игра ещё не начата) — в лобби.
+    if (mode !== 'race') mode = 'lobby';
     resize(); // подогнать сетку под мир хоста + redraw
     updateUI();
-    renderLobbyPanel();
+    if (mode === 'lobby') renderLobbyPanel();
   } catch (e) {
     if (inJoinDialog) showJoinError(joinErrorText(e));
     else showToast(joinErrorText(e));
