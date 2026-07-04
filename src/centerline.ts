@@ -19,6 +19,8 @@ import {
   selfIntersectsClosed,
   pointInPolygon,
   segmentPolylineIntersections,
+  resampleClosed,
+  smoothClosed,
 } from './geometry';
 import { WORLD_W, WORLD_H } from './track';
 
@@ -34,6 +36,11 @@ const SELF_GAP = 1.0;
 const CURV_SAFETY = 0.85;
 /** Отступ кромки от края поля. */
 const WORLD_MARGIN = 0.3;
+/** Сглаживание итоговой кромки: число проходов и сила (0..1). */
+const EDGE_SMOOTH_ITERS = 4;
+const EDGE_SMOOTH_FACTOR = 0.5;
+/** Целевой шаг ресемплинга осевой: держит число вершин в разумных пределах. */
+const CENTER_MAX_VERTS = 380;
 
 /** Данные ширины трассы: осевая, нормали и смещения кромок в каждой вершине. */
 export interface WidthModel {
@@ -180,7 +187,12 @@ export function offsetCaps(center: Polyline, outNormal: Vec[]): OffsetCaps {
   return { maxOut, maxIn };
 }
 
-/** Построение внешней/внутренней кромок по осевой, нормалям и смещениям. */
+/**
+ * Построение кромок по осевой, нормалям и смещениям с финальным сглаживанием,
+ * чтобы граница всегда была плавной линией (без острых углов и зазубрин от
+ * шума ширины или стыка росчерка). Число вершин сохраняется — индексы кромок
+ * соответствуют вершинам осевой (нужно для перетаскивания).
+ */
 export function offsetEdges(
   center: Polyline,
   outNormal: Vec[],
@@ -193,11 +205,23 @@ export function offsetEdges(
     outer.push(add(center[i], scale(outNormal[i], outW[i])));
     inner.push(sub(center[i], scale(outNormal[i], inW[i])));
   }
-  return { outer, inner };
+  return {
+    outer: smoothClosed(outer, EDGE_SMOOTH_ITERS, EDGE_SMOOTH_FACTOR),
+    inner: smoothClosed(inner, EDGE_SMOOTH_ITERS, EDGE_SMOOTH_FACTOR),
+  };
 }
 
-/** Кромки валидны: каждая проста, внутренняя вложена во внешнюю без пересечений. */
+/** Все вершины внутри поля (с учётом отступа). */
+function withinWorld(poly: Polyline): boolean {
+  for (const p of poly) {
+    if (p.x < 0 || p.y < 0 || p.x > WORLD_W || p.y > WORLD_H) return false;
+  }
+  return true;
+}
+
+/** Кромки валидны: в поле, каждая проста, внутренняя вложена без пересечений. */
 export function edgesValid(outer: Polyline, inner: Polyline): boolean {
+  if (!withinWorld(outer) || !withinWorld(inner)) return false;
   if (selfIntersectsClosed(outer) || selfIntersectsClosed(inner)) return false;
   for (const p of inner) if (!pointInPolygon(p, outer)) return false;
   for (let i = 0; i < inner.length; i++) {
@@ -215,31 +239,40 @@ export type GenerateResult = { model: WidthModel; outer: Polyline; inner: Polyli
  * близости/кривизны/края. Если после клампа кромки всё же где-то пересекаются,
  * несколько раз слегка ужимаем ширину глобально; иначе — ошибка.
  */
-export function generateEdges(center: Polyline): GenerateResult {
+export function generateEdges(centerRaw: Polyline): GenerateResult {
+  // Ресемпл держит число вершин ограниченным (быстрый драг) и равномерным.
+  const { total } = arcLengths(centerRaw);
+  const center = resampleClosed(centerRaw, Math.max(1, total / CENTER_MAX_VERTS));
   const outNormal = closedNormals(center);
   const caps = offsetCaps(center, outNormal);
   const w = randomWidths(center);
   const n = center.length;
 
+  const clampCaps = (arr: number[], cap: number[]): void => {
+    for (let i = 0; i < n; i++) arr[i] = Math.max(HALF_MIN, Math.min(arr[i], cap[i]));
+  };
+
   let outW = new Array(n);
   let inW = new Array(n);
-  for (let i = 0; i < n; i++) {
-    const half = Math.max(HALF_MIN, w[i] / 2);
-    outW[i] = Math.min(half, caps.maxOut[i]);
-    inW[i] = Math.min(half, caps.maxIn[i]);
+  for (let i = 0; i < n; i++) outW[i] = inW[i] = w[i] / 2;
+  clampCaps(outW, caps.maxOut);
+  clampCaps(inW, caps.maxIn);
+  // Чередуем сглаживание ширины и кламп к пределам: итог и плавный, и валидный.
+  for (let pass = 0; pass < 2; pass++) {
+    outW = smoothRing(outW, 2);
+    inW = smoothRing(inW, 2);
+    clampCaps(outW, caps.maxOut);
+    clampCaps(inW, caps.maxIn);
   }
-  outW = smoothRing(outW, 1);
-  inW = smoothRing(inW, 1);
 
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const { outer, inner } = offsetEdges(center, outNormal, outW, inW);
-    if (edgesValid(outer, inner)) {
-      return { model: { center, outNormal, outW, inW }, outer, inner };
-    }
+  const model: WidthModel = { center, outNormal, outW, inW };
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { outer, inner } = rebuildEdges(model);
+    if (edgesValid(outer, inner)) return { model, outer, inner };
     // Пробуем ещё ужать — глобально, но мягко.
     for (let i = 0; i < n; i++) {
-      outW[i] = Math.max(HALF_MIN, outW[i] * 0.85);
-      inW[i] = Math.max(HALF_MIN, inW[i] * 0.85);
+      model.outW[i] = Math.max(HALF_MIN, model.outW[i] * 0.85);
+      model.inW[i] = Math.max(HALF_MIN, model.inW[i] * 0.85);
     }
   }
   return {
@@ -277,9 +310,12 @@ export function pickEdge(
 
 /**
  * Применить перетаскивание: сдвинуть кромку `edge` в вершине `index` к точке p
- * (проекция на нормаль), с плавным затуханием на соседей. Смещение принимается,
- * только если новые кромки остаются валидными (не налезают на другую часть
- * трассы) — иначе модель не меняется. Возвращает true, если правка принята.
+ * (проекция на нормаль), с плавным затуханием на соседей. Тянемая точка следует
+ * за пальцем целиком (без пер-вершинного клампа, из-за которого она «застревала»,
+ * а по бокам ехало полотно). Если полное смещение сделало бы кромку невалидной
+ * (налезла бы на другую часть трассы или ушла за поле) — подбираем бисекцией
+ * максимально далёкое валидное положение, и кромка плавно «упирается». Модель
+ * меняется только на валидное состояние. Возвращает true, если что-то сдвинулось.
  */
 export function applyEdgeDrag(
   m: WidthModel,
@@ -289,29 +325,52 @@ export function applyEdgeDrag(
 ): boolean {
   const n = m.center.length;
   const nrm = edge === 'outer' ? m.outNormal[index] : scale(m.outNormal[index], -1);
-  // Смещение вдоль нормали (проекция), с полом.
-  const target = Math.max(HALF_MIN, dot(sub(p, m.center[index]), nrm));
-  const arr = edge === 'outer' ? m.outW : m.inW;
-  const caps = offsetCaps(m.center, m.outNormal);
-  const capArr = edge === 'outer' ? caps.maxOut : caps.maxIn;
+  const base = edge === 'outer' ? m.outW : m.inW;
+  const cur = base[index];
+  // Желаемое смещение тянемой вершины: проекция пальца на нормаль (с полом).
+  const desired = Math.max(HALF_MIN, dot(sub(p, m.center[index]), nrm));
+  const R = Math.max(6, Math.round(n / 10)); // окно затухания на соседей
 
-  const R = Math.max(4, Math.round(n / 16)); // окно затухания
-  const next = arr.slice();
-  for (let k = -R; k <= R; k++) {
-    const i = (index + k + n) % n;
-    const wgt = 0.5 * (1 + Math.cos((Math.PI * k) / (R + 1))); // 1 в центре → 0 к краям
-    const val = arr[i] + (target - arr[i]) * wgt;
-    next[i] = Math.min(Math.max(HALF_MIN, val), capArr[i]);
-  }
-
-  const trial: WidthModel = {
-    center: m.center,
-    outNormal: m.outNormal,
-    outW: edge === 'outer' ? next : m.outW,
-    inW: edge === 'inner' ? next : m.inW,
+  // Массив смещений при доле alpha пути от текущего положения к desired.
+  const build = (alpha: number): number[] => {
+    const target = cur + (desired - cur) * alpha;
+    const next = base.slice();
+    for (let k = -R; k <= R; k++) {
+      const i = (index + k + n) % n;
+      const wgt = 0.5 * (1 + Math.cos((Math.PI * k) / (R + 1))); // 1 в центре → 0 к краям
+      next[i] = Math.max(HALF_MIN, base[i] + (target - base[i]) * wgt);
+    }
+    return next;
   };
-  const { outer, inner } = rebuildEdges(trial);
-  if (!edgesValid(outer, inner)) return false;
-  if (edge === 'outer') m.outW = next; else m.inW = next;
+  const tryAlpha = (alpha: number): number[] | null => {
+    const next = build(alpha);
+    const trial: WidthModel = {
+      center: m.center,
+      outNormal: m.outNormal,
+      outW: edge === 'outer' ? next : m.outW,
+      inW: edge === 'inner' ? next : m.inW,
+    };
+    const { outer, inner } = rebuildEdges(trial);
+    return edgesValid(outer, inner) ? next : null;
+  };
+
+  // Сначала пробуем дойти до пальца целиком; если нельзя — ищем предел бисекцией.
+  let best = tryAlpha(1);
+  if (!best) {
+    let lo = 0;
+    let hi = 1;
+    for (let it = 0; it < 6; it++) {
+      const mid = (lo + hi) / 2;
+      const res = tryAlpha(mid);
+      if (res) {
+        best = res;
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+  }
+  if (!best) return false;
+  if (edge === 'outer') m.outW = best; else m.inW = best;
   return true;
 }

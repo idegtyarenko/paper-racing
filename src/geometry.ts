@@ -176,6 +176,30 @@ export function trimSeamOverlap(raw: Vec[], maxTrim: number): Vec[] {
   return [best.point, ...raw.slice(best.i + 1, best.j + 1)];
 }
 
+/**
+ * Лапласово сглаживание замкнутой полилинии: каждая вершина подтягивается к
+ * середине соседей на долю factor. Число вершин сохраняется (в отличие от
+ * Чайкина) — важно там, где индексы вершин должны оставаться стабильными.
+ */
+export function smoothClosed(poly: Polyline, iterations: number, factor = 0.5): Polyline {
+  let pts = poly;
+  for (let it = 0; it < iterations; it++) {
+    const n = pts.length;
+    const out: Vec[] = new Array(n);
+    for (let i = 0; i < n; i++) {
+      const a = pts[(i - 1 + n) % n];
+      const b = pts[i];
+      const c = pts[(i + 1) % n];
+      out[i] = {
+        x: b.x + ((a.x + c.x) / 2 - b.x) * factor,
+        y: b.y + ((a.y + c.y) / 2 - b.y) * factor,
+      };
+    }
+    pts = out;
+  }
+  return pts;
+}
+
 /** Проверка самопересечения замкнутой полилинии (несмежные рёбра). */
 export function selfIntersectsClosed(poly: Polyline): boolean {
   const n = poly.length;
