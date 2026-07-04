@@ -83,7 +83,7 @@ export function processStroke(raw: Vec[]): StrokeResult {
   }
   const diag = Math.hypot(maxX - minX, maxY - minY);
   if (diag < 4) {
-    return { error: strings.track.strokeTiny };
+    return { error: strings.track.strokeShort };
   }
   if (dist(raw[0], raw[raw.length - 1]) > 0.25 * diag) {
     return { error: strings.track.notClosed };
