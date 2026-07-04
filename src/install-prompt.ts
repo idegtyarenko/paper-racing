@@ -78,7 +78,11 @@ function shareIcon(): HTMLElement {
 }
 
 /** Собрать DOM всплывашки. Для iOS кнопки установки нет — только инструкция. */
-function build(kind: 'android' | 'ios', onInstall: () => void, onClose: () => void): HTMLElement {
+function build(
+  kind: 'android' | 'ios',
+  onInstall: () => void,
+  onClose: () => void,
+): HTMLElement {
   const box = document.createElement('div');
   box.className = 'install-prompt';
   box.setAttribute('role', 'dialog');

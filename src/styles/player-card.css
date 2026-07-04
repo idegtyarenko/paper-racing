@@ -14,7 +14,9 @@
 }
 
 /* Подсветка карточки игрока, чей сейчас ход. */
-.player-card--active { border-color: #55524a; }
+.player-card--active {
+  border-color: #55524a;
+}
 
 /* Цветная точка рядом с именем игрока. */
 .player-card__dot {
@@ -44,5 +46,7 @@
 /* На узких (мобильных, двухколоночных) карточках прячем «км/ч» — иначе
    фиксированный по ширине стат съедает имя игрока. Остаётся голое число. */
 @media (max-width: 700px) {
-  .player-card__unit { display: none; }
+  .player-card__unit {
+    display: none;
+  }
 }

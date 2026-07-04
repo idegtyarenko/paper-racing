@@ -7,7 +7,9 @@
   display: flex;
 }
 
-.overlay[hidden] { display: none; }
+.overlay[hidden] {
+  display: none;
+}
 
 .overlay__backdrop {
   position: absolute;
@@ -29,13 +31,19 @@
   gap: 10px;
 }
 
-.sheet[hidden] { display: none; }
+.sheet[hidden] {
+  display: none;
+}
 
-.sheet__title { font-size: 18px; }
+.sheet__title {
+  font-size: 18px;
+}
 
 /* Узкие экраны: шторка выезжает снизу на всю ширину. */
 @media (max-width: 700px) {
-  .overlay { align-items: flex-end; }
+  .overlay {
+    align-items: flex-end;
+  }
 
   .sheet {
     margin: 0;
@@ -47,6 +55,10 @@
 }
 
 @keyframes sheet-up {
-  from { transform: translateY(100%); }
-  to { transform: none; }
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
 }

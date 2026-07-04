@@ -60,9 +60,14 @@ let panY = 0;
 /** Активные тач-указатели (для распознавания пинча двумя пальцами). */
 const activePointers = new Map<number, Vec>();
 /** Снимок начала пинч-жеста; null — пинча нет. */
-let pinch:
-  | { d0: number; midX: number; midY: number; zoom0: number; panX0: number; panY0: number }
-  | null = null;
+let pinch: {
+  d0: number;
+  midX: number;
+  midY: number;
+  zoom0: number;
+  panX0: number;
+  panY0: number;
+} | null = null;
 
 /** Эффективный размер клетки на экране с учётом пинч-зума, css-px. */
 function effCell(): number {
@@ -294,7 +299,10 @@ canvas.addEventListener('pointerdown', (e) => {
     worldLocked = true;
     const tol = touch ? Math.max(1.2, TOUCH_TOL_PX / cellPx) : 1.2;
     pointerDown(editor, w, tol);
-    if (editor.phase === 'ready') { goToPlayers('edit'); return; }
+    if (editor.phase === 'ready') {
+      goToPlayers('edit');
+      return;
+    }
     updateUI();
   } else if (game && game.phase === 'race') {
     if (touch) {
@@ -394,7 +402,12 @@ canvas.addEventListener('pointercancel', (e) => {
  */
 function goToPlayers(from: 'edit' | 'race'): void {
   if (from === 'edit') {
-    const res = finalizeTrack(editor.outer!, editor.inner!, editor.finish!, editor.forward!);
+    const res = finalizeTrack(
+      editor.outer!,
+      editor.inner!,
+      editor.finish!,
+      editor.forward!,
+    );
     if ('error' in res) {
       editor.message = res.error;
       editor.error = true;

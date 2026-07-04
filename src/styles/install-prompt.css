@@ -15,7 +15,9 @@
   border-radius: 14px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22);
   opacity: 0;
-  transition: transform 0.24s ease-out, opacity 0.24s ease-out;
+  transition:
+    transform 0.24s ease-out,
+    opacity 0.24s ease-out;
 }
 
 /* Класс добавляется на следующий кадр — карточка выезжает снизу. */
@@ -71,7 +73,9 @@
   touch-action: manipulation;
 }
 
-.install-prompt__install:active { background: #097843; }
+.install-prompt__install:active {
+  background: #097843;
+}
 
 .install-prompt__close {
   flex: none;
@@ -89,4 +93,6 @@
   touch-action: manipulation;
 }
 
-.install-prompt__close:active { background: rgba(0, 0, 0, 0.06); }
+.install-prompt__close:active {
+  background: rgba(0, 0, 0, 0.06);
+}

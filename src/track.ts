@@ -71,7 +71,10 @@ export function processStroke(raw: Vec[]): StrokeResult {
   if (raw.length < 8) {
     return { error: strings.track.strokeShort };
   }
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
   for (const p of raw) {
     minX = Math.min(minX, p.x);
     minY = Math.min(minY, p.y);
@@ -113,9 +116,7 @@ function isRoadLatticePoint(p: Vec, outer: Polyline, inner: Polyline): boolean {
  * численные щели. Протяжку не обязательно вести точно от стенки до стенки —
  * достаточно задать направление поперёк дороги.
  */
-export type ClipFinishResult =
-  | { finish: FinishLine }
-  | { error: 'no-cross' | 'narrow' };
+export type ClipFinishResult = { finish: FinishLine } | { error: 'no-cross' | 'narrow' };
 
 export function clipFinishLine(
   a: Vec,
@@ -162,7 +163,10 @@ export function finalizeTrack(
   finish: FinishLine,
   forward: Vec,
 ): FinalizeResult {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
   for (const p of outer) {
     minX = Math.min(minX, p.x);
     minY = Math.min(minY, p.y);

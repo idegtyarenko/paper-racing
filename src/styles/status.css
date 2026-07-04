@@ -4,7 +4,9 @@
   line-height: 1.4;
 }
 
-.status:empty { display: none; }
+.status:empty {
+  display: none;
+}
 
 /* Заметная подсказка «Шаг N из 4» в режиме рисования. */
 .status--step {

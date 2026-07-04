@@ -1,70 +1,117 @@
 <!doctype html>
 <html lang="ru">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Paper Racing</title>
-  <link rel="icon" href="/paper-racing/favicon.svg" type="image/svg+xml" />
-  <link rel="apple-touch-icon" href="/paper-racing/apple-touch-icon.png" />
-  <meta name="theme-color" content="#0a8a4f" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Paper Racing" />
-</head>
-<body>
-  <div class="app">
-    <div class="app__board">
-      <canvas id="board"></canvas>
-      <button id="confirmMove" class="confirm-move" data-i18n="buttons.confirmMove" hidden>✓ Газу!</button>
-    </div>
-    <aside class="panel">
-      <header class="panel__header">
-        <h1 class="panel__title" data-i18n="app.title">🏁 Paper Racing</h1>
-        <button id="helpBtn" class="icon-button" data-i18n-aria-label="buttons.rulesTitle" data-i18n-title="buttons.rulesTitle" aria-label="Регламент" title="Регламент">?</button>
-      </header>
-      <div class="status"></div>
-      <div id="editButtons" class="panel__group">
-        <button id="nextBtn" class="button button--center" data-i18n="buttons.next" hidden>Далее →</button>
-        <button id="backBtn" class="button button--center" data-i18n="buttons.back">← Назад</button>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Paper Racing</title>
+    <link rel="icon" href="/paper-racing/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/paper-racing/apple-touch-icon.png" />
+    <meta name="theme-color" content="#0a8a4f" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Paper Racing" />
+  </head>
+  <body>
+    <div class="app">
+      <div class="app__board">
+        <canvas id="board"></canvas>
+        <button
+          id="confirmMove"
+          class="confirm-move"
+          data-i18n="buttons.confirmMove"
+          hidden
+        >
+          ✓ Газу!
+        </button>
       </div>
-      <div id="playersButtons" class="panel__group" hidden>
-        <div id="playerCount" class="players-select">
-          <button type="button" class="count-btn" data-count="2">2</button>
-          <button type="button" class="count-btn" data-count="3">3</button>
-          <button type="button" class="count-btn" data-count="4">4</button>
-          <button type="button" class="count-btn" data-count="5">5</button>
-          <button type="button" class="count-btn" data-count="6">6</button>
+      <aside class="panel">
+        <header class="panel__header">
+          <h1 class="panel__title" data-i18n="app.title">🏁 Paper Racing</h1>
+          <button
+            id="helpBtn"
+            class="icon-button"
+            data-i18n-aria-label="buttons.rulesTitle"
+            data-i18n-title="buttons.rulesTitle"
+            aria-label="Регламент"
+            title="Регламент"
+          >
+            ?
+          </button>
+        </header>
+        <div class="status"></div>
+        <div id="editButtons" class="panel__group">
+          <button
+            id="nextBtn"
+            class="button button--center"
+            data-i18n="buttons.next"
+            hidden
+          >
+            Далее →
+          </button>
+          <button id="backBtn" class="button button--center" data-i18n="buttons.back">
+            ← Назад
+          </button>
         </div>
-        <button id="playersBack" class="button button--center" data-i18n="buttons.back">← Назад</button>
-      </div>
-      <div id="raceButtons" class="panel__group" hidden>
-        <div class="winner">
-          <div class="winner__trophy">🏆</div>
-          <div class="winner__title"></div>
+        <div id="playersButtons" class="panel__group" hidden>
+          <div id="playerCount" class="players-select">
+            <button type="button" class="count-btn" data-count="2">2</button>
+            <button type="button" class="count-btn" data-count="3">3</button>
+            <button type="button" class="count-btn" data-count="4">4</button>
+            <button type="button" class="count-btn" data-count="5">5</button>
+            <button type="button" class="count-btn" data-count="6">6</button>
+          </div>
+          <button id="playersBack" class="button button--center" data-i18n="buttons.back">
+            ← Назад
+          </button>
         </div>
-        <button id="newRace" class="button" data-i18n="buttons.newRace">🏁 Новый заезд</button>
+        <div id="raceButtons" class="panel__group" hidden>
+          <div class="winner">
+            <div class="winner__trophy">🏆</div>
+            <div class="winner__title"></div>
+          </div>
+          <button id="newRace" class="button" data-i18n="buttons.newRace">
+            🏁 Новый заезд
+          </button>
+        </div>
+      </aside>
+    </div>
+    <div id="overlay" class="overlay" hidden>
+      <div class="overlay__backdrop"></div>
+      <div id="rulesSheet" class="sheet" hidden>
+        <h2 class="sheet__title" data-i18n="buttons.rulesTitle">Регламент</h2>
+        <p class="rules__text" data-i18n="rules.body">
+          Каждый ход разгон меняется на ±1 клетку по каждой оси — рули плавно, иначе
+          занесёт. Вылетел за бортик — два хода в боксах на ремонт, потом рестарт с
+          нулевой скоростью. Первый, кто замкнёт круг, забирает клетчатый флаг. 🏁
+        </p>
+        <button class="button button--center" data-i18n="buttons.toWheel" data-close>
+          К рулю!
+        </button>
       </div>
-    </aside>
-  </div>
-  <div id="overlay" class="overlay" hidden>
-    <div class="overlay__backdrop"></div>
-    <div id="rulesSheet" class="sheet" hidden>
-      <h2 class="sheet__title" data-i18n="buttons.rulesTitle">Регламент</h2>
-      <p class="rules__text" data-i18n="rules.body">
-        Каждый ход разгон меняется на ±1 клетку по каждой оси — рули плавно,
-        иначе занесёт. Вылетел за бортик — два хода в боксах на ремонт, потом
-        рестарт с нулевой скоростью. Первый, кто замкнёт круг, забирает
-        клетчатый флаг. 🏁
-      </p>
-      <button class="button button--center" data-i18n="buttons.toWheel" data-close>К рулю!</button>
+      <div id="raceDialog" class="sheet" hidden>
+        <h2 class="sheet__title" data-i18n="buttons.newRaceDialogTitle">Новый заезд</h2>
+        <button
+          id="dlgSameTrack"
+          class="button button--center"
+          data-i18n="buttons.sameTrack"
+        >
+          🔄 По той же трассе
+        </button>
+        <button
+          id="dlgNewTrack"
+          class="button button--center"
+          data-i18n="buttons.newTrack"
+        >
+          ✏️ Начертить новую
+        </button>
+        <button class="button button--center" data-i18n="buttons.cancel" data-close>
+          Отмена
+        </button>
+      </div>
     </div>
-    <div id="raceDialog" class="sheet" hidden>
-      <h2 class="sheet__title" data-i18n="buttons.newRaceDialogTitle">Новый заезд</h2>
-      <button id="dlgSameTrack" class="button button--center" data-i18n="buttons.sameTrack">🔄 По той же трассе</button>
-      <button id="dlgNewTrack" class="button button--center" data-i18n="buttons.newTrack">✏️ Начертить новую</button>
-      <button class="button button--center" data-i18n="buttons.cancel" data-close>Отмена</button>
-    </div>
-  </div>
-  <script type="module" src="/src/main.ts"></script>
-</body>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
 </html>

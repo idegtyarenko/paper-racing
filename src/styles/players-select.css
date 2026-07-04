@@ -17,6 +17,13 @@
   touch-action: manipulation;
 }
 
-.count-btn:hover:not(:disabled) { background: #f0ecdf; }
-.count-btn:active:not(:disabled) { background: #e6e0cf; }
-.count-btn:disabled { opacity: 0.35; cursor: default; }
+.count-btn:hover:not(:disabled) {
+  background: #f0ecdf;
+}
+.count-btn:active:not(:disabled) {
+  background: #e6e0cf;
+}
+.count-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}

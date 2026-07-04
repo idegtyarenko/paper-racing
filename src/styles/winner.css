@@ -1,5 +1,7 @@
 /* Баннер победителя после финиша. */
-.winner { display: none; }
+.winner {
+  display: none;
+}
 
 .winner--shown {
   display: block;

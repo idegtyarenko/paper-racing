@@ -15,11 +15,7 @@ import {
   selfIntersectsClosed,
   polygonArea,
 } from './geometry';
-import {
-  FinishLine,
-  processStroke,
-  clipFinishLine,
-} from './track';
+import { FinishLine, processStroke, clipFinishLine } from './track';
 import {
   WidthModel,
   generateEdges,
@@ -201,7 +197,10 @@ function perpDirAt(width: WidthModel, p: Vec): Vec {
   let bestD = Infinity;
   for (let i = 0; i < width.center.length; i++) {
     const d = dist(p, width.center[i]);
-    if (d < bestD) { bestD = d; best = i; }
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
   }
   return width.outNormal[best];
 }

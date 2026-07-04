@@ -11,9 +11,16 @@
   touch-action: manipulation;
 }
 
-.button:hover:not(:disabled) { background: #f0ecdf; }
-.button:active:not(:disabled) { background: #e6e0cf; }
-.button:disabled { opacity: 0.45; cursor: default; }
+.button:hover:not(:disabled) {
+  background: #f0ecdf;
+}
+.button:active:not(:disabled) {
+  background: #e6e0cf;
+}
+.button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
 
 /* Главная кнопка «Старт!». */
 .button--primary {
@@ -22,7 +29,9 @@
 }
 
 /* Кнопка с центрированной подписью («← Назад»). */
-.button--center { text-align: center; }
+.button--center {
+  text-align: center;
+}
 
 /* Плавающая кнопка подтверждения хода: у нижнего края поля, поверх canvas. */
 .confirm-move {
@@ -44,8 +53,12 @@
   touch-action: manipulation;
 }
 
-.confirm-move:active { background: #097843; }
-.confirm-move[hidden] { display: none; }
+.confirm-move:active {
+  background: #097843;
+}
+.confirm-move[hidden] {
+  display: none;
+}
 
 /* Круглая кнопка-иконка («?» — правила). */
 .icon-button {
@@ -63,5 +76,9 @@
   touch-action: manipulation;
 }
 
-.icon-button:hover { background: #f0ecdf; }
-.icon-button:active { background: #e6e0cf; }
+.icon-button:hover {
+  background: #f0ecdf;
+}
+.icon-button:active {
+  background: #e6e0cf;
+}

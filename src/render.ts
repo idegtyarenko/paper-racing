@@ -56,7 +56,12 @@ export function render(ctx: CanvasRenderingContext2D, app: AppView): void {
  * «Лупа» для тач-прицеливания: увеличенный фрагмент сцены вокруг точки
  * касания, вынесенный выше пальца, чтобы палец его не закрывал.
  */
-function drawLoupe(ctx: CanvasRenderingContext2D, app: AppView, w: number, h: number): void {
+function drawLoupe(
+  ctx: CanvasRenderingContext2D,
+  app: AppView,
+  w: number,
+  h: number,
+): void {
   const R = 64;
   const ZOOM = 3;
   const p = app.loupe!;
@@ -120,7 +125,12 @@ function strokePoly(
   ctx.stroke();
 }
 
-function drawTrackEdges(ctx: CanvasRenderingContext2D, s: number, outer: Polyline | null, inner: Polyline | null): void {
+function drawTrackEdges(
+  ctx: CanvasRenderingContext2D,
+  s: number,
+  outer: Polyline | null,
+  inner: Polyline | null,
+): void {
   ctx.strokeStyle = INK;
   ctx.lineWidth = 2.5;
   ctx.lineJoin = 'round';
@@ -141,7 +151,14 @@ function drawFinishLine(ctx: CanvasRenderingContext2D, s: number, a: Vec, b: Vec
   ctx.restore();
 }
 
-function drawArrow(ctx: CanvasRenderingContext2D, s: number, from: Vec, tip: Vec, color: string, width: number): void {
+function drawArrow(
+  ctx: CanvasRenderingContext2D,
+  s: number,
+  from: Vec,
+  tip: Vec,
+  color: string,
+  width: number,
+): void {
   const d = normalize(sub(tip, from));
   const n = { x: -d.y, y: d.x };
   const headBase = sub(tip, scale(d, 0.8));
@@ -205,13 +222,20 @@ function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): 
     ctx.save();
     ctx.fillStyle = ARROW_COLOR;
     ctx.beginPath();
-    ctx.arc(ed.dragStart.x * s, ed.dragStart.y * s, Math.max(4, s * 0.22), 0, Math.PI * 2);
+    ctx.arc(
+      ed.dragStart.x * s,
+      ed.dragStart.y * s,
+      Math.max(4, s * 0.22),
+      0,
+      Math.PI * 2,
+    );
     ctx.fill();
     ctx.restore();
   }
 
   if (ed.phase === 'direction' && ed.arrows) {
-    for (const arrow of ed.arrows) drawArrow(ctx, s, arrow.from, arrow.tip, ARROW_COLOR, 4);
+    for (const arrow of ed.arrows)
+      drawArrow(ctx, s, arrow.from, arrow.tip, ARROW_COLOR, 4);
   }
 
   if (ed.phase === 'ready' && ed.arrows && ed.forward) {
@@ -235,7 +259,14 @@ function drawRace(
 
   // Стрелка направления гонки у финишной линии.
   const m = lerp(track.finish.a, track.finish.b, 0.5);
-  drawArrow(ctx, s, add(m, scale(track.forward, 0.8)), add(m, scale(track.forward, 2.6)), ARROW_COLOR, 2.5);
+  drawArrow(
+    ctx,
+    s,
+    add(m, scale(track.forward, 0.8)),
+    add(m, scale(track.forward, 2.6)),
+    ARROW_COLOR,
+    2.5,
+  );
 
   // Следы обоих игроков.
   for (const p of game.players) {

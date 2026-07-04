@@ -75,12 +75,18 @@ export function bindButtons(h: PanelHandlers): void {
   });
   helpBtn.addEventListener('click', () => openSheet(rulesSheet));
   newRaceBtn.addEventListener('click', () => openSheet(raceDialog));
-  dlgSameTrack.addEventListener('click', () => { closeOverlay(); h.onChooseSameTrack(); });
-  dlgNewTrack.addEventListener('click', () => { closeOverlay(); h.onNewTrack(); });
+  dlgSameTrack.addEventListener('click', () => {
+    closeOverlay();
+    h.onChooseSameTrack();
+  });
+  dlgNewTrack.addEventListener('click', () => {
+    closeOverlay();
+    h.onNewTrack();
+  });
   overlay.querySelector('.overlay__backdrop')!.addEventListener('click', closeOverlay);
-  overlay.querySelectorAll('[data-close]').forEach((b) =>
-    b.addEventListener('click', closeOverlay),
-  );
+  overlay
+    .querySelectorAll('[data-close]')
+    .forEach((b) => b.addEventListener('click', closeOverlay));
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeOverlay();
   });
@@ -179,7 +185,11 @@ function showWinner(game: GameState): void {
     const name = document.createElement('span');
     name.style.color = w.color;
     name.textContent = w.name;
-    winnerWho.replaceChildren(strings.race.winnerFlag, document.createElement('br'), name);
+    winnerWho.replaceChildren(
+      strings.race.winnerFlag,
+      document.createElement('br'),
+      name,
+    );
   }
   winnerBanner.classList.add('winner--shown');
 }

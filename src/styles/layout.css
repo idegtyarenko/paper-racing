@@ -2,7 +2,10 @@
 .app {
   display: flex;
   height: 100%;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
 }
 
 .app__board {
@@ -14,7 +17,9 @@
 
 /* Узкие экраны (телефон в портрете): поле сверху, панель под ним. */
 @media (max-width: 700px) {
-  .app { flex-direction: column; }
+  .app {
+    flex-direction: column;
+  }
 
   .app__board {
     /* Поле забирает всё свободное место; число клеток адаптивно (см. main.ts). */

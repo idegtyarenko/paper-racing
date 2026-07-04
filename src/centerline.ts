@@ -172,7 +172,7 @@ export function offsetCaps(center: Polyline, outNormal: Vec[]): OffsetCaps {
       const dout = scale(eOut, 1 / lo);
       const theta = Math.atan2(Math.abs(cross(din, dout)), dot(din, dout));
       if (theta > 1e-3) {
-        const R = ((li + lo) / 2) / theta; // радиус кривизны
+        const R = (li + lo) / 2 / theta; // радиус кривизны
         const cap = Math.max(HALF_MIN, CURV_SAFETY * R);
         // Вогнутая сторона — куда указывает биссектриса поворота.
         const bis = add(scale(din, -1), dout); // ≈ направление к центру кривизны
@@ -233,7 +233,8 @@ export function edgesValid(outer: Polyline, inner: Polyline): boolean {
   return true;
 }
 
-export type GenerateResult = { model: WidthModel; outer: Polyline; inner: Polyline } | { error: string };
+export type GenerateResult =
+  { model: WidthModel; outer: Polyline; inner: Polyline } | { error: string };
 
 /**
  * Генерация кромок из осевой линии: случайная ширина, ужатая до пределов
@@ -298,9 +299,15 @@ export function pickEdge(
   let bestD = tol;
   for (let i = 0; i < outer.length; i++) {
     const dO = dist(p, outer[i]);
-    if (dO < bestD) { bestD = dO; best = { edge: 'outer', index: i }; }
+    if (dO < bestD) {
+      bestD = dO;
+      best = { edge: 'outer', index: i };
+    }
     const dI = dist(p, inner[i]);
-    if (dI < bestD) { bestD = dI; best = { edge: 'inner', index: i }; }
+    if (dI < bestD) {
+      bestD = dI;
+      best = { edge: 'inner', index: i };
+    }
   }
   return best;
 }
@@ -368,6 +375,7 @@ export function applyEdgeDrag(
     }
   }
   if (!best) return false;
-  if (edge === 'outer') m.outW = best; else m.inW = best;
+  if (edge === 'outer') m.outW = best;
+  else m.inW = best;
   return true;
 }

@@ -8,16 +8,16 @@ import {
   distPointToPolyline,
   segSegIntersection,
   segmentPolylineIntersections,
-} from "./geometry";
-import { Track, key, unkey, sideOfFinish, onRoad } from "./track";
-import { strings } from "./strings";
+} from './geometry';
+import { Track, key, unkey, sideOfFinish, onRoad } from './track';
+import { strings } from './strings';
 import {
   MIN_PLAYERS,
   WIN_CROSSINGS,
   CRASH_SKIP_TURNS,
   OFFROAD_FORGIVE,
   CRASH_SAMPLE_STEP,
-} from "./config";
+} from './config';
 
 export interface TrailSeg {
   from: Vec;
@@ -46,8 +46,8 @@ export interface GameState {
   track: Track;
   players: Player[];
   current: number;
-  phase: "race" | "over";
-  winner: number | "draw" | null;
+  phase: 'race' | 'over';
+  winner: number | 'draw' | null;
   /**
    * Сколько ходов осталось доиграть в решающем круге. Пока никто не финишировал —
    * null. Как только кто-то пересёк финиш, остальные игроки этого же круга
@@ -58,14 +58,7 @@ export interface GameState {
 }
 
 /** Цвета и имена болидов по индексу игрока (до шести участников). */
-const COLORS = [
-  "#c62828",
-  "#1565c0",
-  "#2e7d32",
-  "#ef6c00",
-  "#6a1b9a",
-  "#0097a7",
-];
+const COLORS = ['#c62828', '#1565c0', '#2e7d32', '#ef6c00', '#6a1b9a', '#0097a7'];
 
 /** Имена болидов по цвету — строго в порядке COLORS. */
 const NAMES = strings.players.names;
@@ -103,7 +96,7 @@ export function newGame(track: Track, playerCount = 2): GameState {
     track,
     players: Array.from({ length: n }, (_, i) => mk(i)),
     current: 0,
-    phase: "race",
+    phase: 'race',
     winner: null,
     finalTurnsLeft: null,
   };
@@ -181,7 +174,7 @@ function nearestFreeInsidePoint(state: GameState, q: Vec): Vec {
 }
 
 export function applyMove(state: GameState, cand: Candidate): void {
-  if (state.phase !== "race" || cand.blocked) return;
+  if (state.phase !== 'race' || cand.blocked) return;
   const track = state.track;
   const p = state.players[state.current];
   const from = { ...p.pos };
@@ -280,9 +273,9 @@ function afterAction(state: GameState): void {
 
 /** Победитель решающего круга — максимальный заезд за линию среди финишировавших. */
 function decideWinner(state: GameState): void {
-  state.phase = "over";
+  state.phase = 'over';
   let best = -Infinity;
-  let winner: number | "draw" | null = null;
+  let winner: number | 'draw' | null = null;
   state.players.forEach((p, i) => {
     if (p.crossings < WIN_CROSSINGS) return;
     const o = p.finishOvershoot ?? 0;
@@ -290,7 +283,7 @@ function decideWinner(state: GameState): void {
       best = o;
       winner = i;
     } else if (Math.abs(o - best) <= 1e-9) {
-      winner = "draw";
+      winner = 'draw';
     }
   });
   state.winner = winner;
