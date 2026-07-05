@@ -6,7 +6,7 @@
 
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { Vec } from './geometry';
-import { Track, WORLD_W, WORLD_H, setWorldSize } from './track';
+import { Track, WORLD_W, WORLD_H } from './track';
 import { GameState } from './game';
 
 // ── Сериализация ────────────────────────────────────────────────────────────────
@@ -54,11 +54,11 @@ export function serializeTrack(t: Track): SerializedTrack {
 }
 
 /**
- * Восстанавливает трассу и — важно для гостя — выставляет размеры мира хоста, чтобы
- * рендер совпадал (вызывающий должен зафиксировать мир и вписать сетку).
+ * Восстанавливает трассу. Поля worldW/worldH больше не влияют на рендер —
+ * кадрирование берётся из bbox трассы (fit-to-track), одинаково на всех
+ * устройствах; поля оставлены в JSON для обратной совместимости.
  */
 export function deserializeTrack(s: SerializedTrack): Track {
-  setWorldSize(s.worldW, s.worldH);
   return {
     outer: s.outer,
     inner: s.inner,

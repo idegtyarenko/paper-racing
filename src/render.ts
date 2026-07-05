@@ -1,9 +1,10 @@
 // Отрисовка обеих фаз на одном canvas: полная перерисовка по событию.
 
 import { Vec, Polyline, add, sub, scale, normalize, lerp } from './geometry';
-import { WORLD_W, WORLD_H, Track } from './track';
+import { Track } from './track';
 import { EditorState, Arrow } from './editor';
 import { GameState, Candidate } from './game';
+import { Camera } from './camera';
 
 export interface AppView {
   mode: 'edit' | 'race';
@@ -15,11 +16,8 @@ export interface AppView {
   selected: Candidate | null;
   /** Позиция пальца в css-пикселях canvas — включает «лупу» при прицеливании. */
   loupe: Vec | null;
-  cellPx: number;
-  /** Пинч-зум трассы (1 — вписанная сетка). Смещение — в css-px canvas. */
-  zoom: number;
-  panX: number;
-  panY: number;
+  /** Камера: единый переход мир↔экран (масштаб + смещение). */
+  cam: Camera;
 }
 
 const INK = '#3a3a3a';
@@ -33,15 +31,15 @@ export function render(ctx: CanvasRenderingContext2D, app: AppView): void {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const w = ctx.canvas.width / dpr;
   const h = ctx.canvas.height / dpr;
-  const s = app.cellPx * app.zoom;
+  const s = app.cam.scale;
 
   ctx.fillStyle = PAPER;
   ctx.fillRect(0, 0, w, h);
 
-  // Сцена рисуется под пинч-зумом/паном; лупа — поверх, в экранных координатах.
+  // Сцена рисуется под камерой (зум/пан); лупа — поверх, в экранных координатах.
   ctx.save();
-  ctx.translate(app.panX, app.panY);
-  drawGrid(ctx, s);
+  ctx.translate(app.cam.ox, app.cam.oy);
+  drawGrid(ctx, s, app.cam.ox, app.cam.oy, 0, 0, w, h);
   if (app.mode === 'edit') {
     drawEditor(ctx, s, app.editor);
   } else if (app.game) {
@@ -67,7 +65,7 @@ function drawLoupe(
   const p = app.loupe!;
   const cx = Math.min(Math.max(p.x, R + 4), Math.max(R + 4, w - R - 4));
   const cy = Math.max(p.y - R - 36, R + 4);
-  const s2 = app.cellPx * ZOOM;
+  const s2 = app.cam.scale * ZOOM;
 
   ctx.save();
   ctx.beginPath();
@@ -75,11 +73,13 @@ function drawLoupe(
   ctx.clip();
   ctx.fillStyle = PAPER;
   ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
-  // Мировая точка под пальцем (с учётом пинч-зума/пана) — в центр лупы.
-  const wx = (p.x - app.panX) / (app.cellPx * app.zoom);
-  const wy = (p.y - app.panY) / (app.cellPx * app.zoom);
-  ctx.translate(cx - wx * s2, cy - wy * s2);
-  drawGrid(ctx, s2);
+  // Мировая точка под пальцем (с учётом камеры) — в центр лупы.
+  const wx = (p.x - app.cam.ox) / app.cam.scale;
+  const wy = (p.y - app.cam.oy) / app.cam.scale;
+  const ox2 = cx - wx * s2;
+  const oy2 = cy - wy * s2;
+  ctx.translate(ox2, oy2);
+  drawGrid(ctx, s2, ox2, oy2, cx - R, cy - R, cx + R, cy + R);
   drawRace(ctx, s2, app.game!, app.cands, app.hover ?? app.selected);
   ctx.restore();
 
@@ -90,23 +90,43 @@ function drawLoupe(
   ctx.stroke();
 }
 
-function drawGrid(ctx: CanvasRenderingContext2D, s: number): void {
-  const w = WORLD_W * s;
-  const h = WORLD_H * s;
-  for (let x = 0; x <= WORLD_W; x++) {
-    ctx.strokeStyle = x % 5 === 0 ? GRID_HEAVY : GRID_LIGHT;
-    ctx.lineWidth = 1;
+/**
+ * Бесконечная сетка: рисуем только линии, попадающие в видимое окно
+ * [vx0..vx1] × [vy0..vy1] (экранные css-px). ctx уже сдвинут на (ox, oy), поэтому
+ * узел мира n рисуется в координате n*s. Жирная линия — каждые 5 клеток
+ * (корректно и для отрицательных координат).
+ */
+function drawGrid(
+  ctx: CanvasRenderingContext2D,
+  s: number,
+  ox: number,
+  oy: number,
+  vx0: number,
+  vy0: number,
+  vx1: number,
+  vy1: number,
+): void {
+  const x0 = Math.floor((vx0 - ox) / s);
+  const x1 = Math.ceil((vx1 - ox) / s);
+  const y0 = Math.floor((vy0 - oy) / s);
+  const y1 = Math.ceil((vy1 - oy) / s);
+  const top = y0 * s;
+  const bottom = y1 * s;
+  const left = x0 * s;
+  const right = x1 * s;
+  ctx.lineWidth = 1;
+  for (let x = x0; x <= x1; x++) {
+    ctx.strokeStyle = ((x % 5) + 5) % 5 === 0 ? GRID_HEAVY : GRID_LIGHT;
     ctx.beginPath();
-    ctx.moveTo(x * s, 0);
-    ctx.lineTo(x * s, h);
+    ctx.moveTo(x * s, top);
+    ctx.lineTo(x * s, bottom);
     ctx.stroke();
   }
-  for (let y = 0; y <= WORLD_H; y++) {
-    ctx.strokeStyle = y % 5 === 0 ? GRID_HEAVY : GRID_LIGHT;
-    ctx.lineWidth = 1;
+  for (let y = y0; y <= y1; y++) {
+    ctx.strokeStyle = ((y % 5) + 5) % 5 === 0 ? GRID_HEAVY : GRID_LIGHT;
     ctx.beginPath();
-    ctx.moveTo(0, y * s);
-    ctx.lineTo(w, y * s);
+    ctx.moveTo(left, y * s);
+    ctx.lineTo(right, y * s);
     ctx.stroke();
   }
 }

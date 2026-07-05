@@ -19,23 +19,14 @@ import {
   trimSeamOverlap,
 } from './geometry';
 import { strings } from './strings';
-import {
-  WORLD_W_DEFAULT,
-  WORLD_H_DEFAULT,
-  WALL_CLEARANCE,
-  MAX_START_POINTS,
-  MIN_ROAD_CELLS,
-} from './config';
+import { WORLD_SIZE, WALL_CLEARANCE, MAX_START_POINTS, MIN_ROAD_CELLS } from './config';
 
-// Размеры мира в клетках. Изменяемы: подбираются под пропорции доски при
-// первом resize (см. main.ts) и фиксируются, как только начата трасса.
-export let WORLD_W = WORLD_W_DEFAULT;
-export let WORLD_H = WORLD_H_DEFAULT;
-
-export function setWorldSize(w: number, h: number): void {
-  WORLD_W = w;
-  WORLD_H = h;
-}
+// Размер условно бесконечного квадратного поля в клетках. Фиксирован: сетка
+// рисуется по видимому вьюпорту, а кадр задаётся камерой (fit-to-track), поэтому
+// от пропорций экрана размер мира не зависит. Это лишь щедрые предохранители
+// геометрии и безопасный диапазон для key(); реальная трасса — десятки клеток.
+export const WORLD_W = WORLD_SIZE;
+export const WORLD_H = WORLD_SIZE;
 
 export interface FinishLine {
   a: Vec;

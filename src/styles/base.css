@@ -19,3 +19,7 @@ canvas {
   -webkit-user-select: none;
   cursor: crosshair;
 }
+/* Во время панорамирования карты — «схваченная рука». */
+canvas.grabbing {
+  cursor: grabbing;
+}
