@@ -11,8 +11,13 @@
   touch-action: manipulation;
 }
 
-.button:hover:not(:disabled) {
-  background: #f0ecdf;
+/* Hover — только на устройствах с настоящим курсором. На тач-экранах :hover
+   «залипает» после тапа и на iOS съедает первый клик (кнопка срабатывает лишь
+   со второго нажатия), поэтому наведение туда не пускаем. */
+@media (hover: hover) {
+  .button:hover:not(:disabled) {
+    background: #f0ecdf;
+  }
 }
 .button:active:not(:disabled) {
   background: #e6e0cf;
@@ -76,8 +81,10 @@
   touch-action: manipulation;
 }
 
-.icon-button:hover {
-  background: #f0ecdf;
+@media (hover: hover) {
+  .icon-button:hover {
+    background: #f0ecdf;
+  }
 }
 .icon-button:active {
   background: #e6e0cf;

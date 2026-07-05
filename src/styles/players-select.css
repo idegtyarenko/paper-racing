@@ -17,8 +17,10 @@
   touch-action: manipulation;
 }
 
-.count-btn:hover:not(:disabled) {
-  background: #f0ecdf;
+@media (hover: hover) {
+  .count-btn:hover:not(:disabled) {
+    background: #f0ecdf;
+  }
 }
 .count-btn:active:not(:disabled) {
   background: #e6e0cf;
