@@ -2,7 +2,7 @@
 
 import './styles/index.css';
 import { Vec, dist } from './geometry';
-import { Track, WORLD_W, WORLD_H, finalizeTrack } from './track';
+import { Track, finalizeTrack } from './track';
 import {
   newEditor,
   editorFromTrack,
@@ -15,17 +15,8 @@ import {
 } from './editor';
 import { GameState, Candidate, newGame, candidates, applyMove, seatColor } from './game';
 import { render, AppView } from './render';
-import {
-  Camera,
-  Bounds,
-  screenToWorld,
-  worldToScreen,
-  fitBounds,
-  zoomAt,
-  polylineBounds,
-  clampToBounds,
-  clampScale,
-} from './camera';
+import { Bounds, worldToScreen, polylineBounds, clampScale } from './camera';
+import * as vp from './viewport';
 import {
   bindButtons,
   updatePanel,
@@ -49,8 +40,6 @@ import {
   TOUCH_LIFT,
   TOUCH_TOL_PX,
   LOUPE_MAX_CELL_PX,
-  SCALE_DEFAULT,
-  FIT_MARGIN,
   AIM_ZONE_PX,
   DRAG_PX,
   ZOOM_BTN_FACTOR,
@@ -77,11 +66,6 @@ let hover: Candidate | null = null;
 let selected: Candidate | null = null;
 /** Тач: позиция пальца (css-px canvas) во время прицеливания — включает лупу. */
 let loupe: Vec | null = null;
-/** Камера: единый переход мир↔экран. Инициализируется в resize() до первого кадра. */
-let cam: Camera = { scale: SCALE_DEFAULT, ox: 0, oy: 0 };
-/** Пользователь вручную зумил/панорамировал: при ресайзе сохраняем его вид,
- *  а не пере-вписываем трассу. Сбрасывается при каждом авто-вписывании. */
-let userAdjustedView = false;
 /** Активные тач-указатели (для распознавания пинча двумя пальцами). */
 const activePointers = new Map<number, Vec>();
 /** Снимок начала пинч-жеста; null — пинча нет. */
@@ -111,61 +95,24 @@ let activeId: number | null = null;
 
 /** Радиус попадания по кандидату в клетках: для пальца — не меньше TOUCH_TOL_PX. */
 function touchTol(): number {
-  return Math.max(0.45, TOUCH_TOL_PX / cam.scale);
+  return Math.max(0.45, TOUCH_TOL_PX / vp.scale());
 }
 
-function viewSize(): { w: number; h: number } {
-  const r = wrap.getBoundingClientRect();
-  return { w: r.width, h: r.height };
-}
-
-/** Bbox содержимого для fit/clamp: трасса гонки или редактируемая трасса. */
+/** Bbox содержимого для fit/clamp: трасса гонки или редактируемая трасса.
+ *  Провайдер границ для вьюпорта — «что сейчас на экране» знает приложение. */
 function contentBounds(): Bounds | null {
   if (mode === 'race' && game) return polylineBounds(game.track.outer, game.track.inner);
   return polylineBounds(editor.outer, editor.inner, editor.center);
 }
 
-/** Стартовый вид пустого поля: центр мира в центре вьюпорта. */
-function defaultCamera(w: number, h: number): Camera {
-  const c = WORLD_W / 2;
-  return { scale: SCALE_DEFAULT, ox: w / 2 - c * SCALE_DEFAULT, oy: h / 2 - c * SCALE_DEFAULT };
-}
-
-/** Вписать содержимое по центру (или дефолтный вид, если содержимого нет). */
-function fitToContent(): void {
-  const { w, h } = viewSize();
-  const bb = contentBounds();
-  cam = bb ? fitBounds(bb, w, h, FIT_MARGIN) : defaultCamera(w, h);
-  userAdjustedView = false;
-}
-
-/** Ограничить пан, чтобы трасса не уезжала полностью из вида. */
-function clampCam(): void {
-  const bb = contentBounds();
-  if (!bb) return;
-  const { w, h } = viewSize();
-  cam = clampToBounds(cam, bb, w, h);
-}
-
 /** Нужен ли лифт точки над пальцем при прицеливании — пока клетки мелкие. */
 function loupeActive(): boolean {
-  return cam.scale < LOUPE_MAX_CELL_PX;
+  return vp.scale() < LOUPE_MAX_CELL_PX;
 }
 
+/** Пересчитать вьюпорт под новый размер поля и перерисовать. */
 function resize(): void {
-  const r = wrap.getBoundingClientRect();
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = Math.max(1, Math.round(r.width * dpr));
-  canvas.height = Math.max(1, Math.round(r.height * dpr));
-  canvas.style.width = `${r.width}px`;
-  canvas.style.height = `${r.height}px`;
-  // Кадр берём из содержимого: пустое поле — дефолтный вид; трасса — вписываем
-  // по центру. Если пользователь сам зумил/панорамировал — сохраняем его масштаб,
-  // лишь переклампив смещение под новый размер.
-  const bb = contentBounds();
-  if (!bb) cam = defaultCamera(r.width, r.height);
-  else if (userAdjustedView) cam = clampToBounds(cam, bb, r.width, r.height);
-  else cam = fitBounds(bb, r.width, r.height, FIT_MARGIN);
+  vp.resize();
   redraw();
 }
 
@@ -180,7 +127,7 @@ function redraw(): void {
     hover,
     selected,
     loupe,
-    cam,
+    cam: vp.camera(),
   };
   render(ctx, app);
 }
@@ -210,22 +157,6 @@ function commitMove(cand: Candidate): void {
     session.pushMove(game).catch(() => showToast(strings.online.error));
 }
 
-function toScreen(e: PointerEvent): Vec {
-  const r = canvas.getBoundingClientRect();
-  return { x: e.clientX - r.left, y: e.clientY - r.top };
-}
-
-function toWorld(e: PointerEvent, liftPx = 0): Vec {
-  const p = toScreen(e);
-  const w = screenToWorld(cam, { x: p.x, y: p.y - liftPx });
-  // Клампим в границы (квадратного) мира — он key-безопасен и достаточно велик,
-  // чтобы при масштабе по умолчанию ощущаться бесконечным при рисовании.
-  return {
-    x: Math.max(0, Math.min(WORLD_W, w.x)),
-    y: Math.max(0, Math.min(WORLD_H, w.y)),
-  };
-}
-
 /**
  * Смещение точки рисования вверх — только при freehand-рисовании края пальцем.
  * Протяжка финиша и тап по стрелкам остаются точно под пальцем (лифт = 0).
@@ -240,7 +171,7 @@ function drawLift(e: PointerEvent): number {
 
 /** Экранная точка прицела для тач-гонки: положение пальца, поднятое на TOUCH_LIFT. */
 function aimScreen(e: PointerEvent): Vec {
-  const s = toScreen(e);
+  const s = vp.toScreen(e);
   return { x: s.x, y: s.y - TOUCH_LIFT };
 }
 
@@ -285,13 +216,14 @@ function pinchPoints(): [Vec, Vec] {
 /** Начать пинч-жест по текущим двум пальцам, прервав любой одиночный жест. */
 function startPinch(): void {
   const [a, b] = pinchPoints();
+  const c = vp.camera();
   pinch = {
     d0: Math.hypot(a.x - b.x, a.y - b.y) || 1,
     midX: (a.x + b.x) / 2,
     midY: (a.y + b.y) / 2,
-    scale0: cam.scale,
-    ox0: cam.ox,
-    oy0: cam.oy,
+    scale0: c.scale,
+    ox0: c.ox,
+    oy0: c.oy,
   };
   gesture = null;
   activeId = null;
@@ -312,11 +244,11 @@ function updatePinch(): void {
   const mid1y = (a.y + b.y) / 2;
   const nscale = clampScale(pinch.scale0 * (d1 / pinch.d0));
   const k = nscale / pinch.scale0;
-  cam.ox = mid1x - (pinch.midX - pinch.ox0) * k;
-  cam.oy = mid1y - (pinch.midY - pinch.oy0) * k;
-  cam.scale = nscale;
-  userAdjustedView = true;
-  clampCam();
+  vp.applyUserCamera({
+    scale: nscale,
+    ox: mid1x - (pinch.midX - pinch.ox0) * k,
+    oy: mid1y - (pinch.midY - pinch.oy0) * k,
+  });
 }
 
 /** Подъём точки прицела над пальцем — только когда есть лупа (иначе палец
@@ -327,7 +259,7 @@ function aimLift(): number {
 
 /** Прицеливание пальцем: подсветить ближайшего кандидата и (если нужна) лупу. */
 function aimAt(e: PointerEvent): void {
-  hover = findCandidate(toWorld(e, aimLift()), touchTol());
+  hover = findCandidate(vp.toWorld(e, aimLift()), touchTol());
   loupe = loupeActive() ? aimScreen(e) : null;
 }
 
@@ -336,9 +268,10 @@ function nearestCandScreen(scr: Vec): { cand: Candidate; dist: number } | null {
   if (!cands) return null;
   let best: Candidate | null = null;
   let bestD = Infinity;
+  const view = vp.camera();
   for (const c of cands) {
     if (c.blocked) continue;
-    const p = worldToScreen(cam, c.target);
+    const p = worldToScreen(view, c.target);
     const d = Math.hypot(p.x - scr.x, p.y - scr.y);
     if (d < bestD) {
       best = c;
@@ -350,7 +283,8 @@ function nearestCandScreen(scr: Vec): { cand: Candidate; dist: number } | null {
 
 /** Начать пан карты одним указателем от экранной точки. */
 function beginPan(sx: number, sy: number, id: number): void {
-  gesture = { kind: 'pan', ox0: cam.ox, oy0: cam.oy, sx0: sx, sy0: sy };
+  const c = vp.camera();
+  gesture = { kind: 'pan', ox0: c.ox, oy0: c.oy, sx0: sx, sy0: sy };
   activeId = id;
   loupe = null;
   hover = null;
@@ -362,16 +296,17 @@ function beginPan(sx: number, sy: number, id: number): void {
 /** Сдвинуть камеру за указателем (жест pan). */
 function movePan(scr: Vec): void {
   if (gesture?.kind !== 'pan') return;
-  cam.ox = gesture.ox0 + (scr.x - gesture.sx0);
-  cam.oy = gesture.oy0 + (scr.y - gesture.sy0);
-  userAdjustedView = true;
-  clampCam();
+  vp.applyUserCamera({
+    scale: vp.scale(),
+    ox: gesture.ox0 + (scr.x - gesture.sx0),
+    oy: gesture.oy0 + (scr.y - gesture.sy0),
+  });
 }
 
 /** Классификация касания в редакторе: рисование/тюнинг/финиш/стрелка либо пан. */
 function handleEditDown(e: PointerEvent, scr: Vec, touch: boolean): void {
-  const w = toWorld(e, drawLift(e));
-  const tol = touch ? Math.max(1.2, TOUCH_TOL_PX / cam.scale) : 1.2;
+  const w = vp.toWorld(e, drawLift(e));
+  const tol = touch ? Math.max(1.2, TOUCH_TOL_PX / vp.scale()) : 1.2;
   const phase = editor.phase;
   switch (phase) {
     case 'center':
@@ -432,7 +367,7 @@ function handleGestureMove(e: PointerEvent, scr: Vec): void {
   switch (g.kind) {
     case 'draw':
     case 'edge':
-      pointerMove(editor, toWorld(e, drawLift(e)));
+      pointerMove(editor, vp.toWorld(e, drawLift(e)));
       break;
     case 'finish':
       if (Math.hypot(scr.x - g.downX, scr.y - g.downY) > DRAG_PX) {
@@ -440,7 +375,7 @@ function handleGestureMove(e: PointerEvent, scr: Vec): void {
         beginPan(g.downX, g.downY, activeId!);
         movePan(scr);
       } else {
-        pointerMove(editor, toWorld(e, drawLift(e))); // обновляем превью финиша
+        pointerMove(editor, vp.toWorld(e, drawLift(e))); // обновляем превью финиша
       }
       break;
     case 'move':
@@ -466,10 +401,10 @@ function endGesture(e: PointerEvent): void {
     case 'edge':
     case 'finish': {
       const prevPhase = editor.phase;
-      pointerMove(editor, toWorld(e, drawLift(e)));
+      pointerMove(editor, vp.toWorld(e, drawLift(e)));
       pointerUp(editor);
       // Осевая замкнута (center → adjust) — «автор закончил рисовать»: вписываем.
-      if (prevPhase === 'center' && editor.phase === 'adjust') fitToContent();
+      if (prevPhase === 'center' && editor.phase === 'adjust') vp.fitToContent();
       updateUI();
       break;
     }
@@ -480,7 +415,7 @@ function endGesture(e: PointerEvent): void {
       // Отпускание: выбрать кандидата (превью + плавающая кнопка «Газу!»).
       loupe = null;
       hover = null;
-      selected = findCandidate(toWorld(e, aimLift()), touchTol());
+      selected = findCandidate(vp.toWorld(e, aimLift()), touchTol());
       showConfirmMove(!!selected);
       break;
     case 'pan':
@@ -498,7 +433,7 @@ canvas.addEventListener('pointerdown', (e) => {
     canvas.setPointerCapture(e.pointerId);
   } catch {}
   const touch = e.pointerType === 'touch';
-  const scr = toScreen(e);
+  const scr = vp.toScreen(e);
   if (touch) activePointers.set(e.pointerId, scr);
 
   // Второй палец — пинч (зум + пан) во всех режимах.
@@ -517,7 +452,7 @@ canvas.addEventListener('pointerdown', (e) => {
 
 canvas.addEventListener('pointermove', (e) => {
   const touch = e.pointerType === 'touch';
-  const scr = toScreen(e);
+  const scr = vp.toScreen(e);
   if (touch && activePointers.has(e.pointerId)) activePointers.set(e.pointerId, scr);
 
   if (pinch && activePointers.size >= 2) {
@@ -533,7 +468,7 @@ canvas.addEventListener('pointermove', (e) => {
   }
   // Нет активного жеста: только hover мышью по кандидатам в гонке.
   if (!touch && mode === 'race' && game && game.phase === 'race') {
-    const c = findCandidate(toWorld(e));
+    const c = findCandidate(vp.toWorld(e));
     if (c !== hover) {
       hover = c;
       redraw();
@@ -587,9 +522,7 @@ canvas.addEventListener(
   'wheel',
   (e) => {
     e.preventDefault();
-    cam = zoomAt(cam, Math.pow(WHEEL_FACTOR, -e.deltaY), e.offsetX, e.offsetY);
-    userAdjustedView = true;
-    clampCam();
+    vp.zoomAt(Math.pow(WHEEL_FACTOR, -e.deltaY), e.offsetX, e.offsetY);
     redraw();
   },
   { passive: false },
@@ -597,10 +530,8 @@ canvas.addEventListener(
 
 /** Зум кнопкой ＋/－ (десктоп) — относительно центра поля. */
 function zoomByButton(dir: 1 | -1): void {
-  const { w, h } = viewSize();
-  cam = zoomAt(cam, dir > 0 ? ZOOM_BTN_FACTOR : 1 / ZOOM_BTN_FACTOR, w / 2, h / 2);
-  userAdjustedView = true;
-  clampCam();
+  const { w, h } = vp.viewSize();
+  vp.zoomAt(dir > 0 ? ZOOM_BTN_FACTOR : 1 / ZOOM_BTN_FACTOR, w / 2, h / 2);
   redraw();
 }
 document.getElementById('zoomIn')?.addEventListener('click', () => zoomByButton(1));
@@ -656,7 +587,7 @@ function startRace(playerCount: number): void {
   if (!raceTrack) return;
   game = newGame(raceTrack, playerCount);
   mode = 'race';
-  fitToContent();
+  vp.fitToContent();
   refreshCands();
   updateUI();
   redraw();
@@ -672,7 +603,7 @@ function resetToEdit(): void {
   showConfirmMove(false);
   editor = newEditor();
   mode = 'edit';
-  userAdjustedView = false; // пустое поле — вернуться к дефолтному виду
+  // Пустое поле → resize() покажет дефолтный вид (границ содержимого нет).
   updateUI();
   resize();
 }
@@ -720,7 +651,7 @@ const onlineHandlers: OnlineHandlers = {
     if (mode !== 'race') {
       mode = 'race';
       closeOverlay();
-      fitToContent();
+      vp.fitToContent();
     }
     refreshCands();
     updateUI();
@@ -762,12 +693,12 @@ async function joinOnline(
     if (t) {
       editor = editorFromTrack(t); // превью трассы хоста в лобби
       raceTrack = null; // гость не владеет трассой
-      userAdjustedView = false; // вписать трассу хоста заново
     }
     // Реконнект в уже идущую гонку: onGameState уже перевёл в режим race —
     // не сбрасываем обратно в лобби. Иначе (игра ещё не начата) — в лобби.
     if (mode !== 'race') mode = 'lobby';
-    resize(); // вписать трассу хоста по центру + redraw
+    vp.fitToContent(); // вписать трассу хоста по центру
+    redraw();
     updateUI();
     if (mode === 'lobby') renderLobbyPanel();
   } catch (e) {
@@ -786,7 +717,7 @@ async function startOnline(): Promise<void> {
   });
   game = g;
   mode = 'race';
-  fitToContent();
+  vp.fitToContent();
   refreshCands();
   updateUI();
   redraw();
@@ -900,6 +831,9 @@ localizeDom();
 
 // Онлайн-входы показываем только если бэкенд настроен (иначе — только локальная игра).
 setOnlineEnabled(onlineAvailable());
+
+// Камера: связать вьюпорт с canvas/обёрткой и провайдером границ содержимого.
+vp.initViewport(canvas, wrap, contentBounds);
 
 // ResizeObserver вместо window.resize: обёртка меняет размер и при смене
 // раскладки (портрет/ландшафт на мобильных), а не только окна.
