@@ -152,9 +152,14 @@ export function candidates(state: GameState): Candidate[] {
   return out;
 }
 
-/** Позиции всех игроков, кроме ходящего сейчас. */
+/**
+ * Позиции всех игроков, кроме ходящего сейчас и тех, кто отбывает штраф после
+ * аварии — они ещё не вернулись на трассу и не мешают чужому пути.
+ */
 function otherPositions(state: GameState): Vec[] {
-  return state.players.filter((_, i) => i !== state.current).map((pl) => ({ ...pl.pos }));
+  return state.players
+    .filter((pl, i) => i !== state.current && pl.skipTurns === 0)
+    .map((pl) => ({ ...pl.pos }));
 }
 
 function nearestFreeInsidePoint(state: GameState, q: Vec): Vec {
@@ -217,11 +222,12 @@ export function applyMove(state: GameState, cand: Candidate): void {
   }
 
   if (crashAt) {
-    const resetTo = nearestFreeInsidePoint(state, crashAt);
+    // Болид остаётся в точке аварии на время штрафа — вернуть его на трассу
+    // (nearestFreeInsidePoint) и дорисовать пунктирный «телепорт» нужно только
+    // когда штраф отбыт (см. afterAction), иначе он мешает другим машинам.
     p.trail.push({ from, to: crashAt, jump: false });
-    p.trail.push({ from: crashAt, to: { ...resetTo }, jump: true });
     p.crashes.push(crashAt);
-    p.pos = { ...resetTo };
+    p.pos = { ...crashAt };
     p.vel = { x: 0, y: 0 };
     p.skipTurns = CRASH_SKIP_TURNS;
   } else {
@@ -272,6 +278,12 @@ function afterAction(state: GameState): void {
   const next = state.players[state.current];
   if (next.skipTurns > 0) {
     next.skipTurns -= 1;
+    if (next.skipTurns === 0) {
+      // Штраф отбыт — только теперь возвращаем болид на трассу.
+      const resetTo = nearestFreeInsidePoint(state, next.pos);
+      next.trail.push({ from: { ...next.pos }, to: { ...resetTo }, jump: true });
+      next.pos = resetTo;
+    }
     afterAction(state);
   }
 }
