@@ -7,16 +7,10 @@
 import { Track } from '../model/track';
 import { GameState, newGame, coastMove, seatColor } from '../model/game';
 import { EditorState, editorFromTrack } from '../model/editor';
-import {
-  renderLobby,
-  openNameDialog,
-  openJoinDialog,
-  showJoinError,
-  showToast,
-  closeOverlay,
-  NetTurn,
-  PanelMode,
-} from '../ui/ui';
+import { renderLobby } from '../ui/lobby';
+import { openNameDialog, openJoinDialog, showJoinError, showToast } from '../ui/dialogs';
+import { closeOverlay } from '../ui/dom';
+import { NetTurn, PanelMode } from '../ui/panel';
 import { TURN_TIMEOUT_MS, LOBBY_PRUNE_MS } from '../config';
 import { strings } from '../strings';
 import * as session from './online';

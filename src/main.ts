@@ -8,13 +8,8 @@ import { GameState, Candidate, newGame, candidates, applyMove } from './model/ga
 import { render, AppView } from './view/render';
 import { Bounds, polylineBounds } from './view/camera';
 import * as vp from './view/viewport';
-import {
-  bindButtons,
-  updatePanel,
-  showToast,
-  setOnlineEnabled,
-  PanelMode,
-} from './ui/ui';
+import { bindButtons, updatePanel, setOnlineEnabled, PanelMode } from './ui/panel';
+import { showToast } from './ui/dialogs';
 import { localizeDom } from './ui/localize';
 import { strings } from './strings';
 import { onlineAvailable } from './online/net';

@@ -16,7 +16,7 @@ import {
 import { GameState, Candidate } from '../model/game';
 import { worldToScreen, clampScale } from './camera';
 import * as vp from './viewport';
-import { showConfirmMove, PanelMode } from '../ui/ui';
+import { showConfirmMove, PanelMode } from '../ui/panel';
 import {
   TOUCH_LIFT,
   TOUCH_TOL_PX,
