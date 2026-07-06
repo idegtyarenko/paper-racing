@@ -5,7 +5,6 @@ import { Vec, dist } from './geometry';
 import { Track, finalizeTrack } from './track';
 import {
   newEditor,
-  editorFromTrack,
   pointerDown,
   pointerMove,
   pointerUp,
@@ -13,7 +12,7 @@ import {
   stepBack,
   confirmEdges,
 } from './editor';
-import { GameState, Candidate, newGame, candidates, applyMove, seatColor } from './game';
+import { GameState, Candidate, newGame, candidates, applyMove } from './game';
 import { render, AppView } from './render';
 import { Bounds, worldToScreen, polylineBounds, clampScale } from './camera';
 import * as vp from './viewport';
@@ -21,20 +20,15 @@ import {
   bindButtons,
   updatePanel,
   showConfirmMove,
-  renderLobby,
-  openNameDialog,
-  openJoinDialog,
-  showJoinError,
   showToast,
   setOnlineEnabled,
-  closeOverlay,
   PanelMode,
 } from './ui';
 import { localizeDom } from './localize';
 import { strings } from './strings';
 import { onlineAvailable } from './net';
 import * as session from './online';
-import { OnlineHandlers } from './online';
+import * as online from './online-controller';
 import { initInstallPrompt } from './install-prompt';
 import {
   TOUCH_LIFT,
@@ -608,171 +602,29 @@ function resetToEdit(): void {
   resize();
 }
 
-// ── Онлайн-режим ────────────────────────────────────────────────────────────────
-
-function savedName(): string {
-  return localStorage.getItem('pr-player-name') ?? '';
-}
-function rememberName(n: string): void {
-  localStorage.setItem('pr-player-name', n);
-}
-
-/** Разложить ошибку присоединения в понятный текст. */
-function joinErrorText(e: unknown): string {
-  const m = (e as { message?: string })?.message ?? '';
-  if (m.includes('game_not_found')) return strings.online.notFound;
-  if (m.includes('game_full')) return strings.online.full;
-  if (m.includes('game_started')) return strings.online.started;
-  return strings.online.error;
-}
-
-/** Перерисовать панель лобби по текущему ростеру сессии. */
-function renderLobbyPanel(): void {
-  const roster = session.getRoster();
-  const mine = session.mySeat();
-  renderLobby({
-    code: session.getCode() ?? '',
-    players: roster.map((r, i) => ({
-      name: r.name,
-      color: seatColor(i),
-      you: i === mine,
-    })),
-    canStart: session.canStart(),
-    isHost: session.isHost(),
-  });
-}
-
-const onlineHandlers: OnlineHandlers = {
-  onLobby: () => {
-    if (mode === 'lobby') renderLobbyPanel();
+// Онлайн-флоу (host/join/start/leave/share) вынесен в online-controller.ts;
+// он читает и мутирует состояние приложения через эти зависимости.
+online.initOnline({
+  getMode: () => mode,
+  setMode: (m) => {
+    mode = m;
   },
-  onGameState: (g) => {
+  getRaceTrack: () => raceTrack,
+  setRaceTrack: (t) => {
+    raceTrack = t;
+  },
+  setGame: (g) => {
     game = g;
-    if (mode !== 'race') {
-      mode = 'race';
-      closeOverlay();
-      vp.fitToContent();
-    }
-    refreshCands();
-    updateUI();
-    redraw();
   },
-  onClosed: () => {
-    showToast(strings.online.closed);
-    resetToEdit();
+  setEditor: (e) => {
+    editor = e;
   },
-};
-
-/** Создать онлайн-игру (хост) с введённым именем и открыть лобби. */
-async function hostOnline(name: string): Promise<void> {
-  if (!raceTrack) return;
-  try {
-    await session.host(raceTrack, name, onlineHandlers);
-    mode = 'lobby';
-    updateUI();
-    renderLobbyPanel();
-    redraw();
-  } catch {
-    showToast(strings.online.error);
-  }
-}
-
-/**
- * Присоединиться к онлайн-игре по коду. inJoinDialog — ошибку показываем прямо в
- * диалоге входа (он остаётся открыт); иначе (вход по ссылке) — тостом.
- */
-async function joinOnline(
-  code: string,
-  name: string,
-  inJoinDialog: boolean,
-): Promise<void> {
-  try {
-    await session.join(code, name, onlineHandlers);
-    closeOverlay();
-    const t = session.getTrack();
-    if (t) {
-      editor = editorFromTrack(t); // превью трассы хоста в лобби
-      raceTrack = null; // гость не владеет трассой
-    }
-    // Реконнект в уже идущую гонку: onGameState уже перевёл в режим race —
-    // не сбрасываем обратно в лобби. Иначе (игра ещё не начата) — в лобби.
-    if (mode !== 'race') mode = 'lobby';
-    vp.fitToContent(); // вписать трассу хоста по центру
-    redraw();
-    updateUI();
-    if (mode === 'lobby') renderLobbyPanel();
-  } catch (e) {
-    if (inJoinDialog) showJoinError(joinErrorText(e));
-    else showToast(joinErrorText(e));
-  }
-}
-
-/** Хост стартует онлайн-гонку: строит стейт с именами игроков и рассылает его. */
-async function startOnline(): Promise<void> {
-  if (!raceTrack || !session.canStart()) return;
-  const roster = session.getRoster();
-  const g = newGame(raceTrack, roster.length);
-  roster.forEach((r, i) => {
-    if (g.players[i]) g.players[i].name = r.name;
-  });
-  game = g;
-  mode = 'race';
-  vp.fitToContent();
-  refreshCands();
-  updateUI();
-  redraw();
-  try {
-    await session.start(g);
-  } catch {
-    showToast(strings.online.error);
-  }
-}
-
-/** Выйти из лобби: освободить место на сервере и вернуться (хост — к выбору режима). */
-async function leaveLobby(): Promise<void> {
-  const wasHost = raceTrack !== null;
-  await session.leave();
-  if (wasHost) {
-    mode = 'mode';
-    updateUI();
-    redraw();
-  } else {
-    resetToEdit();
-  }
-}
-
-/** Поделиться ссылкой на игру (Web Share или копирование в буфер). */
-async function shareLink(): Promise<void> {
-  const code = session.getCode();
-  if (!code) return;
-  const url = `${location.origin}${import.meta.env.BASE_URL}?join=${code}`;
-  if (navigator.share) {
-    try {
-      await navigator.share({ title: strings.app.title, url });
-    } catch {
-      // Пользователь отменил шаринг — ничего не делаем.
-    }
-  } else {
-    try {
-      await navigator.clipboard.writeText(url);
-      showToast(strings.online.copied);
-    } catch {
-      showToast(url);
-    }
-  }
-}
-
-/** Скопировать код игры в буфер. */
-async function copyCode(): Promise<void> {
-  const code = session.getCode();
-  if (!code) return;
-  try {
-    await navigator.clipboard.writeText(code);
-    showToast(strings.online.codeCopied);
-  } catch {
-    // Буфер недоступен — код и так виден на экране.
-  }
-}
+  fitToContent: () => vp.fitToContent(),
+  refreshCands,
+  updateUI,
+  redraw,
+  resetToEdit,
+});
 
 bindButtons({
   onBack: () => {
@@ -807,23 +659,13 @@ bindButtons({
     updateUI();
     redraw();
   },
-  onModeOnline: () => {
-    openNameDialog(strings.online.create, savedName(), (name) => {
-      rememberName(name);
-      hostOnline(name);
-    });
-  },
+  onModeOnline: () => online.promptCreate(),
   onModeBack: () => backFromSetup(),
-  onJoinByCode: () => {
-    openJoinDialog(savedName(), '', (code, name) => {
-      rememberName(name);
-      joinOnline(code, name, true);
-    });
-  },
-  onLobbyStart: () => startOnline(),
-  onLobbyShare: () => shareLink(),
-  onLobbyCopyCode: () => copyCode(),
-  onLobbyLeave: () => leaveLobby(),
+  onJoinByCode: () => online.promptJoin(),
+  onLobbyStart: () => online.start(),
+  onLobbyShare: () => online.share(),
+  onLobbyCopyCode: () => online.copy(),
+  onLobbyLeave: () => online.leave(),
 });
 
 // Заполнить статичные тексты разметки из strings до первого показа панели.
@@ -844,10 +686,7 @@ resize();
 // Открыта ссылка-приглашение (?join=CODE) — спросить имя и подключиться к игре.
 const joinParam = new URLSearchParams(location.search).get('join');
 if (joinParam && onlineAvailable()) {
-  openNameDialog(strings.online.joinSubmit, savedName(), (name) => {
-    rememberName(name);
-    joinOnline(joinParam.toUpperCase(), name, false);
-  });
+  online.promptJoinByLink(joinParam.toUpperCase());
 }
 
 // Предложить установить игру ярлыком на телефон (Android/Chromium и iOS Safari).
