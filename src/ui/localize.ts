@@ -7,7 +7,7 @@
 //   data-i18n-aria-label="…"            → задаёт атрибут aria-label
 // Ключ — путь по вложенному объекту strings через точку.
 
-import { strings } from './strings';
+import { strings } from '../strings';
 
 /** Резолв ключа вида "buttons.next" по вложенному объекту strings. */
 function resolve(key: string): string | undefined {

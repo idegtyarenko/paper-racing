@@ -1,10 +1,10 @@
 // Боковая панель: владеет её DOM-элементами и обновляет их по состоянию игры.
 
-import { KMH_PER_CELL } from './config';
-import { EditorState, canStepBack } from './editor';
-import { GameState, Player } from './game';
-import { len } from './geometry';
-import { strings } from './strings';
+import { KMH_PER_CELL } from '../config';
+import { EditorState, canStepBack } from '../model/editor';
+import { GameState, Player } from '../model/game';
+import { len } from '../geometry';
+import { strings } from '../strings';
 
 const statusEl = document.querySelector('.status')!;
 

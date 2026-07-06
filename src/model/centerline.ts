@@ -21,10 +21,10 @@ import {
   segmentPolylineIntersections,
   resampleClosed,
   smoothClosed,
-} from './geometry';
+} from '../geometry';
 import { WORLD_W, WORLD_H } from './track';
-import { strings } from './strings';
-import { WIDTH_MIN, WIDTH_MAX } from './config';
+import { strings } from '../strings';
+import { WIDTH_MIN, WIDTH_MAX } from '../config';
 
 // Диапазон полной ширины трассы (клетки) — реэкспорт из config для внешних импортов.
 export { WIDTH_MIN, WIDTH_MAX };

@@ -17,9 +17,9 @@ import {
   resampleClosed,
   chaikinClosed,
   trimSeamOverlap,
-} from './geometry';
-import { strings } from './strings';
-import { WORLD_SIZE, WALL_CLEARANCE, MAX_START_POINTS, MIN_ROAD_CELLS } from './config';
+} from '../geometry';
+import { strings } from '../strings';
+import { WORLD_SIZE, WALL_CLEARANCE, MAX_START_POINTS, MIN_ROAD_CELLS } from '../config';
 
 // Размер условно бесконечного квадратного поля в клетках. Фиксирован: сетка
 // рисуется по видимому вьюпорту, а кадр задаётся камерой (fit-to-track), поэтому

@@ -1,21 +1,27 @@
 // Оркестрация: состояние приложения, переключение фаз редактор/гонка, сборка
 // зависимостей ввода/онлайна/кнопок. Сами жесты указателя живут в input.ts.
 
-import './styles/index.css';
-import { Track, finalizeTrack } from './track';
-import { newEditor, stepBack, confirmEdges } from './editor';
-import { GameState, Candidate, newGame, candidates, applyMove } from './game';
-import { render, AppView } from './render';
-import { Bounds, polylineBounds } from './camera';
-import * as vp from './viewport';
-import { bindButtons, updatePanel, showToast, setOnlineEnabled, PanelMode } from './ui';
-import { localizeDom } from './localize';
+import './ui/styles/index.css';
+import { Track, finalizeTrack } from './model/track';
+import { newEditor, stepBack, confirmEdges } from './model/editor';
+import { GameState, Candidate, newGame, candidates, applyMove } from './model/game';
+import { render, AppView } from './view/render';
+import { Bounds, polylineBounds } from './view/camera';
+import * as vp from './view/viewport';
+import {
+  bindButtons,
+  updatePanel,
+  showToast,
+  setOnlineEnabled,
+  PanelMode,
+} from './ui/ui';
+import { localizeDom } from './ui/localize';
 import { strings } from './strings';
-import { onlineAvailable } from './net';
-import * as session from './online';
-import * as online from './online-controller';
-import * as input from './input';
-import { initInstallPrompt } from './install-prompt';
+import { onlineAvailable } from './online/net';
+import * as session from './online/online';
+import * as online from './online/online-controller';
+import * as input from './view/input';
+import { initInstallPrompt } from './ui/install-prompt';
 
 const canvas = document.getElementById('board') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;

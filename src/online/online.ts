@@ -3,8 +3,8 @@
 // высокоуровневые события для main.ts. Ровно одна активная сессия за раз.
 
 import { RealtimeChannel } from '@supabase/supabase-js';
-import { Track } from './track';
-import { GameState } from './game';
+import { Track } from '../model/track';
+import { GameState } from '../model/game';
 import {
   GameRow,
   RosterEntry,

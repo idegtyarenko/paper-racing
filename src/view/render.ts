@@ -1,9 +1,9 @@
 // Отрисовка обеих фаз на одном canvas: полная перерисовка по событию.
 
-import { Vec, Polyline, add, sub, scale, normalize, lerp } from './geometry';
-import { Track } from './track';
-import { EditorState, Arrow } from './editor';
-import { GameState, Candidate } from './game';
+import { Vec, Polyline, add, sub, scale, normalize, lerp } from '../geometry';
+import { Track } from '../model/track';
+import { EditorState, Arrow } from '../model/editor';
+import { GameState, Candidate } from '../model/game';
 import { Camera } from './camera';
 
 export interface AppView {

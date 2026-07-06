@@ -5,9 +5,9 @@
 // пишет строку игры; остальные подхватывают изменения через realtime-подписку.
 
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
-import { Vec } from './geometry';
-import { Track, WORLD_W, WORLD_H } from './track';
-import { GameState } from './game';
+import { Vec } from '../geometry';
+import { Track, WORLD_W, WORLD_H } from '../model/track';
+import { GameState } from '../model/game';
 
 // ── Сериализация ────────────────────────────────────────────────────────────────
 

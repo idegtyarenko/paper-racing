@@ -5,18 +5,18 @@
 // читает рендер; игровое состояние (mode/editor/game/cands) он читает и правит
 // через переданный на init InputDeps. Ровно один набор обработчиков на приложение.
 
-import { Vec, dist } from './geometry';
+import { Vec, dist } from '../geometry';
 import {
   EditorState,
   pointerDown,
   pointerMove,
   pointerUp,
   pointerCancel,
-} from './editor';
-import { GameState, Candidate } from './game';
+} from '../model/editor';
+import { GameState, Candidate } from '../model/game';
 import { worldToScreen, clampScale } from './camera';
 import * as vp from './viewport';
-import { showConfirmMove, PanelMode } from './ui';
+import { showConfirmMove, PanelMode } from '../ui/ui';
 import {
   TOUCH_LIFT,
   TOUCH_TOL_PX,
@@ -25,7 +25,7 @@ import {
   DRAG_PX,
   ZOOM_BTN_FACTOR,
   WHEEL_FACTOR,
-} from './config';
+} from '../config';
 
 /** Мост к состоянию и флоу главного модуля: ввод не держит их сам. */
 export interface InputDeps {

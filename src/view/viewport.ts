@@ -4,9 +4,9 @@
 // boundsProvider. DOM здесь только canvas/обёртка (размер + rect), рендера нет.
 // Ровно один вьюпорт на приложение (модуль-синглтон).
 
-import { Vec } from './geometry';
-import { WORLD_W, WORLD_H } from './track';
-import { SCALE_DEFAULT, FIT_MARGIN } from './config';
+import { Vec } from '../geometry';
+import { WORLD_W, WORLD_H } from '../model/track';
+import { SCALE_DEFAULT, FIT_MARGIN } from '../config';
 import {
   Camera,
   Bounds,

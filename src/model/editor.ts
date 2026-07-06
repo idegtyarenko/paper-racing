@@ -14,7 +14,7 @@ import {
   distPointToSegment,
   selfIntersectsClosed,
   polygonArea,
-} from './geometry';
+} from '../geometry';
 import { FinishLine, processStroke, clipFinishLine } from './track';
 import {
   WidthModel,
@@ -23,8 +23,8 @@ import {
   pickEdge,
   applyEdgeDrag,
 } from './centerline';
-import { strings } from './strings';
-import { MIN_CENTER_AREA } from './config';
+import { strings } from '../strings';
+import { MIN_CENTER_AREA } from '../config';
 
 export type EditorPhase = 'center' | 'adjust' | 'finish' | 'direction' | 'ready';
 

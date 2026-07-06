@@ -8,16 +8,16 @@ import {
   distPointToPolyline,
   segSegIntersection,
   segmentPolylineIntersections,
-} from './geometry';
+} from '../geometry';
 import { Track, key, unkey, sideOfFinish, onRoad } from './track';
-import { strings } from './strings';
+import { strings } from '../strings';
 import {
   MIN_PLAYERS,
   WIN_CROSSINGS,
   CRASH_SKIP_TURNS,
   OFFROAD_FORGIVE,
   CRASH_SAMPLE_STEP,
-} from './config';
+} from '../config';
 
 export interface TrailSeg {
   from: Vec;

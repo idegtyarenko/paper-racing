@@ -4,9 +4,9 @@
 // читает и мутирует его через переданный на init OnlineDeps, а перерисовку и
 // пересчёт делает его же колбэками. Ровно один контроллер на приложение.
 
-import { Track } from './track';
-import { GameState, newGame, seatColor } from './game';
-import { EditorState, editorFromTrack } from './editor';
+import { Track } from '../model/track';
+import { GameState, newGame, seatColor } from '../model/game';
+import { EditorState, editorFromTrack } from '../model/editor';
 import {
   renderLobby,
   openNameDialog,
@@ -15,8 +15,8 @@ import {
   showToast,
   closeOverlay,
   PanelMode,
-} from './ui';
-import { strings } from './strings';
+} from '../ui/ui';
+import { strings } from '../strings';
 import * as session from './online';
 import { OnlineHandlers } from './online';
 

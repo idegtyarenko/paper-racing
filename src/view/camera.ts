@@ -3,8 +3,8 @@
 // (ox, oy) — экранная позиция мировой точки (0, 0). Сетка условно бесконечна,
 // поэтому кадр задаётся не размером мира, а этой камерой (fit-to-track).
 
-import { Vec, Polyline } from './geometry';
-import { SCALE_MIN, SCALE_MAX } from './config';
+import { Vec, Polyline } from '../geometry';
+import { SCALE_MIN, SCALE_MAX } from '../config';
 
 export interface Camera {
   /** Размер клетки на экране, css-px. */
