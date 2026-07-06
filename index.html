@@ -31,9 +31,7 @@
           class="confirm-move"
           data-i18n="buttons.confirmMove"
           hidden
-        >
-          ✓ Газу!
-        </button>
+        ></button>
       </div>
       <aside class="panel">
         <header class="panel__header">
@@ -55,18 +53,14 @@
           class="button button--center"
           data-i18n="buttons.skipTurn"
           hidden
-        >
-          ⏭ Пропустить ход
-        </button>
+        ></button>
         <div id="editButtons" class="panel__group">
           <button
             id="nextBtn"
             class="button button--center"
             data-i18n="buttons.next"
             hidden
-          >
-            Далее →
-          </button>
+          ></button>
           <button id="backBtn" class="button button--center" data-i18n="buttons.back">
             ← Назад
           </button>
@@ -83,27 +77,25 @@
             id="modeLocal"
             class="button button--center"
             data-i18n="modeSelect.local"
-          >
-            📱 На одном устройстве
-          </button>
+          ></button>
           <button
             id="modeOnline"
             class="button button--center"
             data-i18n="modeSelect.online"
-          >
-            🌐 Онлайн с друзьями
-          </button>
+          ></button>
           <button id="modeAI" class="button button--center mode-soon" disabled>
-            <span data-i18n="modeSelect.ai">🤖 С компьютером</span>
-            <span class="mode-soon__badge" data-i18n="modeSelect.soon">Скоро</span>
+            <span data-i18n="modeSelect.ai"></span>
+            <span class="mode-soon__badge" data-i18n="modeSelect.soon"></span>
           </button>
-          <button id="modeBack" class="button button--center" data-i18n="buttons.back">
-            ← Назад
-          </button>
+          <button
+            id="modeBack"
+            class="button button--center"
+            data-i18n="buttons.back"
+          ></button>
         </div>
         <div id="lobbyButtons" class="panel__group" hidden>
           <div class="lobby__code">
-            <span class="lobby__code-label" data-i18n="online.codeLabel">Код игры</span>
+            <span class="lobby__code-label" data-i18n="online.codeLabel"></span>
             <button
               id="lobbyCode"
               type="button"
@@ -113,21 +105,23 @@
               —
             </button>
           </div>
-          <button id="lobbyShare" class="button button--center" data-i18n="online.share">
-            🔗 Поделиться ссылкой
-          </button>
+          <button
+            id="lobbyShare"
+            class="button button--center"
+            data-i18n="online.share"
+          ></button>
           <ul id="lobbyRoster" class="lobby__roster"></ul>
           <button
             id="lobbyStart"
             class="button button--primary"
             data-i18n="online.start"
             hidden
-          >
-            🏁 Начать игру
-          </button>
-          <button id="lobbyLeave" class="button button--center" data-i18n="online.leave">
-            ← Выйти
-          </button>
+          ></button>
+          <button
+            id="lobbyLeave"
+            class="button button--center"
+            data-i18n="online.leave"
+          ></button>
         </div>
         <div id="playersButtons" class="panel__group" hidden>
           <div id="playerCount" class="players-select">
@@ -137,56 +131,52 @@
             <button type="button" class="count-btn" data-count="5">5</button>
             <button type="button" class="count-btn" data-count="6">6</button>
           </div>
-          <button id="playersBack" class="button button--center" data-i18n="buttons.back">
-            ← Назад
-          </button>
+          <button
+            id="playersBack"
+            class="button button--center"
+            data-i18n="buttons.back"
+          ></button>
         </div>
         <div id="raceButtons" class="panel__group" hidden>
           <div class="winner">
             <div class="winner__trophy">🏆</div>
             <div class="winner__title"></div>
           </div>
-          <button id="newRace" class="button" data-i18n="buttons.newRace">
-            🏁 Новый заезд
-          </button>
+          <button id="newRace" class="button" data-i18n="buttons.newRace"></button>
         </div>
       </aside>
     </div>
     <div id="overlay" class="overlay" hidden>
       <div class="overlay__backdrop"></div>
       <div id="rulesSheet" class="sheet" hidden>
-        <h2 class="sheet__title" data-i18n="buttons.rulesTitle">Регламент</h2>
-        <p class="rules__text" data-i18n="rules.body">
-          Каждый ход разгон меняется на ±1 клетку по каждой оси — рули плавно, иначе
-          занесёт. Вылетел за бортик — два хода в боксах на ремонт, потом рестарт с
-          нулевой скоростью. Первый, кто замкнёт круг, забирает клетчатый флаг. 🏁
-        </p>
-        <button class="button button--center" data-i18n="buttons.toWheel" data-close>
-          К рулю!
-        </button>
+        <h2 class="sheet__title" data-i18n="buttons.rulesTitle"></h2>
+        <p class="rules__text" data-i18n="rules.body"></p>
+        <button
+          class="button button--center"
+          data-i18n="buttons.toWheel"
+          data-close
+        ></button>
       </div>
       <div id="raceDialog" class="sheet" hidden>
-        <h2 class="sheet__title" data-i18n="buttons.newRaceDialogTitle">Новый заезд</h2>
+        <h2 class="sheet__title" data-i18n="buttons.newRaceDialogTitle"></h2>
         <button
           id="dlgSameTrack"
           class="button button--center"
           data-i18n="buttons.sameTrack"
-        >
-          🔄 По той же трассе
-        </button>
+        ></button>
         <button
           id="dlgNewTrack"
           class="button button--center"
           data-i18n="buttons.newTrack"
-        >
-          ✏️ Начертить новую
-        </button>
-        <button class="button button--center" data-i18n="buttons.cancel" data-close>
-          Отмена
-        </button>
+        ></button>
+        <button
+          class="button button--center"
+          data-i18n="buttons.cancel"
+          data-close
+        ></button>
       </div>
       <div id="nameDialog" class="sheet" hidden>
-        <h2 class="sheet__title" data-i18n="online.namePrompt">Как тебя зовут?</h2>
+        <h2 class="sheet__title" data-i18n="online.namePrompt"></h2>
         <input
           id="nameInput"
           class="field"
@@ -194,17 +184,20 @@
           maxlength="16"
           autocomplete="off"
           data-i18n-placeholder="online.namePlaceholder"
-          placeholder="Имя игрока"
         />
-        <button id="nameConfirm" class="button button--primary" data-i18n="online.create">
-          Создать игру
-        </button>
-        <button class="button button--center" data-i18n="buttons.cancel" data-close>
-          Отмена
-        </button>
+        <button
+          id="nameConfirm"
+          class="button button--primary"
+          data-i18n="online.create"
+        ></button>
+        <button
+          class="button button--center"
+          data-i18n="buttons.cancel"
+          data-close
+        ></button>
       </div>
       <div id="joinDialog" class="sheet" hidden>
-        <h2 class="sheet__title" data-i18n="online.joinTitle">Войти в игру</h2>
+        <h2 class="sheet__title" data-i18n="online.joinTitle"></h2>
         <input
           id="joinCodeInput"
           class="field field--code"
@@ -214,7 +207,6 @@
           autocapitalize="characters"
           spellcheck="false"
           data-i18n-placeholder="online.codePlaceholder"
-          placeholder="Код игры"
         />
         <input
           id="joinNameInput"
@@ -223,19 +215,18 @@
           maxlength="16"
           autocomplete="off"
           data-i18n-placeholder="online.namePlaceholder"
-          placeholder="Имя игрока"
         />
         <div id="joinError" class="dialog-error" hidden></div>
         <button
           id="joinConfirm"
           class="button button--primary"
           data-i18n="online.joinSubmit"
-        >
-          Войти
-        </button>
-        <button class="button button--center" data-i18n="buttons.cancel" data-close>
-          Отмена
-        </button>
+        ></button>
+        <button
+          class="button button--center"
+          data-i18n="buttons.cancel"
+          data-close
+        ></button>
       </div>
     </div>
     <div id="toast" class="toast" hidden></div>
