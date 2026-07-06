@@ -76,6 +76,15 @@ export function segSegIntersection(p1: Vec, p2: Vec, q1: Vec, q2: Vec): SegHit |
   return { t: tc, point: lerp(p1, p2, tc) };
 }
 
+/** Лежит ли точка p на отрезке a→b (включая концы, с допуском EPS). */
+export function pointOnSegment(p: Vec, a: Vec, b: Vec): boolean {
+  const ab = sub(b, a);
+  const ap = sub(p, a);
+  if (Math.abs(cross(ab, ap)) > EPS) return false; // не коллинеарна прямой a→b
+  const proj = dot(ap, ab);
+  return proj >= -EPS && proj <= dot(ab, ab) + EPS;
+}
+
 export function distPointToSegment(p: Vec, a: Vec, b: Vec): number {
   const ab = sub(b, a);
   const ab2 = dot(ab, ab);

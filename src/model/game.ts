@@ -6,6 +6,7 @@ import {
   dist,
   lerp,
   distPointToPolyline,
+  pointOnSegment,
   segSegIntersection,
   segmentPolylineIntersections,
 } from '../geometry';
@@ -137,9 +138,12 @@ export function candidates(state: GameState): Candidate[] {
   for (let ay = -1; ay <= 1; ay++) {
     for (let ax = -1; ax <= 1; ax++) {
       const target = { x: p.pos.x + p.vel.x + ax, y: p.pos.y + p.vel.y + ay };
+      // Ход запрещён, если соперник стоит в конечной точке или отрезок хода
+      // проходит через клетку, где соперник стоит сейчас (проехать «сквозь» нельзя).
+      const blocked = occupied.some((o) => pointOnSegment(o, p.pos, target));
       out.push({
         target,
-        blocked: occupied.has(key(target.x, target.y)),
+        blocked,
         crash: moveCrashes(state.track, p.pos, target),
         inertial: ax === 0 && ay === 0,
       });
@@ -148,17 +152,13 @@ export function candidates(state: GameState): Candidate[] {
   return out;
 }
 
-/** Клетки, занятые всеми игроками, кроме ходящего сейчас. */
-function otherPositions(state: GameState): Set<number> {
-  const occupied = new Set<number>();
-  state.players.forEach((pl, i) => {
-    if (i !== state.current) occupied.add(key(pl.pos.x, pl.pos.y));
-  });
-  return occupied;
+/** Позиции всех игроков, кроме ходящего сейчас. */
+function otherPositions(state: GameState): Vec[] {
+  return state.players.filter((_, i) => i !== state.current).map((pl) => ({ ...pl.pos }));
 }
 
 function nearestFreeInsidePoint(state: GameState, q: Vec): Vec {
-  const occupied = otherPositions(state);
+  const occupied = new Set(otherPositions(state).map((o) => key(o.x, o.y)));
   let best: Vec | null = null;
   let bestD = Infinity;
   state.track.inside.forEach((k) => {
