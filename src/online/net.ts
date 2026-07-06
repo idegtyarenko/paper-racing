@@ -6,8 +6,9 @@
 
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { Vec } from '../geometry';
-import { Track, WORLD_W, WORLD_H } from '../model/track';
+import { Track } from '../model/track';
 import { GameState } from '../model/game';
+import { WORLD_SIZE } from '../config';
 
 // ── Сериализация ────────────────────────────────────────────────────────────────
 
@@ -48,8 +49,8 @@ export function serializeTrack(t: Track): SerializedTrack {
     forward: t.forward,
     inside: [...t.inside],
     startPoints: t.startPoints,
-    worldW: WORLD_W,
-    worldH: WORLD_H,
+    worldW: WORLD_SIZE,
+    worldH: WORLD_SIZE,
   };
 }
 

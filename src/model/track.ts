@@ -21,13 +21,6 @@ import {
 import { strings } from '../strings';
 import { WORLD_SIZE, WALL_CLEARANCE, MAX_START_POINTS, MIN_ROAD_CELLS } from '../config';
 
-// Размер условно бесконечного квадратного поля в клетках. Фиксирован: сетка
-// рисуется по видимому вьюпорту, а кадр задаётся камерой (fit-to-track), поэтому
-// от пропорций экрана размер мира не зависит. Это лишь щедрые предохранители
-// геометрии и безопасный диапазон для key(); реальная трасса — десятки клеток.
-export const WORLD_W = WORLD_SIZE;
-export const WORLD_H = WORLD_SIZE;
-
 export interface FinishLine {
   a: Vec;
   b: Vec;
@@ -165,9 +158,9 @@ export function finalizeTrack(
     maxY = Math.max(maxY, p.y);
   }
   const x0 = Math.max(0, Math.floor(minX));
-  const x1 = Math.min(WORLD_W, Math.ceil(maxX));
+  const x1 = Math.min(WORLD_SIZE, Math.ceil(maxX));
   const y0 = Math.max(0, Math.floor(minY));
-  const y1 = Math.min(WORLD_H, Math.ceil(maxY));
+  const y1 = Math.min(WORLD_SIZE, Math.ceil(maxY));
 
   const inside = new Set<number>();
   for (let x = x0; x <= x1; x++) {

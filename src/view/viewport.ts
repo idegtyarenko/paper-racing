@@ -5,8 +5,7 @@
 // Ровно один вьюпорт на приложение (модуль-синглтон).
 
 import { Vec } from '../geometry';
-import { WORLD_W, WORLD_H } from '../model/track';
-import { SCALE_DEFAULT, FIT_MARGIN } from '../config';
+import { WORLD_SIZE, SCALE_DEFAULT, FIT_MARGIN } from '../config';
 import {
   Camera,
   Bounds,
@@ -54,7 +53,7 @@ export function viewSize(): { w: number; h: number } {
 
 /** Стартовый вид пустого поля: центр мира в центре вьюпорта. */
 function defaultCamera(w: number, h: number): Camera {
-  const c = WORLD_W / 2;
+  const c = WORLD_SIZE / 2;
   return {
     scale: SCALE_DEFAULT,
     ox: w / 2 - c * SCALE_DEFAULT,
@@ -89,8 +88,8 @@ export function toWorld(e: PointerEvent, liftPx = 0): Vec {
   // Клампим в границы (квадратного) мира — он key-безопасен и достаточно велик,
   // чтобы при масштабе по умолчанию ощущаться бесконечным при рисовании.
   return {
-    x: Math.max(0, Math.min(WORLD_W, w.x)),
-    y: Math.max(0, Math.min(WORLD_H, w.y)),
+    x: Math.max(0, Math.min(WORLD_SIZE, w.x)),
+    y: Math.max(0, Math.min(WORLD_SIZE, w.y)),
   };
 }
 

@@ -22,9 +22,8 @@ import {
   resampleClosed,
   smoothClosed,
 } from '../geometry';
-import { WORLD_W, WORLD_H } from './track';
 import { strings } from '../strings';
-import { WIDTH_MIN, WIDTH_MAX } from '../config';
+import { WIDTH_MIN, WIDTH_MAX, WORLD_SIZE } from '../config';
 
 // Диапазон полной ширины трассы (клетки) — реэкспорт из config для внешних импортов.
 export { WIDTH_MIN, WIDTH_MAX };
@@ -123,9 +122,9 @@ function smoothRing(arr: number[], iterations: number): number[] {
  */
 function worldCap(p: Vec, d: Vec): number {
   let t = Infinity;
-  if (d.x > 1e-9) t = Math.min(t, (WORLD_W - WORLD_MARGIN - p.x) / d.x);
+  if (d.x > 1e-9) t = Math.min(t, (WORLD_SIZE - WORLD_MARGIN - p.x) / d.x);
   else if (d.x < -1e-9) t = Math.min(t, (WORLD_MARGIN - p.x) / d.x);
-  if (d.y > 1e-9) t = Math.min(t, (WORLD_H - WORLD_MARGIN - p.y) / d.y);
+  if (d.y > 1e-9) t = Math.min(t, (WORLD_SIZE - WORLD_MARGIN - p.y) / d.y);
   else if (d.y < -1e-9) t = Math.min(t, (WORLD_MARGIN - p.y) / d.y);
   return Math.max(0, t);
 }
@@ -215,7 +214,7 @@ export function offsetEdges(
 /** Все вершины внутри поля (с учётом отступа). */
 function withinWorld(poly: Polyline): boolean {
   for (const p of poly) {
-    if (p.x < 0 || p.y < 0 || p.x > WORLD_W || p.y > WORLD_H) return false;
+    if (p.x < 0 || p.y < 0 || p.x > WORLD_SIZE || p.y > WORLD_SIZE) return false;
   }
   return true;
 }
