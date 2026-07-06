@@ -70,6 +70,11 @@
   border-radius: 6px;
 }
 
+/* Игрок офлайн (закрыл вкладку) — приглушаем строку ростера. */
+.lobby__player--offline {
+  opacity: 0.5;
+}
+
 .lobby__dot {
   flex: none;
   width: 14px;

@@ -69,7 +69,7 @@ function redraw(): void {
 }
 
 function updateUI(): void {
-  const net = session.active() && game ? { yourTurn: myTurn() } : null;
+  const net = online.netTurn(game);
   updatePanel(mode, editor, game, raceTrack?.startPoints.length ?? 6, net);
 }
 
@@ -187,6 +187,7 @@ online.initOnline({
   setRaceTrack: (t) => {
     raceTrack = t;
   },
+  getGame: () => game,
   setGame: (g) => {
     game = g;
   },
@@ -255,6 +256,7 @@ bindButtons({
   onLobbyShare: () => online.share(),
   onLobbyCopyCode: () => online.copy(),
   onLobbyLeave: () => online.leave(),
+  onSkip: () => online.skip(),
 });
 
 // Заполнить статичные тексты разметки из strings до первого показа панели.

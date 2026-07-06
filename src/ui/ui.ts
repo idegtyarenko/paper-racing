@@ -21,6 +21,7 @@ const playersBackBtn = document.getElementById('playersBack') as HTMLButtonEleme
 const helpBtn = document.getElementById('helpBtn') as HTMLButtonElement;
 const newRaceBtn = document.getElementById('newRace') as HTMLButtonElement;
 const confirmMoveBtn = document.getElementById('confirmMove') as HTMLButtonElement;
+const skipBtn = document.getElementById('skipTurn') as HTMLButtonElement;
 const overlay = document.getElementById('overlay')!;
 const rulesSheet = document.getElementById('rulesSheet')!;
 const raceDialog = document.getElementById('raceDialog')!;
@@ -82,6 +83,8 @@ export interface PanelHandlers {
   onLobbyCopyCode: () => void;
   /** Выйти из лобби. */
   onLobbyLeave: () => void;
+  /** Пропустить ход задержавшегося игрока (болид едет по инерции). */
+  onSkip: () => void;
 }
 
 /** Показать/спрятать плавающую кнопку подтверждения хода (тач-прицеливание). */
@@ -175,7 +178,7 @@ export function setOnlineEnabled(enabled: boolean): void {
 
 export interface LobbyView {
   code: string;
-  players: { name: string; color: string; you: boolean }[];
+  players: { name: string; color: string; you: boolean; offline?: boolean }[];
   canStart: boolean;
   isHost: boolean;
 }
@@ -194,6 +197,10 @@ export function renderLobby(v: LobbyView): void {
       name.className = 'lobby__name';
       name.textContent = p.name;
       li.append(dot, name);
+      if (p.offline) {
+        li.classList.add('lobby__player--offline');
+        li.title = strings.online.offline;
+      }
       if (p.you) {
         const you = document.createElement('span');
         you.className = 'lobby__you';
@@ -260,6 +267,7 @@ export function bindButtons(h: PanelHandlers): void {
   bindTap(lobbyShareBtn, h.onLobbyShare);
   bindTap(lobbyCodeBtn, h.onLobbyCopyCode);
   bindTap(lobbyLeaveBtn, h.onLobbyLeave);
+  bindTap(skipBtn, h.onSkip);
   bindTap(nameConfirm, submitName);
   nameInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') submitName();
@@ -339,12 +347,17 @@ function playerInfo(p: Player, active: boolean, target: HTMLElement): void {
  * Пересобрать карточки игроков как прямых потомков #raceButtons (перед кнопкой
  * «Новая гонка») — так они попадают в двухколоночную мобильную сетку панели.
  */
-function renderPlayerCards(game: GameState): void {
+function renderPlayerCards(game: GameState, present?: boolean[]): void {
   raceButtons.querySelectorAll('.player-card').forEach((c) => c.remove());
   game.players.forEach((p, i) => {
     const card = document.createElement('div');
     card.className = 'player-card';
     playerInfo(p, game.phase === 'race' && game.current === i, card);
+    // В онлайне помечаем игроков, чьи вкладки сейчас офлайн.
+    if (present && present[i] === false) {
+      card.classList.add('player-card--offline');
+      card.title = strings.online.offline;
+    }
     raceButtons.insertBefore(card, newRaceBtn);
   });
 }
@@ -389,9 +402,16 @@ function showWinner(game: GameState): void {
   winnerBanner.classList.add('winner--shown');
 }
 
-/** Онлайн-контекст текущего хода — для статуса гонки (чей ход, мой ли). */
+/** Онлайн-контекст текущего хода — для статуса гонки (чей ход, мой ли, можно ли
+ *  пропустить, кто сейчас офлайн по местам). */
 export interface NetTurn {
   yourTurn: boolean;
+  /** Показать кнопку пропуска: активный игрок онлайн, но не ходит дольше таймаута. */
+  canSkip: boolean;
+  /** Имя игрока, чей сейчас ход (для статуса про пропуск). */
+  currentName: string;
+  /** Присутствие по местам (индекс = место); false — вкладка офлайн. */
+  present: boolean[];
 }
 
 export function updatePanel(
@@ -406,6 +426,7 @@ export function updatePanel(
   lobbyButtons.hidden = mode !== 'lobby';
   playersButtons.hidden = mode !== 'players';
   raceButtons.hidden = mode !== 'race';
+  skipBtn.hidden = true; // покажем ниже только в гонке, когда доступен пропуск
 
   if (mode === 'edit') {
     renderEditStatus(editor);
@@ -435,7 +456,7 @@ export function updatePanel(
   statusEl.className = 'status';
   if (!game) return;
 
-  renderPlayerCards(game);
+  renderPlayerCards(game, net?.present);
 
   if (game.phase === 'over') {
     showWinner(game);
@@ -446,9 +467,22 @@ export function updatePanel(
   winnerBanner.classList.remove('winner--shown');
   const cur = game.players[game.current];
   if (net) {
-    statusEl.textContent = net.yourTurn
-      ? strings.online.yourTurn
-      : strings.online.turnOf(cur.name);
+    if (net.canSkip) {
+      statusEl.textContent = strings.online.skippable(net.currentName);
+      const name = document.createElement('b');
+      name.className = 'skip-btn__name';
+      name.style.color = cur.color;
+      name.textContent = cur.name;
+      skipBtn.replaceChildren(
+        document.createTextNode(`${strings.online.skipTurnBtn} `),
+        name,
+      );
+      skipBtn.hidden = false;
+    } else {
+      statusEl.textContent = net.yourTurn
+        ? strings.online.yourTurn
+        : strings.online.turnOf(cur.name);
+    }
     return;
   }
   const warn = game.finalTurnsLeft !== null ? strings.race.finalWarn : '';

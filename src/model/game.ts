@@ -276,6 +276,32 @@ function afterAction(state: GameState): void {
   }
 }
 
+/**
+ * Пропуск хода отсутствующего/задумавшегося игрока: болид продолжает ехать прямо
+ * с той же скоростью (чистая инерция, ускорение 0,0). Если инерционная клетка
+ * занята соперником — болид остаётся на месте с нулевой скоростью, а ход просто
+ * уходит дальше. Аварии/пересечение финиша/боксы обрабатываются штатно через
+ * applyMove. Детерминирована: два клиента, применившие coastMove к одному стейту,
+ * получат идентичный результат (безопасно при last-write-wins в онлайне).
+ */
+export function coastMove(state: GameState): void {
+  if (state.phase !== 'race') return;
+  const p = state.players[state.current];
+  // Болид стоит (старт / после аварии) — ехать по инерции некуда: просто пас,
+  // без вырожденного следа нулевой длины на каждый пропуск.
+  if (p.vel.x === 0 && p.vel.y === 0) {
+    afterAction(state);
+    return;
+  }
+  const inertial = candidates(state).find((c) => c.inertial)!;
+  if (inertial.blocked) {
+    p.vel = { x: 0, y: 0 };
+    afterAction(state);
+  } else {
+    applyMove(state, inertial);
+  }
+}
+
 /** Победитель решающего круга — максимальный заезд за линию среди финишировавших. */
 function decideWinner(state: GameState): void {
   state.phase = 'over';

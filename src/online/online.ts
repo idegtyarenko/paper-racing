@@ -12,6 +12,7 @@ import {
   createGame,
   joinGame,
   leaveGame,
+  pruneSeat,
   pushState,
   subscribeGame,
   unsubscribe,
@@ -26,6 +27,8 @@ export interface OnlineHandlers {
   onGameState: (game: GameState) => void;
   /** Игра удалена на сервере (TTL / хост вышел) — вернуться из онлайна. */
   onClosed: () => void;
+  /** Изменилось присутствие (кто-то онлайн/офлайн) — пересчитать таймер/пропуск/метки. */
+  onPresence: () => void;
 }
 
 let code: string | null = null;
@@ -34,6 +37,10 @@ let roster: RosterEntry[] = [];
 let hostFlag = false;
 let track: Track | null = null;
 let handlers: OnlineHandlers | null = null;
+/** clientId'ы, чьи вкладки сейчас онлайн (Realtime Presence). */
+let present = new Set<string>();
+/** Когда clientId пропал из присутствия (мс) — метка 30-секундной форы на авто-пропуск. */
+let leftAt = new Map<string, number>();
 
 /** Идёт ли онлайн-сессия (создана или подключена игра). */
 export function active(): boolean {
@@ -59,6 +66,44 @@ export function getTrack(): Track | null {
 /** Место (индекс) этого клиента в ростере; −1 — если не за столом. */
 export function mySeat(): number {
   return roster.findIndex((r) => r.clientId === clientId());
+}
+
+/** clientId места по индексу ростера (null — места нет). */
+function seatClientId(seat: number): string | null {
+  return roster[seat]?.clientId ?? null;
+}
+
+/** Онлайн ли вкладка игрока на этом месте прямо сейчас. */
+export function isPresent(seat: number): boolean {
+  const id = seatClientId(seat);
+  return id !== null && present.has(id);
+}
+
+/** Когда игрок этого места пропал из присутствия (мс), либо null — если он онлайн. */
+export function leftAtOf(seat: number): number | null {
+  const id = seatClientId(seat);
+  if (id === null || present.has(id)) return null;
+  return leftAt.get(id) ?? null;
+}
+
+/**
+ * Место присутствующего клиента, назначенного выполнять авто-пропуск/прунинг —
+ * минимальный онлайн-seat. Так дублирующую запись делает только один клиент
+ * (остальные пишут идентичный стейт, но лишний трафик ни к чему). −1 — никого нет.
+ */
+export function designatedSkipper(): number {
+  for (let s = 0; s < roster.length; s++) if (isPresent(s)) return s;
+  return -1;
+}
+
+/** Обработать sync присутствия: обновить набор онлайн и метки ухода, дёрнуть handler. */
+function handlePresence(next: Set<string>): void {
+  present.forEach((id) => {
+    if (!next.has(id)) leftAt.set(id, Date.now());
+  });
+  next.forEach((id) => leftAt.delete(id));
+  present = next;
+  handlers?.onPresence();
 }
 
 /** Хост может стартовать, когда подключился хотя бы ещё один игрок. */
@@ -88,7 +133,7 @@ export async function host(t: Track, name: string, h: OnlineHandlers): Promise<s
   code = row.id;
   hostFlag = true;
   track = t;
-  channel = subscribeGame(code, applyRow);
+  channel = subscribeGame(code, applyRow, handlePresence);
   applyRow(row);
   return code;
 }
@@ -104,7 +149,7 @@ export async function join(
   code = row.id;
   hostFlag = row.host_id === clientId();
   track = deserializeTrack(row.track);
-  channel = subscribeGame(code, applyRow);
+  channel = subscribeGame(code, applyRow, handlePresence);
   applyRow(row);
 }
 
@@ -116,6 +161,17 @@ export async function start(game: GameState): Promise<void> {
 /** Отправить свой ход остальным. */
 export async function pushMove(game: GameState): Promise<void> {
   if (code) await pushState(code, game);
+}
+
+/** Убрать из лобби брошенное место (по индексу) — прунинг присутствующим клиентом. */
+export async function prune(seat: number): Promise<void> {
+  const id = seatClientId(seat);
+  if (code && id) await pruneSeat(code, id);
+}
+
+/** Снять своё присутствие немедленно (при закрытии вкладки) — best-effort. */
+export function untrack(): void {
+  channel?.untrack();
 }
 
 /** Выйти из сессии: освободить место на сервере и отписаться. */
@@ -140,4 +196,6 @@ function close(): void {
   hostFlag = false;
   track = null;
   handlers = null;
+  present = new Set();
+  leftAt = new Map();
 }

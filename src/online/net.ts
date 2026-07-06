@@ -185,16 +185,26 @@ export async function leaveGame(code: string): Promise<void> {
   await db().rpc('leave_game', { p_code: code, p_client_id: clientId() });
 }
 
+/** Выйти из лобби за другого (отсутствующего) игрока: прунинг брошенного места
+ *  присутствующим клиентом. Та же RPC leave_game, но с чужим clientId. */
+export async function pruneSeat(code: string, absentClientId: string): Promise<void> {
+  await db().rpc('leave_game', { p_code: code, p_client_id: absentClientId });
+}
+
 /**
  * Подписаться на изменения строки игры. onChange получает новую строку при
- * INSERT/UPDATE и null при удалении игры (DELETE — TTL/хост вышел).
+ * INSERT/UPDATE и null при удалении игры (DELETE — TTL/хост вышел). Если задан
+ * onPresence, канал ведёт Realtime Presence: этот клиент отмечается как онлайн
+ * (ключ = clientId), а onPresence получает актуальный набор присутствующих
+ * clientId'ов при каждом sync (вход/выход любого участника).
  */
 export function subscribeGame(
   code: string,
   onChange: (row: GameRow | null) => void,
+  onPresence?: (present: Set<string>) => void,
 ): RealtimeChannel {
-  return db()
-    .channel(`game:${code}`)
+  const ch = db()
+    .channel(`game:${code}`, { config: { presence: { key: clientId() } } })
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'games', filter: `id=eq.${code}` },
@@ -202,8 +212,16 @@ export function subscribeGame(
         if (payload.eventType === 'DELETE') onChange(null);
         else onChange(payload.new as GameRow);
       },
-    )
-    .subscribe();
+    );
+  if (onPresence) {
+    ch.on('presence', { event: 'sync' }, () => {
+      onPresence(new Set(Object.keys(ch.presenceState())));
+    });
+  }
+  ch.subscribe((status) => {
+    if (status === 'SUBSCRIBED' && onPresence) ch.track({ clientId: clientId() });
+  });
+  return ch;
 }
 
 export function unsubscribe(ch: RealtimeChannel): void {

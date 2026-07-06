@@ -5,7 +5,7 @@
 // пересчёт делает его же колбэками. Ровно один контроллер на приложение.
 
 import { Track } from '../model/track';
-import { GameState, newGame, seatColor } from '../model/game';
+import { GameState, newGame, coastMove, seatColor } from '../model/game';
 import { EditorState, editorFromTrack } from '../model/editor';
 import {
   renderLobby,
@@ -14,8 +14,10 @@ import {
   showJoinError,
   showToast,
   closeOverlay,
+  NetTurn,
   PanelMode,
 } from '../ui/ui';
+import { TURN_TIMEOUT_MS, LOBBY_PRUNE_MS } from '../config';
 import { strings } from '../strings';
 import * as session from './online';
 import { OnlineHandlers } from './online';
@@ -26,6 +28,7 @@ export interface OnlineDeps {
   setMode(m: PanelMode): void;
   getRaceTrack(): Track | null;
   setRaceTrack(t: Track | null): void;
+  getGame(): GameState | null;
   setGame(g: GameState): void;
   setEditor(e: EditorState): void;
   /** Вписать текущее содержимое (трассу) по центру вьюпорта. */
@@ -41,6 +44,134 @@ let deps: OnlineDeps;
 
 export function initOnline(d: OnlineDeps): void {
   deps = d;
+  // Закрытие/уход со страницы: сразу снимаем присутствие (чтобы остальные быстрее
+  // увидели офлайн и включили пропуск), а при реальном выгрузе из лобби — освобождаем
+  // место. В гонке место оставляем: его двигает авто-пропуск. persisted → bfcache
+  // (страница может вернуться), сессию не рвём.
+  window.addEventListener('pagehide', (e: PageTransitionEvent) => {
+    if (!session.active()) return;
+    session.untrack();
+    if (!e.persisted && deps.getMode() === 'lobby') session.leave();
+  });
+}
+
+// ── Наблюдатель за ходом: таймаут 30 с + пропуск (инерция) ────────────────────────
+// Присутствующего, но не ходящего игрока через 30 с может пропустить любой другой
+// (ручная кнопка). Отсутствующего (закрыл вкладку) пропускаем автоматически: первый
+// ход — с 30-секундной форой от момента ухода (шанс на реконнект), дальше — сразу.
+// Авто-пропуск делает только «назначенный» присутствующий клиент (минимальный seat),
+// чтобы не слать дубликаты; результат детерминирован, так что гонок записи нет.
+
+let skipTimer: number | null = null;
+let lobbyPruneTimer: number | null = null;
+/** Показывать ли кнопку ручного пропуска (истинно только для присутствующего игрока). */
+let skipVisible = false;
+
+function clearTurnWatch(): void {
+  if (skipTimer !== null) {
+    clearTimeout(skipTimer);
+    skipTimer = null;
+  }
+  skipVisible = false;
+}
+
+/** Снять все таймеры слежения (выход из сессии/закрытие игры). */
+function clearWatches(): void {
+  clearTurnWatch();
+  if (lobbyPruneTimer !== null) {
+    clearTimeout(lobbyPruneTimer);
+    lobbyPruneTimer = null;
+  }
+}
+
+/**
+ * Убрать из лобби места, чьи вкладки офлайн дольше LOBBY_PRUNE_MS (фора на реколнект).
+ * Прунит только назначенный присутствующий клиент. Если есть места, чья фора ещё не
+ * вышла, перепланируем проверку на ближайший дедлайн (без нового presence-события).
+ */
+function pruneAbsentLobby(): void {
+  if (lobbyPruneTimer !== null) {
+    clearTimeout(lobbyPruneTimer);
+    lobbyPruneTimer = null;
+  }
+  if (session.designatedSkipper() !== session.mySeat()) return;
+  let soonest = Infinity;
+  session.getRoster().forEach((_, seat) => {
+    const left = session.leftAtOf(seat);
+    if (left === null) return;
+    const waited = Date.now() - left;
+    if (waited >= LOBBY_PRUNE_MS) session.prune(seat).catch(() => {});
+    else soonest = Math.min(soonest, LOBBY_PRUNE_MS - waited);
+  });
+  if (soonest !== Infinity) {
+    lobbyPruneTimer = window.setTimeout(() => {
+      if (deps.getMode() === 'lobby') pruneAbsentLobby();
+    }, soonest);
+  }
+}
+
+/** Пересчитать слежение за текущим ходом. Зовётся на каждый стейт и presence-событие. */
+function armTurnWatch(): void {
+  clearTurnWatch();
+  const game = deps.getGame();
+  if (!session.active() || !game || game.phase !== 'race') return;
+  const cur = game.current;
+  if (cur === session.mySeat()) return; // мой ход — не слежу за собой
+
+  if (session.isPresent(cur)) {
+    // Онлайн, но задумался — через 30 с открываем ручной пропуск остальным.
+    skipTimer = window.setTimeout(() => {
+      skipVisible = true;
+      deps.updateUI();
+    }, TURN_TIMEOUT_MS);
+    return;
+  }
+  // Отсутствует: авто-пропуск выполняет назначенный присутствующий клиент.
+  if (session.designatedSkipper() !== session.mySeat()) return;
+  const left = session.leftAtOf(cur);
+  const grace =
+    left === null ? TURN_TIMEOUT_MS : Math.max(0, TURN_TIMEOUT_MS - (Date.now() - left));
+  skipTimer = window.setTimeout(() => autoSkip(cur), grace);
+}
+
+/** Авто-пропуск отсутствующего игрока (если он всё ещё офлайн и ходит сейчас). */
+function autoSkip(seat: number): void {
+  const game = deps.getGame();
+  if (!game || game.phase !== 'race' || game.current !== seat) return;
+  if (session.isPresent(seat)) return; // вернулся — ждём его самого
+  if (session.designatedSkipper() !== session.mySeat()) return;
+  applySkip(game);
+}
+
+/** Применить пропуск: болид едет по инерции, локально обновляемся и рассылаем стейт. */
+function applySkip(game: GameState): void {
+  coastMove(game);
+  clearTurnWatch();
+  deps.refreshCands();
+  deps.updateUI();
+  deps.redraw();
+  session.pushMove(game).catch(() => showToast(strings.online.error));
+  // Следующий ход переарм-ится эхом собственной записи (onGameState).
+}
+
+/** Онлайн-контекст текущего хода для панели: чей ход, мой ли, можно ли пропустить,
+ *  кто сейчас офлайн. Null — если не в онлайн-игре. */
+export function netTurn(game: GameState | null): NetTurn | null {
+  if (!session.active() || !game) return null;
+  return {
+    yourTurn: session.mySeat() === game.current,
+    canSkip: skipVisible,
+    currentName: game.players[game.current]?.name ?? '',
+    present: game.players.map((_, i) => session.isPresent(i)),
+  };
+}
+
+/** Кнопка «Пропустить ход» (доступна, когда истёк таймаут присутствующего игрока). */
+export function skip(): void {
+  const game = deps.getGame();
+  if (!game || game.phase !== 'race' || !skipVisible) return;
+  if (game.current === session.mySeat()) return;
+  applySkip(game);
 }
 
 function savedName(): string {
@@ -69,6 +200,7 @@ function renderLobbyPanel(): void {
       name: r.name,
       color: seatColor(i),
       you: i === mine,
+      offline: !session.isPresent(i),
     })),
     canStart: session.canStart(),
     isHost: session.isHost(),
@@ -89,10 +221,22 @@ const handlers: OnlineHandlers = {
     deps.refreshCands();
     deps.updateUI();
     deps.redraw();
+    armTurnWatch();
   },
   onClosed: () => {
+    clearWatches();
     showToast(strings.online.closed);
     deps.resetToEdit();
+  },
+  onPresence: () => {
+    // Присутствие влияет на «ждать/пропускать» и на метки офлайна в панели/лобби;
+    // в лобби ещё и вычищаем брошенные места.
+    armTurnWatch();
+    if (deps.getMode() === 'lobby') {
+      pruneAbsentLobby();
+      renderLobbyPanel();
+    }
+    deps.updateUI();
   },
 };
 
@@ -165,6 +309,7 @@ async function startOnline(): Promise<void> {
 
 /** Выйти из лобби: освободить место на сервере и вернуться (хост — к выбору режима). */
 async function leaveLobby(): Promise<void> {
+  clearWatches();
   const wasHost = deps.getRaceTrack() !== null;
   await session.leave();
   if (wasHost) {
