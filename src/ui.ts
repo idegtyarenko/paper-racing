@@ -213,48 +213,75 @@ export function renderLobby(v: LobbyView): void {
   renderStepStatus(strings.online.lobbyBadge, body);
 }
 
-export function bindButtons(h: PanelHandlers): void {
-  backBtn.addEventListener('click', h.onBack);
-  nextBtn.addEventListener('click', h.onNext);
-  playersBackBtn.addEventListener('click', h.onPlayersBack);
-  confirmMoveBtn.addEventListener('click', h.onConfirmMove);
-  playerCount.querySelectorAll<HTMLButtonElement>('.count-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      if (!btn.disabled) h.onPlayerCount(Number(btn.dataset.count));
+/**
+ * Надёжная активация кнопки на сенсорном экране. На iOS первый синтетический
+ * `click` по кнопке, показанной сразу после жеста на canvas (например «Вперёд» в
+ * редакторе или «Газу!» после прицела), теряется — кнопка срабатывает лишь со
+ * второго тапа. Media-фикс `:hover` убрал только «залипающий» стиль, но не саму
+ * потерю клика. Поэтому на coarse-указателе активируем прямо по завершению
+ * касания (`pointerup` доходит с первого раза), а дублирующий `click`, если он
+ * всё же придёт следом, гасим по времени. Мышь, стилус и клавиатура (Enter/Space
+ * шлют `click` без касания) идут обычным путём. Прокрутка панели, начатая с
+ * кнопки, отменяет касание через `pointercancel` — тогда `pointerup` не придёт.
+ */
+function bindTap(el: HTMLElement, handler: () => void): void {
+  const disabled = () => el.matches(':disabled');
+  if (!coarsePointer) {
+    el.addEventListener('click', () => {
+      if (!disabled()) handler();
     });
+    return;
+  }
+  let tappedAt = -Infinity;
+  el.addEventListener('pointerup', (e) => {
+    if (e.pointerType !== 'touch' || disabled()) return;
+    tappedAt = e.timeStamp;
+    handler();
   });
-  modeLocalBtn.addEventListener('click', h.onModeLocal);
-  modeOnlineBtn.addEventListener('click', h.onModeOnline);
-  modeBackBtn.addEventListener('click', h.onModeBack);
-  joinByCodeBtn.addEventListener('click', h.onJoinByCode);
-  lobbyStartBtn.addEventListener('click', () => {
-    if (!lobbyStartBtn.disabled) h.onLobbyStart();
+  el.addEventListener('click', (e) => {
+    if (e.timeStamp - tappedAt < 700 || disabled()) return;
+    handler();
   });
-  lobbyShareBtn.addEventListener('click', h.onLobbyShare);
-  lobbyCodeBtn.addEventListener('click', h.onLobbyCopyCode);
-  lobbyLeaveBtn.addEventListener('click', h.onLobbyLeave);
-  nameConfirm.addEventListener('click', submitName);
+}
+
+export function bindButtons(h: PanelHandlers): void {
+  bindTap(backBtn, h.onBack);
+  bindTap(nextBtn, h.onNext);
+  bindTap(playersBackBtn, h.onPlayersBack);
+  bindTap(confirmMoveBtn, h.onConfirmMove);
+  playerCount.querySelectorAll<HTMLButtonElement>('.count-btn').forEach((btn) => {
+    bindTap(btn, () => h.onPlayerCount(Number(btn.dataset.count)));
+  });
+  bindTap(modeLocalBtn, h.onModeLocal);
+  bindTap(modeOnlineBtn, h.onModeOnline);
+  bindTap(modeBackBtn, h.onModeBack);
+  bindTap(joinByCodeBtn, h.onJoinByCode);
+  bindTap(lobbyStartBtn, h.onLobbyStart);
+  bindTap(lobbyShareBtn, h.onLobbyShare);
+  bindTap(lobbyCodeBtn, h.onLobbyCopyCode);
+  bindTap(lobbyLeaveBtn, h.onLobbyLeave);
+  bindTap(nameConfirm, submitName);
   nameInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') submitName();
   });
-  joinConfirm.addEventListener('click', submitJoin);
+  bindTap(joinConfirm, submitJoin);
   joinNameInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') submitJoin();
   });
-  helpBtn.addEventListener('click', () => openSheet(rulesSheet));
-  newRaceBtn.addEventListener('click', () => openSheet(raceDialog));
-  dlgSameTrack.addEventListener('click', () => {
+  bindTap(helpBtn, () => openSheet(rulesSheet));
+  bindTap(newRaceBtn, () => openSheet(raceDialog));
+  bindTap(dlgSameTrack, () => {
     closeOverlay();
     h.onChooseSameTrack();
   });
-  dlgNewTrack.addEventListener('click', () => {
+  bindTap(dlgNewTrack, () => {
     closeOverlay();
     h.onNewTrack();
   });
   overlay.querySelector('.overlay__backdrop')!.addEventListener('click', closeOverlay);
   overlay
-    .querySelectorAll('[data-close]')
-    .forEach((b) => b.addEventListener('click', closeOverlay));
+    .querySelectorAll<HTMLElement>('[data-close]')
+    .forEach((b) => bindTap(b, closeOverlay));
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeOverlay();
   });
