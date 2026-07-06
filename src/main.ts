@@ -274,7 +274,8 @@ new ResizeObserver(resize).observe(wrap);
 updateUI();
 resize();
 
-// Открыта ссылка-приглашение (?join=CODE) — спросить имя и подключиться к игре.
+// Открыта ссылка-приглашение (?join=CODE) — подключиться к игре (при повторном
+// входе имя уже известно, иначе спросим).
 const joinParam = new URLSearchParams(location.search).get('join');
 if (joinParam && onlineAvailable()) {
   online.promptJoinByLink(joinParam.toUpperCase());

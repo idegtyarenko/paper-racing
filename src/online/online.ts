@@ -10,6 +10,7 @@ import {
   RosterEntry,
   clientId,
   createGame,
+  fetchGame,
   joinGame,
   leaveGame,
   pruneSeat,
@@ -136,6 +137,21 @@ export async function host(t: Track, name: string, h: OnlineHandlers): Promise<s
   channel = subscribeGame(code, applyRow, handlePresence);
   applyRow(row);
   return code;
+}
+
+/**
+ * Имя, под которым этот клиент уже записан в ростере игры с данным кодом
+ * (то есть повторный вход в уже активную игру), либо null — если игры нет
+ * или клиента в её ростере нет. Позволяет не переспрашивать имя при реконнекте.
+ */
+export async function memberName(joinCode: string): Promise<string | null> {
+  try {
+    const row = await fetchGame(joinCode);
+    const me = row?.lobby?.find((r) => r.clientId === clientId());
+    return me?.name ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** Присоединиться к игре по коду (гость). */

@@ -372,8 +372,19 @@ export function promptJoin(): void {
   });
 }
 
-/** Открыта ссылка-приглашение (?join=CODE): спросить имя и подключиться. */
-export function promptJoinByLink(code: string): void {
+/**
+ * Открыта ссылка-приглашение (?join=CODE): подключиться к игре.
+ * Повторный вход в уже активную игру (этот клиент уже в её ростере — например
+ * после перезагрузки/реконнекта) — имя уже известно, не переспрашиваем и входим
+ * сразу. Первый вход в игру — спрашиваем имя, как и раньше.
+ */
+export async function promptJoinByLink(code: string): Promise<void> {
+  const known = await session.memberName(code);
+  if (known) {
+    rememberName(known);
+    joinOnline(code, known, false);
+    return;
+  }
   openNameDialog(strings.online.joinSubmit, savedName(), (name) => {
     rememberName(name);
     joinOnline(code, name, false);
