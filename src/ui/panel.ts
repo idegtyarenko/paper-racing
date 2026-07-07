@@ -10,6 +10,7 @@ import { strings } from '../strings';
 import { coarsePointer, bindTap, openSheet, closeOverlay, bindOverlayClose } from './dom';
 import { div, renderStepStatus, statusElement } from './status';
 import { bindDialogs } from './dialogs';
+import { bindSettings } from './settings';
 import { bindLobby } from './lobby';
 
 const statusEl = statusElement();
@@ -24,6 +25,7 @@ const nextBtn = document.getElementById('nextBtn') as HTMLButtonElement;
 const playersBackBtn = document.getElementById('playersBack') as HTMLButtonElement;
 const helpBtn = document.getElementById('helpBtn') as HTMLButtonElement;
 const newRaceBtn = document.getElementById('newRace') as HTMLButtonElement;
+const settingsBtn = document.getElementById('settingsBtn') as HTMLButtonElement;
 const confirmMoveBtn = document.getElementById('confirmMove') as HTMLButtonElement;
 const skipBtn = document.getElementById('skipTurn') as HTMLButtonElement;
 const rulesSheet = document.getElementById('rulesSheet')!;
@@ -56,6 +58,10 @@ export interface PanelHandlers {
   onPlayersBack: () => void;
   /** Выбрано число игроков — сразу стартуем гонку. */
   onPlayerCount: (n: number) => void;
+  /** Открыть настройки правил заезда (кнопка ⚙ на экране числа игроков). */
+  onOpenSettings: () => void;
+  /** Открыть настройки правил из лобби (кнопка ⚙, только хост). */
+  onLobbySettings: () => void;
   /** Шаг выбора режима: локальная игра. */
   onModeLocal: () => void;
   /** Шаг выбора режима: онлайн (открыть диалог имени → создать игру). */
@@ -95,6 +101,7 @@ export function bindButtons(h: PanelHandlers): void {
   playerCount.querySelectorAll<HTMLButtonElement>('.count-btn').forEach((btn) => {
     bindTap(btn, () => h.onPlayerCount(Number(btn.dataset.count)));
   });
+  bindTap(settingsBtn, h.onOpenSettings);
   bindTap(modeLocalBtn, h.onModeLocal);
   bindTap(modeOnlineBtn, h.onModeOnline);
   bindTap(modeBackBtn, h.onModeBack);
@@ -111,6 +118,7 @@ export function bindButtons(h: PanelHandlers): void {
     h.onNewTrack();
   });
   bindDialogs();
+  bindSettings();
   bindLobby(h);
   bindOverlayClose();
 }

@@ -16,6 +16,7 @@ import {
   MIN_PLAYERS,
   WIN_CROSSINGS,
   CRASH_SKIP_TURNS,
+  CRASH_PENALTY_MAX,
   OFFROAD_FORGIVE,
   CRASH_SAMPLE_STEP,
 } from '../config';
@@ -43,9 +44,47 @@ export interface Player {
 // Число пересечений финиша для победы (см. WIN_CROSSINGS в config) — реэкспорт.
 export { WIN_CROSSINGS };
 
+/**
+ * Настройки правил заезда. В онлайне их задаёт хост, и они едут вместе со стейтом
+ * (rules — часть GameState, а сериализуется весь стейт кроме track), поэтому у всех
+ * игроков применяются одни и те же правила.
+ */
+export interface Rules {
+  /** Как считать штраф за вылет: 'dynamic' — по скорости, 'static' — фиксированный. */
+  penalty: 'dynamic' | 'static';
+  /** Размер штрафа в ходах при статическом штрафе. */
+  staticTurns: number;
+  /** Показатель степени («строгость») формулы динамического штрафа. */
+  dynamicExponent: number;
+  /** Порядок ходов в онлайне. Пока всегда 'sequential' (переключатель заблокирован). */
+  turnMode: 'sequential' | 'simultaneous';
+}
+
+/** Правила по умолчанию: динамический штраф со стандартной (линейной) строгостью. */
+export const DEFAULT_RULES: Rules = {
+  penalty: 'dynamic',
+  staticTurns: CRASH_SKIP_TURNS,
+  dynamicExponent: 1,
+  turnMode: 'sequential',
+};
+
+/**
+ * Штраф за аварию в ходах. Статический — фиксированное число. Динамический —
+ * степенная функция скорости хода (длины вектора перемещения):
+ * round(speed ^ строгость), зажатая в [1, CRASH_PENALTY_MAX]. При строгости 1
+ * это линейно (скорость 1→1 ход, 2→2, 3→3), выше — круче для быстрых вылетов.
+ */
+export function crashPenalty(rules: Rules, speed: number): number {
+  if (rules.penalty === 'static') return rules.staticTurns;
+  const t = speed ** rules.dynamicExponent;
+  return Math.min(CRASH_PENALTY_MAX, Math.max(1, Math.round(t)));
+}
+
 export interface GameState {
   track: Track;
   players: Player[];
+  /** Правила заезда (штраф за вылет, порядок ходов). */
+  rules: Rules;
   current: number;
   phase: 'race' | 'over';
   winner: number | 'draw' | null;
@@ -82,7 +121,11 @@ export interface Candidate {
   inertial: boolean;
 }
 
-export function newGame(track: Track, playerCount = 2): GameState {
+export function newGame(
+  track: Track,
+  playerCount = 2,
+  rules: Rules = DEFAULT_RULES,
+): GameState {
   const n = Math.max(
     MIN_PLAYERS,
     Math.min(MAX_PLAYERS, playerCount, track.startPoints.length),
@@ -101,6 +144,7 @@ export function newGame(track: Track, playerCount = 2): GameState {
   return {
     track,
     players: Array.from({ length: n }, (_, i) => mk(i)),
+    rules,
     current: 0,
     phase: 'race',
     winner: null,
@@ -229,7 +273,9 @@ export function applyMove(state: GameState, cand: Candidate): void {
     p.crashes.push(crashAt);
     p.pos = { ...crashAt };
     p.vel = { x: 0, y: 0 };
-    p.skipTurns = CRASH_SKIP_TURNS;
+    // Скорость вылета — длина запланированного хода (|vel+accel|): чем быстрее
+    // ехал, тем дальше в гравий и тем дольше выбираться.
+    p.skipTurns = crashPenalty(state.rules, dist(from, to));
   } else {
     p.vel = { x: to.x - from.x, y: to.y - from.y };
     p.pos = to;

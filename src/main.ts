@@ -4,12 +4,21 @@
 import './ui/styles/index.css';
 import { Track, finalizeTrack } from './model/track';
 import { newEditor, stepBack, confirmEdges } from './model/editor';
-import { GameState, Candidate, newGame, candidates, applyMove } from './model/game';
+import {
+  GameState,
+  Candidate,
+  Rules,
+  DEFAULT_RULES,
+  newGame,
+  candidates,
+  applyMove,
+} from './model/game';
 import { render, AppView } from './view/render';
 import { Bounds, polylineBounds } from './view/camera';
 import * as vp from './view/viewport';
 import { bindButtons, updatePanel, setOnlineEnabled, PanelMode } from './ui/panel';
 import { showToast } from './ui/dialogs';
+import { openSettings } from './ui/settings';
 import { localizeDom } from './ui/localize';
 import { strings } from './strings';
 import { onlineAvailable } from './online/net';
@@ -33,6 +42,8 @@ let raceTrack: Track | null = null;
 let playersReturn: 'edit' | 'race' = 'edit';
 let game: GameState | null = null;
 let cands: Candidate[] | null = null;
+/** Правила заезда, выбранные в настройках (⚙). В онлайне их задаёт хост. */
+let raceRules: Rules = { ...DEFAULT_RULES };
 
 /** Bbox содержимого для fit/clamp: трасса гонки или редактируемая трасса.
  *  Провайдер границ для вьюпорта — «что сейчас на экране» знает приложение. */
@@ -150,7 +161,7 @@ function backFromSetup(): void {
 /** Выбрано число игроков — стартуем локальную гонку на подготовленной трассе. */
 function startRace(playerCount: number): void {
   if (!raceTrack) return;
-  game = newGame(raceTrack, playerCount);
+  game = newGame(raceTrack, playerCount, raceRules);
   mode = 'race';
   vp.fitToContent();
   refreshCands();
@@ -186,6 +197,7 @@ online.initOnline({
   setGame: (g) => {
     game = g;
   },
+  getRules: () => raceRules,
   setEditor: (e) => {
     editor = e;
   },
@@ -238,6 +250,14 @@ bindButtons({
     }
   },
   onPlayerCount: (n) => startRace(n),
+  onOpenSettings: () =>
+    openSettings(raceRules, false, (r) => {
+      raceRules = r;
+    }),
+  onLobbySettings: () =>
+    openSettings(raceRules, true, (r) => {
+      raceRules = r;
+    }),
   onNewTrack: () => resetToEdit(),
   onModeLocal: () => {
     mode = 'players';

@@ -5,7 +5,7 @@
 // пересчёт делает его же колбэками. Ровно один контроллер на приложение.
 
 import { Track } from '../model/track';
-import { GameState, newGame, coastMove, seatColor } from '../model/game';
+import { GameState, Rules, newGame, coastMove, seatColor } from '../model/game';
 import { EditorState, editorFromTrack } from '../model/editor';
 import { renderLobby } from '../ui/lobby';
 import { openNameDialog, openJoinDialog, showJoinError, showToast } from '../ui/dialogs';
@@ -24,6 +24,8 @@ export interface OnlineDeps {
   setRaceTrack(t: Track | null): void;
   getGame(): GameState | null;
   setGame(g: GameState): void;
+  /** Текущие правила заезда (их задаёт хост; едут в стейте при старте). */
+  getRules(): Rules;
   setEditor(e: EditorState): void;
   /** Вписать текущее содержимое (трассу) по центру вьюпорта. */
   fitToContent(): void;
@@ -284,7 +286,7 @@ async function startOnline(): Promise<void> {
   const raceTrack = deps.getRaceTrack();
   if (!raceTrack || !session.canStart()) return;
   const roster = session.getRoster();
-  const g = newGame(raceTrack, roster.length);
+  const g = newGame(raceTrack, roster.length, deps.getRules());
   roster.forEach((r, i) => {
     if (g.players[i]) g.players[i].name = r.name;
   });

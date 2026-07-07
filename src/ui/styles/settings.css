@@ -1,0 +1,96 @@
+/* Лист-модалка настроек правил заезда: строки «подпись + контрол», сегмент-
+   переключатели (тип штрафа, порядок ходов) и ползунки (строгость, ходы штрафа). */
+
+/* Одна строка настройки: подпись сверху, контрол под ней. */
+.setting {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.setting[hidden] {
+  display: none;
+}
+
+/* Шапка строки с ползунком: подпись слева, текущее значение справа. */
+.setting__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.setting__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4a4636;
+}
+
+.setting__value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0a8a4f;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Сегмент-переключатель: ряд кнопок, из которых активна одна. */
+.seg {
+  display: flex;
+  gap: 6px;
+}
+
+/* Вертикальная раскладка сегмента — для длинных подписей (тип штрафа). */
+.seg--stack {
+  flex-direction: column;
+}
+
+.seg__btn {
+  flex: 1;
+  min-height: 44px;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid #b7b0a0;
+  background: #fff;
+  border-radius: 6px;
+  touch-action: manipulation;
+}
+
+@media (hover: hover) {
+  .seg__btn:hover:not(:disabled):not(.seg__btn--active) {
+    background: #f0ecdf;
+  }
+}
+
+.seg__btn--active {
+  color: #fff;
+  background: #0a8a4f;
+  border-color: #0a8a4f;
+}
+
+.seg__btn:disabled {
+  cursor: default;
+}
+
+/* Заблокированный сегмент (например, «Последовательные»): активный пункт остаётся
+   зелёным, но приглушённым — видно, что выбор зафиксирован. */
+.seg__btn:disabled:not(.seg__btn--active) {
+  opacity: 0.45;
+}
+
+/* Ползунок значения (строгость / ходы штрафа). */
+.slider {
+  width: 100%;
+  accent-color: #0a8a4f;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* Подписи краёв диапазона под ползунком (мин / макс). */
+.slider__scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #8a8575;
+  font-variant-numeric: tabular-nums;
+}

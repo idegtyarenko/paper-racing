@@ -7,7 +7,7 @@
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { Vec } from '../geometry';
 import { Track } from '../model/track';
-import { GameState } from '../model/game';
+import { GameState, DEFAULT_RULES } from '../model/game';
 import { WORLD_SIZE } from '../config';
 
 // ── Сериализация ────────────────────────────────────────────────────────────────
@@ -76,7 +76,8 @@ export function serializeState(g: GameState): SerializedState {
 }
 
 export function deserializeState(s: SerializedState, track: Track): GameState {
-  return { ...s, track };
+  // Правила едут в стейте; на старые строки без них подставляем дефолт.
+  return { ...s, rules: s.rules ?? DEFAULT_RULES, track };
 }
 
 // ── Идентичность и код игры ──────────────────────────────────────────────────────

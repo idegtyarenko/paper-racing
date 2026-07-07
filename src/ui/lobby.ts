@@ -8,6 +8,7 @@ import { strings } from '../strings';
 const lobbyCodeBtn = document.getElementById('lobbyCode') as HTMLButtonElement;
 const lobbyShareBtn = document.getElementById('lobbyShare') as HTMLButtonElement;
 const lobbyRoster = document.getElementById('lobbyRoster')!;
+const lobbySettingsBtn = document.getElementById('lobbySettings') as HTMLButtonElement;
 const lobbyStartBtn = document.getElementById('lobbyStart') as HTMLButtonElement;
 const lobbyLeaveBtn = document.getElementById('lobbyLeave') as HTMLButtonElement;
 
@@ -26,6 +27,8 @@ export interface LobbyHandlers {
   onLobbyShare: () => void;
   /** Скопировать код игры. */
   onLobbyCopyCode: () => void;
+  /** Открыть настройки правил (только хост). */
+  onLobbySettings: () => void;
   /** Выйти из лобби. */
   onLobbyLeave: () => void;
 }
@@ -57,6 +60,7 @@ export function renderLobby(v: LobbyView): void {
       return li;
     }),
   );
+  lobbySettingsBtn.hidden = !v.isHost;
   lobbyStartBtn.hidden = !v.isHost;
   lobbyStartBtn.disabled = !v.canStart;
   const body = v.isHost
@@ -72,5 +76,6 @@ export function bindLobby(h: LobbyHandlers): void {
   bindTap(lobbyStartBtn, h.onLobbyStart);
   bindTap(lobbyShareBtn, h.onLobbyShare);
   bindTap(lobbyCodeBtn, h.onLobbyCopyCode);
+  bindTap(lobbySettingsBtn, h.onLobbySettings);
   bindTap(lobbyLeaveBtn, h.onLobbyLeave);
 }

@@ -112,6 +112,12 @@
           ></button>
           <ul id="lobbyRoster" class="lobby__roster"></ul>
           <button
+            id="lobbySettings"
+            class="button button--center"
+            data-i18n="settings.open"
+            hidden
+          ></button>
+          <button
             id="lobbyStart"
             class="button button--primary"
             data-i18n="online.start"
@@ -131,6 +137,11 @@
             <button type="button" class="count-btn" data-count="5">5</button>
             <button type="button" class="count-btn" data-count="6">6</button>
           </div>
+          <button
+            id="settingsBtn"
+            class="button button--center"
+            data-i18n="settings.open"
+          ></button>
           <button
             id="playersBack"
             class="button button--center"
@@ -172,6 +183,73 @@
         <button
           class="button button--center"
           data-i18n="buttons.cancel"
+          data-close
+        ></button>
+      </div>
+      <div id="settingsSheet" class="sheet" hidden>
+        <h2 class="sheet__title" data-i18n="settings.title"></h2>
+        <div class="setting">
+          <span class="setting__label" data-i18n="settings.penaltyLabel"></span>
+          <div id="penaltyType" class="seg seg--stack">
+            <button
+              type="button"
+              class="seg__btn"
+              data-penalty="dynamic"
+              data-i18n="settings.dynamic"
+            ></button>
+            <button
+              type="button"
+              class="seg__btn"
+              data-penalty="static"
+              data-i18n="settings.static"
+            ></button>
+          </div>
+        </div>
+        <div id="exponentRow" class="setting">
+          <span class="setting__label" data-i18n="settings.exponentLabel"></span>
+          <div id="exponentType" class="seg">
+            <button
+              type="button"
+              class="seg__btn"
+              data-exponent="standard"
+              data-i18n="settings.exponentStandard"
+            ></button>
+            <button
+              type="button"
+              class="seg__btn"
+              data-exponent="strict"
+              data-i18n="settings.exponentStrict"
+            ></button>
+          </div>
+        </div>
+        <div id="staticRow" class="setting">
+          <div class="setting__head">
+            <span class="setting__label" data-i18n="settings.staticTurnsLabel"></span>
+            <span id="staticTurnsValue" class="setting__value"></span>
+          </div>
+          <input id="staticSlider" class="slider" type="range" min="1" max="8" step="1" />
+          <div class="slider__scale"><span>1</span><span>8</span></div>
+        </div>
+        <div id="turnModeRow" class="setting">
+          <span class="setting__label" data-i18n="settings.turnModeLabel"></span>
+          <div class="seg">
+            <button
+              type="button"
+              class="seg__btn"
+              disabled
+              data-i18n="settings.simultaneous"
+            ></button>
+            <button
+              type="button"
+              class="seg__btn seg__btn--active"
+              disabled
+              data-i18n="settings.sequential"
+            ></button>
+          </div>
+        </div>
+        <button
+          class="button button--center"
+          data-i18n="settings.done"
           data-close
         ></button>
       </div>

@@ -10,6 +10,12 @@ body {
 }
 body {
   height: 100dvh;
+  /* Шрифт задаём на body, а не только на .app: оверлей со шторками и тост —
+     соседи .app, иначе унаследовали бы дефолтный серифный шрифт браузера. */
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
 }
 
 canvas {
