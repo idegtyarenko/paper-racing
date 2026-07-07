@@ -1,8 +1,14 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   base: '/paper-racing/',
+  // Юнит-тесты покрывают только чистое детерминированное ядро (model, geometry).
+  test: {
+    include: ['src/**/*.test.ts'],
+    environment: 'node',
+  },
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
