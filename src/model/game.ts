@@ -8,7 +8,6 @@ import {
   distPointToPolyline,
   pointOnSegment,
   segSegIntersection,
-  segmentPolylineIntersections,
 } from '../geometry';
 import { Track, key, unkey, sideOfFinish, onRoad } from './track';
 import { strings } from '../strings';
@@ -172,18 +171,54 @@ function offRoadDepth(track: Track, p: Vec): number {
   );
 }
 
+/** Результат прохода по отрезку хода: авария ли, и где именно случилась. */
+interface MoveScan {
+  crash: boolean;
+  /** Параметр вдоль from→to в точке аварии (Infinity, если аварии нет). */
+  tCrash: number;
+  /** Точка аварии на кромке (null, если аварии нет). */
+  crashAt: Vec | null;
+}
+
 /**
- * Ход — авария, только если где-то вдоль отрезка (включая конечную точку) он
- * заходит за стенку глубже допуска OFFROAD_FORGIVE. Точку хода густо семплим,
- * чтобы ловить и заезды «насквозь» через газон, и глубокие срезы углов, но
- * прощать касания впритирку. Стартовая точка всегда на дороге, её пропускаем.
+ * Единый проход по отрезку хода: и детект аварии, и её локализация одним
+ * критерием (глубина за кромкой > OFFROAD_FORGIVE). Ход — авария, если где-то
+ * вдоль отрезка он заходит за стенку глубже допуска: густой семплинг ловит и
+ * заезды «насквозь» через газон, и глубокие срезы углов, но прощает касания
+ * впритирку.
+ *
+ * Точку аварии находим бисекцией по изолинии допуска (глубина == OFFROAD_FORGIVE),
+ * а не по самой кромке: если ход стартует уже в полосе допуска за стенкой и уходит
+ * глубже по ту же сторону, отрезок кромку может вовсе не пересечь — тогда искать
+ * «пересечение со стенкой» бессмысленно, а порог допуска всегда взят в вилку
+ * (from — внутри допуска по инварианту, первый «плохой» семпл — за ним). Так
+ * crashAt садится ≈на кромку одинаково, стартовал ход внутри трассы или в полосе
+ * допуска — в этом и была асимметрия старой логики.
+ *
+ * Инвариант «from в пределах допуска»: старт — узел дороги (см. track.ts), обычный
+ * ход кончается там, где scanMove не дал аварии (глубина конца ≤ допуска), аварийный
+ * ход кончается на crashAt (тоже в допуске), а возврат после штрафа — на узле дороги
+ * (nearestFreeInsidePoint).
  */
-function moveCrashes(track: Track, from: Vec, to: Vec): boolean {
+function scanMove(track: Track, from: Vec, to: Vec): MoveScan {
   const steps = Math.max(2, Math.ceil(dist(from, to) / CRASH_SAMPLE_STEP));
+  let loT = 0; // последний параметр, где точка была в пределах допуска
   for (let i = 1; i <= steps; i++) {
-    if (offRoadDepth(track, lerp(from, to, i / steps)) > OFFROAD_FORGIVE) return true;
+    const t = i / steps;
+    if (offRoadDepth(track, lerp(from, to, t)) > OFFROAD_FORGIVE) {
+      // Кромка допуска лежит в (loT, t] — уточняем бисекцией.
+      let lo = loT;
+      let hi = t;
+      for (let k = 0; k < 24; k++) {
+        const mid = (lo + hi) / 2;
+        if (offRoadDepth(track, lerp(from, to, mid)) > OFFROAD_FORGIVE) hi = mid;
+        else lo = mid;
+      }
+      return { crash: true, tCrash: hi, crashAt: lerp(from, to, hi) };
+    }
+    loT = t;
   }
-  return false;
+  return { crash: false, tCrash: Infinity, crashAt: null };
 }
 
 export function candidates(state: GameState): Candidate[] {
@@ -199,7 +234,7 @@ export function candidates(state: GameState): Candidate[] {
       out.push({
         target,
         blocked,
-        crash: moveCrashes(state.track, p.pos, target),
+        crash: scanMove(state.track, p.pos, target).crash,
         inertial: ax === 0 && ay === 0,
       });
     }
@@ -245,24 +280,8 @@ export function applyMove(state: GameState, cand: Candidate): void {
   const from = { ...p.pos };
   const to = { ...cand.target };
 
-  // Точка аварии — первое пересечение отрезка хода со стенкой.
-  let tCrash = Infinity;
-  let crashAt: Vec | null = null;
-  if (cand.crash) {
-    const hits = [
-      ...segmentPolylineIntersections(from, to, track.outer),
-      ...segmentPolylineIntersections(from, to, track.inner),
-    ].sort((a, b) => a.t - b.t);
-    if (hits.length > 0) {
-      tCrash = hits[0].t;
-      crashAt = hits[0].point;
-    } else {
-      // Конечная точка вне дороги, но стенку отрезок не пересёк (вылет «в
-      // стенку целиком» за зазором) — считаем аварией в конечной точке.
-      tCrash = 1;
-      crashAt = to;
-    }
-  }
+  // Детект и точка аварии — одним проходом (тот же критерий, что в кандидатах).
+  const { tCrash, crashAt } = scanMove(track, from, to);
 
   // Пересечение финишной линии засчитывается, только если случилось до аварии
   // и сторона линии реально сменилась (точка ровно на линии считается стороной

@@ -16,6 +16,7 @@ import {
   normalize,
   closedNormals,
   distPointToSegment,
+  closestPointOnSegment,
   selfIntersectsClosed,
   pointInPolygon,
   segmentPolylineIntersections,
@@ -23,7 +24,7 @@ import {
   smoothClosed,
 } from '../geometry';
 import { strings } from '../strings';
-import { WIDTH_MIN, WIDTH_MAX, WORLD_SIZE } from '../config';
+import { WIDTH_MIN, WIDTH_MAX, WORLD_SIZE, GAP_MIN } from '../config';
 
 // Диапазон полной ширины трассы (клетки) — реэкспорт из config для внешних импортов.
 export { WIDTH_MIN, WIDTH_MAX };
@@ -219,7 +220,66 @@ function withinWorld(poly: Polyline): boolean {
   return true;
 }
 
-/** Кромки валидны: в поле, каждая проста, внутренняя вложена без пересечений. */
+/**
+ * Есть ли между несоседними частями кромки target травяная перегородка тоньше
+ * minGap (probe — кольцо-зонд, чьи вершины проверяем). Для каждой вершины зонда
+ * берём ближайшую точку на несоседнем ребре target; если середина этого зазора
+ * вне дороги — это травяная перегородка, а не узкое полотно между внешней и
+ * внутренней кромкой. Соседей по дуге пропускаем (sameRing), как в offsetCaps.
+ * Проверку «вне дороги» (O(n) на pointInPolygon) гейтим порогом minGap, поэтому
+ * она срабатывает лишь на редких тонких сближениях — общая сложность ~O(n²).
+ */
+function neckThinnerThan(
+  probe: Polyline,
+  target: Polyline,
+  outer: Polyline,
+  inner: Polyline,
+  sameRing: boolean,
+  minGap: number,
+): boolean {
+  const nearArc = WIDTH_MAX * 1.5;
+  const { cum: pc, total: pt } = arcLengths(probe);
+  const { cum: tc, total: tt } = arcLengths(target);
+  const nt = target.length;
+  for (let i = 0; i < probe.length; i++) {
+    const p = probe[i];
+    for (let j = 0; j < nt; j++) {
+      if (sameRing) {
+        // Конец замыкающего ребра — total, а не cum[0]=0 (иначе его середина
+        // уезжает на середину кольца и сосед вершины 0 не отсекается).
+        const midArc = (tc[j] + (j + 1 < nt ? tc[j + 1] : tt)) / 2;
+        if (arcGap(pc[i], midArc, pt) < nearArc) continue; // свой же сосед по дуге
+      }
+      const c = closestPointOnSegment(p, target[j], target[(j + 1) % nt]);
+      if (dist(p, c) >= minGap) continue; // не тоньше порога — не перегородка
+      const mid = { x: (p.x + c.x) / 2, y: (p.y + c.y) / 2 };
+      const onRoad = pointInPolygon(mid, outer) && !pointInPolygon(mid, inner);
+      if (!onRoad) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Есть ли где-то травяная перегородка между двумя проходами трассы тоньше minGap.
+ * Тонкая перегородка — баг: ход сквозь неё не ловится как авария (глубина за
+ * кромкой ≤ OFFROAD_FORGIVE), и болид проезжает на другой виток. Проверяем пары
+ * несоседних рёбер каждой кромки с собой и внешней с внутренней.
+ */
+export function hasNarrowGrassNeck(
+  outer: Polyline,
+  inner: Polyline,
+  minGap: number,
+): boolean {
+  return (
+    neckThinnerThan(outer, outer, outer, inner, true, minGap) ||
+    neckThinnerThan(inner, inner, outer, inner, true, minGap) ||
+    neckThinnerThan(outer, inner, outer, inner, false, minGap)
+  );
+}
+
+/** Кромки валидны: в поле, каждая проста, внутренняя вложена без пересечений,
+ *  и нет тонкой травяной перегородки между проходами (проезд «насквозь»). */
 export function edgesValid(outer: Polyline, inner: Polyline): boolean {
   if (!withinWorld(outer) || !withinWorld(inner)) return false;
   if (selfIntersectsClosed(outer) || selfIntersectsClosed(inner)) return false;
@@ -229,6 +289,7 @@ export function edgesValid(outer: Polyline, inner: Polyline): boolean {
     const b = inner[(i + 1) % inner.length];
     if (segmentPolylineIntersections(a, b, outer).length > 0) return false;
   }
+  if (hasNarrowGrassNeck(outer, inner, GAP_MIN)) return false;
   return true;
 }
 

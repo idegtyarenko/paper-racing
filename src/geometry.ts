@@ -85,11 +85,16 @@ export function pointOnSegment(p: Vec, a: Vec, b: Vec): boolean {
   return proj >= -EPS && proj <= dot(ab, ab) + EPS;
 }
 
-export function distPointToSegment(p: Vec, a: Vec, b: Vec): number {
+/** Ближайшая к p точка на отрезке a→b. */
+export function closestPointOnSegment(p: Vec, a: Vec, b: Vec): Vec {
   const ab = sub(b, a);
   const ab2 = dot(ab, ab);
   const t = ab2 < EPS ? 0 : Math.min(1, Math.max(0, dot(sub(p, a), ab) / ab2));
-  return dist(p, lerp(a, b, t));
+  return lerp(a, b, t);
+}
+
+export function distPointToSegment(p: Vec, a: Vec, b: Vec): number {
+  return dist(p, closestPointOnSegment(p, a, b));
 }
 
 export function distPointToPolyline(p: Vec, poly: Polyline): number {
