@@ -17,10 +17,8 @@ import { render, AppView } from './view/render';
 import { Bounds, polylineBounds } from './view/camera';
 import * as vp from './view/viewport';
 import { bindButtons, updatePanel, setOnlineEnabled, PanelMode } from './ui/panel';
-import { showToast } from './ui/dialogs';
 import { openSettings } from './ui/settings';
 import { localizeDom } from './ui/localize';
-import { strings } from './strings';
 import { onlineAvailable } from './online/net';
 import * as session from './online/online';
 import * as online from './online/online-controller';
@@ -91,12 +89,16 @@ function myTurn(): boolean {
  */
 function commitMove(cand: Candidate): void {
   if (!game || game.phase !== 'race' || !myTurn()) return;
+  if (session.active()) {
+    // Онлайн: confirm-first — локальный стейт двинется только после успешной записи
+    // (см. online.sendMove), чтобы при обрыве ход не потерялся и его можно было повторить.
+    online.sendMove(cand);
+    return;
+  }
   applyMove(game, cand);
   refreshCands();
   updateUI();
   redraw();
-  if (session.active())
-    session.pushMove(game).catch(() => showToast(strings.online.error));
 }
 
 function refreshCands(): void {
@@ -236,6 +238,7 @@ bindButtons({
   onConfirmMove: () => {
     const sel = input.getSelected();
     if (sel) commitMove(sel);
+    else online.retryMove(); // десктоп: выделение не хранится — повторяем последний ход
   },
   onChooseSameTrack: () => goToMode('race'),
   onPlayersBack: () => {

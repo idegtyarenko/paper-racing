@@ -2,6 +2,7 @@
 // и короткие всплывающие уведомления (тост). DOM-шторки живут в #overlay.
 
 import { bindTap, openSheet, closeOverlay } from './dom';
+import { strings } from '../strings';
 
 const nameDialog = document.getElementById('nameDialog')!;
 const nameInput = document.getElementById('nameInput') as HTMLInputElement;
@@ -12,6 +13,7 @@ const joinNameInput = document.getElementById('joinNameInput') as HTMLInputEleme
 const joinError = document.getElementById('joinError')!;
 const joinConfirm = document.getElementById('joinConfirm') as HTMLButtonElement;
 const toast = document.getElementById('toast')!;
+const connBanner = document.getElementById('connBanner')!;
 
 // Колбэки подтверждения диалогов имени/кода (заполняются при открытии диалога).
 let nameCb: ((name: string) => void) | null = null;
@@ -50,9 +52,17 @@ export function openJoinDialog(
   joinCodeInput.value = defaultCode;
   joinNameInput.value = defaultName;
   joinError.hidden = true;
+  setJoinBusy(false);
   joinCb = onConfirm;
   openSheet(joinDialog);
   setTimeout(() => (defaultCode ? joinNameInput : joinCodeInput).focus(), 50);
+}
+
+/** Пока идёт запрос входа: заблокировать кнопку и показать «Подключаемся…»,
+ *  чтобы повторные тапы не плодили параллельные join'ы. */
+export function setJoinBusy(busy: boolean): void {
+  joinConfirm.disabled = busy;
+  joinConfirm.textContent = busy ? strings.online.joining : strings.online.joinSubmit;
 }
 
 function submitJoin(): void {
@@ -67,6 +77,11 @@ function submitJoin(): void {
 export function showJoinError(msg: string): void {
   joinError.textContent = msg;
   joinError.hidden = false;
+}
+
+/** Показать/скрыть баннер «нет связи» (обрыв realtime-канала). */
+export function setConnBanner(lost: boolean): void {
+  connBanner.hidden = !lost;
 }
 
 let toastTimer: number | undefined;

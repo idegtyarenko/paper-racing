@@ -8,7 +8,7 @@ import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabas
 import { Vec } from '../geometry';
 import { Track } from '../model/track';
 import { GameState, DEFAULT_RULES } from '../model/game';
-import { WORLD_SIZE } from '../config';
+import { WORLD_SIZE, NET_TIMEOUT_MS } from '../config';
 
 // ── Сериализация ────────────────────────────────────────────────────────────────
 
@@ -129,6 +129,29 @@ function db(): SupabaseClient {
 
 // ── Операции ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Обернуть сетевой промис таймаутом: если запрос не завершился за ms, реджектим
+ * `net-timeout`. Гарантирует, что любой await в онлайне рано или поздно осядет —
+ * без этого зависший запрос (обрыв на полуслове) держал бы промис вечно, и catch
+ * вызывающего (тост/восстановление кнопки) никогда бы не сработал. Билдеры запросов
+ * Supabase — thenable, так что оборачиваются как есть.
+ */
+function withTimeout<T>(p: PromiseLike<T>, ms = NET_TIMEOUT_MS): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('net-timeout')), ms);
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      },
+    );
+  });
+}
+
 /** Создать игру: вставляет строку с трассой и хостом в лобби. Возвращает строку. */
 export async function createGame(track: Track, hostName: string): Promise<GameRow> {
   const id = makeCode();
@@ -141,7 +164,9 @@ export async function createGame(track: Track, hostName: string): Promise<GameRo
     host_id: me,
     status: 'lobby' as const,
   };
-  const { data, error } = await db().from('games').insert(row).select().single();
+  const { data, error } = await withTimeout(
+    db().from('games').insert(row).select().single(),
+  );
   if (error) {
     // Крайне редкая коллизия кода — одна повторная попытка с новым кодом.
     if (error.code === '23505') return createGame(track, hostName);
@@ -152,18 +177,22 @@ export async function createGame(track: Track, hostName: string): Promise<GameRo
 
 /** Присоединиться к игре по коду (атомарно через RPC). Возвращает строку игры. */
 export async function joinGame(code: string, name: string): Promise<GameRow> {
-  const { data, error } = await db().rpc('join_game', {
-    p_code: code,
-    p_client_id: clientId(),
-    p_name: name,
-  });
+  const { data, error } = await withTimeout(
+    db().rpc('join_game', {
+      p_code: code,
+      p_client_id: clientId(),
+      p_name: name,
+    }),
+  );
   if (error) throw error;
   return data as GameRow;
 }
 
 /** Прочитать строку игры по коду (null — если не найдена). */
 export async function fetchGame(code: string): Promise<GameRow | null> {
-  const { data, error } = await db().from('games').select().eq('id', code).maybeSingle();
+  const { data, error } = await withTimeout(
+    db().from('games').select().eq('id', code).maybeSingle(),
+  );
   if (error) throw error;
   return (data as GameRow) ?? null;
 }
@@ -171,26 +200,28 @@ export async function fetchGame(code: string): Promise<GameRow | null> {
 /** Записать текущий стейт гонки (после хода или при старте). Обновляет status. */
 export async function pushState(code: string, state: GameState): Promise<void> {
   const status = state.phase === 'over' ? 'over' : 'race';
-  const { error } = await db()
-    .from('games')
-    .update({
-      state: serializeState(state),
-      status,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', code);
+  const { error } = await withTimeout(
+    db()
+      .from('games')
+      .update({
+        state: serializeState(state),
+        status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', code),
+  );
   if (error) throw error;
 }
 
 /** Выйти из лобби (атомарно): освобождает место, при опустошении/выходе хоста удаляет игру. */
 export async function leaveGame(code: string): Promise<void> {
-  await db().rpc('leave_game', { p_code: code, p_client_id: clientId() });
+  await withTimeout(db().rpc('leave_game', { p_code: code, p_client_id: clientId() }));
 }
 
 /** Выйти из лобби за другого (отсутствующего) игрока: прунинг брошенного места
  *  присутствующим клиентом. Та же RPC leave_game, но с чужим clientId. */
 export async function pruneSeat(code: string, absentClientId: string): Promise<void> {
-  await db().rpc('leave_game', { p_code: code, p_client_id: absentClientId });
+  await withTimeout(db().rpc('leave_game', { p_code: code, p_client_id: absentClientId }));
 }
 
 /**
@@ -204,6 +235,7 @@ export function subscribeGame(
   code: string,
   onChange: (row: GameRow | null) => void,
   onPresence?: (present: Set<string>) => void,
+  onStatus?: (connected: boolean) => void,
 ): RealtimeChannel {
   const ch = db()
     .channel(`game:${code}`, { config: { presence: { key: clientId() } } })
@@ -220,8 +252,17 @@ export function subscribeGame(
       onPresence(new Set(Object.keys(ch.presenceState())));
     });
   }
+  // supabase-js сам ре-джойнит канал после обрыва сокета, поэтому SUBSCRIBED
+  // приходит и на первичной подписке, и на каждом переподключении — используем его
+  // как хук ресинка (ре-трек присутствия + fetchGame в вызывающем). Ошибка/таймаут/
+  // закрытие канала — сигнал «связь потеряна» для баннера.
   ch.subscribe((status) => {
-    if (status === 'SUBSCRIBED' && onPresence) ch.track({ clientId: clientId() });
+    if (status === 'SUBSCRIBED') {
+      if (onPresence) ch.track({ clientId: clientId() });
+      onStatus?.(true);
+    } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+      onStatus?.(false);
+    }
   });
   return ch;
 }

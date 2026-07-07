@@ -5,13 +5,29 @@
 // пересчёт делает его же колбэками. Ровно один контроллер на приложение.
 
 import { Track } from '../model/track';
-import { GameState, Rules, newGame, coastMove, seatColor } from '../model/game';
+import {
+  GameState,
+  Candidate,
+  Rules,
+  newGame,
+  coastMove,
+  applyMove,
+  cloneState,
+  seatColor,
+} from '../model/game';
 import { EditorState, editorFromTrack } from '../model/editor';
-import { renderLobby } from '../ui/lobby';
-import { openNameDialog, openJoinDialog, showJoinError, showToast } from '../ui/dialogs';
+import { renderLobby, setLobbyStarting } from '../ui/lobby';
+import {
+  openNameDialog,
+  openJoinDialog,
+  showJoinError,
+  showToast,
+  setJoinBusy,
+  setConnBanner,
+} from '../ui/dialogs';
 import { closeOverlay } from '../ui/dom';
-import { NetTurn, PanelMode } from '../ui/panel';
-import { TURN_TIMEOUT_MS, LOBBY_PRUNE_MS } from '../config';
+import { NetTurn, PanelMode, setMoveSendState } from '../ui/panel';
+import { TURN_TIMEOUT_MS, LOBBY_PRUNE_MS, SKIP_RETRY_MS } from '../config';
 import { strings } from '../strings';
 import * as session from './online';
 import { OnlineHandlers } from './online';
@@ -62,6 +78,72 @@ let skipTimer: number | null = null;
 let lobbyPruneTimer: number | null = null;
 /** Показывать ли кнопку ручного пропуска (истинно только для присутствующего игрока). */
 let skipVisible = false;
+
+// ── Защита от дублей и confirm-first отправка ─────────────────────────────────────
+
+/** Идёт ли сейчас сессионная операция (host/join/start/leave) — не более одной за раз,
+ *  чтобы повторные тапы не плодили параллельные создания/входы. */
+let busy = false;
+async function guarded(fn: () => Promise<void>): Promise<void> {
+  if (busy) return;
+  busy = true;
+  try {
+    await fn();
+  } finally {
+    busy = false;
+  }
+}
+
+/** Идёт ли отправка хода и какой кандидат ждёт (для повтора после ошибки). */
+let sending = false;
+let pendingCand: Candidate | null = null;
+/** Идёт ли запись пропуска (авто/ручного) — защита от дублей. */
+let skipSending = false;
+
+/**
+ * Отправить свой ход (confirm-first): применяем к копии, пишем на сервер и лишь при
+ * успехе делаем копию текущим стейтом. Оригинал не трогаем — при ошибке выбор игрока
+ * и кандидаты целы, кнопка превращается в «↻ Отправить ещё раз». Identity-guard: если
+ * пока шла запись прилетел авторитетный стейт (эхо/чужой ход), локальное применение
+ * пропускаем.
+ */
+export async function sendMove(cand: Candidate): Promise<void> {
+  const game = deps.getGame();
+  if (!game || game.phase !== 'race' || sending) return;
+  if (session.mySeat() !== game.current) return; // уже не мой ход
+  sending = true;
+  pendingCand = cand;
+  setMoveSendState('sending');
+  const base = game;
+  const next = cloneState(game);
+  applyMove(next, cand);
+  try {
+    await session.pushMove(next);
+    sending = false;
+    pendingCand = null;
+    setMoveSendState('idle');
+    if (deps.getGame() !== base) return; // авторитетный стейт уже применился
+    deps.setGame(next);
+    deps.refreshCands();
+    deps.updateUI();
+    deps.redraw();
+    armTurnWatch();
+  } catch {
+    sending = false;
+    if (deps.getGame() !== base) {
+      pendingCand = null;
+      setMoveSendState('idle');
+      return;
+    }
+    setMoveSendState('failed');
+    deps.updateUI(); // статус → «не получилось отправить…»
+  }
+}
+
+/** Повторить последнюю неудавшуюся отправку хода (десктоп: выделения нет — берём pendingCand). */
+export function retryMove(): void {
+  if (pendingCand) sendMove(pendingCand);
+}
 
 function clearTurnWatch(): void {
   if (skipTimer !== null) {
@@ -139,15 +221,38 @@ function autoSkip(seat: number): void {
   applySkip(game);
 }
 
-/** Применить пропуск: болид едет по инерции, локально обновляемся и рассылаем стейт. */
-function applySkip(game: GameState): void {
-  coastMove(game);
-  clearTurnWatch();
-  deps.refreshCands();
-  deps.updateUI();
-  deps.redraw();
-  session.pushMove(game).catch(() => showToast(strings.online.error));
-  // Следующий ход переарм-ится эхом собственной записи (onGameState).
+/**
+ * Применить пропуск (confirm-first): болид едет по инерции в копии, пишем на сервер и
+ * лишь при успехе делаем её текущим стейтом. При ошибке локально ничего не меняем.
+ * Авто-пропуск — тихо перепланируем повтор через SKIP_RETRY_MS (autoSkip сам
+ * перепроверит условия); ручной — оставляем кнопку на месте, чтобы можно было нажать снова.
+ */
+async function applySkip(game: GameState): Promise<void> {
+  if (skipSending) return;
+  skipSending = true;
+  const next = cloneState(game);
+  coastMove(next);
+  try {
+    await session.pushMove(next);
+    if (deps.getGame() === game) {
+      // Эхо ещё не пришло — применяем сами; иначе авторитетный стейт уже на месте.
+      deps.setGame(next);
+      clearTurnWatch();
+      deps.refreshCands();
+      deps.updateUI();
+      deps.redraw();
+      armTurnWatch();
+    }
+  } catch {
+    showToast(strings.online.error);
+    // Авто-пропуск: тихий повтор — autoSkip перепроверит (тот же ход, игрок офлайн, я
+    // назначенный). Ручной пропуск: skipVisible остаётся true, кнопка доступна снова.
+    if (!session.isPresent(game.current)) {
+      skipTimer = window.setTimeout(() => autoSkip(game.current), SKIP_RETRY_MS);
+    }
+  } finally {
+    skipSending = false;
+  }
 }
 
 /** Онлайн-контекст текущего хода для панели: чей ход, мой ли, можно ли пропустить,
@@ -208,6 +313,11 @@ const handlers: OnlineHandlers = {
     if (deps.getMode() === 'lobby') renderLobbyPanel();
   },
   onGameState: (g) => {
+    // Входящий авторитетный стейт перекрывает наш незавершённый/провалившийся ход:
+    // сбрасываем pending-состояние (поздний resolve нашей отправки станет инертным
+    // благодаря identity-guard в sendMove, а в БД действует last-write-wins).
+    pendingCand = null;
+    setMoveSendState('idle');
     deps.setGame(g);
     if (deps.getMode() !== 'race') {
       deps.setMode('race');
@@ -215,14 +325,25 @@ const handlers: OnlineHandlers = {
       deps.fitToContent();
     }
     deps.refreshCands();
+    // armTurnWatch до updateUI: он сбрасывает skipVisible под новый ход, иначе в
+    // рендер утёк бы «висящий» флаг пропуска с прошлого хода (кнопка «долго не ходит»
+    // на своём же ходу).
+    armTurnWatch();
     deps.updateUI();
     deps.redraw();
-    armTurnWatch();
   },
   onClosed: () => {
     clearWatches();
+    pendingCand = null;
+    setMoveSendState('idle');
+    setConnBanner(false);
+    setLobbyStarting(false);
     showToast(strings.online.closed);
     deps.resetToEdit();
+  },
+  onConnection: (ok) => {
+    setConnBanner(!ok);
+    deps.updateUI();
   },
   onPresence: () => {
     // Присутствие влияет на «ждать/пропускать» и на метки офлайна в панели/лобби;
@@ -237,84 +358,110 @@ const handlers: OnlineHandlers = {
 };
 
 /** Создать онлайн-игру (хост) с введённым именем и открыть лобби. */
-async function hostOnline(name: string): Promise<void> {
-  const raceTrack = deps.getRaceTrack();
-  if (!raceTrack) return;
-  try {
-    await session.host(raceTrack, name, handlers);
-    deps.setMode('lobby');
-    deps.updateUI();
-    renderLobbyPanel();
-    deps.redraw();
-  } catch {
-    showToast(strings.online.error);
-  }
+function hostOnline(name: string): Promise<void> {
+  return guarded(async () => {
+    const raceTrack = deps.getRaceTrack();
+    if (!raceTrack) return;
+    try {
+      await session.host(raceTrack, name, handlers);
+      deps.setMode('lobby');
+      deps.updateUI();
+      renderLobbyPanel();
+      deps.redraw();
+    } catch {
+      showToast(strings.online.error);
+    }
+  });
 }
 
 /**
  * Присоединиться к онлайн-игре по коду. inJoinDialog — ошибку показываем прямо в
  * диалоге входа (он остаётся открыт); иначе (вход по ссылке) — тостом.
  */
-async function joinOnline(
+function joinOnline(
   code: string,
   name: string,
   inJoinDialog: boolean,
 ): Promise<void> {
-  try {
-    await session.join(code, name, handlers);
-    closeOverlay();
-    const t = session.getTrack();
-    if (t) {
-      deps.setEditor(editorFromTrack(t)); // превью трассы хоста в лобби
-      deps.setRaceTrack(null); // гость не владеет трассой
+  return guarded(async () => {
+    if (inJoinDialog) setJoinBusy(true);
+    try {
+      await session.join(code, name, handlers);
+      closeOverlay();
+      const t = session.getTrack();
+      if (t) {
+        deps.setEditor(editorFromTrack(t)); // превью трассы хоста в лобби
+        deps.setRaceTrack(null); // гость не владеет трассой
+      }
+      // Реконнект в уже идущую гонку: onGameState уже перевёл в режим race —
+      // не сбрасываем обратно в лобби. Иначе (игра ещё не начата) — в лобби.
+      if (deps.getMode() !== 'race') deps.setMode('lobby');
+      deps.fitToContent(); // вписать трассу хоста по центру
+      deps.redraw();
+      deps.updateUI();
+      if (deps.getMode() === 'lobby') renderLobbyPanel();
+    } catch (e) {
+      if (inJoinDialog) showJoinError(joinErrorText(e));
+      else showToast(joinErrorText(e));
+    } finally {
+      if (inJoinDialog) setJoinBusy(false);
     }
-    // Реконнект в уже идущую гонку: onGameState уже перевёл в режим race —
-    // не сбрасываем обратно в лобби. Иначе (игра ещё не начата) — в лобби.
-    if (deps.getMode() !== 'race') deps.setMode('lobby');
-    deps.fitToContent(); // вписать трассу хоста по центру
-    deps.redraw();
-    deps.updateUI();
-    if (deps.getMode() === 'lobby') renderLobbyPanel();
-  } catch (e) {
-    if (inJoinDialog) showJoinError(joinErrorText(e));
-    else showToast(joinErrorText(e));
-  }
+  });
 }
 
-/** Хост стартует онлайн-гонку: строит стейт с именами игроков и рассылает его. */
-async function startOnline(): Promise<void> {
-  const raceTrack = deps.getRaceTrack();
-  if (!raceTrack || !session.canStart()) return;
-  const roster = session.getRoster();
-  const g = newGame(raceTrack, roster.length, deps.getRules());
-  roster.forEach((r, i) => {
-    if (g.players[i]) g.players[i].name = r.name;
+/**
+ * Хост стартует онлайн-гонку (confirm-first): строит стейт, сначала пишет его на
+ * сервер и только при успехе входит в гонку. При ошибке остаёмся в лобби — «Начать
+ * игру» снова активна, гости ничего не увидели (записи не было).
+ */
+function startOnline(): Promise<void> {
+  return guarded(async () => {
+    const raceTrack = deps.getRaceTrack();
+    if (!raceTrack || !session.canStart()) return;
+    const roster = session.getRoster();
+    const g = newGame(raceTrack, roster.length, deps.getRules());
+    roster.forEach((r, i) => {
+      if (g.players[i]) g.players[i].name = r.name;
+    });
+    setLobbyStarting(true);
+    try {
+      await session.start(g);
+      if (deps.getMode() !== 'race') {
+        // Эхо собственной записи могло уже перевести в гонку — не дублируем.
+        deps.setGame(g);
+        deps.setMode('race');
+        deps.fitToContent();
+        deps.refreshCands();
+        deps.updateUI();
+        deps.redraw();
+        armTurnWatch();
+      }
+    } catch {
+      showToast(strings.online.startFailed);
+    } finally {
+      setLobbyStarting(false);
+    }
   });
-  deps.setGame(g);
-  deps.setMode('race');
-  deps.fitToContent();
-  deps.refreshCands();
-  deps.updateUI();
-  deps.redraw();
-  try {
-    await session.start(g);
-  } catch {
-    showToast(strings.online.error);
-  }
 }
 
 /** Выйти из лобби: освободить место на сервере и вернуться (хост — к выбору режима). */
-async function leaveLobby(): Promise<void> {
-  clearWatches();
-  const wasHost = deps.getRaceTrack() !== null;
-  await session.leave();
-  if (wasHost) {
-    deps.setMode('mode');
-    deps.updateUI();
-    deps.redraw();
-  } else {
-    deps.resetToEdit();
-  }
+function leaveLobby(): Promise<void> {
+  return guarded(async () => {
+    clearWatches();
+    pendingCand = null;
+    setMoveSendState('idle');
+    setConnBanner(false);
+    setLobbyStarting(false);
+    const wasHost = deps.getRaceTrack() !== null;
+    await session.leave();
+    if (wasHost) {
+      deps.setMode('mode');
+      deps.updateUI();
+      deps.redraw();
+    } else {
+      deps.resetToEdit();
+    }
+  });
 }
 
 /** Поделиться ссылкой на игру (Web Share или копирование в буфер). */

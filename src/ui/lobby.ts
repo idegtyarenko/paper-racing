@@ -33,6 +33,19 @@ export interface LobbyHandlers {
   onLobbyLeave: () => void;
 }
 
+/** Идёт ли запись стартового стейта (кнопка «Начать» заблокирована). Живёт вне
+ *  renderLobby, чтобы переживать ре-рендеры лобби по presence во время await. */
+let starting = false;
+
+/** Пока хост стартует гонку: заблокировать «Начать игру» и показать «Запускаем…».
+ *  Применяем сразу (без ре-рендера) и запоминаем для будущих renderLobby. */
+export function setLobbyStarting(b: boolean): void {
+  starting = b;
+  lobbyStartBtn.disabled = b;
+  if (b) lobbyStartBtn.textContent = strings.online.starting;
+  else lobbyStartBtn.textContent = strings.online.start;
+}
+
 /** Отрисовать экран лобби: код, список игроков, кнопку «Начать» и статус. */
 export function renderLobby(v: LobbyView): void {
   lobbyCodeBtn.textContent = v.code;
@@ -62,7 +75,8 @@ export function renderLobby(v: LobbyView): void {
   );
   lobbySettingsBtn.hidden = !v.isHost;
   lobbyStartBtn.hidden = !v.isHost;
-  lobbyStartBtn.disabled = !v.canStart;
+  lobbyStartBtn.disabled = starting || !v.canStart;
+  lobbyStartBtn.textContent = starting ? strings.online.starting : strings.online.start;
   const body = v.isHost
     ? v.canStart
       ? strings.online.lobbyHost

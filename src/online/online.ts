@@ -30,6 +30,8 @@ export interface OnlineHandlers {
   onClosed: () => void;
   /** Изменилось присутствие (кто-то онлайн/офлайн) — пересчитать таймер/пропуск/метки. */
   onPresence: () => void;
+  /** Состояние realtime-канала изменилось — показать/спрятать баннер соединения. */
+  onConnection: (connected: boolean) => void;
 }
 
 let code: string | null = null;
@@ -42,10 +44,17 @@ let handlers: OnlineHandlers | null = null;
 let present = new Set<string>();
 /** Когда clientId пропал из присутствия (мс) — метка 30-секундной форы на авто-пропуск. */
 let leftAt = new Map<string, number>();
+/** Есть ли сейчас связь по realtime-каналу (для баннера «нет связи»). */
+let connected = true;
 
 /** Идёт ли онлайн-сессия (создана или подключена игра). */
 export function active(): boolean {
   return code !== null;
+}
+
+/** Есть ли сейчас связь по realtime-каналу. */
+export function isConnected(): boolean {
+  return connected;
 }
 
 export function getCode(): string | null {
@@ -107,6 +116,22 @@ function handlePresence(next: Set<string>): void {
   handlers?.onPresence();
 }
 
+/**
+ * Обработать смену состояния realtime-канала. При (пере)подключении — ресинк:
+ * тянем актуальную строку игры (закрывает пропущенные за время обрыва апдейты и
+ * щель между начальным fetch и выходом подписки в онлайн). Удалённую за это время
+ * игру fetchGame вернёт как null → applyRow(null) → штатный onClosed. Баннер
+ * дёргаем только при реальной смене состояния.
+ */
+function handleStatus(ok: boolean): void {
+  if (!code) return; // после close() события мёртвого канала инертны
+  if (ok) fetchGame(code).then(applyRow).catch(() => {});
+  if (connected !== ok) {
+    connected = ok;
+    handlers?.onConnection(ok);
+  }
+}
+
 /** Хост может стартовать, когда подключился хотя бы ещё один игрок. */
 export function canStart(): boolean {
   return hostFlag && roster.length >= 2;
@@ -134,7 +159,8 @@ export async function host(t: Track, name: string, h: OnlineHandlers): Promise<s
   code = row.id;
   hostFlag = true;
   track = t;
-  channel = subscribeGame(code, applyRow, handlePresence);
+  connected = true;
+  channel = subscribeGame(code, applyRow, handlePresence, handleStatus);
   applyRow(row);
   return code;
 }
@@ -165,7 +191,8 @@ export async function join(
   code = row.id;
   hostFlag = row.host_id === clientId();
   track = deserializeTrack(row.track);
-  channel = subscribeGame(code, applyRow, handlePresence);
+  connected = true;
+  channel = subscribeGame(code, applyRow, handlePresence, handleStatus);
   applyRow(row);
 }
 
@@ -205,13 +232,17 @@ export async function leave(): Promise<void> {
 
 /** Локально закрыть сессию (отписка + сброс состояния). */
 function close(): void {
-  if (channel) unsubscribe(channel);
+  // Сначала зануляем code/handlers, потом отписываемся: прилетевший из-за
+  // removeChannel статус CLOSED пройдёт через handleStatus как no-op (нет code).
+  const ch = channel;
   channel = null;
   code = null;
+  handlers = null;
   roster = [];
   hostFlag = false;
   track = null;
-  handlers = null;
   present = new Set();
   leftAt = new Map();
+  connected = true;
+  if (ch) unsubscribe(ch);
 }

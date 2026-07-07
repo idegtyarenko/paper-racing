@@ -152,6 +152,17 @@ export function newGame(
   };
 }
 
+/**
+ * Глубокая копия стейта для confirm-first отправки хода: применяем ход к копии,
+ * шлём её на сервер и лишь при успехе делаем её текущей — оригинал остаётся цел,
+ * чтобы при ошибке выбор игрока не пропал. Всё, кроме track (неизменная трасса,
+ * шарим по ссылке), — обычные JSON-данные, поэтому structuredClone безопасен.
+ */
+export function cloneState(g: GameState): GameState {
+  const { track, ...rest } = g;
+  return { ...structuredClone(rest), track };
+}
+
 /** Насколько глубоко точка зашла за край дороги: 0 на дороге, иначе — до ближайшей стенки. */
 function offRoadDepth(track: Track, p: Vec): number {
   if (onRoad(p, track.outer, track.inner)) return 0;

@@ -1,0 +1,34 @@
+/* Баннер «нет связи» при обрыве realtime-канала: закреплён вверху по центру,
+   янтарный, поверх всего, не перехватывает клики (игра под ним живёт). */
+.conn-banner {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 25;
+  max-width: calc(100% - 24px);
+  background: #b45309;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 999px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  animation: conn-banner-in 0.15s ease-out;
+}
+
+.conn-banner[hidden] {
+  display: none;
+}
+
+@keyframes conn-banner-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}

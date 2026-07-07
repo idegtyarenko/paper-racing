@@ -82,9 +82,31 @@ export interface PanelHandlers {
   onSkip: () => void;
 }
 
-/** Показать/спрятать плавающую кнопку подтверждения хода (тач-прицеливание). */
+/** Состояние отправки хода в онлайне: покой / идёт запись / запись не удалась. */
+export type SendState = 'idle' | 'sending' | 'failed';
+let sendState: SendState = 'idle';
+
+/**
+ * Отразить состояние отправки хода на кнопке подтверждения: «Отправка…» (заблокирована,
+ * чтобы не слать дубли) / «↻ Отправить ещё раз» после ошибки / обычное «Едем!». Пока
+ * идёт запись или после ошибки кнопка видима и на десктопе (где обычно скрыта), чтобы
+ * игрок видел прогресс и мог повторить. */
+export function setMoveSendState(s: SendState): void {
+  sendState = s;
+  confirmMoveBtn.disabled = s === 'sending';
+  confirmMoveBtn.textContent =
+    s === 'sending'
+      ? strings.online.sending
+      : s === 'failed'
+        ? strings.online.retrySend
+        : strings.buttons.confirmMove;
+  if (s !== 'idle') confirmMoveBtn.hidden = false;
+}
+
+/** Показать/спрятать плавающую кнопку подтверждения хода (тач-прицеливание).
+ *  Во время отправки / после ошибки кнопку не прячем — на ней прогресс/повтор. */
 export function showConfirmMove(show: boolean): void {
-  confirmMoveBtn.hidden = !show;
+  confirmMoveBtn.hidden = !(show || sendState !== 'idle');
 }
 
 /** Спрятать онлайн-входы, если бэкенд не настроен (играем только локально). */
@@ -293,6 +315,10 @@ export function updatePanel(
         name,
       );
       skipBtn.hidden = false;
+    } else if (net.yourTurn && sendState === 'failed') {
+      // Ход не ушёл на сервер — держим заметный текст ошибки, пока игрок не повторит.
+      statusEl.classList.add('status--error');
+      statusEl.textContent = strings.online.sendFailed;
     } else {
       statusEl.textContent = net.yourTurn
         ? strings.online.yourTurn
