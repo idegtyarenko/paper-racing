@@ -61,7 +61,7 @@
 /* Кандидаты внизу поля — кнопку уводим наверх, ниже полосы очереди ходов
    (turn-queue сидит на top:10px), чтобы не накрывать точки-цели. */
 .confirm-move--top {
-  top: 52px;
+  top: calc(52px + env(safe-area-inset-top));
   bottom: auto;
 }
 

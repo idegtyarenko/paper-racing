@@ -2,7 +2,8 @@
    canvas (как zoom-ctl / confirm-move). Не перехватывает жесты по карте. */
 .turn-queue {
   position: absolute;
-  top: 10px;
+  /* Отступ от верха + вырез (бровь/челка) iPhone, иначе полоса прячется под ним. */
+  top: calc(10px + env(safe-area-inset-top));
   left: 50%;
   transform: translateX(-50%);
   z-index: 5;

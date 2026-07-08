@@ -22,6 +22,7 @@ import {
   TOUCH_TOL_PX,
   LOUPE_MAX_CELL_PX,
   AIM_ZONE_PX,
+  CONFIRM_BTN_ZONE_PX,
   DRAG_PX,
   ZOOM_BTN_FACTOR,
   WHEEL_FACTOR,
@@ -200,24 +201,22 @@ function updatePinch(): void {
 }
 
 /**
- * В какой половине поля показать кнопку подтверждения: если облако кандидатов
- * тяготеет к низу — уводим кнопку наверх, и наоборот. Так плавающая кнопка не
- * накрывает точки-цели (иначе тап по цели попадает в кнопку — чужой ход).
+ * Где показать кнопку подтверждения. По умолчанию внизу; уводим наверх, только
+ * если нижний кандидат реально заходит в зону кнопки у нижнего края (иначе тап по
+ * цели попадёт в кнопку — чужой ход). Просто «ниже центра» не считается, чтобы
+ * кнопка не прыгала туда-сюда попусту.
  */
 function confirmAnchor(): 'top' | 'bottom' {
   const cands = deps.getCands();
   const view = vp.camera();
   const { h } = vp.viewSize();
-  let sum = 0;
-  let n = 0;
+  let maxY = -Infinity; // экранный Y самого нижнего незаблокированного кандидата
   if (cands)
     for (const c of cands) {
       if (c.blocked) continue;
-      sum += worldToScreen(view, c.target).y;
-      n++;
+      maxY = Math.max(maxY, worldToScreen(view, c.target).y);
     }
-  const cloudY = n ? sum / n : h; // нет кандидатов → низ (кнопка по умолчанию внизу)
-  return cloudY > h / 2 ? 'top' : 'bottom';
+  return maxY > h - CONFIRM_BTN_ZONE_PX ? 'top' : 'bottom';
 }
 
 /** Ближайший (незаблокированный) кандидат к экранной точке, в css-px. */
