@@ -8,6 +8,7 @@ import {
   candidates,
   applyMove,
   coastMove,
+  playerForTurn,
   Candidate,
   Player,
 } from './game';
@@ -179,27 +180,64 @@ describe('порядок ходов и отбытие штрафа', () => {
   it('вылетевший болид возвращается на трассу ТОЛЬКО когда штраф отбыт до нуля', () => {
     const g = newGame(ringTrack(), 2);
     place(g.players[0], [10, 1]);
-    applyMove(g, cand(10, -2)); // p0 в гравии, skip=3, ход у p1
+    applyMove(g, cand(10, -2)); // p0 в гравии, skip=3, ход у соперника
     const crashed = g.players[0];
     const gravel = { ...crashed.pos };
     expect(crashed.skipTurns).toBe(3);
     expect(g.current).toBe(1);
 
-    const skipsSeen: number[] = [];
-    // p1 делает три обычных хода; между ними p0 сжигает по одному пропуску.
-    for (let k = 0; k < 3; k++) {
-      place(g.players[1], [20, 4], [0, 0]);
+    // Гоняем ходы: пока штраф не отбыт, ход всегда у не-вылетевшего игрока
+    // (пропуски p0 сгорают автоматически внутри afterAction). Инвариант: пока
+    // skip>0, вылетевший остаётся в гравии; на нуле — возвращается на трассу.
+    let guard = 0;
+    while (crashed.skipTurns > 0 && guard++ < 20) {
+      expect(g.current).not.toBe(0); // p0 отбывает — ходит соперник
+      place(g.players[g.current], [20, 4], [0, 0]);
       applyMove(g, cand(20, 4));
-      skipsSeen.push(crashed.skipTurns);
-      if (crashed.skipTurns > 0) {
-        // ещё отбывает — остаётся в гравии
-        expect(crashed.pos).toEqual(gravel);
-      }
+      if (crashed.skipTurns > 0) expect(crashed.pos).toEqual(gravel);
     }
-    expect(skipsSeen).toEqual([2, 1, 0]);
+    expect(crashed.skipTurns).toBe(0);
     // после отбытия — на узле дороги (inside), с пунктирным «телепортом».
     expect(g.track.inside.has(key(crashed.pos.x, crashed.pos.y))).toBe(true);
     expect(crashed.trail.some((s) => s.jump)).toBe(true);
+  });
+});
+
+describe('честная очерёдность хода', () => {
+  it('каждый круг стартовый игрок сдвигается — А,Б,В → Б,В,А → В,А,Б', () => {
+    const order = (turn: number) => playerForTurn(turn, 3);
+    expect([0, 1, 2].map(order)).toEqual([0, 1, 2]); // круг 1
+    expect([3, 4, 5].map(order)).toEqual([1, 2, 0]); // круг 2
+    expect([6, 7, 8].map(order)).toEqual([2, 0, 1]); // круг 3
+    expect([9, 10, 11].map(order)).toEqual([0, 1, 2]); // цикл замкнулся
+  });
+
+  it('каждый круг — перестановка всех игроков (никто не пропущен и не сходит дважды)', () => {
+    for (let n = 2; n <= 6; n++) {
+      for (let round = 0; round < 4; round++) {
+        const seats = Array.from({ length: n }, (_, s) =>
+          playerForTurn(round * n + s, n),
+        );
+        expect([...seats].sort((a, b) => a - b)).toEqual(
+          Array.from({ length: n }, (_, i) => i),
+        );
+      }
+    }
+  });
+
+  it('реальные ходы в игре идут по ротации (3 игрока, два круга)', () => {
+    const g = newGame(ringTrack(), 3);
+    // Разводим болиды по разным клеткам нижнего коридора (y∈1..7), чтобы ходы
+    // не блокировали друг друга.
+    g.players.forEach((p, i) => place(p, [20, 2 + i * 2], [0, 0]));
+    const seen: number[] = [];
+    for (let k = 0; k < 6; k++) {
+      seen.push(g.current);
+      const cur = g.players[g.current];
+      place(cur, [10 + k, 3], [0, 0]); // уникальная свободная клетка на этот ход
+      applyMove(g, cand(10 + k, 3));
+    }
+    expect(seen).toEqual([0, 1, 2, 1, 2, 0]);
   });
 });
 

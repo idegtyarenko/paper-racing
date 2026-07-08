@@ -85,6 +85,13 @@ export interface GameState {
   /** Правила заезда (штраф за вылет, порядок ходов). */
   rules: Rules;
   current: number;
+  /**
+   * Сквозной счётчик слотов хода (0-based) для честной очерёдности. Круг — это
+   * n слотов; на каждом круге стартовый игрок сдвигается на 1, чтобы убрать
+   * преимущество первого. Игрок слота задаётся playerForTurn(); current держим
+   * в синхроне для остального кода, читающего его как индекс ходящего.
+   */
+  turn: number;
   phase: 'race' | 'over';
   winner: number | 'draw' | null;
   /**
@@ -145,10 +152,24 @@ export function newGame(
     players: Array.from({ length: n }, (_, i) => mk(i)),
     rules,
     current: 0,
+    turn: 0,
     phase: 'race',
     winner: null,
     finalTurnsLeft: null,
   };
+}
+
+/**
+ * Индекс игрока для сквозного слота хода при честной очерёдности. Круг = n слотов;
+ * позиция в круге (seat) — turn % n, номер круга (round) — floor(turn / n).
+ * Стартовый игрок круга сдвигается на round, поэтому игрок = (round + seat) % n.
+ * Круг 1 (n=3): 0,1,2; круг 2: 1,2,0; круг 3: 2,0,1 — по кругу, без преимущества
+ * первого. Детерминирована: одинаковый turn у всех клиентов даёт один индекс.
+ */
+export function playerForTurn(turn: number, n: number): number {
+  const round = Math.floor(turn / n);
+  const seat = turn % n;
+  return (round + seat) % n;
 }
 
 /**
@@ -320,19 +341,20 @@ export function applyMove(state: GameState, cand: Candidate): void {
 }
 
 /**
- * Смена хода и определение победителя. Игроки ходят по кругу в порядке индексов.
- * Как только кто-то финишировал, оставшиеся игроки этого же круга доигрывают
- * свои ходы (те, кто ходил раньше финишировавшего, свой шанс в этом круге уже
- * использовали). После этого среди всех финишировавших в решающем круге
- * побеждает заехавший дальше за линию; при равенстве — ничья.
- * Вынужденные пропуски после аварии проходят автоматически: если ход перешёл
- * к игроку, который ещё отбывает пропуск, он тратит один пропуск и ход сразу
- * уходит дальше — участнику ничего нажимать не нужно.
+ * Смена хода и определение победителя. Игроки ходят по кругу с честной
+ * очерёдностью: каждый круг стартовый игрок сдвигается на 1 (см. playerForTurn),
+ * так что преимущества первого хода нет. Как только кто-то финишировал,
+ * оставшиеся игроки этого же круга доигрывают свои ходы (те, кто ходил раньше
+ * финишировавшего в этом круге, свой шанс уже использовали). После этого среди
+ * всех финишировавших в решающем круге побеждает заехавший дальше за линию; при
+ * равенстве — ничья. Вынужденные пропуски после аварии проходят автоматически:
+ * если ход перешёл к игроку, который ещё отбывает пропуск, он тратит один пропуск
+ * и ход сразу уходит дальше — участнику ничего нажимать не нужно.
  */
 function afterAction(state: GameState): void {
   const n = state.players.length;
-  const i = state.current;
-  const finished = state.players[i].crossings >= WIN_CROSSINGS;
+  const seat = state.turn % n; // позиция ходящего в текущем круге
+  const finished = state.players[state.current].crossings >= WIN_CROSSINGS;
 
   if (state.finalTurnsLeft !== null) {
     // Решающий круг уже идёт: этот ход укоротил число оставшихся.
@@ -342,15 +364,16 @@ function afterAction(state: GameState): void {
       return;
     }
   } else if (finished) {
-    // Первый финиш: остальные игроки круга (после текущего) доигрывают.
-    state.finalTurnsLeft = n - 1 - i;
+    // Первый финиш: остальные игроки этого круга (после текущего seat) доигрывают.
+    state.finalTurnsLeft = n - 1 - seat;
     if (state.finalTurnsLeft <= 0) {
       decideWinner(state);
       return;
     }
   }
 
-  state.current = (i + 1) % n;
+  state.turn += 1;
+  state.current = playerForTurn(state.turn, n);
   const next = state.players[state.current];
   if (next.skipTurns > 0) {
     next.skipTurns -= 1;

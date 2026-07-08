@@ -76,8 +76,9 @@ export function serializeState(g: GameState): SerializedState {
 }
 
 export function deserializeState(s: SerializedState, track: Track): GameState {
-  // Правила едут в стейте; на старые строки без них подставляем дефолт.
-  return { ...s, rules: s.rules ?? DEFAULT_RULES, track };
+  // Правила и счётчик очерёдности едут в стейте; на старые строки без них
+  // подставляем дефолт (turn 0 — безопасный старт ротации).
+  return { ...s, rules: s.rules ?? DEFAULT_RULES, turn: s.turn ?? 0, track };
 }
 
 // ── Идентичность и код игры ──────────────────────────────────────────────────────
@@ -221,7 +222,9 @@ export async function leaveGame(code: string): Promise<void> {
 /** Выйти из лобби за другого (отсутствующего) игрока: прунинг брошенного места
  *  присутствующим клиентом. Та же RPC leave_game, но с чужим clientId. */
 export async function pruneSeat(code: string, absentClientId: string): Promise<void> {
-  await withTimeout(db().rpc('leave_game', { p_code: code, p_client_id: absentClientId }));
+  await withTimeout(
+    db().rpc('leave_game', { p_code: code, p_client_id: absentClientId }),
+  );
 }
 
 /**
@@ -260,7 +263,11 @@ export function subscribeGame(
     if (status === 'SUBSCRIBED') {
       if (onPresence) ch.track({ clientId: clientId() });
       onStatus?.(true);
-    } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+    } else if (
+      status === 'CHANNEL_ERROR' ||
+      status === 'TIMED_OUT' ||
+      status === 'CLOSED'
+    ) {
       onStatus?.(false);
     }
   });
