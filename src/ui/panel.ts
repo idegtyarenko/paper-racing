@@ -86,6 +86,9 @@ export interface PanelHandlers {
 export type SendState = 'idle' | 'sending' | 'failed';
 let sendState: SendState = 'idle';
 
+/** Настроен ли онлайн-бэкенд: без него «Войти по коду» прячем всегда. */
+let onlineEnabled = false;
+
 /**
  * Отразить состояние отправки хода на кнопке подтверждения: «Отправка…» (заблокирована,
  * чтобы не слать дубли) / «↻ Отправить ещё раз» после ошибки / обычное «Едем!». Пока
@@ -111,8 +114,9 @@ export function showConfirmMove(show: boolean): void {
 
 /** Спрятать онлайн-входы, если бэкенд не настроен (играем только локально). */
 export function setOnlineEnabled(enabled: boolean): void {
+  onlineEnabled = enabled;
   modeOnlineBtn.hidden = !enabled;
-  joinByCodeBtn.hidden = !enabled;
+  joinByCodeBtn.hidden = true; // покажем только на первом шаге редактора (см. update)
 }
 
 export function bindButtons(h: PanelHandlers): void {
@@ -269,6 +273,8 @@ export function updatePanel(
     renderEditStatus(editor);
     backBtn.disabled = !canStepBack(editor);
     nextBtn.hidden = editor.phase !== 'adjust';
+    // «Войти по коду» уместна только на первом шаге; дальше по мастеру она мешает.
+    joinByCodeBtn.hidden = !onlineEnabled || editor.phase !== 'center';
     return;
   }
 
