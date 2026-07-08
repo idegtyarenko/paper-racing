@@ -52,12 +52,25 @@ export function applyMove(state: GameState, cand: Candidate): void {
  *  - 'rotate' — стартовый игрок сдвигается на round: (round + seat) % n.
  *    n=3: круг 1 — 0,1,2; круг 2 — 1,2,0; круг 3 — 2,0,1 (по кругу, без преимущества
  *    первого хода).
- *  - 'snake' — направление разворачивается каждый круг: чётные круги seat, нечётные
- *    n-1-seat. n=3: 0,1,2 → 2,1,0 → 0,1,2 (змейкой).
+ *  - 'snake' — направление разворота задаётся последовательностью Тьюе-Морса
+ *    (чётность числа единичных битов в номере круга), а не простым чередованием:
+ *    это балансирует очерёдность так, что разворот на стыке кругов иногда
+ *    повторяется, компенсируя предыдущий блок. n=3: 0,1,2 → 2,1,0 → 2,1,0 →
+ *    0,1,2 → 2,1,0 → 0,1,2 → 0,1,2 → 2,1,0 (abc cba cba abc cba abc abc cba).
  *  - 'fixed' — очерёдность не меняется: всегда seat. n=3: 0,1,2 каждый круг.
  * Любая схема — перестановка всех игроков в каждом круге (никто не пропущен и не
  * ходит дважды) и детерминирована: одинаковый turn у всех клиентов даёт один индекс.
  */
+function thueMorseParity(x: number): number {
+  let n = x;
+  let parity = 0;
+  while (n > 0) {
+    parity ^= n & 1;
+    n >>>= 1;
+  }
+  return parity;
+}
+
 export function playerForTurn(
   turn: number,
   n: number,
@@ -66,7 +79,7 @@ export function playerForTurn(
   const round = Math.floor(turn / n);
   const seat = turn % n;
   if (order === 'fixed') return seat;
-  if (order === 'snake') return round % 2 === 0 ? seat : n - 1 - seat;
+  if (order === 'snake') return thueMorseParity(round) === 0 ? seat : n - 1 - seat;
   return (round + seat) % n;
 }
 

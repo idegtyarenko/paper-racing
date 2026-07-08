@@ -173,11 +173,16 @@ describe('честная очерёдность хода', () => {
     expect([9, 10, 11].map(order)).toEqual([0, 1, 2]); // цикл замкнулся
   });
 
-  it("'snake' — направление разворачивается: А,Б,В → В,Б,А → А,Б,В", () => {
+  it("'snake' — направление задаётся последовательностью Тьюе-Морса: abc cba cba abc cba abc abc cba", () => {
     const order = (turn: number) => playerForTurn(turn, 3, 'snake');
     expect([0, 1, 2].map(order)).toEqual([0, 1, 2]); // круг 1
     expect([3, 4, 5].map(order)).toEqual([2, 1, 0]); // круг 2
-    expect([6, 7, 8].map(order)).toEqual([0, 1, 2]); // круг 3
+    expect([6, 7, 8].map(order)).toEqual([2, 1, 0]); // круг 3
+    expect([9, 10, 11].map(order)).toEqual([0, 1, 2]); // круг 4
+    expect([12, 13, 14].map(order)).toEqual([2, 1, 0]); // круг 5
+    expect([15, 16, 17].map(order)).toEqual([0, 1, 2]); // круг 6
+    expect([18, 19, 20].map(order)).toEqual([0, 1, 2]); // круг 7
+    expect([21, 22, 23].map(order)).toEqual([2, 1, 0]); // круг 8
   });
 
   it("'fixed' — очерёдность не меняется: А,Б,В каждый круг", () => {
