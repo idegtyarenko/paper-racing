@@ -83,6 +83,11 @@ export const strings = {
     turnModeLabel: 'Ходы',
     simultaneous: 'Одновременные',
     sequential: 'Последовательные',
+    // Очерёдность игроков в последовательном режиме (строка скрыта в одновременном).
+    turnOrderLabel: 'Очерёдность',
+    orderRotate: 'По кругу',
+    orderSnake: 'Змейкой',
+    orderFixed: 'Постоянная',
     done: 'Готово',
   },
 

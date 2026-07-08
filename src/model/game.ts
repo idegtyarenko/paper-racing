@@ -55,6 +55,14 @@ export interface Rules {
    * все выбирают ход одновременно вслепую, потом раскрытие разом (simultaneous.ts).
    */
   turnMode: 'sequential' | 'simultaneous';
+  /**
+   * Очерёдность игроков в последовательном режиме (см. playerForTurn):
+   * 'rotate' — А,Б,В → Б,В,А → В,А,Б (стартовый сдвигается каждый круг);
+   * 'snake' — А,Б,В → В,Б,А → А,Б,В (змейкой, разворот направления каждый круг);
+   * 'fixed' — А,Б,В → А,Б,В → А,Б,В (порядок не меняется). В одновременном
+   * режиме не используется (все ходят разом).
+   */
+  turnOrder: 'rotate' | 'snake' | 'fixed';
 }
 
 /** Правила по умолчанию: динамический штраф со стандартной (линейной) строгостью. */
@@ -63,6 +71,7 @@ export const DEFAULT_RULES: Rules = {
   staticTurns: CRASH_SKIP_TURNS,
   dynamicExponent: 1,
   turnMode: 'sequential',
+  turnOrder: 'rotate',
 };
 
 /**

@@ -81,7 +81,9 @@ export function deserializeState(s: SerializedState, track: Track): GameState {
   // pending null — последовательный режим).
   return {
     ...s,
-    rules: s.rules ?? DEFAULT_RULES,
+    // Мержим с дефолтом, чтобы новые поля правил (turnOrder) не были undefined в
+    // старых строках, где rules есть, но снят до их появления.
+    rules: { ...DEFAULT_RULES, ...s.rules },
     turn: s.turn ?? 0,
     pending: s.pending ?? null,
     track,

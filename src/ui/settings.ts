@@ -16,6 +16,8 @@ const staticSlider = document.getElementById('staticSlider') as HTMLInputElement
 const staticTurnsValue = document.getElementById('staticTurnsValue')!;
 const turnModeRow = document.getElementById('turnModeRow')!;
 const turnModeType = document.getElementById('turnModeType')!;
+const turnOrderRow = document.getElementById('turnOrderRow')!;
+const turnOrderType = document.getElementById('turnOrderType')!;
 
 /** Показатель степени, соответствующий выбору сегмента строгости. */
 const exponentOf = (kind: string): number =>
@@ -39,6 +41,11 @@ function render(): void {
   turnModeType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
     btn.classList.toggle('seg__btn--active', btn.dataset.turn === rules.turnMode);
   });
+  turnOrderType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
+    btn.classList.toggle('seg__btn--active', btn.dataset.order === rules.turnOrder);
+  });
+  // Очерёдность имеет смысл только когда игроки ходят по очереди.
+  turnOrderRow.hidden = rules.turnMode !== 'sequential';
   const dynamic = rules.penalty === 'dynamic';
   exponentRow.hidden = !dynamic;
   staticRow.hidden = dynamic;
@@ -94,6 +101,12 @@ export function bindSettings(): void {
   turnModeType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
     bindTap(btn, () => {
       rules.turnMode = btn.dataset.turn as Rules['turnMode'];
+      commit();
+    });
+  });
+  turnOrderType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
+    bindTap(btn, () => {
+      rules.turnOrder = btn.dataset.order as Rules['turnOrder'];
       commit();
     });
   });

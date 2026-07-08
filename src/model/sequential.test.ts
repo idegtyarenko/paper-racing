@@ -165,23 +165,39 @@ describe('порядок ходов и отбытие штрафа', () => {
 });
 
 describe('честная очерёдность хода', () => {
-  it('каждый круг стартовый игрок сдвигается — А,Б,В → Б,В,А → В,А,Б', () => {
-    const order = (turn: number) => playerForTurn(turn, 3);
+  it("'rotate' — стартовый игрок сдвигается каждый круг: А,Б,В → Б,В,А → В,А,Б", () => {
+    const order = (turn: number) => playerForTurn(turn, 3, 'rotate');
     expect([0, 1, 2].map(order)).toEqual([0, 1, 2]); // круг 1
     expect([3, 4, 5].map(order)).toEqual([1, 2, 0]); // круг 2
     expect([6, 7, 8].map(order)).toEqual([2, 0, 1]); // круг 3
     expect([9, 10, 11].map(order)).toEqual([0, 1, 2]); // цикл замкнулся
   });
 
-  it('каждый круг — перестановка всех игроков (никто не пропущен и не сходит дважды)', () => {
-    for (let n = 2; n <= 6; n++) {
-      for (let round = 0; round < 4; round++) {
-        const seats = Array.from({ length: n }, (_, s) =>
-          playerForTurn(round * n + s, n),
-        );
-        expect([...seats].sort((a, b) => a - b)).toEqual(
-          Array.from({ length: n }, (_, i) => i),
-        );
+  it("'snake' — направление разворачивается: А,Б,В → В,Б,А → А,Б,В", () => {
+    const order = (turn: number) => playerForTurn(turn, 3, 'snake');
+    expect([0, 1, 2].map(order)).toEqual([0, 1, 2]); // круг 1
+    expect([3, 4, 5].map(order)).toEqual([2, 1, 0]); // круг 2
+    expect([6, 7, 8].map(order)).toEqual([0, 1, 2]); // круг 3
+  });
+
+  it("'fixed' — очерёдность не меняется: А,Б,В каждый круг", () => {
+    const order = (turn: number) => playerForTurn(turn, 3, 'fixed');
+    expect([0, 1, 2].map(order)).toEqual([0, 1, 2]);
+    expect([3, 4, 5].map(order)).toEqual([0, 1, 2]);
+    expect([6, 7, 8].map(order)).toEqual([0, 1, 2]);
+  });
+
+  it('любая схема — перестановка всех игроков в круге (никто не пропущен и не сходит дважды)', () => {
+    for (const scheme of ['rotate', 'snake', 'fixed'] as const) {
+      for (let n = 2; n <= 6; n++) {
+        for (let round = 0; round < 4; round++) {
+          const seats = Array.from({ length: n }, (_, s) =>
+            playerForTurn(round * n + s, n, scheme),
+          );
+          expect([...seats].sort((a, b) => a - b)).toEqual(
+            Array.from({ length: n }, (_, i) => i),
+          );
+        }
       }
     }
   });
