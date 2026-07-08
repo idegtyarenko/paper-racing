@@ -20,7 +20,18 @@ export function closeOverlay(): void {
 
 /** Навесить закрытие оверлея по фону, `[data-close]`-кнопкам и Escape. */
 export function bindOverlayClose(): void {
-  overlay.querySelector('.overlay__backdrop')!.addEventListener('click', closeOverlay);
+  // Закрываем по фону, только если и нажатие началось на фоне. Иначе на iOS
+  // синтетический `click` после тапа, свернувшего подсказку в bottom-sheet
+  // (шторка анкерится снизу и уезжает вниз, а координаты клика оказываются над
+  // её верхним краем — на фоне), перенаправлялся на фон и ложно закрывал оверлей.
+  const backdrop = overlay.querySelector<HTMLElement>('.overlay__backdrop')!;
+  let pressedBackdrop = false;
+  overlay.addEventListener('pointerdown', (e) => {
+    pressedBackdrop = e.target === backdrop;
+  });
+  backdrop.addEventListener('click', () => {
+    if (pressedBackdrop) closeOverlay();
+  });
   overlay
     .querySelectorAll<HTMLElement>('[data-close]')
     .forEach((b) => bindTap(b, closeOverlay));
