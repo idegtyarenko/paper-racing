@@ -10,11 +10,10 @@ import {
   Candidate,
   Rules,
   newGame,
-  coastMove,
-  applyMove,
   cloneState,
   seatColor,
 } from '../model/game';
+import { coastMove, applyMove } from '../model/sequential';
 import { EditorState, editorFromTrack } from '../model/editor';
 import { renderLobby, setLobbyStarting } from '../ui/lobby';
 import {
@@ -378,11 +377,7 @@ function hostOnline(name: string): Promise<void> {
  * Присоединиться к онлайн-игре по коду. inJoinDialog — ошибку показываем прямо в
  * диалоге входа (он остаётся открыт); иначе (вход по ссылке) — тостом.
  */
-function joinOnline(
-  code: string,
-  name: string,
-  inJoinDialog: boolean,
-): Promise<void> {
+function joinOnline(code: string, name: string, inJoinDialog: boolean): Promise<void> {
   return guarded(async () => {
     if (inJoinDialog) setJoinBusy(true);
     try {

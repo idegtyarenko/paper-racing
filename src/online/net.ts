@@ -76,9 +76,16 @@ export function serializeState(g: GameState): SerializedState {
 }
 
 export function deserializeState(s: SerializedState, track: Track): GameState {
-  // Правила и счётчик очерёдности едут в стейте; на старые строки без них
-  // подставляем дефолт (turn 0 — безопасный старт ротации).
-  return { ...s, rules: s.rules ?? DEFAULT_RULES, turn: s.turn ?? 0, track };
+  // Правила, счётчик очерёдности и буфер одновременного раунда едут в стейте; на
+  // старые строки без них подставляем дефолт (turn 0 — безопасный старт ротации;
+  // pending null — последовательный режим).
+  return {
+    ...s,
+    rules: s.rules ?? DEFAULT_RULES,
+    turn: s.turn ?? 0,
+    pending: s.pending ?? null,
+    track,
+  };
 }
 
 // ── Идентичность и код игры ──────────────────────────────────────────────────────

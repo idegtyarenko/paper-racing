@@ -15,6 +15,7 @@ const staticRow = document.getElementById('staticRow')!;
 const staticSlider = document.getElementById('staticSlider') as HTMLInputElement;
 const staticTurnsValue = document.getElementById('staticTurnsValue')!;
 const turnModeRow = document.getElementById('turnModeRow')!;
+const turnModeType = document.getElementById('turnModeType')!;
 
 /** Показатель степени, соответствующий выбору сегмента строгости. */
 const exponentOf = (kind: string): number =>
@@ -35,6 +36,9 @@ function render(): void {
       exponentOf(btn.dataset.exponent!) === rules.dynamicExponent,
     );
   });
+  turnModeType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
+    btn.classList.toggle('seg__btn--active', btn.dataset.turn === rules.turnMode);
+  });
   const dynamic = rules.penalty === 'dynamic';
   exponentRow.hidden = !dynamic;
   staticRow.hidden = dynamic;
@@ -50,8 +54,9 @@ function commit(): void {
 
 /**
  * Открыть настройки. current — текущие правила (копируем: изменения сразу отдаём
- * через onChange, чужой объект не трогаем). online — показывать ли строку порядка
- * ходов (только для онлайн-хоста).
+ * через onChange, чужой объект не трогаем). online — онлайн-заезд: порядок ходов
+ * пока поддержан только локально, поэтому в онлайне строку показываем заглушкой
+ * (кнопки disabled, всегда последовательный) — включится, когда сядет онлайн-часть.
  */
 export function openSettings(
   current: Rules,
@@ -60,7 +65,10 @@ export function openSettings(
 ): void {
   rules = { ...current };
   onChange = onChangeCb;
-  turnModeRow.hidden = !online;
+  turnModeRow.hidden = false;
+  turnModeType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
+    btn.disabled = online;
+  });
   render();
   openSheet(sheet);
 }
@@ -82,5 +90,11 @@ export function bindSettings(): void {
   staticSlider.addEventListener('input', () => {
     rules.staticTurns = Number(staticSlider.value);
     commit();
+  });
+  turnModeType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
+    bindTap(btn, () => {
+      rules.turnMode = btn.dataset.turn as Rules['turnMode'];
+      commit();
+    });
   });
 }

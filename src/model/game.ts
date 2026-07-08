@@ -1,14 +1,9 @@
-// Игровой движок: состояние гонки, кандидаты хода, аварии, финиш, победа.
-// Чистая логика без DOM.
+// Игровой движок — общее ядро: состояние гонки, правила, расчёт исхода одного хода
+// (авария, финиш, новые pos/vel/след), возврат из штрафа и определение победителя.
+// Чистая логика без DOM. Режимо-специфичная очерёдность вынесена: последовательный
+// режим — sequential.ts, одновременный «вслепую» — simultaneous.ts.
 
-import {
-  Vec,
-  dist,
-  lerp,
-  distPointToPolyline,
-  pointOnSegment,
-  segSegIntersection,
-} from '../geometry';
+import { Vec, dist, lerp, distPointToPolyline, segSegIntersection } from '../geometry';
 import { Track, key, unkey, sideOfFinish, onRoad } from './track';
 import { strings } from '../strings';
 import {
@@ -55,7 +50,10 @@ export interface Rules {
   staticTurns: number;
   /** Показатель степени («строгость») формулы динамического штрафа. */
   dynamicExponent: number;
-  /** Порядок ходов в онлайне. Пока всегда 'sequential' (переключатель заблокирован). */
+  /**
+   * Порядок ходов. 'sequential' — по очереди (sequential.ts); 'simultaneous' —
+   * все выбирают ход одновременно вслепую, потом раскрытие разом (simultaneous.ts).
+   */
   turnMode: 'sequential' | 'simultaneous';
 }
 
@@ -92,6 +90,12 @@ export interface GameState {
    * в синхроне для остального кода, читающего его как индекс ходящего.
    */
   turn: number;
+  /**
+   * Буфер ходов текущего раунда в одновременном режиме (индекс = место, null —
+   * ещё не подтвердил / отбывает штраф). В последовательном режиме — null.
+   * Выборы не применяются к болидам и не рисуются до раскрытия раунда (вслепую).
+   */
+  pending: (Candidate | null)[] | null;
   phase: 'race' | 'over';
   winner: number | 'draw' | null;
   /**
@@ -121,7 +125,7 @@ export function seatColor(i: number): string {
 export interface Candidate {
   target: Vec;
   crash: boolean;
-  /** Точка занята соперником — ход запрещён. */
+  /** Точка занята соперником — ход запрещён (только в последовательном режиме). */
   blocked: boolean;
   /** Кандидат чистой инерции (ускорение 0,0). */
   inertial: boolean;
@@ -153,23 +157,12 @@ export function newGame(
     rules,
     current: 0,
     turn: 0,
+    pending:
+      rules.turnMode === 'simultaneous' ? Array.from({ length: n }, () => null) : null,
     phase: 'race',
     winner: null,
     finalTurnsLeft: null,
   };
-}
-
-/**
- * Индекс игрока для сквозного слота хода при честной очерёдности. Круг = n слотов;
- * позиция в круге (seat) — turn % n, номер круга (round) — floor(turn / n).
- * Стартовый игрок круга сдвигается на round, поэтому игрок = (round + seat) % n.
- * Круг 1 (n=3): 0,1,2; круг 2: 1,2,0; круг 3: 2,0,1 — по кругу, без преимущества
- * первого. Детерминирована: одинаковый turn у всех клиентов даёт один индекс.
- */
-export function playerForTurn(turn: number, n: number): number {
-  const round = Math.floor(turn / n);
-  const seat = turn % n;
-  return (round + seat) % n;
 }
 
 /**
@@ -242,39 +235,107 @@ function scanMove(track: Track, from: Vec, to: Vec): MoveScan {
   return { crash: false, tCrash: Infinity, crashAt: null };
 }
 
-export function candidates(state: GameState): Candidate[] {
-  const p = state.players[state.current];
-  const occupied = otherPositions(state);
-  const out: Candidate[] = [];
-  for (let ay = -1; ay <= 1; ay++) {
-    for (let ax = -1; ax <= 1; ax++) {
-      const target = { x: p.pos.x + p.vel.x + ax, y: p.pos.y + p.vel.y + ay };
-      // Ход запрещён, если соперник стоит в конечной точке или отрезок хода
-      // проходит через клетку, где соперник стоит сейчас (проехать «сквозь» нельзя).
-      const blocked = occupied.some((o) => pointOnSegment(o, p.pos, target));
-      out.push({
-        target,
-        blocked,
-        crash: scanMove(state.track, p.pos, target).crash,
-        inertial: ax === 0 && ay === 0,
-      });
-    }
-  }
-  return out;
+/** Результат хода одного болида — чистые данные для применения (без мутации игрока). */
+export interface MoveOutcome {
+  /** Где болид оказался: crashAt при аварии, иначе целевая клетка. */
+  end: Vec;
+  /** Новая скорость (нулевая при аварии). */
+  vel: Vec;
+  crash: boolean;
+  crashAt: Vec | null;
+  /** Штраф в ходах при аварии, иначе 0. */
+  skipTurns: number;
+  /** Изменение счётчика пересечений финиша: −1 / 0 / +1. */
+  crossingDelta: number;
+  trailSeg: TrailSeg;
 }
 
 /**
- * Позиции всех игроков, кроме ходящего сейчас и тех, кто отбывает штраф после
+ * Посчитать исход хода болида из точки from в клетку target — авария и её точка,
+ * пересечение финиша, новые скорость/след. Чистая функция, ничего не мутирует;
+ * применяет результат applyOutcome. Общий расчёт для обоих режимов (последовательный
+ * ход и разрешение одновременного раунда).
+ */
+export function computeOutcome(
+  track: Track,
+  rules: Rules,
+  from: Vec,
+  target: Vec,
+): MoveOutcome {
+  const to = { ...target };
+  const { tCrash, crashAt } = scanMove(track, from, to);
+
+  // Пересечение финишной линии засчитывается, только если случилось до аварии
+  // и сторона линии реально сменилась (точка ровно на линии считается стороной
+  // «впереди», чтобы не засчитывать одно пересечение дважды).
+  const end = crashAt ?? to;
+  let crossingDelta = 0;
+  const fin = segSegIntersection(from, to, track.finish.a, track.finish.b);
+  if (fin && fin.t < tCrash) {
+    const sFrom = sideOfFinish(track, from);
+    const sTo = sideOfFinish(track, end);
+    if (sFrom < 0 && sTo >= 0) crossingDelta = 1;
+    else if (sFrom >= 0 && sTo < 0) crossingDelta = -1;
+  }
+
+  if (crashAt) {
+    return {
+      end: { ...crashAt },
+      vel: { x: 0, y: 0 },
+      crash: true,
+      crashAt: { ...crashAt },
+      // Скорость вылета — длина запланированного хода (|vel+accel|): чем быстрее
+      // ехал, тем дальше в гравий и тем дольше выбираться.
+      skipTurns: crashPenalty(rules, dist(from, to)),
+      crossingDelta,
+      trailSeg: { from: { ...from }, to: { ...crashAt }, jump: false },
+    };
+  }
+  return {
+    end: { ...to },
+    vel: { x: to.x - from.x, y: to.y - from.y },
+    crash: false,
+    crashAt: null,
+    skipTurns: 0,
+    crossingDelta,
+    trailSeg: { from: { ...from }, to: { ...to }, jump: false },
+  };
+}
+
+/**
+ * Применить посчитанный исход к болиду: обновить счётчик финиша, след, аварию,
+ * позицию/скорость/штраф и (при достижении победы) глубину заезда за линию.
+ * Смену очереди/определение победителя вызывающий делает сам (режимо-специфично).
+ */
+export function applyOutcome(track: Track, p: Player, o: MoveOutcome): void {
+  p.crossings += o.crossingDelta;
+  p.trail.push(o.trailSeg);
+  if (o.crashAt) {
+    // Болид остаётся в точке аварии на время штрафа — вернуть его на трассу
+    // (returnFromPenalty) нужно только когда штраф отбыт, иначе он мешает другим.
+    p.crashes.push({ ...o.crashAt });
+  }
+  p.pos = { ...o.end };
+  p.vel = { ...o.vel };
+  p.skipTurns = o.skipTurns;
+  if (p.crossings >= WIN_CROSSINGS && p.finishOvershoot === null) {
+    p.finishOvershoot = sideOfFinish(track, o.end);
+  }
+}
+
+/**
+ * Позиции всех игроков, кроме указанного места и тех, кто отбывает штраф после
  * аварии — они ещё не вернулись на трассу и не мешают чужому пути.
  */
-function otherPositions(state: GameState): Vec[] {
+export function otherPositions(state: GameState, exclude: number): Vec[] {
   return state.players
-    .filter((pl, i) => i !== state.current && pl.skipTurns === 0)
+    .filter((pl, i) => i !== exclude && pl.skipTurns === 0)
     .map((pl) => ({ ...pl.pos }));
 }
 
-function nearestFreeInsidePoint(state: GameState, q: Vec): Vec {
-  const occupied = new Set(otherPositions(state).map((o) => key(o.x, o.y)));
+/** Ближайшая свободная (не занятая другим болидом) клетка трассы к точке q. */
+export function nearestFreeInsidePoint(state: GameState, q: Vec, exclude: number): Vec {
+  const occupied = new Set(otherPositions(state, exclude).map((o) => key(o.x, o.y)));
   let best: Vec | null = null;
   let bestD = Infinity;
   state.track.inside.forEach((k) => {
@@ -294,127 +355,19 @@ function nearestFreeInsidePoint(state: GameState, q: Vec): Vec {
   return best!;
 }
 
-export function applyMove(state: GameState, cand: Candidate): void {
-  if (state.phase !== 'race' || cand.blocked) return;
-  const track = state.track;
-  const p = state.players[state.current];
-  const from = { ...p.pos };
-  const to = { ...cand.target };
-
-  // Детект и точка аварии — одним проходом (тот же критерий, что в кандидатах).
-  const { tCrash, crashAt } = scanMove(track, from, to);
-
-  // Пересечение финишной линии засчитывается, только если случилось до аварии
-  // и сторона линии реально сменилась (точка ровно на линии считается стороной
-  // «впереди», чтобы не засчитывать одно пересечение дважды).
-  const fin = segSegIntersection(from, to, track.finish.a, track.finish.b);
-  if (fin && fin.t < tCrash) {
-    const end = crashAt ?? to;
-    const sFrom = sideOfFinish(track, from);
-    const sTo = sideOfFinish(track, end);
-    if (sFrom < 0 && sTo >= 0) p.crossings += 1;
-    else if (sFrom >= 0 && sTo < 0) p.crossings -= 1;
-  }
-
-  if (crashAt) {
-    // Болид остаётся в точке аварии на время штрафа — вернуть его на трассу
-    // (nearestFreeInsidePoint) и дорисовать пунктирный «телепорт» нужно только
-    // когда штраф отбыт (см. afterAction), иначе он мешает другим машинам.
-    p.trail.push({ from, to: crashAt, jump: false });
-    p.crashes.push(crashAt);
-    p.pos = { ...crashAt };
-    p.vel = { x: 0, y: 0 };
-    // Скорость вылета — длина запланированного хода (|vel+accel|): чем быстрее
-    // ехал, тем дальше в гравий и тем дольше выбираться.
-    p.skipTurns = crashPenalty(state.rules, dist(from, to));
-  } else {
-    p.vel = { x: to.x - from.x, y: to.y - from.y };
-    p.pos = to;
-    p.trail.push({ from, to, jump: false });
-  }
-
-  if (p.crossings >= WIN_CROSSINGS && p.finishOvershoot === null) {
-    p.finishOvershoot = sideOfFinish(track, crashAt ?? to);
-  }
-
-  afterAction(state);
-}
-
 /**
- * Смена хода и определение победителя. Игроки ходят по кругу с честной
- * очерёдностью: каждый круг стартовый игрок сдвигается на 1 (см. playerForTurn),
- * так что преимущества первого хода нет. Как только кто-то финишировал,
- * оставшиеся игроки этого же круга доигрывают свои ходы (те, кто ходил раньше
- * финишировавшего в этом круге, свой шанс уже использовали). После этого среди
- * всех финишировавших в решающем круге побеждает заехавший дальше за линию; при
- * равенстве — ничья. Вынужденные пропуски после аварии проходят автоматически:
- * если ход перешёл к игроку, который ещё отбывает пропуск, он тратит один пропуск
- * и ход сразу уходит дальше — участнику ничего нажимать не нужно.
+ * Штраф отбыт — вернуть болид на ближайшую свободную клетку трассы с пунктирным
+ * «телепортом» из гравия. Общий помощник для обоих режимов (afterAction и resolveRound).
  */
-function afterAction(state: GameState): void {
-  const n = state.players.length;
-  const seat = state.turn % n; // позиция ходящего в текущем круге
-  const finished = state.players[state.current].crossings >= WIN_CROSSINGS;
-
-  if (state.finalTurnsLeft !== null) {
-    // Решающий круг уже идёт: этот ход укоротил число оставшихся.
-    state.finalTurnsLeft -= 1;
-    if (state.finalTurnsLeft <= 0) {
-      decideWinner(state);
-      return;
-    }
-  } else if (finished) {
-    // Первый финиш: остальные игроки этого круга (после текущего seat) доигрывают.
-    state.finalTurnsLeft = n - 1 - seat;
-    if (state.finalTurnsLeft <= 0) {
-      decideWinner(state);
-      return;
-    }
-  }
-
-  state.turn += 1;
-  state.current = playerForTurn(state.turn, n);
-  const next = state.players[state.current];
-  if (next.skipTurns > 0) {
-    next.skipTurns -= 1;
-    if (next.skipTurns === 0) {
-      // Штраф отбыт — только теперь возвращаем болид на трассу.
-      const resetTo = nearestFreeInsidePoint(state, next.pos);
-      next.trail.push({ from: { ...next.pos }, to: { ...resetTo }, jump: true });
-      next.pos = resetTo;
-    }
-    afterAction(state);
-  }
-}
-
-/**
- * Пропуск хода отсутствующего/задумавшегося игрока: болид продолжает ехать прямо
- * с той же скоростью (чистая инерция, ускорение 0,0). Если инерционная клетка
- * занята соперником — болид остаётся на месте с нулевой скоростью, а ход просто
- * уходит дальше. Аварии/пересечение финиша/боксы обрабатываются штатно через
- * applyMove. Детерминирована: два клиента, применившие coastMove к одному стейту,
- * получат идентичный результат (безопасно при last-write-wins в онлайне).
- */
-export function coastMove(state: GameState): void {
-  if (state.phase !== 'race') return;
-  const p = state.players[state.current];
-  // Болид стоит (старт / после аварии) — ехать по инерции некуда: просто пас,
-  // без вырожденного следа нулевой длины на каждый пропуск.
-  if (p.vel.x === 0 && p.vel.y === 0) {
-    afterAction(state);
-    return;
-  }
-  const inertial = candidates(state).find((c) => c.inertial)!;
-  if (inertial.blocked) {
-    p.vel = { x: 0, y: 0 };
-    afterAction(state);
-  } else {
-    applyMove(state, inertial);
-  }
+export function returnFromPenalty(state: GameState, seat: number): void {
+  const p = state.players[seat];
+  const resetTo = nearestFreeInsidePoint(state, p.pos, seat);
+  p.trail.push({ from: { ...p.pos }, to: { ...resetTo }, jump: true });
+  p.pos = resetTo;
 }
 
 /** Победитель решающего круга — максимальный заезд за линию среди финишировавших. */
-function decideWinner(state: GameState): void {
+export function decideWinner(state: GameState): void {
   state.phase = 'over';
   let best = -Infinity;
   let winner: number | 'draw' | null = null;

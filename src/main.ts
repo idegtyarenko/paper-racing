@@ -4,15 +4,14 @@
 import './ui/styles/index.css';
 import { Track, finalizeTrack } from './model/track';
 import { newEditor, stepBack, confirmEdges } from './model/editor';
+import { GameState, Candidate, Rules, DEFAULT_RULES, newGame } from './model/game';
+import { candidates, applyMove } from './model/sequential';
 import {
-  GameState,
-  Candidate,
-  Rules,
-  DEFAULT_RULES,
-  newGame,
-  candidates,
-  applyMove,
-} from './model/game';
+  simultaneousCandidates,
+  submitBlindMove,
+  nextPickSeat,
+  resolveRound,
+} from './model/simultaneous';
 import { render, AppView } from './view/render';
 import { Bounds, polylineBounds } from './view/camera';
 import * as vp from './view/viewport';
@@ -95,6 +94,19 @@ function commitMove(cand: Candidate): void {
     online.sendMove(cand);
     return;
   }
+  if (game.rules.turnMode === 'simultaneous') {
+    // Локально вслепую: записываем выбор в буфер и сразу прячем его (clearSelection в
+    // refreshCands), чтобы следующий игрок его не видел. Когда все выбрали — раскрываем
+    // раунд разом (resolveRound) и передаём ход первому в новом раунде.
+    submitBlindMove(game, game.current, cand);
+    const next = nextPickSeat(game);
+    if (next === null) resolveRound(game);
+    else game.current = next;
+    refreshCands();
+    updateUI();
+    redraw();
+    return;
+  }
   applyMove(game, cand);
   refreshCands();
   updateUI();
@@ -104,15 +116,18 @@ function commitMove(cand: Candidate): void {
 function refreshCands(): void {
   input.clearSelection();
   if (
-    game &&
-    game.phase === 'race' &&
-    game.players[game.current].skipTurns === 0 &&
-    myTurn()
+    !game ||
+    game.phase !== 'race' ||
+    game.players[game.current].skipTurns !== 0 ||
+    !myTurn()
   ) {
-    cands = candidates(game);
-  } else {
     cands = null;
+    return;
   }
+  cands =
+    game.rules.turnMode === 'simultaneous'
+      ? simultaneousCandidates(game, game.current)
+      : candidates(game);
 }
 
 /**

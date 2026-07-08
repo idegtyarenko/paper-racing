@@ -232,18 +232,18 @@
         </div>
         <div id="turnModeRow" class="setting">
           <span class="setting__label" data-i18n="settings.turnModeLabel"></span>
-          <div class="seg">
-            <button
-              type="button"
-              class="seg__btn"
-              disabled
-              data-i18n="settings.simultaneous"
-            ></button>
+          <div id="turnModeType" class="seg">
             <button
               type="button"
               class="seg__btn seg__btn--active"
-              disabled
+              data-turn="sequential"
               data-i18n="settings.sequential"
+            ></button>
+            <button
+              type="button"
+              class="seg__btn"
+              data-turn="simultaneous"
+              data-i18n="settings.simultaneous"
             ></button>
           </div>
         </div>
