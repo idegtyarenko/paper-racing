@@ -8,6 +8,7 @@
 @import './lobby.css';
 @import './status.css';
 @import './player-card.css';
+@import './turn-queue.css';
 @import './winner.css';
 @import './rules.css';
 @import './overlay.css';

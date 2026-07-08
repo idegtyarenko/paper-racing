@@ -10,6 +10,7 @@ import { render, AppView } from './view/render';
 import { Bounds, polylineBounds } from './view/camera';
 import * as vp from './view/viewport';
 import { bindButtons, updatePanel, setOnlineEnabled, PanelMode } from './ui/panel';
+import { renderTurnQueue } from './ui/turn-queue';
 import { openSettings } from './ui/settings';
 import { localizeDom } from './ui/localize';
 import { onlineAvailable } from './online/net';
@@ -68,6 +69,7 @@ function redraw(): void {
 function updateUI(): void {
   const net = online.netTurn(game);
   updatePanel(mode, editor, game, raceTrack?.startPoints.length ?? 6, net);
+  renderTurnQueue(mode === 'race' ? game : null);
 }
 
 /** Может ли этот клиент ходить сейчас: в локальной игре — всегда, в онлайне — на своём месте. */

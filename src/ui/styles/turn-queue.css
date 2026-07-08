@@ -1,0 +1,38 @@
+/* Полоса очереди ходов: капсула с точками игроков у верхнего края поля, поверх
+   canvas (как zoom-ctl / confirm-move). Не перехватывает жесты по карте. */
+.turn-queue {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+  pointer-events: none; /* полоса информативная — клики уходят на карту под ней */
+}
+
+.turn-queue[hidden] {
+  display: none;
+}
+
+/* Точка очереди — болид соответствующего цвета. */
+.turn-queue__dot {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+/* Текущий ход: крупнее и в тёмной рамке — сразу видно, чей ход сейчас. */
+.turn-queue__dot--current {
+  width: 18px;
+  height: 18px;
+  box-shadow: 0 0 0 2px #55524a;
+}

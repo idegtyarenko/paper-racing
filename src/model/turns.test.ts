@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { newGame, cloneState, Candidate, Player } from './game';
-import { candidates, applyMove, coastMove, playerForTurn } from './turns';
+import { newGame, cloneState, Candidate, Player, DEFAULT_RULES } from './game';
+import { candidates, applyMove, coastMove, playerForTurn, upcomingTurns } from './turns';
 import { WIN_CROSSINGS } from '../config';
 import { key } from './track';
 import { ringTrack } from './test-fixtures';
@@ -220,6 +220,58 @@ describe('честная очерёдность хода', () => {
       applyMove(g, cand(10 + k, 3));
     }
     expect(seen).toEqual([0, 1, 2, 1, 2, 0]);
+  });
+});
+
+describe('upcomingTurns — очередь ближайших ходов', () => {
+  it('первый элемент — текущий игрок; порядок следует схеме очерёдности', () => {
+    const g = newGame(ringTrack(), 3); // rotate по умолчанию
+    expect(upcomingTurns(g, 6)).toEqual([0, 1, 2, 1, 2, 0]); // как реальные ходы
+  });
+
+  it('уважает схему fixed', () => {
+    const g = newGame(ringTrack(), 3, { ...DEFAULT_RULES, turnOrder: 'fixed' });
+    expect(upcomingTurns(g, 5)).toEqual([0, 1, 2, 0, 1]);
+  });
+
+  it('смотрит вперёд от текущего слота (turn != 0)', () => {
+    const g = newGame(ringTrack(), 3);
+    g.turn = 4;
+    g.current = playerForTurn(4, 3, 'rotate'); // держим инвариант current == playerForTurn(turn)
+    expect(upcomingTurns(g, 4)).toEqual([2, 0, 2, 0]); // слоты 4,5,6,7 = 2,0,2,0
+  });
+
+  it('игрок в боксах (skipTurns) не появляется, пока не отбудет штраф', () => {
+    const g = newGame(ringTrack(), 3);
+    g.players[1].skipTurns = 2; // Синий отбывает два хода
+    // Слоты rotate: 0,1,2,0(круг2 сдвиг:1,2,0)… Синий (1) в слотах 1 и 3 сгорают.
+    const q = upcomingTurns(g, 5);
+    expect(q[0]).toBe(0);
+    expect(q).not.toContain(1); // за первые пять реальных ходов Синий ещё в гравии/только вышел
+    // после отбытия штрафа Синий возвращается в очередь
+    expect(upcomingTurns(g, 8)).toContain(1);
+  });
+
+  it('решающий круг: очередь не длиннее оставшихся слотов (finalTurnsLeft)', () => {
+    const g = newGame(ringTrack(), 3);
+    g.finalTurnsLeft = 2;
+    expect(upcomingTurns(g, 9)).toHaveLength(2);
+  });
+
+  it('решающий круг: слот игрока в боксах тратит остаток и укорачивает очередь', () => {
+    const g = newGame(ringTrack(), 3);
+    g.finalTurnsLeft = 2;
+    g.players[1].skipTurns = 1; // Синий (слот 1) отбывает штраф — его слот сгорает
+    // Слоты 0,1: слот0 → Красный ходит (остаётся 1), слот1 → Синий пропуск (остаётся 0).
+    expect(upcomingTurns(g, 9)).toEqual([0]);
+  });
+
+  it('детерминирован: не мутирует стейт', () => {
+    const g = newGame(ringTrack(), 3);
+    g.players[1].skipTurns = 2;
+    const before = JSON.stringify(g);
+    upcomingTurns(g, 12);
+    expect(JSON.stringify(g)).toBe(before);
   });
 });
 
