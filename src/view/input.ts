@@ -199,6 +199,27 @@ function updatePinch(): void {
   });
 }
 
+/**
+ * В какой половине поля показать кнопку подтверждения: если облако кандидатов
+ * тяготеет к низу — уводим кнопку наверх, и наоборот. Так плавающая кнопка не
+ * накрывает точки-цели (иначе тап по цели попадает в кнопку — чужой ход).
+ */
+function confirmAnchor(): 'top' | 'bottom' {
+  const cands = deps.getCands();
+  const view = vp.camera();
+  const { h } = vp.viewSize();
+  let sum = 0;
+  let n = 0;
+  if (cands)
+    for (const c of cands) {
+      if (c.blocked) continue;
+      sum += worldToScreen(view, c.target).y;
+      n++;
+    }
+  const cloudY = n ? sum / n : h; // нет кандидатов → низ (кнопка по умолчанию внизу)
+  return cloudY > h / 2 ? 'top' : 'bottom';
+}
+
 /** Ближайший (незаблокированный) кандидат к экранной точке, в css-px. */
 function nearestCandScreen(scr: Vec): { cand: Candidate; dist: number } | null {
   const cands = deps.getCands();
@@ -355,7 +376,7 @@ function endGesture(e: PointerEvent): void {
       loupe = null;
       hover = null;
       selected = findCandidate(vp.toWorld(e, aimLift()), touchTol());
-      showConfirmMove(!!selected);
+      showConfirmMove(!!selected, confirmAnchor());
       break;
     case 'pan':
       break;
@@ -483,4 +504,27 @@ export function initInput(d: InputDeps): void {
 
   document.getElementById('zoomIn')?.addEventListener('click', () => zoomByButton(1));
   document.getElementById('zoomOut')?.addEventListener('click', () => zoomByButton(-1));
+
+  // Страховка: если кнопка подтверждения всё же накрыла кандидата, касание пальцем
+  // по такой скрытой точке перехватываем в прицеливание, а не в подтверждение —
+  // иначе подтвердится ранее выбранный (чужой) ход. Обычный тап по кнопке (рядом
+  // кандидата нет) проходит как есть и коммитит.
+  document.getElementById('confirmMove')?.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch' || pinch || activeId !== null) return;
+    const game = deps.getGame();
+    if (!(deps.getMode() === 'race' && game && game.phase === 'race')) return;
+    const scr = vp.toScreen(e);
+    const near = nearestCandScreen(scr);
+    if (!near || near.dist > AIM_ZONE_PX) return; // рядом нет цели — пусть коммитит
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      canvas.setPointerCapture(e.pointerId); // забираем указатель у кнопки на canvas
+    } catch {}
+    activePointers.set(e.pointerId, scr);
+    gesture = { kind: 'aim' };
+    activeId = e.pointerId;
+    aimAt(e);
+    deps.redraw();
+  });
 }

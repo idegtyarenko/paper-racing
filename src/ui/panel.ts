@@ -107,8 +107,14 @@ export function setMoveSendState(s: SendState): void {
 }
 
 /** Показать/спрятать плавающую кнопку подтверждения хода (тач-прицеливание).
- *  Во время отправки / после ошибки кнопку не прячем — на ней прогресс/повтор. */
-export function showConfirmMove(show: boolean): void {
+ *  Во время отправки / после ошибки кнопку не прячем — на ней прогресс/повтор.
+ *  `anchor` уводит кнопку в свободную от кандидатов половину поля, чтобы она не
+ *  накрывала точки-цели (иначе тап по цели попадёт в кнопку). */
+export function showConfirmMove(
+  show: boolean,
+  anchor: 'top' | 'bottom' = 'bottom',
+): void {
+  confirmMoveBtn.classList.toggle('confirm-move--top', anchor === 'top');
   confirmMoveBtn.hidden = !(show || sendState !== 'idle');
 }
 

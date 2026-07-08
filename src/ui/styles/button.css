@@ -58,6 +58,13 @@
   touch-action: manipulation;
 }
 
+/* Кандидаты внизу поля — кнопку уводим наверх, ниже полосы очереди ходов
+   (turn-queue сидит на top:10px), чтобы не накрывать точки-цели. */
+.confirm-move--top {
+  top: 52px;
+  bottom: auto;
+}
+
 .confirm-move:active {
   background: #097843;
 }
