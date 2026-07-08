@@ -1,7 +1,6 @@
 // Игровой движок — общее ядро: состояние гонки, правила, расчёт исхода одного хода
 // (авария, финиш, новые pos/vel/след), возврат из штрафа и определение победителя.
-// Чистая логика без DOM. Режимо-специфичная очерёдность вынесена: последовательный
-// режим — sequential.ts, одновременный «вслепую» — simultaneous.ts.
+// Чистая логика без DOM. Очерёдность ходов вынесена в turns.ts.
 
 import { Vec, dist, lerp, distPointToPolyline, segSegIntersection } from '../geometry';
 import { Track, key, unkey, sideOfFinish, onRoad } from './track';
@@ -51,16 +50,11 @@ export interface Rules {
   /** Показатель степени («строгость») формулы динамического штрафа. */
   dynamicExponent: number;
   /**
-   * Порядок ходов. 'sequential' — по очереди (sequential.ts); 'simultaneous' —
-   * все выбирают ход одновременно вслепую, потом раскрытие разом (simultaneous.ts).
-   */
-  turnMode: 'sequential' | 'simultaneous';
-  /**
-   * Очерёдность игроков в последовательном режиме (см. playerForTurn):
+   * Очерёдность игроков внутри круга (см. playerForTurn):
    * 'rotate' — А,Б,В → Б,В,А → В,А,Б (стартовый сдвигается каждый круг);
-   * 'snake' — А,Б,В → В,Б,А → А,Б,В (змейкой, разворот направления каждый круг);
-   * 'fixed' — А,Б,В → А,Б,В → А,Б,В (порядок не меняется). В одновременном
-   * режиме не используется (все ходят разом).
+   * 'snake' — змейкой с балансировкой направления по Тьюе-Морсу (не простое
+   *   чередование): А,Б,В → В,Б,А → В,Б,А → А,Б,В → … (см. playerForTurn в turns.ts);
+   * 'fixed' — А,Б,В → А,Б,В → А,Б,В (порядок не меняется).
    */
   turnOrder: 'rotate' | 'snake' | 'fixed';
 }
@@ -70,7 +64,6 @@ export const DEFAULT_RULES: Rules = {
   penalty: 'dynamic',
   staticTurns: CRASH_SKIP_TURNS,
   dynamicExponent: 1,
-  turnMode: 'sequential',
   turnOrder: 'rotate',
 };
 
@@ -99,12 +92,6 @@ export interface GameState {
    * в синхроне для остального кода, читающего его как индекс ходящего.
    */
   turn: number;
-  /**
-   * Буфер ходов текущего раунда в одновременном режиме (индекс = место, null —
-   * ещё не подтвердил / отбывает штраф). В последовательном режиме — null.
-   * Выборы не применяются к болидам и не рисуются до раскрытия раунда (вслепую).
-   */
-  pending: (Candidate | null)[] | null;
   phase: 'race' | 'over';
   winner: number | 'draw' | null;
   /**
@@ -134,7 +121,7 @@ export function seatColor(i: number): string {
 export interface Candidate {
   target: Vec;
   crash: boolean;
-  /** Точка занята соперником — ход запрещён (только в последовательном режиме). */
+  /** Точка занята соперником — ход запрещён. */
   blocked: boolean;
   /** Кандидат чистой инерции (ускорение 0,0). */
   inertial: boolean;
@@ -166,8 +153,6 @@ export function newGame(
     rules,
     current: 0,
     turn: 0,
-    pending:
-      rules.turnMode === 'simultaneous' ? Array.from({ length: n }, () => null) : null,
     phase: 'race',
     winner: null,
     finalTurnsLeft: null,
@@ -262,8 +247,7 @@ export interface MoveOutcome {
 /**
  * Посчитать исход хода болида из точки from в клетку target — авария и её точка,
  * пересечение финиша, новые скорость/след. Чистая функция, ничего не мутирует;
- * применяет результат applyOutcome. Общий расчёт для обоих режимов (последовательный
- * ход и разрешение одновременного раунда).
+ * применяет результат applyOutcome.
  */
 export function computeOutcome(
   track: Track,
@@ -314,7 +298,7 @@ export function computeOutcome(
 /**
  * Применить посчитанный исход к болиду: обновить счётчик финиша, след, аварию,
  * позицию/скорость/штраф и (при достижении победы) глубину заезда за линию.
- * Смену очереди/определение победителя вызывающий делает сам (режимо-специфично).
+ * Смену очереди и определение победителя вызывающий делает сам (см. turns.ts).
  */
 export function applyOutcome(track: Track, p: Player, o: MoveOutcome): void {
   p.crossings += o.crossingDelta;
@@ -366,7 +350,7 @@ export function nearestFreeInsidePoint(state: GameState, q: Vec, exclude: number
 
 /**
  * Штраф отбыт — вернуть болид на ближайшую свободную клетку трассы с пунктирным
- * «телепортом» из гравия. Общий помощник для обоих режимов (afterAction и resolveRound).
+ * «телепортом» из гравия (см. afterAction в turns.ts).
  */
 export function returnFromPenalty(state: GameState, seat: number): void {
   const p = state.players[seat];

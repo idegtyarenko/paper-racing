@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { newGame, cloneState, Candidate, Player } from './game';
-import { candidates, applyMove, coastMove, playerForTurn } from './sequential';
+import { candidates, applyMove, coastMove, playerForTurn } from './turns';
 import { WIN_CROSSINGS } from '../config';
 import { key } from './track';
 import { ringTrack } from './test-fixtures';

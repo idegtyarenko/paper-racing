@@ -1,7 +1,7 @@
 // Лист-модалка настроек правил заезда: тип штрафа за вылет (по скорости или
 // статический), строгость динамической формулы, размер статического штрафа и
-// (в онлайне) порядок ходов. Владеет своими DOM-элементами; текущие правила
-// держит вызывающий — сюда они приходят копией, а изменения уезжают через onChange.
+// очерёдность ходов. Владеет своими DOM-элементами; текущие правила держит
+// вызывающий — сюда они приходят копией, а изменения уезжают через onChange.
 
 import { Rules } from '../model/game';
 import { CRASH_EXPONENT_STANDARD, CRASH_EXPONENT_STRICT } from '../config';
@@ -14,9 +14,6 @@ const exponentType = document.getElementById('exponentType')!;
 const staticRow = document.getElementById('staticRow')!;
 const staticSlider = document.getElementById('staticSlider') as HTMLInputElement;
 const staticTurnsValue = document.getElementById('staticTurnsValue')!;
-const turnModeRow = document.getElementById('turnModeRow')!;
-const turnModeType = document.getElementById('turnModeType')!;
-const turnOrderRow = document.getElementById('turnOrderRow')!;
 const turnOrderType = document.getElementById('turnOrderType')!;
 
 /** Показатель степени, соответствующий выбору сегмента строгости. */
@@ -38,14 +35,9 @@ function render(): void {
       exponentOf(btn.dataset.exponent!) === rules.dynamicExponent,
     );
   });
-  turnModeType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
-    btn.classList.toggle('seg__btn--active', btn.dataset.turn === rules.turnMode);
-  });
   turnOrderType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
     btn.classList.toggle('seg__btn--active', btn.dataset.order === rules.turnOrder);
   });
-  // Очерёдность имеет смысл только когда игроки ходят по очереди.
-  turnOrderRow.hidden = rules.turnMode !== 'sequential';
   const dynamic = rules.penalty === 'dynamic';
   exponentRow.hidden = !dynamic;
   staticRow.hidden = dynamic;
@@ -61,21 +53,11 @@ function commit(): void {
 
 /**
  * Открыть настройки. current — текущие правила (копируем: изменения сразу отдаём
- * через onChange, чужой объект не трогаем). online — онлайн-заезд: порядок ходов
- * пока поддержан только локально, поэтому в онлайне строку показываем заглушкой
- * (кнопки disabled, всегда последовательный) — включится, когда сядет онлайн-часть.
+ * через onChange, чужой объект не трогаем).
  */
-export function openSettings(
-  current: Rules,
-  online: boolean,
-  onChangeCb: (r: Rules) => void,
-): void {
+export function openSettings(current: Rules, onChangeCb: (r: Rules) => void): void {
   rules = { ...current };
   onChange = onChangeCb;
-  turnModeRow.hidden = false;
-  turnModeType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
-    btn.disabled = online;
-  });
   render();
   openSheet(sheet);
 }
@@ -105,12 +87,6 @@ export function bindSettings(): void {
   staticSlider.addEventListener('input', () => {
     rules.staticTurns = Number(staticSlider.value);
     commit();
-  });
-  turnModeType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
-    bindTap(btn, () => {
-      rules.turnMode = btn.dataset.turn as Rules['turnMode'];
-      commit();
-    });
   });
   turnOrderType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
     bindTap(btn, () => {

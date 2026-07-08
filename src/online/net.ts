@@ -76,16 +76,14 @@ export function serializeState(g: GameState): SerializedState {
 }
 
 export function deserializeState(s: SerializedState, track: Track): GameState {
-  // Правила, счётчик очерёдности и буфер одновременного раунда едут в стейте; на
-  // старые строки без них подставляем дефолт (turn 0 — безопасный старт ротации;
-  // pending null — последовательный режим).
+  // Правила и счётчик очерёдности едут в стейте; на старые строки без них
+  // подставляем дефолт (turn 0 — безопасный старт ротации).
   return {
     ...s,
     // Мержим с дефолтом, чтобы новые поля правил (turnOrder) не были undefined в
     // старых строках, где rules есть, но снят до их появления.
     rules: { ...DEFAULT_RULES, ...s.rules },
     turn: s.turn ?? 0,
-    pending: s.pending ?? null,
     track,
   };
 }

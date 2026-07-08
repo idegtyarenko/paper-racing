@@ -13,7 +13,7 @@ import {
   cloneState,
   seatColor,
 } from '../model/game';
-import { coastMove, applyMove } from '../model/sequential';
+import { coastMove, applyMove } from '../model/turns';
 import { EditorState, editorFromTrack } from '../model/editor';
 import { renderLobby, setLobbyStarting } from '../ui/lobby';
 import {
