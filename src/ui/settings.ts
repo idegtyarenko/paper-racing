@@ -82,6 +82,14 @@ export function openSettings(
 
 /** Навесить обработчики сегментов и ползунка (один раз при инициализации панели). */
 export function bindSettings(): void {
+  // Кнопки-подсказки «?»: тап раскрывает/прячет пояснение в своей строке настройки.
+  sheet.querySelectorAll<HTMLButtonElement>('.setting__help').forEach((btn) => {
+    const hint = btn.closest('.setting')!.querySelector<HTMLElement>('.setting__hint')!;
+    bindTap(btn, () => {
+      hint.hidden = !hint.hidden;
+      btn.setAttribute('aria-expanded', String(!hint.hidden));
+    });
+  });
   penaltyType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
     bindTap(btn, () => {
       rules.penalty = btn.dataset.penalty as Rules['penalty'];

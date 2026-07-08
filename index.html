@@ -189,7 +189,18 @@
       <div id="settingsSheet" class="sheet" hidden>
         <h2 class="sheet__title" data-i18n="settings.title"></h2>
         <div class="setting">
-          <span class="setting__label" data-i18n="settings.penaltyLabel"></span>
+          <div class="setting__labelrow">
+            <span class="setting__label" data-i18n="settings.penaltyLabel"></span>
+            <button
+              type="button"
+              class="setting__help"
+              aria-expanded="false"
+              data-i18n-aria-label="settings.helpLabel"
+            >
+              ?
+            </button>
+          </div>
+          <p class="setting__hint" data-i18n="settings.penaltyHint" hidden></p>
           <div id="penaltyType" class="seg seg--stack">
             <button
               type="button"
@@ -206,7 +217,18 @@
           </div>
         </div>
         <div id="exponentRow" class="setting">
-          <span class="setting__label" data-i18n="settings.exponentLabel"></span>
+          <div class="setting__labelrow">
+            <span class="setting__label" data-i18n="settings.exponentLabel"></span>
+            <button
+              type="button"
+              class="setting__help"
+              aria-expanded="false"
+              data-i18n-aria-label="settings.helpLabel"
+            >
+              ?
+            </button>
+          </div>
+          <p class="setting__hint" data-i18n="settings.exponentHint" hidden></p>
           <div id="exponentType" class="seg">
             <button
               type="button"
@@ -224,14 +246,36 @@
         </div>
         <div id="staticRow" class="setting">
           <div class="setting__head">
-            <span class="setting__label" data-i18n="settings.staticTurnsLabel"></span>
+            <div class="setting__labelrow">
+              <span class="setting__label" data-i18n="settings.staticTurnsLabel"></span>
+              <button
+                type="button"
+                class="setting__help"
+                aria-expanded="false"
+                data-i18n-aria-label="settings.helpLabel"
+              >
+                ?
+              </button>
+            </div>
             <span id="staticTurnsValue" class="setting__value"></span>
           </div>
+          <p class="setting__hint" data-i18n="settings.staticTurnsHint" hidden></p>
           <input id="staticSlider" class="slider" type="range" min="1" max="8" step="1" />
           <div class="slider__scale"><span>1</span><span>8</span></div>
         </div>
         <div id="turnModeRow" class="setting">
-          <span class="setting__label" data-i18n="settings.turnModeLabel"></span>
+          <div class="setting__labelrow">
+            <span class="setting__label" data-i18n="settings.turnModeLabel"></span>
+            <button
+              type="button"
+              class="setting__help"
+              aria-expanded="false"
+              data-i18n-aria-label="settings.helpLabel"
+            >
+              ?
+            </button>
+          </div>
+          <p class="setting__hint" data-i18n="settings.turnModeHint" hidden></p>
           <div id="turnModeType" class="seg">
             <button
               type="button"
@@ -248,7 +292,18 @@
           </div>
         </div>
         <div id="turnOrderRow" class="setting">
-          <span class="setting__label" data-i18n="settings.turnOrderLabel"></span>
+          <div class="setting__labelrow">
+            <span class="setting__label" data-i18n="settings.turnOrderLabel"></span>
+            <button
+              type="button"
+              class="setting__help"
+              aria-expanded="false"
+              data-i18n-aria-label="settings.helpLabel"
+            >
+              ?
+            </button>
+          </div>
+          <p class="setting__hint" data-i18n="settings.turnOrderHint" hidden></p>
           <div id="turnOrderType" class="seg">
             <button
               type="button"

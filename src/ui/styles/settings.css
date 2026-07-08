@@ -25,6 +25,56 @@
   color: #4a4636;
 }
 
+/* Подпись и кнопка-подсказка «?» рядом: держатся вместе слева. */
+.setting__labelrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Круглая кнопка «?» — раскрывает пояснение к настройке под подписью. */
+.setting__help {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  color: #8a8575;
+  background: #fff;
+  border: 1px solid #b7b0a0;
+  border-radius: 50%;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.setting__help[aria-expanded='true'] {
+  color: #fff;
+  background: #0a8a4f;
+  border-color: #0a8a4f;
+}
+
+@media (hover: hover) {
+  .setting__help:hover:not([aria-expanded='true']) {
+    background: #f0ecdf;
+  }
+}
+
+/* Раскрытое пояснение к настройке. */
+.setting__hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #6b6656;
+}
+
+.setting__hint[hidden] {
+  display: none;
+}
+
 .setting__value {
   font-size: 16px;
   font-weight: 700;
