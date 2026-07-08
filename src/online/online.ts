@@ -125,7 +125,10 @@ function handlePresence(next: Set<string>): void {
  */
 function handleStatus(ok: boolean): void {
   if (!code) return; // после close() события мёртвого канала инертны
-  if (ok) fetchGame(code).then(applyRow).catch(() => {});
+  if (ok)
+    fetchGame(code)
+      .then(applyRow)
+      .catch(() => {});
   if (connected !== ok) {
     connected = ok;
     handlers?.onConnection(ok);
