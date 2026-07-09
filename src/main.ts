@@ -85,7 +85,8 @@ function redraw(): void {
 
 function updateUI(): void {
   const net = online.netTurn(game);
-  updatePanel(mode, editor, game, raceTrack?.startPoints.length ?? 6, net);
+  const aiTurn = !!(game && aiSeats?.[game.current]);
+  updatePanel(mode, editor, game, raceTrack?.startPoints.length ?? 6, net, aiTurn);
   renderTurnQueue(mode === 'race' ? game : null);
 }
 
