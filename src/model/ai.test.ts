@@ -55,8 +55,10 @@ const rngConst = (v: number) => (): number => v;
 describe('buildNavField', () => {
   it('покрывает все узлы дороги конечным расстоянием', () => {
     track.inside.forEach((k) => {
-      expect(nav.dist.get(k), `нет расстояния для ${JSON.stringify(unkey(k))}`)
-        .toBeGreaterThan(0);
+      expect(
+        nav.dist.get(k),
+        `нет расстояния для ${JSON.stringify(unkey(k))}`,
+      ).toBeGreaterThan(0);
     });
   });
 
@@ -98,11 +100,7 @@ describe('navAt', () => {
 });
 
 /** Прогнать гонку, где всеми местами управляет бот заданной сложности. */
-function botRace(
-  players: number,
-  difficulty: Difficulty,
-  maxTurns: number,
-): GameState {
+function botRace(players: number, difficulty: Difficulty, maxTurns: number): GameState {
   const state = gameOn(track, players);
   const rng = rngConst(0.99); // без epsilon-случайности — детерминированный прогон
   for (let i = 0; i < maxTurns && state.phase === 'race'; i++) {
@@ -210,9 +208,7 @@ describe('chooseMove', () => {
     const cand = chooseMove(state, nav, 'hard')!;
     const chosen = computeOutcome(track, state.rules, me.pos, cand.target);
     const minSkip = Math.min(
-      ...cands.map(
-        (c) => computeOutcome(track, state.rules, me.pos, c.target).skipTurns,
-      ),
+      ...cands.map((c) => computeOutcome(track, state.rules, me.pos, c.target).skipTurns),
     );
     expect(chosen.skipTurns).toBe(minSkip);
   });
