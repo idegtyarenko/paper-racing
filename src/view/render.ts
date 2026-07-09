@@ -4,6 +4,7 @@ import { Vec, Polyline, add, sub, scale, normalize, lerp } from '../geometry';
 import { Track } from '../model/track';
 import { EditorState, Arrow } from '../model/editor';
 import { GameState, Candidate } from '../model/game';
+import { REALISTIC_GRIP, REALISTIC_ACCEL } from '../config';
 import { Camera } from './camera';
 
 export interface AppView {
@@ -266,6 +267,41 @@ function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): 
   }
 }
 
+/**
+ * Заливка «круга сцепления» реалистичной физики — зоны вокруг точки наката
+ * C = pos + vel, внутри которой лежат точки-кандидаты. Это круг радиуса
+ * REALISTIC_GRIP, срезанный спереди хордой на расстоянии REALISTIC_ACCEL (потолок
+ * разгона); на старте (vel = 0) — просто круг радиуса REALISTIC_ACCEL вокруг болида.
+ * Рисуется бледной заливкой без обводки — обозначить границу с минимумом шума.
+ */
+function drawGripArea(
+  ctx: CanvasRenderingContext2D,
+  s: number,
+  pos: Vec,
+  vel: Vec,
+  color: string,
+): void {
+  const speed = Math.hypot(vel.x, vel.y);
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.1;
+  ctx.beginPath();
+  if (speed === 0) {
+    ctx.arc(pos.x * s, pos.y * s, REALISTIC_ACCEL * s, 0, Math.PI * 2);
+  } else {
+    const cx = (pos.x + vel.x) * s;
+    const cy = (pos.y + vel.y) * s;
+    const phi = Math.atan2(vel.y, vel.x); // направление движения = продольная ось
+    // ±θ0 от направления — где круг сцепления встречает срез потолка разгона
+    // (cos θ0 = ACCEL/GRIP). Большую дугу (сзади) замыкаем хордой спереди.
+    const th0 = Math.acos(Math.min(1, Math.max(-1, REALISTIC_ACCEL / REALISTIC_GRIP)));
+    ctx.arc(cx, cy, REALISTIC_GRIP * s, phi + th0, phi + 2 * Math.PI - th0);
+    ctx.closePath();
+  }
+  ctx.fill();
+  ctx.restore();
+}
+
 function drawRace(
   ctx: CanvasRenderingContext2D,
   s: number,
@@ -323,6 +359,8 @@ function drawRace(
   // Кандидаты хода текущего игрока.
   if (cands && game.phase === 'race') {
     const p = game.players[game.current];
+    // Заливка зоны сцепления — под точками, только в реалистичной физике.
+    if (game.rules.physics === 'realistic') drawGripArea(ctx, s, p.pos, p.vel, p.color);
     if (hover && !hover.blocked) {
       ctx.save();
       ctx.strokeStyle = p.color;
