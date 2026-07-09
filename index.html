@@ -91,12 +91,45 @@
             class="button button--center"
             data-i18n="modeSelect.online"
           ></button>
-          <button id="modeAI" class="button button--center mode-soon" disabled>
-            <span data-i18n="modeSelect.ai"></span>
-            <span class="mode-soon__badge" data-i18n="modeSelect.soon"></span>
-          </button>
+          <button
+            id="modeAI"
+            class="button button--center"
+            data-i18n="modeSelect.ai"
+          ></button>
           <button
             id="modeBack"
+            class="button button--center"
+            data-i18n="buttons.back"
+          ></button>
+        </div>
+        <div id="aiButtons" class="panel__group" hidden>
+          <div id="aiDifficulty" class="panel__group">
+            <button
+              type="button"
+              class="button button--center"
+              data-difficulty="easy"
+              data-i18n="aiSelect.easy"
+            ></button>
+            <button
+              type="button"
+              class="button button--center"
+              data-difficulty="medium"
+              data-i18n="aiSelect.medium"
+            ></button>
+            <button
+              type="button"
+              class="button button--center"
+              data-difficulty="hard"
+              data-i18n="aiSelect.hard"
+            ></button>
+          </div>
+          <button
+            id="aiSettingsBtn"
+            class="button button--center"
+            data-i18n="settings.open"
+          ></button>
+          <button
+            id="aiBack"
             class="button button--center"
             data-i18n="buttons.back"
           ></button>

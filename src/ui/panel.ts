@@ -5,6 +5,7 @@
 import { KMH_PER_CELL } from '../config';
 import { EditorState, canStepBack } from '../model/editor';
 import { GameState, Player } from '../model/game';
+import { Difficulty } from '../model/ai';
 import { len } from '../geometry';
 import { strings } from '../strings';
 import { coarsePointer, bindTap, openSheet, closeOverlay, bindOverlayClose } from './dom';
@@ -17,6 +18,7 @@ const statusEl = statusElement();
 
 const editButtons = document.getElementById('editButtons')!;
 const modeButtons = document.getElementById('modeButtons')!;
+const aiButtons = document.getElementById('aiButtons')!;
 const lobbyButtons = document.getElementById('lobbyButtons')!;
 const playersButtons = document.getElementById('playersButtons')!;
 const raceButtons = document.getElementById('raceButtons')!;
@@ -42,8 +44,15 @@ const modeOnlineBtn = document.getElementById('modeOnline') as HTMLButtonElement
 const modeBackBtn = document.getElementById('modeBack') as HTMLButtonElement;
 const joinByCodeBtn = document.getElementById('joinByCode') as HTMLButtonElement;
 
-/** Режим панели: рисование трассы, выбор режима/числа игроков, лобби, гонка. */
-export type PanelMode = 'edit' | 'mode' | 'players' | 'lobby' | 'race';
+// Режим «С компьютером»: кнопка режима и экран выбора сложности ботов.
+const modeAiBtn = document.getElementById('modeAI') as HTMLButtonElement;
+const aiDifficulty = document.getElementById('aiDifficulty')!;
+const aiSettingsBtn = document.getElementById('aiSettingsBtn') as HTMLButtonElement;
+const aiBackBtn = document.getElementById('aiBack') as HTMLButtonElement;
+
+/** Режим панели: рисование трассы, выбор режима/числа игроков/сложности ботов,
+ *  лобби, гонка. */
+export type PanelMode = 'edit' | 'mode' | 'players' | 'ai' | 'lobby' | 'race';
 
 export interface PanelHandlers {
   /** Шаг назад в редакторе трассы. */
@@ -66,6 +75,12 @@ export interface PanelHandlers {
   onModeLocal: () => void;
   /** Шаг выбора режима: онлайн (открыть диалог имени → создать игру). */
   onModeOnline: () => void;
+  /** Шаг выбора режима: с компьютером (перейти к выбору сложности ботов). */
+  onModeAI: () => void;
+  /** Выбрана сложность ботов — сразу стартуем гонку против компьютера. */
+  onAiDifficulty: (d: Difficulty) => void;
+  /** Назад из шага выбора сложности ботов. */
+  onAiBack: () => void;
   /** Назад из шага выбора режима. */
   onModeBack: () => void;
   /** Открыть диалог входа по коду (с экрана рисования). */
@@ -136,6 +151,12 @@ export function bindButtons(h: PanelHandlers): void {
   bindTap(settingsBtn, h.onOpenSettings);
   bindTap(modeLocalBtn, h.onModeLocal);
   bindTap(modeOnlineBtn, h.onModeOnline);
+  bindTap(modeAiBtn, h.onModeAI);
+  aiDifficulty.querySelectorAll<HTMLButtonElement>('[data-difficulty]').forEach((btn) => {
+    bindTap(btn, () => h.onAiDifficulty(btn.dataset.difficulty as Difficulty));
+  });
+  bindTap(aiSettingsBtn, h.onOpenSettings);
+  bindTap(aiBackBtn, h.onAiBack);
   bindTap(modeBackBtn, h.onModeBack);
   bindTap(joinByCodeBtn, h.onJoinByCode);
   bindTap(skipBtn, h.onSkip);
@@ -267,9 +288,11 @@ export function updatePanel(
   game: GameState | null,
   playersMax = 6,
   net: NetTurn | null = null,
+  aiTurn = false,
 ): void {
   editButtons.hidden = mode !== 'edit';
   modeButtons.hidden = mode !== 'mode';
+  aiButtons.hidden = mode !== 'ai';
   lobbyButtons.hidden = mode !== 'lobby';
   playersButtons.hidden = mode !== 'players';
   raceButtons.hidden = mode !== 'race';
@@ -286,6 +309,11 @@ export function updatePanel(
 
   if (mode === 'mode') {
     renderStepStatus(strings.modeSelect.promptBadge, strings.modeSelect.prompt);
+    return;
+  }
+
+  if (mode === 'ai') {
+    renderStepStatus(strings.aiSelect.promptBadge, strings.aiSelect.prompt);
     return;
   }
 
@@ -339,6 +367,11 @@ export function updatePanel(
     return;
   }
   const warn = game.finalTurnsLeft !== null ? strings.race.finalWarn : '';
+  if (aiTurn) {
+    // Ходит бот: подсказка «нажми на точку» неуместна — человек просто ждёт.
+    statusEl.textContent = `${strings.race.driver(cur.name)}${warn}`;
+    return;
+  }
   const hint = coarsePointer ? strings.race.hintTouch : strings.race.hintMouse;
   statusEl.textContent = `${strings.race.driver(cur.name)} ${hint}${warn}`;
 }

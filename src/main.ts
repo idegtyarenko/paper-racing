@@ -4,8 +4,18 @@
 import './ui/styles/index.css';
 import { Track, finalizeTrack } from './model/track';
 import { newEditor, stepBack, confirmEdges } from './model/editor';
-import { GameState, Candidate, Rules, DEFAULT_RULES, newGame } from './model/game';
-import { candidates, applyMove } from './model/turns';
+import {
+  GameState,
+  Candidate,
+  Rules,
+  DEFAULT_RULES,
+  MAX_PLAYERS,
+  newGame,
+} from './model/game';
+import { candidates, applyMove, coastMove } from './model/turns';
+import { NavField, Difficulty, buildNavField, chooseMove } from './model/ai';
+import { strings } from './strings';
+import { AI_MOVE_DELAY_MS } from './config';
 import { render, AppView } from './view/render';
 import { Bounds, polylineBounds } from './view/camera';
 import * as vp from './view/viewport';
@@ -36,6 +46,13 @@ let game: GameState | null = null;
 let cands: Candidate[] | null = null;
 /** Правила заезда, выбранные в настройках (⚙). В онлайне их задаёт хост. */
 let raceRules: Rules = { ...DEFAULT_RULES };
+/** Гонка против компьютера: какие места за ботами (index = seat), null — ботов нет. */
+let aiSeats: boolean[] | null = null;
+/** Навигационное поле ботов для текущей трассы (строится на старте AI-гонки). */
+let aiNav: NavField | null = null;
+let aiDifficulty: Difficulty = 'medium';
+/** Таймер отложенного хода бота — гасится при любом выходе из гонки. */
+let aiTimer: number | null = null;
 
 /** Bbox содержимого для fit/clamp: трасса гонки или редактируемая трасса.
  *  Провайдер границ для вьюпорта — «что сейчас на экране» знает приложение. */
@@ -72,10 +89,47 @@ function updateUI(): void {
   renderTurnQueue(mode === 'race' ? game : null);
 }
 
-/** Может ли этот клиент ходить сейчас: в локальной игре — всегда, в онлайне — на своём месте. */
+/** Может ли этот клиент ходить сейчас: в локальной игре — всегда (кроме хода
+ *  бота), в онлайне — на своём месте. */
 function myTurn(): boolean {
+  if (game && aiSeats?.[game.current]) return false;
   if (!session.active()) return true;
   return game !== null && session.mySeat() === game.current;
+}
+
+function cancelAiMove(): void {
+  if (aiTimer !== null) {
+    clearTimeout(aiTimer);
+    aiTimer = null;
+  }
+}
+
+/**
+ * Цикл ходов ботов: если сейчас очередь бота, походить им после короткой паузы
+ * (человек успевает следить) и продолжить, пока очередь не вернётся к человеку
+ * или гонка не кончится. Пауза сбрасывается при выходе из гонки (cancelAiMove).
+ */
+function scheduleAiMove(): void {
+  if (aiTimer !== null) return;
+  if (!game || game.phase !== 'race' || !aiSeats?.[game.current]) return;
+  aiTimer = window.setTimeout(() => {
+    aiTimer = null;
+    if (!game || game.phase !== 'race' || !aiSeats?.[game.current] || !aiNav) return;
+    const cand = chooseMove(game, aiNav, aiDifficulty);
+    if (cand) applyMove(game, cand);
+    else coastMove(game); // все кандидаты заняты соперниками — пас по инерции
+    refreshCands();
+    updateUI();
+    redraw();
+    scheduleAiMove();
+  }, AI_MOVE_DELAY_MS);
+}
+
+/** Выйти из режима игры с ботами (новая настройка гонки / выход в редактор). */
+function clearAi(): void {
+  cancelAiMove();
+  aiSeats = null;
+  aiNav = null;
 }
 
 /**
@@ -94,6 +148,7 @@ function commitMove(cand: Candidate): void {
   refreshCands();
   updateUI();
   redraw();
+  scheduleAiMove(); // в гонке с ботами после хода человека очередь едет к ботам
 }
 
 function refreshCands(): void {
@@ -137,7 +192,8 @@ function goToMode(from: 'edit' | 'race'): void {
     raceTrack = game.track;
   }
   playersReturn = from;
-  mode = onlineAvailable() ? 'mode' : 'players';
+  cancelAiMove(); // гонка с ботами на паузе, пока открыты экраны настройки
+  mode = 'mode';
   updateUI();
   redraw();
 }
@@ -146,6 +202,7 @@ function goToMode(from: 'edit' | 'race'): void {
 function backFromSetup(): void {
   if (playersReturn === 'race') {
     mode = 'race';
+    scheduleAiMove(); // вернулись в гонку с ботами — продолжить их ходы
   } else {
     mode = 'edit';
     stepBack(editor); // ready → direction
@@ -158,6 +215,7 @@ function backFromSetup(): void {
 /** Выбрано число игроков — стартуем локальную гонку на подготовленной трассе. */
 function startRace(playerCount: number): void {
   if (!raceTrack) return;
+  clearAi();
   game = newGame(raceTrack, playerCount, raceRules);
   mode = 'race';
   vp.fitToContent();
@@ -166,8 +224,32 @@ function startRace(playerCount: number): void {
   redraw();
 }
 
+/**
+ * Выбрана сложность — стартуем гонку против компьютера: человек на месте 0
+ * («Красный», поул — стартовая клетка ближе всех к линии), остальные места
+ * (до пяти, сколько влезает на стартовую решётку) за ботами.
+ */
+function startAiRace(difficulty: Difficulty): void {
+  if (!raceTrack) return;
+  clearAi();
+  game = newGame(raceTrack, MAX_PLAYERS, raceRules);
+  aiSeats = game.players.map((_, i) => i !== 0);
+  game.players.forEach((p, i) => {
+    if (aiSeats![i]) p.name = `${strings.aiSelect.botPrefix} ${p.name}`;
+  });
+  aiNav = buildNavField(raceTrack);
+  aiDifficulty = difficulty;
+  mode = 'race';
+  vp.fitToContent();
+  refreshCands();
+  updateUI();
+  redraw();
+  scheduleAiMove();
+}
+
 /** Сбросить всё к чистому редактору (новая трасса / выход из онлайна). */
 function resetToEdit(): void {
+  clearAi();
   game = null;
   raceTrack = null;
   cands = null;
@@ -192,6 +274,7 @@ online.initOnline({
   },
   getGame: () => game,
   setGame: (g) => {
+    clearAi(); // онлайн-гонка заменяет локальную — боты в ней не участвуют
     game = g;
   },
   getRules: () => raceRules,
@@ -237,15 +320,10 @@ bindButtons({
   },
   onChooseSameTrack: () => goToMode('race'),
   onPlayersBack: () => {
-    // С экрана числа игроков назад — к выбору режима (если онлайн доступен) или
-    // сразу в редактор/гонку (когда режимного шага не было).
-    if (onlineAvailable()) {
-      mode = 'mode';
-      updateUI();
-      redraw();
-    } else {
-      backFromSetup();
-    }
+    // С экрана числа игроков назад — к выбору режима (он теперь есть всегда).
+    mode = 'mode';
+    updateUI();
+    redraw();
   },
   onPlayerCount: (n) => startRace(n),
   onOpenSettings: () =>
@@ -263,6 +341,17 @@ bindButtons({
     redraw();
   },
   onModeOnline: () => online.promptCreate(),
+  onModeAI: () => {
+    mode = 'ai';
+    updateUI();
+    redraw();
+  },
+  onAiDifficulty: (d) => startAiRace(d),
+  onAiBack: () => {
+    mode = 'mode';
+    updateUI();
+    redraw();
+  },
   onModeBack: () => backFromSetup(),
   onJoinByCode: () => online.promptJoin(),
   onLobbyStart: () => online.start(),

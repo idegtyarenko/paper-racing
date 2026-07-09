@@ -171,7 +171,7 @@ export function cloneState(g: GameState): GameState {
 }
 
 /** Насколько глубоко точка зашла за край дороги: 0 на дороге, иначе — до ближайшей стенки. */
-function offRoadDepth(track: Track, p: Vec): number {
+export function offRoadDepth(track: Track, p: Vec): number {
   if (onRoad(p, track.outer, track.inner)) return 0;
   return Math.min(
     distPointToPolyline(p, track.outer),

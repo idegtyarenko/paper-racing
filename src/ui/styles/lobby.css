@@ -1,25 +1,5 @@
 /* Экран лобби онлайн-игры: код, список игроков, поля ввода и всплывашка-тост. */
 
-/* Кнопка режима «С компьютером» с бейджем «Скоро». */
-.mode-soon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-.mode-soon__badge {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  color: #8a6d00;
-  background: #fff3cd;
-  border: 1px solid #f0d98c;
-  border-radius: 999px;
-  padding: 1px 8px;
-}
-
 /* Блок с кодом игры. */
 .lobby__code {
   display: flex;
