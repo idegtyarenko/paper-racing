@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { newGame, cloneState, Candidate, Player, DEFAULT_RULES } from './game';
 import { candidates, applyMove, coastMove, playerForTurn, upcomingTurns } from './turns';
-import { WIN_CROSSINGS } from '../config';
+import { WIN_CROSSINGS, REALISTIC_GRIP, REALISTIC_ACCEL } from '../config';
 import { key } from './track';
 import { ringTrack } from './test-fixtures';
 
@@ -63,6 +63,87 @@ describe('candidates', () => {
     g.players[1].skipTurns = 1;
     const inertial = candidates(g).find((c) => c.inertial)!;
     expect(inertial.blocked).toBe(false);
+  });
+});
+
+describe('candidates — реалистичная физика (круг сцепления)', () => {
+  /** Игра с включённой реалистичной физикой. */
+  const realGame = () =>
+    newGame(ringTrack(), 2, { ...DEFAULT_RULES, physics: 'realistic' });
+  /** Ускорение кандидата a = target − (pos + vel). */
+  const accelOf = (c: Candidate, p: Player) => ({
+    x: c.target.x - p.pos.x - p.vel.x,
+    y: c.target.y - p.pos.y - p.vel.y,
+  });
+  /** Максимальный доворот (угол между старой и новой скоростью) среди кандидатов. */
+  function maxTurn(g: ReturnType<typeof realGame>): number {
+    const p = g.players[0];
+    let max = 0;
+    for (const c of candidates(g)) {
+      const nv = { x: c.target.x - p.pos.x, y: c.target.y - p.pos.y };
+      if (nv.x === 0 && nv.y === 0) continue;
+      const cross = p.vel.x * nv.y - p.vel.y * nv.x;
+      const dot = p.vel.x * nv.x + p.vel.y * nv.y;
+      max = Math.max(max, Math.abs(Math.atan2(cross, dot)));
+    }
+    return max;
+  }
+
+  it('цели целочисленны и внутри круга сцепления, ровно один инерционный', () => {
+    const g = realGame();
+    place(g.players[0], [10, 4], [3, 0]);
+    const p = g.players[0];
+    const cs = candidates(g);
+    expect(cs.length).toBeGreaterThan(0);
+    expect(cs.filter((c) => c.inertial)).toHaveLength(1);
+    for (const c of cs) {
+      expect(Number.isInteger(c.target.x)).toBe(true);
+      expect(Number.isInteger(c.target.y)).toBe(true);
+      const a = accelOf(c, p);
+      expect(a.x * a.x + a.y * a.y).toBeLessThanOrEqual(
+        REALISTIC_GRIP * REALISTIC_GRIP + 1e-9,
+      );
+    }
+  });
+
+  it('инерционный кандидат = точка наката pos + vel (a = 0)', () => {
+    const g = realGame();
+    place(g.players[0], [10, 4], [2, 1]);
+    const inertial = candidates(g).find((c) => c.inertial)!;
+    expect(inertial.target).toEqual({ x: 12, y: 5 });
+  });
+
+  it('на старте (vel = 0) разгон ограничен потолком REALISTIC_ACCEL', () => {
+    const g = realGame();
+    place(g.players[0], [10, 4], [0, 0]);
+    const p = g.players[0];
+    for (const c of candidates(g)) {
+      const a = accelOf(c, p);
+      expect(a.x * a.x + a.y * a.y).toBeLessThanOrEqual(
+        REALISTIC_ACCEL * REALISTIC_ACCEL + 1e-9,
+      );
+    }
+  });
+
+  it('тормозит быстрее, чем разгоняется: назад дотягивается дальше вперёд', () => {
+    expect(REALISTIC_ACCEL).toBeLessThan(REALISTIC_GRIP); // предпосылка асимметрии
+    const g = realGame();
+    place(g.players[0], [10, 4], [3, 0]); // едет вправо, продольная ось = x
+    const p = g.players[0];
+    const speeds = candidates(g).map((c) => c.target.x - p.pos.x); // новая скорость по ходу
+    const base = p.vel.x;
+    const speedUp = Math.max(...speeds) - base; // максимальный разгон
+    const brake = base - Math.min(...speeds); // максимальное торможение
+    expect(speedUp).toBe(REALISTIC_ACCEL); // вперёд — ровно потолок разгона
+    expect(brake).toBeGreaterThan(speedUp); // назад — дальше
+  });
+
+  it('чем выше скорость, тем меньше максимальный доворот за ход', () => {
+    const slow = realGame();
+    place(slow.players[0], [10, 4], [2, 0]);
+    const fast = realGame();
+    place(fast.players[0], [10, 4], [5, 0]);
+    expect(maxTurn(fast)).toBeLessThan(maxTurn(slow));
   });
 });
 

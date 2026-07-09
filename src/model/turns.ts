@@ -4,7 +4,8 @@
 // болида, смена очереди и отбытие штрафа, пропуск по инерции (для онлайна).
 // Общий расчёт исхода/победителя/возврата из штрафа — в game.ts.
 
-import { pointOnSegment } from '../geometry';
+import { Vec, pointOnSegment } from '../geometry';
+import { REALISTIC_GRIP, REALISTIC_ACCEL } from '../config';
 import {
   GameState,
   Candidate,
@@ -17,25 +18,75 @@ import {
   decideWinner,
 } from './game';
 
-export function candidates(state: GameState): Candidate[] {
-  const p = state.players[state.current];
-  const occupied = otherPositions(state, state.current);
-  const out: Candidate[] = [];
+/**
+ * Классическая модель Racetrack: 9 целей — ускорение ±1 клетка по каждой оси вокруг
+ * точки наката C = pos + vel.
+ */
+function classicTargets(pos: Vec, vel: Vec): Vec[] {
+  const out: Vec[] = [];
   for (let ay = -1; ay <= 1; ay++) {
     for (let ax = -1; ax <= 1; ax++) {
-      const target = { x: p.pos.x + p.vel.x + ax, y: p.pos.y + p.vel.y + ay };
-      // Ход запрещён, если соперник стоит в конечной точке или отрезок хода
-      // проходит через клетку, где соперник стоит сейчас (проехать «сквозь» нельзя).
-      const blocked = occupied.some((o) => pointOnSegment(o, p.pos, target));
-      out.push({
-        target,
-        blocked,
-        crash: computeOutcome(state.track, state.rules, p.pos, target).crash,
-        inertial: ax === 0 && ay === 0,
-      });
+      out.push({ x: pos.x + vel.x + ax, y: pos.y + vel.y + ay });
     }
   }
   return out;
+}
+
+/**
+ * Реалистичная модель («круг сцепления»): целые узлы вокруг точки наката C = pos + vel,
+ * для которых изменение скорости a = target − C проходит по бюджету сцепления:
+ *  - |a| ≤ REALISTIC_GRIP — общий круг сцепления (делится между разгоном/торможением и
+ *    поворотом: тормозишь в пол — a смотрит назад, на поворот не осталось; и наоборот);
+ *  - вперёд продольная составляющая a·û ≤ REALISTIC_ACCEL (û = vel/|vel|) — потолок
+ *    разгона; назад (торможение) доступен весь GRIP, поэтому тормозит быстрее, чем
+ *    разгоняется;
+ *  - на старте (vel = 0) направления нет: разгон в любую сторону |a| ≤ REALISTIC_ACCEL.
+ * Скорость учитывается сама: доворот на угол θ требует поперечного Δv ≈ |vel|·θ, значит
+ * θ_max ≈ GRIP/|vel| — чем быстрее, тем меньше доворот за ход. Точка наката (a = 0)
+ * всегда в наборе (0 ≤ любой порог), так что инерция/пропуск работают как в классике.
+ */
+function realisticTargets(pos: Vec, vel: Vec): Vec[] {
+  const cx = pos.x + vel.x;
+  const cy = pos.y + vel.y;
+  const speed = Math.hypot(vel.x, vel.y);
+  const grip2 = REALISTIC_GRIP * REALISTIC_GRIP;
+  const accel2 = REALISTIC_ACCEL * REALISTIC_ACCEL;
+  const r = Math.floor(REALISTIC_GRIP); // целых узлов дальше радиуса круга не бывает
+  const EPS = 1e-9;
+  const out: Vec[] = [];
+  for (let ay = -r; ay <= r; ay++) {
+    for (let ax = -r; ax <= r; ax++) {
+      const len2 = ax * ax + ay * ay;
+      if (len2 > grip2 + EPS) continue; // вне круга сцепления
+      if (speed > 0) {
+        const along = (ax * vel.x + ay * vel.y) / speed; // продольно вдоль скорости
+        if (along > REALISTIC_ACCEL + EPS) continue; // потолок разгона вперёд
+      } else if (len2 > accel2 + EPS) {
+        continue; // старт: разгон не больше потолка
+      }
+      out.push({ x: cx + ax, y: cy + ay });
+    }
+  }
+  return out;
+}
+
+export function candidates(state: GameState): Candidate[] {
+  const p = state.players[state.current];
+  const occupied = otherPositions(state, state.current);
+  const cx = p.pos.x + p.vel.x; // точка наката C (чистая инерция, a = 0)
+  const cy = p.pos.y + p.vel.y;
+  const targets =
+    state.rules.physics === 'realistic'
+      ? realisticTargets(p.pos, p.vel)
+      : classicTargets(p.pos, p.vel);
+  return targets.map((target) => ({
+    target,
+    // Ход запрещён, если соперник стоит в конечной точке или отрезок хода проходит
+    // через клетку, где соперник стоит сейчас (проехать «сквозь» нельзя).
+    blocked: occupied.some((o) => pointOnSegment(o, p.pos, target)),
+    crash: computeOutcome(state.track, state.rules, p.pos, target).crash,
+    inertial: target.x === cx && target.y === cy,
+  }));
 }
 
 export function applyMove(state: GameState, cand: Candidate): void {

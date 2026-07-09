@@ -233,7 +233,9 @@ function startRace(playerCount: number): void {
 function startAiRace(difficulty: Difficulty): void {
   if (!raceTrack) return;
   clearAi();
-  game = newGame(raceTrack, MAX_PLAYERS, raceRules);
+  // Бот перебирает ходы по классической модели (ai.ts), поэтому против AI реалистичную
+  // физику пока форсим на классику — hotseat и онлайн играют её как есть.
+  game = newGame(raceTrack, MAX_PLAYERS, { ...raceRules, physics: 'classic' });
   aiSeats = game.players.map((_, i) => i !== 0);
   game.players.forEach((p, i) => {
     if (aiSeats![i]) p.name = `${strings.aiSelect.botPrefix} ${p.name}`;

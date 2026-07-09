@@ -8,6 +8,7 @@ import { CRASH_EXPONENT_STANDARD, CRASH_EXPONENT_STRICT } from '../config';
 import { bindTap, openSheet } from './dom';
 
 const sheet = document.getElementById('settingsSheet')!;
+const physicsType = document.getElementById('physicsType')!;
 const penaltyType = document.getElementById('penaltyType')!;
 const exponentRow = document.getElementById('exponentRow')!;
 const exponentType = document.getElementById('exponentType')!;
@@ -26,6 +27,9 @@ let onChange: ((r: Rules) => void) | null = null;
 
 /** Обновить вид контролов под текущие rules (активные сегменты, значения, видимость строк). */
 function render(): void {
+  physicsType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
+    btn.classList.toggle('seg__btn--active', btn.dataset.physics === rules.physics);
+  });
   penaltyType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
     btn.classList.toggle('seg__btn--active', btn.dataset.penalty === rules.penalty);
   });
@@ -70,6 +74,12 @@ export function bindSettings(): void {
     bindTap(btn, () => {
       hint.hidden = !hint.hidden;
       btn.setAttribute('aria-expanded', String(!hint.hidden));
+    });
+  });
+  physicsType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
+    bindTap(btn, () => {
+      rules.physics = btn.dataset.physics as Rules['physics'];
+      commit();
     });
   });
   penaltyType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {

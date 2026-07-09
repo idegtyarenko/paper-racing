@@ -231,6 +231,34 @@
         <h2 class="sheet__title" data-i18n="settings.title"></h2>
         <div class="setting">
           <div class="setting__labelrow">
+            <span class="setting__label" data-i18n="settings.physicsLabel"></span>
+            <button
+              type="button"
+              class="setting__help"
+              aria-expanded="false"
+              data-i18n-aria-label="settings.helpLabel"
+            >
+              ?
+            </button>
+          </div>
+          <p class="setting__hint" data-i18n="settings.physicsHint" hidden></p>
+          <div id="physicsType" class="seg">
+            <button
+              type="button"
+              class="seg__btn"
+              data-physics="classic"
+              data-i18n="settings.physicsClassic"
+            ></button>
+            <button
+              type="button"
+              class="seg__btn"
+              data-physics="realistic"
+              data-i18n="settings.physicsRealistic"
+            ></button>
+          </div>
+        </div>
+        <div class="setting">
+          <div class="setting__labelrow">
             <span class="setting__label" data-i18n="settings.penaltyLabel"></span>
             <button
               type="button"
