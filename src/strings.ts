@@ -33,6 +33,7 @@ export const strings = {
       finishNarrow: 'Слишком узкое место для старта — выбери пошире.',
       finishMiss: 'Выбери точку внутри трассы.',
     },
+    gestureCancelled: 'Жест прервался, попробуйте ещё раз.',
   },
 
   track: {

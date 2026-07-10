@@ -478,8 +478,10 @@ export function initInput(d: InputDeps): void {
     }
     if (activeId === null || e.pointerId !== activeId) return;
     const g = gesture;
-    if (g && (g.kind === 'draw' || g.kind === 'edge' || g.kind === 'finish'))
+    if (g && (g.kind === 'draw' || g.kind === 'edge' || g.kind === 'finish')) {
       pointerCancel(deps.getEditor());
+      deps.updateUI();
+    }
     gesture = null;
     activeId = null;
     loupe = null;

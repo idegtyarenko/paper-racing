@@ -226,7 +226,7 @@ function previewFinish(st: EditorState, p: Vec): void {
   st.error = false;
 }
 
-/** Прерывание жеста (pointercancel): сбросить незавершённый штрих/линию/драг. */
+/** Прерывание жеста (pointercancel): сбросить незавершённый штрих/линию/драг и сообщить об этом. */
 export function pointerCancel(st: EditorState): void {
   st.drawing = false;
   st.stroke = [];
@@ -235,6 +235,8 @@ export function pointerCancel(st: EditorState): void {
   st.dragEdge = null;
   st.dragIndex = null;
   if (st.phase === 'finish') st.finish = null;
+  st.message = strings.editor.gestureCancelled;
+  st.error = false;
 }
 
 /** Подтвердить кромки и перейти к рисованию старт/финиша. */
