@@ -244,15 +244,95 @@ function drawTrackEdges(
 }
 
 function drawFinishLine(ctx: CanvasRenderingContext2D, s: number, a: Vec, b: Vec): void {
+  const d = sub(b, a);
+  const len = Math.hypot(d.x, d.y);
+  if (len < 1e-9) return;
+  const dir = { x: d.x / len, y: d.y / len };
+  const n = { x: -dir.y, y: dir.x };
+
+  const lenPx = len * s;
+  const rows = 2;
+  const cell = Math.max(2.5, s * 0.2);
+  const bandHalf = (rows * cell) / 2;
+  // Слегка отступаем от краёв трассы, чтобы прямоугольная полоса не
+  // вылезала за изогнутую кромку у самых точек a/b.
+  const inset = Math.min(lenPx * 0.15, bandHalf);
+  const usableLen = Math.max(cell, lenPx - inset * 2);
+  const ax = a.x * s + dir.x * inset;
+  const ay = a.y * s + dir.y * inset;
+  const cols = Math.max(1, Math.round(usableLen / cell));
+  const actualCell = usableLen / cols;
+
   ctx.save();
-  ctx.strokeStyle = '#111';
-  ctx.lineWidth = 3;
-  ctx.setLineDash([s * 0.35, s * 0.3]);
-  ctx.beginPath();
-  ctx.moveTo(a.x * s, a.y * s);
-  ctx.lineTo(b.x * s, b.y * s);
-  ctx.stroke();
+  // Лёгкая тень под флагом для объёма.
+  ctx.save();
+  ctx.translate(0.5, 0.7);
+  ctx.fillStyle = 'rgba(0,0,0,0.1)';
+  for (let i = 0; i < cols; i++) {
+    for (let r = 0; r < rows; r++) {
+      if ((i + r) % 2 !== 0) continue;
+      const cx =
+        ax + dir.x * (i + 0.5) * actualCell + n.x * (-bandHalf + (r + 0.5) * cell);
+      const cy =
+        ay + dir.y * (i + 0.5) * actualCell + n.y * (-bandHalf + (r + 0.5) * cell);
+      drawCheckerCell(ctx, cx, cy, dir, n, actualCell, cell);
+    }
+  }
   ctx.restore();
+
+  for (let i = 0; i < cols; i++) {
+    for (let r = 0; r < rows; r++) {
+      const dark = (i + r) % 2 === 0;
+      ctx.fillStyle = dark ? '#222' : '#f6f6f2';
+      const cx =
+        ax + dir.x * (i + 0.5) * actualCell + n.x * (-bandHalf + (r + 0.5) * cell);
+      const cy =
+        ay + dir.y * (i + 0.5) * actualCell + n.y * (-bandHalf + (r + 0.5) * cell);
+      drawCheckerCell(ctx, cx, cy, dir, n, actualCell, cell);
+    }
+  }
+
+  // Тонкая рамка по периметру полосы для аккуратного края.
+  ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  const bx = ax + dir.x * usableLen;
+  const by = ay + dir.y * usableLen;
+  const p1 = { x: ax + n.x * -bandHalf, y: ay + n.y * -bandHalf };
+  const p2 = { x: bx + n.x * -bandHalf, y: by + n.y * -bandHalf };
+  const p3 = { x: bx + n.x * bandHalf, y: by + n.y * bandHalf };
+  const p4 = { x: ax + n.x * bandHalf, y: ay + n.y * bandHalf };
+  ctx.moveTo(p1.x, p1.y);
+  ctx.lineTo(p2.x, p2.y);
+  ctx.moveTo(p3.x, p3.y);
+  ctx.lineTo(p4.x, p4.y);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawCheckerCell(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  dir: Vec,
+  n: Vec,
+  cellAlongDir: number,
+  cellAlongN: number,
+): void {
+  const hd = cellAlongDir / 2;
+  const hn = cellAlongN / 2;
+  const p1 = { x: cx - dir.x * hd - n.x * hn, y: cy - dir.y * hd - n.y * hn };
+  const p2 = { x: cx + dir.x * hd - n.x * hn, y: cy + dir.y * hd - n.y * hn };
+  const p3 = { x: cx + dir.x * hd + n.x * hn, y: cy + dir.y * hd + n.y * hn };
+  const p4 = { x: cx - dir.x * hd + n.x * hn, y: cy - dir.y * hd + n.y * hn };
+  ctx.beginPath();
+  ctx.moveTo(p1.x, p1.y);
+  ctx.lineTo(p2.x, p2.y);
+  ctx.lineTo(p3.x, p3.y);
+  ctx.lineTo(p4.x, p4.y);
+  ctx.closePath();
+  ctx.fill();
 }
 
 function drawArrow(
