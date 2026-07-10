@@ -345,7 +345,7 @@ function drawArrow(
 ): void {
   const d = normalize(sub(tip, from));
   const n = { x: -d.y, y: d.x };
-  const headBase = sub(tip, scale(d, 0.8));
+  const headBase = sub(tip, scale(d, 0.5));
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
   ctx.lineWidth = width;
@@ -354,8 +354,8 @@ function drawArrow(
   ctx.moveTo(from.x * s, from.y * s);
   ctx.lineTo(headBase.x * s, headBase.y * s);
   ctx.stroke();
-  const l = add(headBase, scale(n, 0.45));
-  const r = sub(headBase, scale(n, 0.45));
+  const l = add(headBase, scale(n, 0.24));
+  const r = sub(headBase, scale(n, 0.24));
   ctx.beginPath();
   ctx.moveTo(tip.x * s, tip.y * s);
   ctx.lineTo(l.x * s, l.y * s);
@@ -426,14 +426,14 @@ function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): 
 
   if (ed.phase === 'direction' && ed.arrows) {
     for (const arrow of ed.arrows)
-      drawArrow(ctx, s, arrow.from, arrow.tip, ARROW_COLOR, 4);
+      drawArrow(ctx, s, arrow.from, arrow.tip, ARROW_COLOR, 2.5);
   }
 
   if (ed.phase === 'ready' && ed.arrows && ed.forward) {
     const chosen = ed.arrows.find(
       (a: Arrow) => a.forward.x === ed.forward!.x && a.forward.y === ed.forward!.y,
     );
-    if (chosen) drawArrow(ctx, s, chosen.from, chosen.tip, ARROW_COLOR, 4);
+    if (chosen) drawArrow(ctx, s, chosen.from, chosen.tip, ARROW_COLOR, 2.5);
   }
 }
 
@@ -489,9 +489,9 @@ function drawRace(
     ctx,
     s,
     add(m, scale(track.forward, 0.8)),
-    add(m, scale(track.forward, 2.6)),
+    add(m, scale(track.forward, 2.0)),
     ARROW_COLOR,
-    2.5,
+    2,
   );
 
   // Следы обоих игроков. Насыщенность и толщина следа растут со скоростью хода;
@@ -552,7 +552,7 @@ function drawRace(
       ctx.stroke();
       ctx.restore();
     }
-    for (const c of p.crashes) drawCrashMark(ctx, s, c);
+    for (const c of p.crashes) drawCrashMark(ctx, s, c, p.color);
   }
 
   // Болиды.
@@ -623,17 +623,30 @@ function drawRace(
   }
 }
 
-function drawCrashMark(ctx: CanvasRenderingContext2D, s: number, at: Vec): void {
-  const r = Math.max(4, s * 0.25);
+function drawCrashMark(
+  ctx: CanvasRenderingContext2D,
+  s: number,
+  at: Vec,
+  color: string,
+): void {
+  const r = Math.max(2.5, s * 0.14);
   const x = at.x * s;
   const y = at.y * s;
-  ctx.strokeStyle = '#b3261e';
-  ctx.lineWidth = 2.5;
   ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(x - r, y - r);
-  ctx.lineTo(x + r, y + r);
-  ctx.moveTo(x + r, y - r);
-  ctx.lineTo(x - r, y + r);
+  const path = (): void => {
+    ctx.beginPath();
+    ctx.moveTo(x - r, y - r);
+    ctx.lineTo(x + r, y + r);
+    ctx.moveTo(x + r, y - r);
+    ctx.lineTo(x - r, y + r);
+  };
+  // Белый нимб под крестиком — контраст над следом того же цвета.
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 3;
+  path();
+  ctx.stroke();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.6;
+  path();
   ctx.stroke();
 }
