@@ -419,6 +419,9 @@ export function initInput(d: InputDeps): void {
     const game = deps.getGame();
     if (deps.getMode() === 'edit') handleEditDown(e, scr, touch);
     else if (game && game.phase === 'race') handleRaceDown(e, scr, touch);
+    // Гонка окончена (game.phase !== 'race') — прицеливаться уже не по чему,
+    // остаётся только пан по финальной карте.
+    else if (game) beginPan(scr.x, scr.y, e.pointerId);
     deps.redraw();
   });
 
