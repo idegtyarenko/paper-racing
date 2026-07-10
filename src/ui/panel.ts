@@ -236,7 +236,7 @@ function renderPlayerCards(game: GameState, present?: boolean[]): void {
   });
 }
 
-/** Отрисовка сообщения редактора: заметный бейдж «Шаг N» + инструкция. */
+/** Отрисовка сообщения редактора: заметный бейдж «Трасса: шаг N из 4» + инструкция. */
 function renderEditStatus(editor: EditorState): void {
   statusEl.className = 'status';
   if (editor.error) {
@@ -244,7 +244,7 @@ function renderEditStatus(editor: EditorState): void {
     statusEl.textContent = editor.message;
     return;
   }
-  const m = editor.message.match(/^(Шаг \d+(?: из \d+)?)\.\s*(.*)$/s);
+  const m = editor.message.match(/^(Трасса: шаг \d+ из \d+)\.\s*(.*)$/s);
   if (m) {
     renderStepStatus(m[1], m[2]);
   } else {
