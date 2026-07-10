@@ -308,8 +308,15 @@ export function stepBack(st: EditorState): void {
       resetFinish(st);
       break;
     case 'ready':
-      st.forward = null;
-      setPhase(st, 'direction');
+      // Провал финальной валидации (узко/нет места на старт) — не гонять по шагам
+      // direction→finish→adjust вручную, а сразу вернуть к тюнингу кромок, где
+      // ширину и правда можно поправить.
+      if (st.error) {
+        resetAdjust(st);
+      } else {
+        st.forward = null;
+        setPhase(st, 'direction');
+      }
       break;
     // 'center' — это первый шаг, назад некуда.
   }
