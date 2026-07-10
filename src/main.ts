@@ -42,6 +42,13 @@ let editor = newEditor();
 let raceTrack: Track | null = null;
 /** Куда вернуться из шага выбора игроков по «Назад»: в редактор или в гонку. */
 let playersReturn: 'edit' | 'race' = 'edit';
+/**
+ * Последний локальный режим (hotseat/AI) и его параметры — чтобы «По той же
+ * трассе» стартовала одним тапом, без повторного мастера выбора режима/игроков.
+ * Онлайн сюда не попадает: рематч с тем же составом участников — отдельная задача.
+ */
+let lastLocalRace:
+  { mode: 'local'; count: number } | { mode: 'ai'; difficulty: Difficulty } | null = null;
 let game: GameState | null = null;
 let cands: Candidate[] | null = null;
 /** Правила заезда, выбранные в настройках (⚙). В онлайне их задаёт хост. */
@@ -218,6 +225,7 @@ function startRace(playerCount: number): void {
   if (!raceTrack) return;
   clearAi();
   game = newGame(raceTrack, playerCount, raceRules);
+  lastLocalRace = { mode: 'local', count: playerCount };
   mode = 'race';
   vp.fitToContent();
   refreshCands();
@@ -242,6 +250,7 @@ function startAiRace(difficulty: Difficulty): void {
   });
   aiNav = buildNavField(raceTrack);
   aiDifficulty = difficulty;
+  lastLocalRace = { mode: 'ai', difficulty };
   mode = 'race';
   vp.fitToContent();
   refreshCands();
@@ -279,6 +288,7 @@ online.initOnline({
   setGame: (g) => {
     clearAi(); // онлайн-гонка заменяет локальную — боты в ней не участвуют
     game = g;
+    lastLocalRace = null; // онлайн-гонка — не локальный рематч, сбрасываем «ту же трассу»
   },
   getRules: () => raceRules,
   setEditor: (e) => {
@@ -321,7 +331,16 @@ bindButtons({
     if (sel) commitMove(sel);
     else online.retryMove(); // десктоп: выделение не хранится — повторяем последний ход
   },
-  onChooseSameTrack: () => goToMode('race'),
+  onChooseSameTrack: () => {
+    if (!game) return;
+    if (lastLocalRace) {
+      raceTrack = game.track;
+      if (lastLocalRace.mode === 'local') startRace(lastLocalRace.count);
+      else startAiRace(lastLocalRace.difficulty);
+      return;
+    }
+    goToMode('race');
+  },
   onPlayersBack: () => {
     // С экрана числа игроков назад — к выбору режима (он теперь есть всегда).
     mode = 'mode';
