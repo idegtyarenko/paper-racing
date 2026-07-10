@@ -375,7 +375,10 @@ function hostOnline(name: string): Promise<void> {
 
 /**
  * Присоединиться к онлайн-игре по коду. inJoinDialog — ошибку показываем прямо в
- * диалоге входа (он остаётся открыт); иначе (вход по ссылке) — тостом.
+ * диалоге входа (он остаётся открыт); иначе (вход по битой ссылке-приглашению) —
+ * открываем диалог входа с уже заполненным кодом и постоянным текстом ошибки, чтобы
+ * было видно, что пошло не так, и можно было сразу попробовать другой код — вместо
+ * тоста, который гас через пару секунд и оставлял в редакторе без объяснений.
  */
 function joinOnline(code: string, name: string, inJoinDialog: boolean): Promise<void> {
   return guarded(async () => {
@@ -396,8 +399,15 @@ function joinOnline(code: string, name: string, inJoinDialog: boolean): Promise<
       deps.updateUI();
       if (deps.getMode() === 'lobby') renderLobbyPanel();
     } catch (e) {
-      if (inJoinDialog) showJoinError(joinErrorText(e));
-      else showToast(joinErrorText(e));
+      if (inJoinDialog) {
+        showJoinError(joinErrorText(e));
+      } else {
+        openJoinDialog(name, code, (code2, name2) => {
+          rememberName(name2);
+          joinOnline(code2, name2, true);
+        });
+        showJoinError(joinErrorText(e));
+      }
     } finally {
       if (inJoinDialog) setJoinBusy(false);
     }
