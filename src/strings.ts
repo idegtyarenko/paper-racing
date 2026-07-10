@@ -195,6 +195,7 @@ export const strings = {
   buttons: {
     next: 'Вперед →',
     back: '← Назад',
+    redraw: '↺ Перерисовать',
     newRace: '🏁 Новый заезд',
     confirmMove: '✓ Едем!',
     sameTrack: '🔄 По той же трассе',

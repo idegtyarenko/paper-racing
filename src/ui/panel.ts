@@ -301,6 +301,9 @@ export function updatePanel(
   if (mode === 'edit') {
     renderEditStatus(editor);
     backBtn.disabled = !canStepBack(editor);
+    // На шаге 2 «← Назад» стирает всю нарисованную трассу — называем действие честно.
+    backBtn.textContent =
+      editor.phase === 'adjust' ? strings.buttons.redraw : strings.buttons.back;
     nextBtn.hidden = editor.phase !== 'adjust';
     // «Войти по коду» уместна только на первом шаге; дальше по мастеру она мешает.
     joinByCodeBtn.hidden = !onlineEnabled || editor.phase !== 'center';
