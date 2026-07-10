@@ -18,14 +18,15 @@
     <div class="app">
       <div class="app__board">
         <canvas id="board"></canvas>
-        <div
-          id="turnQueue"
-          class="turn-queue"
-          hidden
-          data-i18n-aria-label="race.queueLabel"
-          data-i18n-title="race.queueLabel"
-          role="img"
-        ></div>
+        <div id="turnQueue" class="turn-queue" hidden>
+          <span class="turn-queue__label" data-i18n="race.queueLabel"></span>
+          <div
+            id="turnQueueDots"
+            class="turn-queue__dots"
+            data-i18n-aria-label="race.queueLabel"
+            role="img"
+          ></div>
+        </div>
         <div class="zoom-ctl" aria-hidden="true">
           <button id="zoomIn" type="button" class="zoom-ctl__btn" aria-label="Приблизить">
             ＋

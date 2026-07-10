@@ -23,6 +23,21 @@
   display: none;
 }
 
+/* Текстовая подпись полосы — поясняет, что означают точки. */
+.turn-queue__label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b6a63;
+  white-space: nowrap;
+}
+
+.turn-queue__dots {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* Точка очереди — болид соответствующего цвета. */
 .turn-queue__dot {
   flex: 0 0 auto;
