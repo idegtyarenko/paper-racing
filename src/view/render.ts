@@ -26,6 +26,42 @@ const PAPER = '#fbfaf4';
 const GRID_LIGHT = '#e2e8f2';
 const GRID_HEAVY = '#c9d6e8';
 const ARROW_COLOR = '#0a8a4f';
+/** Заливка внетрассовой территории — холодный серо-голубой в тон сетки, чтобы
+ *  белое полотно трассы читалось контрастом без линии-границы. Полупрозрачная,
+ *  чтобы сетка просвечивала сквозь заливку, а не пропадала под ней. */
+const OFF_TRACK = '#c2cfe0';
+const OFF_TRACK_ALPHA = 0.3;
+/** Тонкая светло-серая линия по кромкам трассы — подчёркивает край поверх заливки. */
+const TRACK_BORDER = '#9aa6b8';
+const TRACK_BORDER_WIDTH = 1.5;
+
+// Насыщенность и толщина следа растут со скоростью хода (длиной сегмента): быстрые
+// прямые рисуются плотной жирной линией, медленное ковыряние в поворотах — бледной
+// тонкой. Цвет — НЕПРОЗРАЧНЫЙ, подмешанный к бумаге (а не globalAlpha): так линия не
+// даёт тёмных точек на стыках сегментов и в пересечениях с сеткой, где полупрозрачные
+// штрихи накладывались бы вдвойне. TRAIL_SPEED_REF (клеток/ход) — скорость, при
+// которой след уже максимально насыщенный.
+const TRAIL_SPEED_REF = 6;
+/** Доля цвета болида в бумаге на самом медленном ходу (0 — почти бумага). */
+const TRAIL_MIX_MIN = 0.14;
+const TRAIL_WIDTH_MIN = 1.5;
+const TRAIL_WIDTH_MAX = 3;
+
+/** Линейная интерполяция двух hex-цветов (#rrggbb) → непрозрачный rgb(). */
+function mixHex(a: string, b: string, t: number): string {
+  const pa = [
+    parseInt(a.slice(1, 3), 16),
+    parseInt(a.slice(3, 5), 16),
+    parseInt(a.slice(5, 7), 16),
+  ];
+  const pb = [
+    parseInt(b.slice(1, 3), 16),
+    parseInt(b.slice(3, 5), 16),
+    parseInt(b.slice(5, 7), 16),
+  ];
+  const c = pa.map((v, i) => Math.round(v + (pb[i] - v) * t));
+  return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+}
 
 export function render(ctx: CanvasRenderingContext2D, app: AppView): void {
   const dpr = window.devicePixelRatio || 1;
@@ -146,6 +182,53 @@ function strokePoly(
   ctx.stroke();
 }
 
+/** Добавить замкнутый контур полилинии в текущий path (без заливки/обводки). */
+function addPolyPath(ctx: CanvasRenderingContext2D, s: number, poly: Polyline): void {
+  if (poly.length < 2) return;
+  ctx.moveTo(poly[0].x * s, poly[0].y * s);
+  for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i].x * s, poly[i].y * s);
+  ctx.closePath();
+}
+
+/**
+ * Заливка всей внетрассовой территории: полотно (кольцо между outer и inner)
+ * остаётся бумажно-белым, а всё вокруг — снаружи внешней кромки и во «дворе»
+ * внутри inner — заливается OFF_TRACK. Границу-линию трассы при этом не рисуем:
+ * край читается контрастом заливки и белого полотна.
+ */
+function drawOffTrack(
+  ctx: CanvasRenderingContext2D,
+  s: number,
+  outer: Polyline | null,
+  inner: Polyline | null,
+): void {
+  if (!outer) return;
+  const B = 1e6; // заведомо больше любого видимого окна в экранных координатах
+  ctx.save();
+  ctx.fillStyle = OFF_TRACK;
+  ctx.globalAlpha = OFF_TRACK_ALPHA;
+  // Снаружи внешней кромки: гигантский прямоугольник с «дыркой» по outer (even-odd).
+  ctx.beginPath();
+  ctx.rect(-B, -B, 2 * B, 2 * B);
+  addPolyPath(ctx, s, outer);
+  ctx.fill('evenodd');
+  // Внутренний двор трассы — той же заливкой.
+  if (inner) {
+    ctx.beginPath();
+    addPolyPath(ctx, s, inner);
+    ctx.fill();
+  }
+  // Светло-серая линия по обеим кромкам — поверх заливки, при полной непрозрачности.
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = TRACK_BORDER;
+  ctx.lineWidth = TRACK_BORDER_WIDTH;
+  ctx.beginPath();
+  addPolyPath(ctx, s, outer);
+  if (inner) addPolyPath(ctx, s, inner);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawTrackEdges(
   ctx: CanvasRenderingContext2D,
   s: number,
@@ -212,7 +295,14 @@ function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): 
     ctx.restore();
   }
 
-  drawTrackEdges(ctx, s, ed.outer, ed.inner);
+  // С фазы «adjust» кромки уже замкнуты — показываем ту же визуализацию, что и в
+  // гонке: полупрозрачную заливку внетрассовой территории со светло-серой кромкой.
+  // В фазе «center» (черчение осевой) заливки ещё нет — рисуем простой контур.
+  if (ed.phase !== 'center' && ed.outer && ed.inner) {
+    drawOffTrack(ctx, s, ed.outer, ed.inner);
+  } else {
+    drawTrackEdges(ctx, s, ed.outer, ed.inner);
+  }
 
   // Активная перетаскиваемая точка кромки.
   if (ed.phase === 'adjust' && ed.dragEdge && ed.dragIndex !== null) {
@@ -310,7 +400,7 @@ function drawRace(
   hover: Candidate | null,
 ): void {
   const track: Track = game.track;
-  drawTrackEdges(ctx, s, track.outer, track.inner);
+  drawOffTrack(ctx, s, track.outer, track.inner);
   drawFinishLine(ctx, s, track.finish.a, track.finish.b);
 
   // Стрелка направления гонки у финишной линии.
@@ -324,17 +414,57 @@ function drawRace(
     2.5,
   );
 
-  // Следы обоих игроков.
+  // Следы обоих игроков. Насыщенность и толщина следа растут со скоростью хода;
+  // чтобы цвет менялся плавно вдоль трассы, а не ступенькой на каждой границе
+  // ходов, каждый сегмент заливаем линейным градиентом между «цветами скорости» в
+  // его узлах-концах. Фактор в узле — среднее скоростей примыкающих сегментов
+  // (если сосед есть, не «прыжок» и делит с сегментом этот узел), иначе — скорость
+  // самого сегмента.
   for (const p of game.players) {
-    for (const seg of p.trail) {
+    const trail = p.trail;
+    // Фактор насыщенности 0..1 по скорости сегмента. Степень >1 растягивает
+    // разрыв между медленным и быстрым ходом — контраст резче.
+    const segFactor = (i: number): number => {
+      const seg = trail[i];
+      const speed = Math.hypot(seg.to.x - seg.from.x, seg.to.y - seg.from.y);
+      return Math.pow(Math.min(1, speed / TRAIL_SPEED_REF), 1.5);
+    };
+    const colorAt = (f: number): string =>
+      mixHex(PAPER, p.color, TRAIL_MIX_MIN + (1 - TRAIL_MIX_MIN) * f);
+    const connected = (
+      a: { to: Vec; jump?: boolean },
+      b: { from: Vec; jump?: boolean },
+    ): boolean => !a.jump && !b.jump && a.to.x === b.from.x && a.to.y === b.from.y;
+
+    for (let i = 0; i < trail.length; i++) {
+      const seg = trail[i];
       ctx.save();
       if (seg.jump) {
         ctx.strokeStyle = '#999';
         ctx.lineWidth = 1.5;
         ctx.setLineDash([4, 4]);
       } else {
-        ctx.strokeStyle = p.color;
-        ctx.lineWidth = 2;
+        const f = segFactor(i);
+        // Фактор в концах — усреднён с соседним сегментом, чтобы цвет перетекал
+        // через границу хода без скачка.
+        const fFrom =
+          i > 0 && connected(trail[i - 1], seg) ? (segFactor(i - 1) + f) / 2 : f;
+        const fTo =
+          i + 1 < trail.length && connected(seg, trail[i + 1])
+            ? (f + segFactor(i + 1)) / 2
+            : f;
+        const grad = ctx.createLinearGradient(
+          seg.from.x * s,
+          seg.from.y * s,
+          seg.to.x * s,
+          seg.to.y * s,
+        );
+        grad.addColorStop(0, colorAt(fFrom));
+        grad.addColorStop(1, colorAt(fTo));
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = TRAIL_WIDTH_MIN + (TRAIL_WIDTH_MAX - TRAIL_WIDTH_MIN) * f;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
       }
       ctx.beginPath();
       ctx.moveTo(seg.from.x * s, seg.from.y * s);
