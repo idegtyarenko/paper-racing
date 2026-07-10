@@ -28,6 +28,7 @@ import * as session from './online/online';
 import * as online from './online/online-controller';
 import * as input from './view/input';
 import { initInstallPrompt } from './ui/install-prompt';
+import * as persist from './persist';
 
 const canvas = document.getElementById('board') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -383,6 +384,56 @@ bindButtons({
   onSkip: () => online.skip(),
 });
 
+/**
+ * Сохранить локальное состояние игры, чтобы перезагрузка/жест «назад»/сворачивание
+ * вкладки не сбрасывали игру к первому экрану. Онлайн-сессию не сохраняем (она
+ * живёт на сервере) — вместо этого стираем прошлый локальный снимок.
+ */
+function saveState(): void {
+  if (session.active()) {
+    persist.clear();
+    return;
+  }
+  persist.save({
+    mode,
+    editor,
+    raceTrack,
+    game,
+    rules: raceRules,
+    playersReturn,
+    lastLocalRace,
+    ai: aiSeats ? { seats: aiSeats, difficulty: aiDifficulty } : null,
+  });
+}
+
+/** Восстановить локальное состояние из снимка. Возвращает восстановленный режим
+ *  (или null, если снимка не было). */
+function restoreState(): PanelMode | null {
+  const snap = persist.load();
+  if (!snap) return null;
+  mode = snap.mode;
+  editor = snap.editor;
+  raceTrack = snap.raceTrack;
+  game = snap.game;
+  raceRules = snap.rules;
+  playersReturn = snap.playersReturn;
+  lastLocalRace = snap.lastLocalRace;
+  if (snap.ai && game) {
+    aiSeats = snap.ai.seats;
+    aiDifficulty = snap.ai.difficulty;
+    aiNav = buildNavField(game.track); // nav-поле не сериализуем — пересобираем из трассы
+  }
+  return snap.mode;
+}
+
+// Мобильный swipe-to-reload, жест/кнопка «назад», закрытие или сворачивание вкладки:
+// pagehide ловит выгрузку и уход в bfcache, visibilitychange — сворачивание (на
+// телефоне самое надёжное, вкладку могут выгрузить из фона без pagehide).
+window.addEventListener('pagehide', saveState);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') saveState();
+});
+
 // Заполнить статичные тексты разметки из strings до первого показа панели.
 localizeDom();
 
@@ -395,14 +446,22 @@ vp.initViewport(canvas, wrap, contentBounds);
 // ResizeObserver вместо window.resize: обёртка меняет размер и при смене
 // раскладки (портрет/ландшафт на мобильных), а не только окна.
 new ResizeObserver(resize).observe(wrap);
-updateUI();
-resize();
 
 // Открыта ссылка-приглашение (?join=CODE) — подключиться к игре (при повторном
-// входе имя уже известно, иначе спросим).
+// входе имя уже известно, иначе спросим). Иначе — восстановить локальную игру,
+// сохранённую перед прошлой выгрузкой страницы.
 const joinParam = new URLSearchParams(location.search).get('join');
-if (joinParam && onlineAvailable()) {
-  online.promptJoinByLink(joinParam.toUpperCase());
+const joining = !!joinParam && onlineAvailable();
+if (!joining && restoreState() === 'race') {
+  refreshCands(); // вернуть кандидатов хода для восстановленной гонки
+  scheduleAiMove(); // возобновить ходы ботов, если это была гонка с ними
+}
+
+updateUI();
+resize(); // resize() сам вписывает восстановленную трассу/гонку в кадр (fit-to-content)
+
+if (joining) {
+  online.promptJoinByLink(joinParam!.toUpperCase());
 }
 
 // Предложить установить игру ярлыком на телефон (Android/Chromium и iOS Safari).
