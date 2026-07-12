@@ -17,6 +17,9 @@ export interface AppView {
   selected: Candidate | null;
   /** Позиция пальца в css-пикселях canvas — включает «лупу» при прицеливании. */
   loupe: Vec | null;
+  /** Места (seat), чьи предыдущие точки показать бледно, пока их кандидаты
+   *  скрыты (ждём чужой ход) — чтобы прикинуть скорость болида. */
+  ghostSeats: number[];
   /** Камера: единый переход мир↔экран (масштаб + смещение). */
   cam: Camera;
 }
@@ -80,7 +83,7 @@ export function render(ctx: CanvasRenderingContext2D, app: AppView): void {
   if (app.mode === 'edit') {
     drawEditor(ctx, s, app.editor);
   } else if (app.game) {
-    drawRace(ctx, s, app.game, app.cands, app.hover ?? app.selected);
+    drawRace(ctx, s, app.game, app.cands, app.hover ?? app.selected, app.ghostSeats);
   }
   ctx.restore();
 
@@ -117,7 +120,7 @@ function drawLoupe(
   const oy2 = cy - wy * s2;
   ctx.translate(ox2, oy2);
   drawGrid(ctx, s2, ox2, oy2, cx - R, cy - R, cx + R, cy + R);
-  drawRace(ctx, s2, app.game!, app.cands, app.hover ?? app.selected);
+  drawRace(ctx, s2, app.game!, app.cands, app.hover ?? app.selected, app.ghostSeats);
   ctx.restore();
 
   ctx.strokeStyle = '#55524a';
@@ -478,6 +481,7 @@ function drawRace(
   game: GameState,
   cands: Candidate[] | null,
   hover: Candidate | null,
+  ghostSeats: number[],
 ): void {
   const track: Track = game.track;
   drawOffTrack(ctx, s, track.outer, track.inner);
@@ -553,6 +557,29 @@ function drawRace(
       ctx.restore();
     }
     for (const c of p.crashes) drawCrashMark(ctx, s, c, p.color);
+  }
+
+  // Предыдущая точка болида, пока ждём чужой ход (кандидатов ещё нет): бледный
+  // кружок в узле pos−vel и тонкая линия к текущей позиции — видно, откуда и с
+  // какой скоростью приехал болид. На старте (vel=0) точки нет — не рисуем.
+  for (const i of ghostSeats) {
+    const p = game.players[i];
+    if (Math.abs(p.vel.x) < 1e-9 && Math.abs(p.vel.y) < 1e-9) continue;
+    const prev = sub(p.pos, p.vel);
+    ctx.save();
+    ctx.globalAlpha = 0.22;
+    ctx.strokeStyle = p.color;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(prev.x * s, prev.y * s);
+    ctx.lineTo(p.pos.x * s, p.pos.y * s);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.arc(prev.x * s, prev.y * s, Math.max(3, s * 0.16), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
   // Болиды.

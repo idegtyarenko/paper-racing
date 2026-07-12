@@ -86,9 +86,25 @@ function redraw(): void {
     hover: input.getHover(),
     selected: input.getSelected(),
     loupe: input.getLoupe(),
+    ghostSeats: ghostSeats(),
     cam: vp.camera(),
   };
   render(ctx, app);
+}
+
+/** Места, чьи предыдущие точки показать бледно, пока ждём их/чужого хода
+ *  (кандидаты скрыты). Текущий ходящий не в счёт (у него кандидаты), боты —
+ *  тоже; в hotseat — все остальные, в онлайне — только своё место. */
+function ghostSeats(): number[] {
+  if (mode !== 'race' || !game || game.phase !== 'race') return [];
+  const seats: number[] = [];
+  for (let i = 0; i < game.players.length; i++) {
+    if (i === game.current) continue;
+    if (aiSeats?.[i]) continue;
+    if (session.active() && session.mySeat() !== i) continue;
+    seats.push(i);
+  }
+  return seats;
 }
 
 function updateUI(): void {
