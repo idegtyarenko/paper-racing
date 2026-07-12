@@ -92,14 +92,24 @@ export function deserializeState(s: SerializedState, track: Track): GameState {
 
 const CLIENT_ID_KEY = 'pr-client-id';
 
+/** Запасной id на текущую сессию, когда localStorage недоступен (приватный режим):
+ *  между вызовами стабилен, но не переживает перезагрузку. */
+let sessionClientId: string | null = null;
+
 /** Стабильный id этого браузера — переживает перезагрузку (нужен для места в лобби). */
 export function clientId(): string {
-  let id = localStorage.getItem(CLIENT_ID_KEY);
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem(CLIENT_ID_KEY, id);
+  try {
+    let id = localStorage.getItem(CLIENT_ID_KEY);
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem(CLIENT_ID_KEY, id);
+    }
+    return id;
+  } catch {
+    // localStorage недоступен (приватный режим) — держим id в памяти на сессию.
+    if (!sessionClientId) sessionClientId = crypto.randomUUID();
+    return sessionClientId;
   }
-  return id;
 }
 
 // Алфавит без похожих символов (0/O, 1/I) — код проще диктовать и вводить.

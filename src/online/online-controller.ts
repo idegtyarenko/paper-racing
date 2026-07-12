@@ -275,10 +275,19 @@ export function skip(): void {
 }
 
 function savedName(): string {
-  return localStorage.getItem('pr-player-name') ?? '';
+  try {
+    return localStorage.getItem('pr-player-name') ?? '';
+  } catch {
+    // localStorage недоступен (приватный режим) — имени просто нет.
+    return '';
+  }
 }
 function rememberName(n: string): void {
-  localStorage.setItem('pr-player-name', n);
+  try {
+    localStorage.setItem('pr-player-name', n);
+  } catch {
+    // недоступен — не запоминаем, ничего страшного.
+  }
 }
 
 /** Разложить ошибку присоединения в понятный текст. */
