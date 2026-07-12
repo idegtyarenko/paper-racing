@@ -17,8 +17,22 @@
   line-height: 1;
 }
 
+/* Все сдались — победителя нет, кубок не показываем. */
+.winner--noresult .winner__trophy {
+  display: none;
+}
+
 .winner__title {
   font-size: 26px;
   font-weight: 800;
   margin-top: 8px;
+}
+
+/* Подпись под именем победителя: гонка ещё идёт / завершена. */
+.winner__subtitle {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #7a6a00;
 }

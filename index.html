@@ -45,16 +45,23 @@
       <aside class="panel">
         <header class="panel__header">
           <h1 class="panel__title" data-i18n="app.title">🏁 Paper Racing</h1>
-          <button
-            id="helpBtn"
-            class="icon-button"
-            data-i18n-aria-label="buttons.rulesTitle"
-            data-i18n-title="buttons.rulesTitle"
-            aria-label="Правила"
-            title="Правила"
-          >
-            ?
-          </button>
+          <div class="panel__header-actions">
+            <button
+              id="retireBtn"
+              class="header-btn"
+              data-i18n="race.retire"
+              hidden
+            ></button>
+            <button
+              id="helpBtn"
+              class="header-btn"
+              data-i18n="buttons.rulesTitle"
+              data-i18n-aria-label="buttons.rulesTitle"
+              data-i18n-title="buttons.rulesTitle"
+              aria-label="Правила"
+              title="Правила"
+            ></button>
+          </div>
         </header>
         <div class="status"></div>
         <button

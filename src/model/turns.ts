@@ -15,7 +15,7 @@ import {
   applyOutcome,
   otherPositions,
   returnFromPenalty,
-  decideWinner,
+  resolveRound,
 } from './game';
 
 /**
@@ -149,12 +149,17 @@ export function upcomingTurns(state: GameState, count: number): number[] {
   const skips = state.players.map((p) => p.skipTurns);
   const out: number[] = [];
   let turn = state.turn;
-  let slotsLeft = state.finalTurnsLeft; // null — круг не решающий, слотов не ограничено
+  let slotsLeft = state.finalTurnsLeft; // null — раунд не идёт, слотов не ограничено
   while (out.length < count && (slotsLeft === null || slotsLeft > 0)) {
     const seat = playerForTurn(turn, n, state.rules.turnOrder);
-    if (skips[seat] > 0)
+    const p = state.players[seat];
+    if (p.place !== null || p.retired) {
+      // Выбывший (получил место / сдался) хода не делает — слот сгорает.
+    } else if (skips[seat] > 0) {
       skips[seat] -= 1; // слот сгорает на отбытие штрафа
-    else out.push(seat);
+    } else {
+      out.push(seat);
+    }
     turn += 1;
     if (slotsLeft !== null) slotsLeft -= 1;
   }
@@ -162,35 +167,47 @@ export function upcomingTurns(state: GameState, count: number): number[] {
 }
 
 /**
- * Смена хода и определение победителя. Игроки ходят по кругу; конкретную
- * очерёдность внутри круга задаёт схема rules.turnOrder (см. playerForTurn).
- * Число доигровок решающего круга (finalTurnsLeft) считается от позиции в круге
- * (seat) и от схемы не зависит. Как только кто-то финишировал,
- * оставшиеся игроки этого же круга доигрывают свои ходы (те, кто ходил раньше
- * финишировавшего в этом круге, свой шанс уже использовали). После этого среди
- * всех финишировавших в решающем круге побеждает заехавший дальше за линию; при
- * равенстве — ничья. Вынужденные пропуски после аварии проходят автоматически:
- * если ход перешёл к игроку, который ещё отбывает пропуск, он тратит один пропуск
- * и ход сразу уходит дальше — участнику ничего нажимать не нужно.
+ * Смена хода и учёт финиша. Игроки ходят по кругу; конкретную очерёдность внутри
+ * круга задаёт схема rules.turnOrder (см. playerForTurn). Как только кто-то
+ * пересекает финиш, открывается «раунд»: остальные болиды этого же круга (после
+ * текущего seat) доигрывают свои ходы — те, кто ходил раньше, свой шанс в этом
+ * круге уже использовали. По исчерпании раунда resolveRound раздаёт места
+ * финишировавшим в нём по глубине заезда за линию. В отличие от прежней логики
+ * гонка на этом не заканчивается: следующие круги играют оставшиеся болиды, пока
+ * все не финишируют или не сдадутся (тогда resolveRound/retireCurrent выставит
+ * phase='over'). Выбывшие болиды (place присвоен или сдался) в очереди
+ * пропускаются автоматически — их слот сгорает без хода, как и штрафной пропуск
+ * после аварии.
  */
 function afterAction(state: GameState): void {
+  if (state.phase !== 'race') return;
   const n = state.players.length;
   const seat = state.turn % n; // позиция ходящего в текущем круге
-  const finished = state.players[state.current].crossings >= WIN_CROSSINGS;
+  const cur = state.players[state.current];
+
+  // Болид только что пересёк финиш нужное число раз и ещё не в этом раунде —
+  // засчитываем его в текущий раунд.
+  const finished =
+    cur.crossings >= WIN_CROSSINGS &&
+    cur.place === null &&
+    !state.roundFinishers.includes(state.current);
+  if (finished) state.roundFinishers.push(state.current);
 
   if (state.finalTurnsLeft !== null) {
-    // Решающий круг уже идёт: этот ход укоротил число оставшихся.
+    // Раунд уже шёл до этого хода: он укоротил число оставшихся в нём слотов
+    // (сам ход финишировавшего, открывшего раунд, слотом не считается — он в
+    // ветке else ниже, где finalTurnsLeft = число болидов ПОСЛЕ него в круге).
     state.finalTurnsLeft -= 1;
     if (state.finalTurnsLeft <= 0) {
-      decideWinner(state);
-      return;
+      resolveRound(state); // раздаёт места, может выставить phase='over'
+      if (state.phase !== 'race') return;
     }
   } else if (finished) {
-    // Первый финиш: остальные игроки этого круга (после текущего seat) доигрывают.
+    // Первый финиш раунда: болиды этого круга после текущего seat доигрывают.
     state.finalTurnsLeft = n - 1 - seat;
     if (state.finalTurnsLeft <= 0) {
-      decideWinner(state);
-      return;
+      resolveRound(state);
+      if (state.phase !== 'race') return;
     }
   }
 
@@ -202,7 +219,30 @@ function afterAction(state: GameState): void {
     // Штраф отбыт — только теперь возвращаем болид на трассу.
     if (next.skipTurns === 0) returnFromPenalty(state, state.current);
     afterAction(state);
+  } else if (next.place !== null || next.retired) {
+    // Выбывший из гонки хода не делает — слот сгорает, ход идёт дальше.
+    afterAction(state);
   }
+}
+
+/**
+ * Сдача игрока: болид seat выбывает из гонки (места не занимает, ходов не
+ * делает). Сдаться можно в любой момент, не обязательно в свой ход. Если после
+ * сдачи активных болидов не осталось — гонка окончена. Если сдался тот, чей
+ * сейчас ход, — ход передаётся дальше (afterAction учитывает бухгалтерию
+ * раунда); если сдался не ходящий сейчас — очередь не трогаем, его слот
+ * пропустится сам, когда до него дойдёт (afterAction/upcomingTurns).
+ */
+export function retireSeat(state: GameState, seat: number): void {
+  if (state.phase !== 'race') return;
+  const p = state.players[seat];
+  if (p.place !== null || p.retired) return;
+  p.retired = true;
+  if (state.players.every((pl) => pl.place !== null || pl.retired)) {
+    state.phase = 'over';
+    return;
+  }
+  if (seat === state.current) afterAction(state);
 }
 
 /**

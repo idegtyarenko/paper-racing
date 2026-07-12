@@ -38,6 +38,22 @@
   text-align: center;
 }
 
+/* Опасное действие (подтверждение сдачи) — красная заливка. */
+.button--danger {
+  font-weight: 700;
+  color: #fff;
+  background: #b3261e;
+  border-color: #8f1a14;
+}
+@media (hover: hover) {
+  .button--danger:hover:not(:disabled) {
+    background: #9f211a;
+  }
+}
+.button--danger:active:not(:disabled) {
+  background: #8f1a14;
+}
+
 /* Плавающая кнопка подтверждения хода: у нижнего края поля, поверх canvas. */
 .confirm-move {
   position: absolute;
@@ -113,27 +129,37 @@
   background: #e6e0cf;
 }
 
-/* Круглая кнопка-иконка («?» — правила). */
-.icon-button {
+/* Кнопки-действия в шапке панели («Правила», «Сдаться») — компактные пилюли. */
+.panel__header-actions {
   flex: none;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.header-btn {
+  flex: none;
+  padding: 6px 12px;
+  min-height: 34px;
+  border-radius: 999px;
   border: 1px solid #b7b0a0;
   background: #fff;
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
+  color: #33322e;
   cursor: pointer;
-  display: grid;
-  place-items: center;
+  white-space: nowrap;
   touch-action: manipulation;
 }
 
 @media (hover: hover) {
-  .icon-button:hover {
+  .header-btn:hover {
     background: #f0ecdf;
   }
 }
-.icon-button:active {
+.header-btn:active {
   background: #e6e0cf;
+}
+.header-btn[hidden] {
+  display: none;
 }

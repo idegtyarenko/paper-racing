@@ -9,6 +9,7 @@ import { Difficulty } from '../model/ai';
 import { len } from '../geometry';
 import { strings } from '../strings';
 import { coarsePointer, bindTap, openSheet, closeOverlay, bindOverlayClose } from './dom';
+import { openConfirm } from './confirm';
 import { div, renderStepStatus, statusElement } from './status';
 import { bindDialogs } from './dialogs';
 import { bindSettings } from './settings';
@@ -27,6 +28,7 @@ const nextBtn = document.getElementById('nextBtn') as HTMLButtonElement;
 const playersBackBtn = document.getElementById('playersBack') as HTMLButtonElement;
 const helpBtn = document.getElementById('helpBtn') as HTMLButtonElement;
 const newRaceBtn = document.getElementById('newRace') as HTMLButtonElement;
+const retireBtn = document.getElementById('retireBtn') as HTMLButtonElement;
 const settingsBtn = document.getElementById('settingsBtn') as HTMLButtonElement;
 const confirmMoveBtn = document.getElementById('confirmMove') as HTMLButtonElement;
 const skipBtn = document.getElementById('skipTurn') as HTMLButtonElement;
@@ -95,6 +97,8 @@ export interface PanelHandlers {
   onLobbyLeave: () => void;
   /** Пропустить ход задержавшегося игрока (болид едет по инерции). */
   onSkip: () => void;
+  /** Сдаться за текущего игрока (кнопка на его карточке) — он выбывает из гонки. */
+  onRetire: () => void;
 }
 
 /** Состояние отправки хода в онлайне: покой / идёт запись / запись не удалась. */
@@ -160,6 +164,14 @@ export function bindButtons(h: PanelHandlers): void {
   bindTap(modeBackBtn, h.onModeBack);
   bindTap(joinByCodeBtn, h.onJoinByCode);
   bindTap(skipBtn, h.onSkip);
+  // «Сдаться» — сперва диалог подтверждения, затем сама сдача.
+  bindTap(retireBtn, () =>
+    openConfirm(
+      strings.race.retireConfirmTitle,
+      strings.race.retireConfirmYes,
+      h.onRetire,
+    ),
+  );
   bindTap(helpBtn, () => openSheet(rulesSheet));
   bindTap(newRaceBtn, () => openSheet(raceDialog));
   bindTap(dlgSameTrack, () => {
@@ -201,6 +213,8 @@ function speedStat(kmh: number): HTMLSpanElement {
  */
 function playerInfo(p: Player, active: boolean, target: HTMLElement): void {
   target.classList.toggle('player-card--active', active);
+  // Выбывший из гонки (финишировал или сдался) — приглушаем карточку.
+  target.classList.toggle('player-card--out', p.place !== null || p.retired);
   const dot = document.createElement('span');
   dot.className = 'player-card__dot';
   dot.style.background = p.color;
@@ -209,11 +223,18 @@ function playerInfo(p: Player, active: boolean, target: HTMLElement): void {
   name.textContent = p.name;
   const stats = document.createElement('span');
   stats.className = 'player-card__stats';
-  // Длину вектора разгона переводим в условные км/ч и округляем до десятков —
-  // как деления на реальном спидометре.
-  const kmh = Math.round((len(p.vel) * KMH_PER_CELL) / 10) * 10;
-  stats.append(speedStat(kmh), stat(strings.race.crashes(p.crashes.length)));
-  if (p.skipTurns > 0) stats.append(stat(strings.race.pit(p.skipTurns)));
+  if (p.place !== null) {
+    // Финишировал — вместо спидометра показываем занятое место.
+    stats.append(stat(strings.race.place(p.place)));
+  } else if (p.retired) {
+    stats.append(stat(strings.race.retired));
+  } else {
+    // Длину вектора разгона переводим в условные км/ч и округляем до десятков —
+    // как деления на реальном спидометре.
+    const kmh = Math.round((len(p.vel) * KMH_PER_CELL) / 10) * 10;
+    stats.append(speedStat(kmh), stat(strings.race.crashes(p.crashes.length)));
+    if (p.skipTurns > 0) stats.append(stat(strings.race.pit(p.skipTurns)));
+  }
   target.replaceChildren(dot, name, stats);
 }
 
@@ -253,11 +274,33 @@ function renderEditStatus(editor: EditorState): void {
   }
 }
 
+/** Подпись под именем победителя: гонка ещё идёт для остальных / уже завершена. */
+function winnerSubtitle(over: boolean): HTMLElement {
+  const s = document.createElement('span');
+  s.className = 'winner__subtitle';
+  s.textContent = over ? strings.race.raceOver : strings.race.stillRacing;
+  return s;
+}
+
+/**
+ * Показать баннер: победителя (место 1) объявляем сразу, как только он определён,
+ * даже если гонка продолжается для остальных — с подписью «Гонка продолжается».
+ * Ничья (делёж 1-го места) — строка draw. Особый случай «все сошли, никто не
+ * финишировал» (winner === null при завершённой гонке) — строка allRetired.
+ */
 function showWinner(game: GameState): void {
-  if (game.winner === 'draw') {
-    winnerWho.textContent = strings.race.draw;
+  const over = game.phase === 'over';
+  // Когда все сдались (победителя нет) — без кубка, только текст.
+  winnerBanner.classList.toggle('winner--noresult', game.winner === null);
+  if (game.winner === null) {
+    winnerWho.textContent = strings.race.allRetired;
+  } else if (game.winner === 'draw') {
+    winnerWho.replaceChildren(
+      document.createTextNode(strings.race.draw),
+      winnerSubtitle(over),
+    );
   } else {
-    const w = game.players[game.winner!];
+    const w = game.players[game.winner];
     const name = document.createElement('span');
     name.style.color = w.color;
     name.textContent = w.name;
@@ -265,6 +308,7 @@ function showWinner(game: GameState): void {
       strings.race.winnerFlag,
       document.createElement('br'),
       name,
+      winnerSubtitle(over),
     );
   }
   winnerBanner.classList.add('winner--shown');
@@ -289,6 +333,7 @@ export function updatePanel(
   playersMax = 6,
   net: NetTurn | null = null,
   aiTurn = false,
+  canRetire = false,
 ): void {
   editButtons.hidden = mode !== 'edit';
   modeButtons.hidden = mode !== 'mode';
@@ -297,6 +342,7 @@ export function updatePanel(
   playersButtons.hidden = mode !== 'players';
   raceButtons.hidden = mode !== 'race';
   skipBtn.hidden = true; // покажем ниже только в гонке, когда доступен пропуск
+  retireBtn.hidden = !canRetire; // «Сдаться» в шапке — пока локальный игрок в гонке
 
   if (mode === 'edit') {
     renderEditStatus(editor);
@@ -336,16 +382,22 @@ export function updatePanel(
   statusEl.className = 'status';
   if (!game) return;
 
+  const cur = game.players[game.current];
   renderPlayerCards(game, net?.present);
 
-  if (game.phase === 'over') {
+  // Победителя объявляем сразу (winner !== null), даже пока гонка идёт для
+  // остальных; при полном завершении гонки показываем итоговый баннер.
+  if (game.winner !== null || game.phase === 'over') {
     showWinner(game);
+  } else {
+    winnerBanner.classList.remove('winner--shown');
+  }
+
+  if (game.phase === 'over') {
     statusEl.textContent = '';
     return;
   }
 
-  winnerBanner.classList.remove('winner--shown');
-  const cur = game.players[game.current];
   if (net) {
     if (net.canSkip) {
       statusEl.textContent = strings.online.skippable(net.currentName);

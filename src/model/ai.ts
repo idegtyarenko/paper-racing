@@ -13,30 +13,13 @@
 // классический инвариант безопасности «успею ли затормозить» (canStop) — он
 // не даёт разгоняться туда, откуда уже не вписаться в поворот.
 
-import { Vec, dist, segSegIntersection } from '../geometry';
-import { Track, key, unkey, sideOfFinish } from './track';
-import {
-  GameState,
-  Candidate,
-  MoveOutcome,
-  WIN_CROSSINGS,
-  computeOutcome,
-  offRoadDepth,
-} from './game';
+import { Vec, dist } from '../geometry';
+import { sideOfFinish } from './track';
+import { GameState, Candidate, MoveOutcome, WIN_CROSSINGS, computeOutcome } from './game';
 import { candidates } from './turns';
-import { OFFROAD_FORGIVE } from '../config';
+import { NavField, navAt } from './nav';
 
 export type Difficulty = 'easy' | 'medium' | 'hard';
-
-/** Поле расстояний до финиша по узлам дороги. */
-export interface NavField {
-  /** key(x,y) → шагов (при скорости 1) до следующего пересечения финиша вперёд. */
-  dist: Map<number, number>;
-  /** ≈ длина круга в шагах: max конечного dist + 1. Слагаемое за недоеханный круг. */
-  lap: number;
-  /** Трасса поля — для стороны финиша в navAt (окно не должно глядеть через линию). */
-  track: Track;
-}
 
 /** Ручки силы бота — см. таблицу в DIFFICULTY. */
 interface DifficultyParams {
@@ -75,104 +58,6 @@ const FINISH_BONUS = 1e6;
 const FINISH_DELAY_COST = 1e3;
 /** Ходы в этой полосе от лучшего считаются «почти лучшими» (для epsilon-выбора). */
 const EPS_MARGIN = 3;
-
-/**
- * Направление пересечения финиша ребром u→v: +1 вперёд, −1 назад, 0 нет.
- * Та же семантика, что у computeOutcome: точка ровно на линии считается
- * стороной «впереди», чтобы не засчитать одно пересечение дважды.
- */
-function crossDir(track: Track, u: Vec, v: Vec): number {
-  if (!segSegIntersection(u, v, track.finish.a, track.finish.b)) return 0;
-  const su = sideOfFinish(track, u);
-  const sv = sideOfFinish(track, v);
-  if (su < 0 && sv >= 0) return 1;
-  if (su >= 0 && sv < 0) return -1;
-  return 0;
-}
-
-/**
- * Ребро проходимо: его середина не глубже допуска за кромкой. Отсекает
- * диагонали и рёбра, «туннелирующие» узкую травяную перегородку между
- * двумя проходами трассы (иначе поле повело бы ботов в невозможный срез).
- */
-function edgeOk(track: Track, u: Vec, v: Vec): boolean {
-  return (
-    offRoadDepth(track, { x: (u.x + v.x) / 2, y: (u.y + v.y) / 2 }) <= OFFROAD_FORGIVE
-  );
-}
-
-/** Построить поле расстояний до финиша. Считается один раз на гонку. */
-export function buildNavField(track: Track): NavField {
-  const d = new Map<number, number>();
-  const queue: Vec[] = [];
-
-  // Сиды: клетки за линией, из которых один шаг пересекает финиш вперёд.
-  track.inside.forEach((k) => {
-    const u = unkey(k);
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        if (dx === 0 && dy === 0) continue;
-        const v = { x: u.x + dx, y: u.y + dy };
-        if (!track.inside.has(key(v.x, v.y))) continue;
-        if (crossDir(track, u, v) === 1 && edgeOk(track, u, v)) {
-          d.set(k, 1);
-          queue.push(u);
-          return;
-        }
-      }
-    }
-  });
-
-  // BFS назад по рёбрам, не пересекающим финиш: клетки «впереди» линии
-  // получают расстояние длинным путём в обход круга.
-  for (let head = 0; head < queue.length; head++) {
-    const u = queue[head];
-    const du = d.get(key(u.x, u.y))!;
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        if (dx === 0 && dy === 0) continue;
-        const w = { x: u.x + dx, y: u.y + dy };
-        const wk = key(w.x, w.y);
-        if (d.has(wk) || !track.inside.has(wk)) continue;
-        if (crossDir(track, w, u) !== 0 || !edgeOk(track, w, u)) continue;
-        d.set(wk, du + 1);
-        queue.push(w);
-      }
-    }
-  }
-
-  let lap = 0;
-  d.forEach((v) => {
-    lap = Math.max(lap, v);
-  });
-  return { dist: d, lap: lap + 1, track };
-}
-
-/**
- * Расстояние до финиша для произвольной точки — не обязательно узла дороги
- * (точка аварии дробная; легальный ход может закончиться в полосе допуска или
- * ближе WALL_CLEARANCE к стенке, где узлов в inside нет). Берём минимум
- * dist + евклидов добор по клеткам окна ±3; совсем вне окна (глухой гравий) —
- * консервативно длина круга.
- */
-export function navAt(field: NavField, p: Vec): number {
-  const cx = Math.round(p.x);
-  const cy = Math.round(p.y);
-  let best = Infinity;
-  for (let dy = -3; dy <= 3; dy++) {
-    for (let dx = -3; dx <= 3; dx++) {
-      const c = { x: cx + dx, y: cy + dy };
-      const v = field.dist.get(key(c.x, c.y));
-      if (v === undefined) continue;
-      // Клетка по ту сторону финишной линии не годится: её расстояние учитывает
-      // другое число оставшихся пересечений (иначе потенциал у линии схлопывается,
-      // и бот «прилипает» к ней вместо честного круга).
-      if (crossDir(field.track, p, c) !== 0) continue;
-      best = Math.min(best, v + dist(p, c));
-    }
-  }
-  return best === Infinity ? field.lap : best;
-}
 
 /** Все 9 векторов ускорения одного хода. */
 const ACCELS: Vec[] = [];

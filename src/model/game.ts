@@ -32,6 +32,15 @@ export interface Player {
   /** Знаковый счётчик пересечений финишной линии: вперёд +1, назад −1. */
   crossings: number;
   finishOvershoot: number | null;
+  /**
+   * Итоговое место (1-based), присвоенное после разрешения раунда, в котором
+   * болид финишировал; null — ещё едет / сдался / финишировал, но раунд не
+   * разрешён. Делится при равном заезде за линию («1224»: два вторых → следующий
+   * четвёртый).
+   */
+  place: number | null;
+  /** Игрок сдался — выбыл из гонки, места не занимает и ходов не делает. */
+  retired: boolean;
 }
 
 // Число пересечений финиша для победы (см. WIN_CROSSINGS в config) — реэкспорт.
@@ -103,14 +112,28 @@ export interface GameState {
    */
   turn: number;
   phase: 'race' | 'over';
+  /**
+   * Победитель гонки (место 1). Определяется при разрешении первого раунда, где
+   * кто-то финишировал, и дальше не меняется. `'draw'` — если 1-е место
+   * разделили несколько болидов с равным заездом за линию. Гонка при этом
+   * продолжается для остальных (см. phase).
+   */
   winner: number | 'draw' | null;
   /**
-   * Сколько ходов осталось доиграть в решающем круге. Пока никто не финишировал —
-   * null. Как только кто-то пересёк финиш, остальные игроки этого же круга
-   * доигрывают свои ходы (это число), после чего победитель определяется по
-   * глубине заезда за линию среди всех финишировавших в решающем круге.
+   * Сколько ходов осталось доиграть в текущем раунде. null — раунд не идёт
+   * (никто в нём ещё не пересёк финиш). Как только кто-то пересекает финиш,
+   * остальные болиды этого же круга доигрывают свои ходы (это число); по
+   * исчерпании раунд разрешается (resolveRound) — финишировавшим в нём
+   * раздаются места по глубине заезда за линию. В отличие от прежней логики
+   * гонка на этом не заканчивается: следующие круги играют оставшиеся болиды,
+   * пока все не финишируют или не сдадутся.
    */
   finalTurnsLeft: number | null;
+  /**
+   * Болиды (seat'ы), пересёкшие финиш в текущем ещё не разрешённом раунде и
+   * ждущие расстановки мест. Опустошается в resolveRound.
+   */
+  roundFinishers: number[];
 }
 
 /** Цвета и имена болидов по индексу игрока (до шести участников). */
@@ -156,6 +179,8 @@ export function newGame(
     skipTurns: 0,
     crossings: 0,
     finishOvershoot: null,
+    place: null,
+    retired: false,
   });
   return {
     track,
@@ -166,6 +191,7 @@ export function newGame(
     phase: 'race',
     winner: null,
     finalTurnsLeft: null,
+    roundFinishers: [],
   };
 }
 
@@ -327,12 +353,17 @@ export function applyOutcome(track: Track, p: Player, o: MoveOutcome): void {
 }
 
 /**
- * Позиции всех игроков, кроме указанного места и тех, кто отбывает штраф после
- * аварии — они ещё не вернулись на трассу и не мешают чужому пути.
+ * Позиции всех игроков, кроме указанного места и тех, кто не мешает чужому пути:
+ * отбывающих штраф после аварии (ещё не вернулись на трассу), а также выбывших
+ * из гонки — уже получивших место (разрешённый раунд) или сдавшихся. Болиды,
+ * пересёкшие финиш, но ждущие расстановки мест (place === null), пока стоят на
+ * трассе и блокируют, как любой активный.
  */
 export function otherPositions(state: GameState, exclude: number): Vec[] {
   return state.players
-    .filter((pl, i) => i !== exclude && pl.skipTurns === 0)
+    .filter(
+      (pl, i) => i !== exclude && pl.skipTurns === 0 && pl.place === null && !pl.retired,
+    )
     .map((pl) => ({ ...pl.pos }));
 }
 
@@ -369,20 +400,41 @@ export function returnFromPenalty(state: GameState, seat: number): void {
   p.pos = resetTo;
 }
 
-/** Победитель решающего круга — максимальный заезд за линию среди финишировавших. */
-export function decideWinner(state: GameState): void {
-  state.phase = 'over';
-  let best = -Infinity;
-  let winner: number | 'draw' | null = null;
-  state.players.forEach((p, i) => {
-    if (p.crossings < WIN_CROSSINGS) return;
-    const o = p.finishOvershoot ?? 0;
-    if (o > best + 1e-9) {
-      best = o;
-      winner = i;
-    } else if (Math.abs(o - best) <= 1e-9) {
-      winner = 'draw';
+/**
+ * Разрешить текущий раунд: раздать места болидам, пересёкшим в нём финиш
+ * (state.roundFinishers), по глубине заезда за линию (finishOvershoot) —
+ * заехавший дальше получает место выше. Спортивная нумерация «1224»: равный
+ * заезд даёт одинаковое место, а следующий за парой — место со сдвигом (два
+ * вторых → следующий четвёртый). Победитель гонки (place 1) фиксируется при
+ * первом же разрешённом раунде с финишировавшими; если 1-е место разделили —
+ * `'draw'`. Когда все болиды получили место или сдались — гонка окончена.
+ */
+export function resolveRound(state: GameState): void {
+  const ranked = [...state.roundFinishers].sort(
+    (a, b) =>
+      (state.players[b].finishOvershoot ?? -Infinity) -
+      (state.players[a].finishOvershoot ?? -Infinity),
+  );
+  const already = state.players.filter((p) => p.place !== null).length;
+  let place = already + 1;
+  ranked.forEach((seat, i) => {
+    if (i > 0) {
+      const prev = state.players[ranked[i - 1]].finishOvershoot ?? 0;
+      const cur = state.players[seat].finishOvershoot ?? 0;
+      if (Math.abs(cur - prev) > 1e-9) place = already + i + 1;
     }
+    state.players[seat].place = place;
   });
-  state.winner = winner;
+
+  if (state.winner === null && ranked.length > 0) {
+    const firstPlace = state.players[ranked[0]].place;
+    const firsts = ranked.filter((s) => state.players[s].place === firstPlace);
+    state.winner = firsts.length > 1 ? 'draw' : firsts[0];
+  }
+
+  state.roundFinishers = [];
+  state.finalTurnsLeft = null;
+  if (state.players.every((p) => p.place !== null || p.retired)) {
+    state.phase = 'over';
+  }
 }

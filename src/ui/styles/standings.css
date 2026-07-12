@@ -1,0 +1,71 @@
+/* Полоса текущих мест (Ф1-башня): вертикальный стек строк у левого верхнего
+   края поля, поверх canvas. Информативная — не перехватывает жесты по карте. */
+.standings {
+  position: absolute;
+  /* Ниже полосы очереди ходов (turn-queue сидит на top:10px по центру), чтобы
+     башня мест у левого края не наезжала на неё на узком поле. */
+  top: calc(52px + env(safe-area-inset-top));
+  left: calc(10px + env(safe-area-inset-left));
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 44%;
+  padding: 6px 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  pointer-events: none; /* полоса информативная — клики уходят на карту под ней */
+}
+
+.standings[hidden] {
+  display: none;
+}
+
+.standings__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+/* Текущий ходящий — подсветка строки, чтобы сразу видеть, чьё место «живое». */
+.standings__row--current {
+  font-weight: 700;
+}
+
+/* Сошедшие с дистанции — приглушены. */
+.standings__row--retired {
+  opacity: 0.5;
+}
+
+/* Позиция / статус (номер, 🏁место, 🏳️) — фиксированная колонка для ровных строк. */
+.standings__pos {
+  flex: 0 0 auto;
+  min-width: 20px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: #55524a;
+}
+
+.standings__dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.standings__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #33322e;
+}
+
+/* На узких телефонах имя съедает место у карты — прячем, оставляя позицию+цвет. */
+@media (max-width: 460px) {
+  .standings__name {
+    display: none;
+  }
+}

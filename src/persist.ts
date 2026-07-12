@@ -18,7 +18,9 @@ import {
 } from './online/net';
 
 const KEY = 'pr-local-state';
-const VERSION = 1;
+// v2: у игроков появились place/retired, у стейта — roundFinishers (гонка идёт
+// до финиша всех). Старые снимки без этих полей несовместимы — их отбрасываем.
+const VERSION = 2;
 
 /** Последний локальный режим/состав — для «По той же трассе» одним тапом. */
 export type LastLocalRace =

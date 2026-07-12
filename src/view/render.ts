@@ -582,8 +582,11 @@ function drawRace(
     ctx.restore();
   }
 
-  // Болиды.
+  // Болиды. Выбывшие (получили место в разрешённом раунде или сдались) ушли с
+  // трассы — их маркер не рисуем (и клетки они не блокируют, см. otherPositions).
+  // След остаётся как история проезда.
   for (const p of game.players) {
+    if (p.place !== null || p.retired) continue;
     ctx.beginPath();
     ctx.arc(p.pos.x * s, p.pos.y * s, Math.max(4, s * 0.28), 0, Math.PI * 2);
     ctx.fillStyle = p.color;

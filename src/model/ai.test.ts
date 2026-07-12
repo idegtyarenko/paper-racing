@@ -8,7 +8,8 @@
 // Гонка в +x: sideOfFinish(p) = p.x − 20, старты — слева от линии.
 
 import { describe, it, expect } from 'vitest';
-import { buildNavField, navAt, chooseMove, Difficulty } from './ai';
+import { chooseMove, Difficulty } from './ai';
+import { buildNavField, navAt } from './nav';
 import { candidates, applyMove, coastMove } from './turns';
 import { GameState, Player, computeOutcome } from './game';
 import { Track, key, unkey, finalizeTrack } from './track';
@@ -46,6 +47,8 @@ function playerAt(pos: Vec, vel: Vec = { x: 0, y: 0 }): Player {
     skipTurns: 0,
     crossings: 0,
     finishOvershoot: null,
+    place: null,
+    retired: false,
   };
 }
 
@@ -114,10 +117,12 @@ function botRace(players: number, difficulty: Difficulty, maxTurns: number): Gam
 describe('chooseMove', () => {
   it('одиночный сложный бот проходит круг, ни разу не вылетев', () => {
     // Чистый инвариант безопасности у стен: соперник стоит на старте и пасует
-    // (coastMove при нулевой скорости), трафика нет.
+    // (coastMove при нулевой скорости), трафика нет. Соперник не финиширует и не
+    // сдаётся, поэтому гонка формально не кончается — проверяем, что бот сам
+    // добрался до финиша (стал победителем и получил место 1) без аварий.
     const state = gameOn(track, 2);
     const rng = rngConst(0.99);
-    for (let i = 0; i < 400 && state.phase === 'race'; i++) {
+    for (let i = 0; i < 400 && state.winner === null; i++) {
       if (state.current === 0) {
         const cand = chooseMove(state, nav, 'hard', rng);
         if (cand) applyMove(state, cand);
@@ -126,8 +131,8 @@ describe('chooseMove', () => {
         coastMove(state);
       }
     }
-    expect(state.phase).toBe('over');
     expect(state.winner).toBe(0);
+    expect(state.players[0].place).toBe(1);
     expect(state.players[0].crashes).toHaveLength(0);
   });
 

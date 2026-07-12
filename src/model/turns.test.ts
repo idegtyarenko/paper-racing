@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { newGame, cloneState, Candidate, Player, DEFAULT_RULES } from './game';
-import { candidates, applyMove, coastMove, playerForTurn, upcomingTurns } from './turns';
+import {
+  candidates,
+  applyMove,
+  coastMove,
+  playerForTurn,
+  upcomingTurns,
+  retireSeat,
+} from './turns';
 import { WIN_CROSSINGS, REALISTIC_GRIP, REALISTIC_ACCEL } from '../config';
 import { key } from './track';
 import { ringTrack } from './test-fixtures';
@@ -356,33 +363,110 @@ describe('upcomingTurns — очередь ближайших ходов', () =>
   });
 });
 
-describe('решающий круг и определение победителя', () => {
-  it('первый финишировавший запускает доигровку; далее победитель — по глубине заезда', () => {
+describe('многораундовый финиш, места и сдача', () => {
+  it('первый финишировавший получает место 1 и звание победителя, но гонка продолжается', () => {
     const g = newGame(ringTrack(), 2);
     place(g.players[0], [5, 4]);
     g.players[0].crossings = WIN_CROSSINGS - 1; // финиширует этим ходом
     applyMove(g, cand(7, 4)); // crossings → WIN, overshoot = 1
     expect(g.players[0].crossings).toBe(WIN_CROSSINGS);
-    expect(g.finalTurnsLeft).toBe(1); // остался ход второго игрока
+    expect(g.finalTurnsLeft).toBe(1); // раунд открыт: остался ход второго
     expect(g.phase).toBe('race');
 
     place(g.players[1], [10, 4]);
-    applyMove(g, cand(12, 4)); // p1 не финишировал
-    expect(g.phase).toBe('over');
+    applyMove(g, cand(13, 4)); // p1 не финишировал — раунд разрешается
+    expect(g.players[0].place).toBe(1);
     expect(g.winner).toBe(0);
+    expect(g.players[1].place).toBeNull();
+    expect(g.phase).toBe('race'); // гонка идёт, пока p1 не финиширует/сдастся
   });
 
-  it('равная глубина заезда финишировавших → ничья', () => {
+  it('места в одном раунде — по глубине заезда, а не по очереди хода', () => {
     const g = newGame(ringTrack(), 2);
     place(g.players[0], [5, 4]);
     g.players[0].crossings = WIN_CROSSINGS - 1;
-    applyMove(g, cand(7, 4)); // overshoot 1, finalTurnsLeft = 1
-
+    applyMove(g, cand(7, 4)); // p0 ходит первым, overshoot 1
     place(g.players[1], [5, 4]);
     g.players[1].crossings = WIN_CROSSINGS - 1;
-    applyMove(g, cand(7, 4)); // тоже overshoot 1
+    applyMove(g, cand(9, 4)); // p1 заехал глубже, overshoot 3
     expect(g.phase).toBe('over');
+    expect(g.players[1].place).toBe(1); // глубже за линию → выше место
+    expect(g.players[0].place).toBe(2);
+    expect(g.winner).toBe(1);
+  });
+
+  it('равный заезд в раунде делит место (1224): два вторых → следующий четвёртый', () => {
+    const g = newGame(ringTrack(), 4);
+    [0, 1, 2, 3].forEach((i) => {
+      place(g.players[i], [5, 4]);
+      g.players[i].crossings = WIN_CROSSINGS - 1;
+    });
+    applyMove(g, cand(11, 4)); // p0 overshoot 5 → место 1
+    applyMove(g, cand(9, 4)); // p1 overshoot 3
+    applyMove(g, cand(9, 4)); // p2 overshoot 3 (равно p1)
+    applyMove(g, cand(7, 4)); // p3 overshoot 1
+    expect(g.phase).toBe('over');
+    expect(g.players.map((p) => p.place)).toEqual([1, 2, 2, 4]);
+    expect(g.winner).toBe(0);
+  });
+
+  it('делёж 1-го места в раунде → winner draw', () => {
+    const g = newGame(ringTrack(), 2);
+    [0, 1].forEach((i) => {
+      place(g.players[i], [5, 4]);
+      g.players[i].crossings = WIN_CROSSINGS - 1;
+    });
+    applyMove(g, cand(7, 4)); // p0 overshoot 1
+    applyMove(g, cand(7, 4)); // p1 overshoot 1 — равны
+    expect(g.phase).toBe('over');
+    expect(g.players[0].place).toBe(1);
+    expect(g.players[1].place).toBe(1);
     expect(g.winner).toBe('draw');
+  });
+
+  it('сдача: игрок выбывает, ход уходит дальше, в очереди не появляется', () => {
+    const g = newGame(ringTrack(), 3);
+    expect(g.current).toBe(0);
+    retireSeat(g, g.current);
+    expect(g.players[0].retired).toBe(true);
+    expect(g.players[0].place).toBeNull();
+    expect(g.phase).toBe('race');
+    expect(g.current).not.toBe(0); // ход перешёл дальше
+    expect(upcomingTurns(g, 6)).not.toContain(0);
+  });
+
+  it('сдача не своего болида (в любой момент) не двигает очередь, но убирает его', () => {
+    const g = newGame(ringTrack(), 3);
+    expect(g.current).toBe(0);
+    retireSeat(g, 2); // сдаётся не ходящий сейчас игрок
+    expect(g.players[2].retired).toBe(true);
+    expect(g.current).toBe(0); // ход остался у текущего
+    expect(g.phase).toBe('race');
+    expect(upcomingTurns(g, 6)).not.toContain(2);
+  });
+
+  it('все сдались → гонка окончена без победителя', () => {
+    const g = newGame(ringTrack(), 2);
+    retireSeat(g, g.current); // p0
+    retireSeat(g, g.current); // p1 — активных не осталось
+    expect(g.phase).toBe('over');
+    expect(g.winner).toBeNull();
+  });
+
+  it('после чужого финиша оставшийся может сдаться — гонка завершается, победитель сохранён', () => {
+    const g = newGame(ringTrack(), 2);
+    place(g.players[0], [5, 4]);
+    g.players[0].crossings = WIN_CROSSINGS - 1;
+    applyMove(g, cand(7, 4)); // p0 финиширует, раунд открыт
+    place(g.players[1], [10, 4]);
+    applyMove(g, cand(13, 4)); // p1 без финиша → p0 место 1, winner 0, гонка идёт
+    expect(g.winner).toBe(0);
+    expect(g.phase).toBe('race');
+    expect(g.current).toBe(1); // p0 выбыл — ход у p1
+    retireSeat(g, g.current); // p1 сдаётся — активных не осталось
+    expect(g.phase).toBe('over');
+    expect(g.players[1].retired).toBe(true);
+    expect(g.winner).toBe(0); // победитель не переопределяется
   });
 });
 

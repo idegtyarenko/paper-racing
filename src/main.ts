@@ -12,8 +12,9 @@ import {
   MAX_PLAYERS,
   newGame,
 } from './model/game';
-import { candidates, applyMove, coastMove } from './model/turns';
-import { NavField, Difficulty, buildNavField, chooseMove } from './model/ai';
+import { candidates, applyMove, coastMove, retireSeat } from './model/turns';
+import { Difficulty, chooseMove } from './model/ai';
+import { NavField, buildNavField } from './model/nav';
 import { strings } from './strings';
 import { AI_MOVE_DELAY_MS } from './config';
 import { render, AppView } from './view/render';
@@ -21,6 +22,7 @@ import { Bounds, polylineBounds } from './view/camera';
 import * as vp from './view/viewport';
 import { bindButtons, updatePanel, setOnlineEnabled, PanelMode } from './ui/panel';
 import { renderTurnQueue } from './ui/turn-queue';
+import { renderStandings } from './ui/standings';
 import { openSettings } from './ui/settings';
 import { localizeDom } from './ui/localize';
 import { onlineAvailable } from './online/net';
@@ -56,8 +58,12 @@ let cands: Candidate[] | null = null;
 let raceRules: Rules = { ...DEFAULT_RULES };
 /** Гонка против компьютера: какие места за ботами (index = seat), null — ботов нет. */
 let aiSeats: boolean[] | null = null;
-/** Навигационное поле ботов для текущей трассы (строится на старте AI-гонки). */
-let aiNav: NavField | null = null;
+/**
+ * Навигационное поле трассы текущей гонки (расстояния до финиша). Строится на
+ * старте любой гонки: нужно и ботам (chooseMove), и полосе текущих мест
+ * (renderStandings). null — вне гонки.
+ */
+let raceNav: NavField | null = null;
 let aiDifficulty: Difficulty = 'medium';
 /** Таймер отложенного хода бота — гасится при любом выходе из гонки. */
 let aiTimer: number | null = null;
@@ -107,11 +113,40 @@ function ghostSeats(): number[] {
   return seats;
 }
 
+/**
+ * Место локального игрока, который сдаётся кнопкой «Сдаться»: в онлайне — своё
+ * место; против ботов — человек (единственное не-ботское место); в hotseat —
+ * тот, чей сейчас ход. −1, если гонки нет.
+ */
+function localHumanSeat(): number {
+  if (!game) return -1;
+  if (session.active()) return session.mySeat();
+  if (aiSeats) return aiSeats.indexOf(false);
+  return game.current;
+}
+
+/** Доступна ли сейчас кнопка «Сдаться»: идёт гонка и локальный игрок ещё в ней
+ *  (не финишировал и не сошёл). Сдаться можно в любой момент, не только в свой ход. */
+function canRetire(): boolean {
+  if (!game || mode !== 'race' || game.phase !== 'race') return false;
+  const seat = localHumanSeat();
+  return seat >= 0 && game.players[seat].place === null && !game.players[seat].retired;
+}
+
 function updateUI(): void {
   const net = online.netTurn(game);
   const aiTurn = !!(game && aiSeats?.[game.current]);
-  updatePanel(mode, editor, game, raceTrack?.startPoints.length ?? 6, net, aiTurn);
+  updatePanel(
+    mode,
+    editor,
+    game,
+    raceTrack?.startPoints.length ?? 6,
+    net,
+    aiTurn,
+    canRetire(),
+  );
   renderTurnQueue(mode === 'race' ? game : null);
+  renderStandings(mode === 'race' ? game : null, raceNav);
 }
 
 /** Может ли этот клиент ходить сейчас: в локальной игре — всегда (кроме хода
@@ -139,8 +174,8 @@ function scheduleAiMove(): void {
   if (!game || game.phase !== 'race' || !aiSeats?.[game.current]) return;
   aiTimer = window.setTimeout(() => {
     aiTimer = null;
-    if (!game || game.phase !== 'race' || !aiSeats?.[game.current] || !aiNav) return;
-    const cand = chooseMove(game, aiNav, aiDifficulty);
+    if (!game || game.phase !== 'race' || !aiSeats?.[game.current] || !raceNav) return;
+    const cand = chooseMove(game, raceNav, aiDifficulty);
     if (cand) applyMove(game, cand);
     else coastMove(game); // все кандидаты заняты соперниками — пас по инерции
     refreshCands();
@@ -150,11 +185,12 @@ function scheduleAiMove(): void {
   }, AI_MOVE_DELAY_MS);
 }
 
-/** Выйти из режима игры с ботами (новая настройка гонки / выход в редактор). */
+/** Выйти из режима игры с ботами (новая настройка гонки / выход в редактор).
+ *  raceNav не трогаем — оно живёт на протяжении гонки для полосы мест; сбрасывается
+ *  на старте новой гонки и в resetToEdit. */
 function clearAi(): void {
   cancelAiMove();
   aiSeats = null;
-  aiNav = null;
 }
 
 /**
@@ -174,6 +210,24 @@ function commitMove(cand: Candidate): void {
   updateUI();
   redraw();
   scheduleAiMove(); // в гонке с ботами после хода человека очередь едет к ботам
+}
+
+/**
+ * Сдаться: локальный игрок выбывает из гонки. Доступно в любой момент (не только
+ * в свой ход). В онлайне — confirm-first отправка; локально — мутируем стейт и
+ * перерисовываем. Кнопку показываем/прячем по canRetire().
+ */
+function retire(): void {
+  if (!canRetire()) return;
+  if (session.active()) {
+    online.sendRetire();
+    return;
+  }
+  retireSeat(game!, localHumanSeat());
+  refreshCands();
+  updateUI();
+  redraw();
+  scheduleAiMove(); // после выбытия человека очередь может уйти к ботам
 }
 
 function refreshCands(): void {
@@ -242,6 +296,7 @@ function startRace(playerCount: number): void {
   if (!raceTrack) return;
   clearAi();
   game = newGame(raceTrack, playerCount, raceRules);
+  raceNav = buildNavField(raceTrack); // для полосы текущих мест
   lastLocalRace = { mode: 'local', count: playerCount };
   mode = 'race';
   vp.fitToContent();
@@ -265,7 +320,7 @@ function startAiRace(difficulty: Difficulty): void {
   game.players.forEach((p, i) => {
     if (aiSeats![i]) p.name = `${strings.aiSelect.botPrefix} ${p.name}`;
   });
-  aiNav = buildNavField(raceTrack);
+  raceNav = buildNavField(raceTrack);
   aiDifficulty = difficulty;
   lastLocalRace = { mode: 'ai', difficulty };
   mode = 'race';
@@ -280,6 +335,7 @@ function startAiRace(difficulty: Difficulty): void {
 function resetToEdit(): void {
   clearAi();
   game = null;
+  raceNav = null;
   raceTrack = null;
   cands = null;
   input.clearSelection();
@@ -305,6 +361,7 @@ online.initOnline({
   setGame: (g) => {
     clearAi(); // онлайн-гонка заменяет локальную — боты в ней не участвуют
     game = g;
+    raceNav = g ? buildNavField(g.track) : null; // для полосы текущих мест
     lastLocalRace = null; // онлайн-гонка — не локальный рематч, сбрасываем «ту же трассу»
   },
   getRules: () => raceRules,
@@ -398,6 +455,7 @@ bindButtons({
   onLobbyCopyCode: () => online.copy(),
   onLobbyLeave: () => online.leave(),
   onSkip: () => online.skip(),
+  onRetire: () => retire(),
 });
 
 /**
@@ -434,10 +492,11 @@ function restoreState(): PanelMode | null {
   raceRules = snap.rules;
   playersReturn = snap.playersReturn;
   lastLocalRace = snap.lastLocalRace;
+  // nav-поле не сериализуем — пересобираем из трассы (нужно ботам и полосе мест).
+  if (game) raceNav = buildNavField(game.track);
   if (snap.ai && game) {
     aiSeats = snap.ai.seats;
     aiDifficulty = snap.ai.difficulty;
-    aiNav = buildNavField(game.track); // nav-поле не сериализуем — пересобираем из трассы
   }
   return snap.mode;
 }

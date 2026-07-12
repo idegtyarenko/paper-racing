@@ -13,7 +13,7 @@ import {
   cloneState,
   seatColor,
 } from '../model/game';
-import { coastMove, applyMove } from '../model/turns';
+import { coastMove, applyMove, retireSeat } from '../model/turns';
 import { EditorState, editorFromTrack } from '../model/editor';
 import { renderLobby, setLobbyStarting } from '../ui/lobby';
 import {
@@ -142,6 +142,41 @@ export async function sendMove(cand: Candidate): Promise<void> {
 /** Повторить последнюю неудавшуюся отправку хода (десктоп: выделения нет — берём pendingCand). */
 export function retryMove(): void {
   if (pendingCand) sendMove(pendingCand);
+}
+
+/**
+ * Сдаться (confirm-first): игрок выбывает из гонки. Применяем retireSeat своего
+ * места к копии, пишем на сервер и лишь при успехе делаем её текущим стейтом.
+ * Сдаться можно в любой момент, не обязательно в свой ход (retireSeat не двигает
+ * очередь, если сдался не ходящий сейчас). При ошибке — тост и сброс состояния
+ * (повтора нет: сдача не критична, игрок может нажать снова).
+ */
+export async function sendRetire(): Promise<void> {
+  const game = deps.getGame();
+  if (!game || game.phase !== 'race' || sending) return;
+  const seat = session.mySeat();
+  const me = game.players[seat];
+  if (!me || me.place !== null || me.retired) return; // уже финишировал/сошёл
+  sending = true;
+  setMoveSendState('sending');
+  const base = game;
+  const next = cloneState(game);
+  retireSeat(next, seat);
+  try {
+    await session.pushMove(next);
+    sending = false;
+    setMoveSendState('idle');
+    if (deps.getGame() !== base) return; // авторитетный стейт уже применился
+    deps.setGame(next);
+    deps.refreshCands();
+    deps.updateUI();
+    deps.redraw();
+    armTurnWatch();
+  } catch {
+    sending = false;
+    setMoveSendState('idle');
+    showToast(strings.online.error);
+  }
 }
 
 function clearTurnWatch(): void {
