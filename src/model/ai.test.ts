@@ -257,4 +257,56 @@ describe('chooseMove', () => {
     const b = chooseMove(state, nav, 'hard')!;
     expect(a.target).toEqual(b.target);
   });
+
+  // Расталкивание пачки: одинаковые детерминированные боты не должны съезжаться на
+  // одну линию и пилить друг друга блокировками (тогда лидер-человек легко
+  // отрывается, а хвост сам себя тормозит). На широкой трассе штраф за близость
+  // к сопернику разводит болиды веером. Числа сняты с текущего бота; у прежнего
+  // (без crowdPenalty) на этой же трассе кучность ≈3.2 и ≈63 хода с блокировками.
+  it('боты не сбиваются в кучу (расталкивание пачки)', () => {
+    const wide = finalizeTrack(
+      [
+        { x: 0, y: 0 },
+        { x: 60, y: 0 },
+        { x: 60, y: 40 },
+        { x: 0, y: 40 },
+      ],
+      [
+        { x: 10, y: 10 },
+        { x: 50, y: 10 },
+        { x: 50, y: 30 },
+        { x: 10, y: 30 },
+      ],
+      { a: { x: 30, y: -0.25 }, b: { x: 30, y: 10.25 } },
+      { x: 1, y: 0 },
+    );
+    if ('error' in wide) throw new Error(`fixture invalid: ${wide.error}`);
+    const wnav = buildNavField(wide.track);
+    const state = gameOn(wide.track, 4);
+    const rng = rngConst(0.37); // без epsilon-случайности — детерминированный прогон
+    let blockedTurns = 0;
+    let nearestSum = 0;
+    let nearestN = 0;
+    for (let i = 0; i < 800 && state.phase === 'race'; i++) {
+      const seat = state.current;
+      const p = state.players[seat];
+      const others = state.players.filter(
+        (q, j) => j !== seat && q.place === null && !q.retired,
+      );
+      if (others.length && p.place === null && !p.retired) {
+        let nd = Infinity;
+        for (const q of others) nd = Math.min(nd, dist(p.pos, q.pos));
+        nearestSum += nd;
+        nearestN += 1;
+      }
+      if (candidates(state).some((c) => c.blocked)) blockedTurns += 1;
+      const cand = chooseMove(state, wnav, 'hard', rng);
+      if (cand) applyMove(state, cand);
+      else coastMove(state);
+    }
+    expect(state.players.filter((q) => q.place !== null).length).toBe(4); // все финишировали
+    const avgNearest = nearestSum / Math.max(1, nearestN);
+    expect(avgNearest).toBeGreaterThan(5); // болиды держат дистанцию (у прежнего ≈3.2)
+    expect(blockedTurns).toBeLessThan(40); // мало взаимных блокировок (у прежнего ≈63)
+  });
 });

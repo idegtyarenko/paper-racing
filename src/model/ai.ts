@@ -12,10 +12,22 @@
 // оценивается потенциалом phi = dist + (осталось пересечений − 1)·круг, плюс
 // классический инвариант безопасности «успею ли затормозить» (canStop) — он
 // не даёт разгоняться туда, откуда уже не вписаться в поворот.
+//
+// Поверх оценки — расталкивание пачки: штраф за близость целевой клетки к другим
+// болидам (crowdPenalty) плюс по-болидный тай-брейк среди равноценных ходов. Без
+// этого одинаковые детерминированные боты съезжаются на одну оптимальную линию и
+// пилят друг друга блокировками — лидер отрывается, а хвост сам себя тормозит.
 
 import { Vec, dist } from '../geometry';
 import { sideOfFinish } from './track';
-import { GameState, Candidate, MoveOutcome, WIN_CROSSINGS, computeOutcome } from './game';
+import {
+  GameState,
+  Candidate,
+  MoveOutcome,
+  WIN_CROSSINGS,
+  computeOutcome,
+  otherPositions,
+} from './game';
 import { candidates } from './turns';
 import { NavField, navAt } from './nav';
 
@@ -58,6 +70,19 @@ const FINISH_BONUS = 1e6;
 const FINISH_DELAY_COST = 1e3;
 /** Ходы в этой полосе от лучшего считаются «почти лучшими» (для epsilon-выбора). */
 const EPS_MARGIN = 3;
+/** Расталкивание пачки: одинаковые детерминированные боты съезжаются на одну
+ *  оптимальную линию и пилят друг друга блокировками — лидер (человек) отрывается,
+ *  а хвост сам себя тормозит. Штраф за близость к сопернику разводит болиды веером
+ *  по ширине трассы; действует только когда рядом реально кто-то есть. */
+/** Радиус ощущения соперника (клетки): ближе — штраф, дальше — ноль. */
+const CROWD_RADIUS = 4;
+/** Максимальный штраф за впритык стоящего соперника (в «клетках пути»). Соизмерим
+ *  с EPS_MARGIN, много меньше расстояний — не сбивает бота с трассы, лишь разводит
+ *  равноценные линии. */
+const CROWD_WEIGHT = 5;
+/** Амплитуда по-болидного тай-брейка среди почти-лучших ходов: разные болиды
+ *  предпочтут разные равноценные линии (детерминированно — заезд воспроизводим). */
+const TIE_JITTER = 1.5;
 
 /** Все 9 векторов ускорения одного хода. */
 const ACCELS: Vec[] = [];
@@ -159,6 +184,30 @@ export function chooseMove(
   const open = candidates(state).filter((c) => !c.blocked);
   if (open.length === 0) return null;
 
+  // Расталкивание: штраф за близость целевой клетки к другим болидам (только тем,
+  // кто реально на трассе — otherPositions отсекает штрафников/выбывших). Ноль,
+  // когда рядом никого, — одиночная сила бота не страдает.
+  const rivals = otherPositions(state, state.current);
+  const crowdPenalty = (target: Vec): number => {
+    let pen = 0;
+    for (const r of rivals) {
+      const d = dist(target, r);
+      if (d < CROWD_RADIUS) pen += CROWD_WEIGHT * (1 - d / CROWD_RADIUS);
+    }
+    return pen;
+  };
+  // Детерминированный «шум» в [0, TIE_JITTER) на (место болида, клетка): разводит
+  // равноценные ходы разных болидов, не внося случайности (заезд воспроизводим).
+  const seat = state.current;
+  const jitter = (target: Vec): number => {
+    const h =
+      Math.sin(target.x * 12.9898 + target.y * 78.233 + seat * 37.719) * 43758.5453;
+    return (h - Math.floor(h)) * TIE_JITTER;
+  };
+
+  // Счёт хода — ЧИСТО гоночный (без расталкивания): расталкивание не должно
+  // перебивать смысл ехать вперёд. На тесном старте суммарный штраф за соседей
+  // иначе перевешивал прогресс, и бот уезжал в наименее людную клетку — назад.
   const scored = open.map((c) => {
     let score = valueOf(outcome(me.pos, c.target), left0, P.depth - 1);
     const speed = dist(me.pos, c.target);
@@ -168,11 +217,41 @@ export function chooseMove(
 
   let best = scored[0];
   for (const s of scored) if (s.score < best.score) best = s;
+
+  // Терминальный ход (финиш/безвыходная авария — счёт огромен по модулю): точный
+  // минимум, без расталкивания. Так сохраняются максимум заезда за линию и выбор
+  // наименьшего штрафа аварии.
+  if (best.score < -FINISH_BONUS / 2 || best.score > FINISH_BONUS / 2) return best.c;
+
   const near = scored.filter((s) => s.score <= best.score + EPS_MARGIN);
   if (near.length > 1 && rng() < P.epsilon) {
     return near[Math.min(near.length - 1, Math.floor(rng() * near.length))].c;
   }
-  return best.c;
+
+  // Расталкивание — ТАЙ-БРЕЙК среди почти-оптимальных ходов, но лишь среди тех, что
+  // (а) реально едут вперёд к финишу (navAt цели меньше, чем у текущей клетки) и
+  // (б) держат мягкий потолок скорости. Иначе на тесном старте «менее людной»
+  // оказывалась клетка назад, и бот уезжал в обратную сторону; а лёгкий бот
+  // превышал бы потолок. Среди годных выбираем наименее людного, равных разводим
+  // по-болидным «шумом». Нет годных — точный минимум (как у прежнего бота).
+  const navPos = navAt(nav, me.pos);
+  const spread = near.filter(
+    (s) => navAt(nav, s.c.target) < navPos && dist(me.pos, s.c.target) <= P.maxSpeed,
+  );
+  if (spread.length === 0) return best.c;
+  let pick = spread[0];
+  let pickCrowd = crowdPenalty(pick.c.target);
+  let pickJit = jitter(pick.c.target);
+  for (const s of spread) {
+    const crowd = crowdPenalty(s.c.target);
+    const jit = jitter(s.c.target);
+    if (crowd < pickCrowd - 1e-6 || (crowd <= pickCrowd + 1e-6 && jit > pickJit)) {
+      pick = s;
+      pickCrowd = crowd;
+      pickJit = jit;
+    }
+  }
+  return pick.c;
 }
 
 /** Экспорт для тестов: параметры сложности (глубина/потолок скорости и т.д.). */
