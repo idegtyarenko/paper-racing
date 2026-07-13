@@ -8,7 +8,7 @@
 // финального прыжка из клеток-сидов: так клетки сразу за линией получают
 // ≈длину круга «в обход», и болиду всегда выгодно ехать вперёд.
 
-import { Vec, dist, segSegIntersection } from '../geometry';
+import { Vec, dist, lerp, segSegIntersection } from '../geometry';
 import { Track, key, unkey, sideOfFinish } from './track';
 import { offRoadDepth } from './game';
 import { OFFROAD_FORGIVE } from '../config';
@@ -96,6 +96,19 @@ export function buildNavField(track: Track): NavField {
 }
 
 /**
+ * Отрезок a→b целиком на дороге (в пределах допуска). Тот же критерий, что у
+ * движка в scanMove: середины семплов не глубже OFFROAD_FORGIVE за кромкой. Шаг
+ * ~0.5 клетки ловит тонкую травяную перегородку (≥ ~1 клетка) между проходами.
+ */
+function segOnRoad(track: Track, a: Vec, b: Vec): boolean {
+  const steps = Math.max(1, Math.ceil(dist(a, b) / 0.5));
+  for (let i = 1; i < steps; i++) {
+    if (offRoadDepth(track, lerp(a, b, i / steps)) > OFFROAD_FORGIVE) return false;
+  }
+  return true;
+}
+
+/**
  * Расстояние до финиша для произвольной точки — не обязательно узла дороги
  * (точка аварии дробная; легальный ход может закончиться в полосе допуска или
  * ближе WALL_CLEARANCE к стенке, где узлов в inside нет). Берём минимум
@@ -111,11 +124,17 @@ export function navAt(field: NavField, p: Vec): number {
       const c = { x: cx + dx, y: cy + dy };
       const v = field.dist.get(key(c.x, c.y));
       if (v === undefined) continue;
+      const est = v + dist(p, c);
+      if (est >= best) continue;
       // Клетка по ту сторону финишной линии не годится: её расстояние учитывает
       // другое число оставшихся пересечений (иначе потенциал у линии схлопывается,
       // и бот «прилипает» к ней вместо честного круга).
       if (crossDir(field.track, p, c) !== 0) continue;
-      best = Math.min(best, v + dist(p, c));
+      // Луч p→c не должен резать стену: иначе поле «протекает» на соседний
+      // проход трассы через тонкую перегородку, и бот едет прямо в неё. Проверяем
+      // лениво — только кандидатов, реально тянущих минимум вниз.
+      if (!segOnRoad(field.track, p, c)) continue;
+      best = est;
     }
   }
   return best === Infinity ? field.lap : best;
