@@ -32,6 +32,7 @@ const retireBtn = document.getElementById('retireBtn') as HTMLButtonElement;
 const settingsBtn = document.getElementById('settingsBtn') as HTMLButtonElement;
 const confirmMoveBtn = document.getElementById('confirmMove') as HTMLButtonElement;
 const skipBtn = document.getElementById('skipTurn') as HTMLButtonElement;
+const raceCodeBtn = document.getElementById('raceCode') as HTMLButtonElement;
 const rulesSheet = document.getElementById('rulesSheet')!;
 const raceDialog = document.getElementById('raceDialog')!;
 const dlgSameTrack = document.getElementById('dlgSameTrack') as HTMLButtonElement;
@@ -97,6 +98,8 @@ export interface PanelHandlers {
   onLobbyLeave: () => void;
   /** Пропустить ход задержавшегося игрока (болид едет по инерции). */
   onSkip: () => void;
+  /** Тап по чипу кода игры над полем — поделиться ссылкой на игру. */
+  onRaceShare: () => void;
   /** Сдаться за текущего игрока (кнопка на его карточке) — он выбывает из гонки. */
   onRetire: () => void;
 }
@@ -164,6 +167,7 @@ export function bindButtons(h: PanelHandlers): void {
   bindTap(modeBackBtn, h.onModeBack);
   bindTap(joinByCodeBtn, h.onJoinByCode);
   bindTap(skipBtn, h.onSkip);
+  bindTap(raceCodeBtn, h.onRaceShare);
   // «Сдаться» — сперва диалог подтверждения, затем сама сдача.
   bindTap(retireBtn, () =>
     openConfirm(
@@ -324,6 +328,8 @@ export interface NetTurn {
   currentName: string;
   /** Присутствие по местам (индекс = место); false — вкладка офлайн. */
   present: boolean[];
+  /** Код текущей онлайн-игры (для чипа над полем — подсказать выпавшему). */
+  code: string;
 }
 
 export function updatePanel(
@@ -343,6 +349,12 @@ export function updatePanel(
   raceButtons.hidden = mode !== 'race';
   skipBtn.hidden = true; // покажем ниже только в гонке, когда доступен пропуск
   retireBtn.hidden = !canRetire; // «Сдаться» в шапке — пока локальный игрок в гонке
+
+  // Чип кода игры над полем: только в идущей онлайн-гонке (net != null), чтобы можно
+  // было подсказать выпавшему код/ссылку. На экране победителя и в локальной — прячем.
+  const showCode = mode === 'race' && !!net && !!game && game.phase !== 'over';
+  raceCodeBtn.hidden = !showCode;
+  if (showCode) raceCodeBtn.textContent = `🔗 ${net!.code}`;
 
   if (mode === 'edit') {
     renderEditStatus(editor);

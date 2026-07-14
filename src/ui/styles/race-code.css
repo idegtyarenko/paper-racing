@@ -1,0 +1,31 @@
+/* Чип с кодом игры над полем во время онлайн-гонки: капсула у верхнего-левого края
+   поля, поверх canvas (как turn-queue / zoom-ctl). В отличие от turn-queue кликабельна
+   — тап делится ссылкой на игру, чтобы подсказать выпавшему код. */
+.race-code {
+  position: absolute;
+  top: calc(10px + env(safe-area-inset-top));
+  left: calc(10px + env(safe-area-inset-left));
+  z-index: 5;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: none;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #3a3a3a;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  touch-action: manipulation;
+  white-space: nowrap;
+}
+
+.race-code:hover {
+  background: #f0ecdf;
+}
+.race-code:active {
+  background: #e6e0cf;
+}
+.race-code[hidden] {
+  display: none;
+}

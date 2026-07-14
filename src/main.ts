@@ -459,6 +459,7 @@ bindButtons({
   onLobbyCopyCode: () => online.copy(),
   onLobbyLeave: () => online.leave(),
   onSkip: () => online.skip(),
+  onRaceShare: () => online.share(),
   onRetire: () => retire(),
 });
 
@@ -541,6 +542,9 @@ resize(); // resize() сам вписывает восстановленную �
 
 if (joining) {
   online.promptJoinByLink(joinParam!.toUpperCase());
+} else if (onlineAvailable() && online.hasSavedSession()) {
+  // Перезаход после дисконнекта: предложить вернуться в последнюю онлайн-игру.
+  online.promptResume();
 }
 
 // Предложить установить игру ярлыком на телефон (Android/Chromium и iOS Safari).

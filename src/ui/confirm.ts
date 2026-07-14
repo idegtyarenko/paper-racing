@@ -22,7 +22,7 @@ function build(): HTMLElement {
 
   yesBtn = document.createElement('button');
   yesBtn.type = 'button';
-  yesBtn.className = 'button button--center button--danger';
+  yesBtn.className = 'button button--center';
 
   const cancel = document.createElement('button');
   cancel.type = 'button';
@@ -39,15 +39,19 @@ function build(): HTMLElement {
   return s;
 }
 
-/** Открыть диалог: заголовок, подпись подтверждающей кнопки и колбэк на «да». */
+/** Открыть диалог: заголовок, подпись подтверждающей кнопки и колбэк на «да».
+ *  По умолчанию кнопка «да» опасная (красная) — для деструктивных действий вроде
+ *  сдачи; для позитивных (например «Вернуться в игру») передать danger:false. */
 export function openConfirm(
   title: string,
   confirmLabel: string,
   onConfirm: () => void,
+  opts: { danger?: boolean } = {},
 ): void {
   if (!sheet) sheet = build();
   titleEl.textContent = title;
   yesBtn.textContent = confirmLabel;
+  yesBtn.classList.toggle('button--danger', opts.danger !== false);
   onYes = onConfirm;
   openSheet(sheet);
 }

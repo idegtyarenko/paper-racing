@@ -25,6 +25,7 @@ import {
   setConnBanner,
 } from '../ui/dialogs';
 import { closeOverlay } from '../ui/dom';
+import { openConfirm } from '../ui/confirm';
 import { NetTurn, PanelMode, setMoveSendState } from '../ui/panel';
 import { TURN_TIMEOUT_MS, LOBBY_PRUNE_MS, SKIP_RETRY_MS } from '../config';
 import { strings } from '../strings';
@@ -62,7 +63,10 @@ export function initOnline(d: OnlineDeps): void {
   window.addEventListener('pagehide', (e: PageTransitionEvent) => {
     if (!session.active()) return;
     session.untrack();
-    if (!e.persisted && deps.getMode() === 'lobby') session.leave();
+    if (!e.persisted && deps.getMode() === 'lobby') {
+      session.leave();
+      forgetSession(); // место освобождено — возвращаться некуда
+    }
   });
 }
 
@@ -310,6 +314,7 @@ export function netTurn(game: GameState | null): NetTurn | null {
     canSkip: skipVisible,
     currentName: game.players[game.current]?.name ?? '',
     present: game.players.map((_, i) => session.isPresent(i)),
+    code: session.getCode() ?? '',
   };
 }
 
@@ -335,6 +340,34 @@ function rememberName(n: string): void {
     localStorage.setItem('pr-player-name', n);
   } catch {
     // недоступен — не запоминаем, ничего страшного.
+  }
+}
+
+// ── «Хлебная крошка» последней онлайн-сессии ─────────────────────────────────────
+// Код активной игры в localStorage: после дисконнекта/перезагрузки (когда in-memory
+// код в online.ts потерян) даёт при запуске предложить вернуться в игру.
+const SESSION_KEY = 'pr-online-session';
+function rememberSession(code: string): void {
+  try {
+    // Зовётся на каждый applyRow (в т.ч. каждый ход) — не пишем, если уже актуально.
+    if (localStorage.getItem(SESSION_KEY) !== code)
+      localStorage.setItem(SESSION_KEY, code);
+  } catch {
+    // localStorage недоступен — просто не запоминаем.
+  }
+}
+function savedSession(): string | null {
+  try {
+    return localStorage.getItem(SESSION_KEY);
+  } catch {
+    return null;
+  }
+}
+function forgetSession(): void {
+  try {
+    localStorage.removeItem(SESSION_KEY);
+  } catch {
+    // недоступен — ничего страшного.
   }
 }
 
@@ -366,6 +399,8 @@ function renderLobbyPanel(): void {
 
 const handlers: OnlineHandlers = {
   onLobby: () => {
+    // Мы в живом лобби — запомним код для возврата после дисконнекта (идемпотентно).
+    rememberSession(session.getCode()!);
     if (deps.getMode() === 'lobby') renderLobbyPanel();
   },
   onGameState: (g) => {
@@ -374,6 +409,11 @@ const handlers: OnlineHandlers = {
     // благодаря identity-guard в sendMove, а в БД действует last-write-wins).
     pendingCand = null;
     setMoveSendState('idle');
+    // Крошка для возврата после дисконнекта: держим её на идущую гонку, стираем на
+    // доигранную (возвращаться на экран победителя незачем). Это единственный владелец
+    // «запомнить/забыть» по авторитетному стейту — вызывается на каждый applyRow.
+    if (g.phase === 'over') forgetSession();
+    else rememberSession(session.getCode()!);
     deps.setGame(g);
     if (deps.getMode() !== 'race') {
       deps.setMode('race');
@@ -390,6 +430,7 @@ const handlers: OnlineHandlers = {
   },
   onClosed: () => {
     clearWatches();
+    forgetSession(); // игра удалена/закрыта хостом — возвращаться некуда
     pendingCand = null;
     setMoveSendState('idle');
     setConnBanner(false);
@@ -510,6 +551,7 @@ function startOnline(): Promise<void> {
 function leaveLobby(): Promise<void> {
   return guarded(async () => {
     clearWatches();
+    forgetSession(); // осознанный выход — возвращаться некуда
     pendingCand = null;
     setMoveSendState('idle');
     setConnBanner(false);
@@ -594,6 +636,37 @@ export async function promptJoinByLink(code: string): Promise<void> {
     rememberName(name);
     joinOnline(code, name, false);
   });
+}
+
+/** Есть ли запомненная онлайн-сессия, в которую можно предложить вернуться. */
+export function hasSavedSession(): boolean {
+  return savedSession() !== null;
+}
+
+/**
+ * Одноразовое предложение вернуться в последнюю онлайн-игру (после дисконнекта/
+ * перезагрузки). Крошку «съедаем» при показе: «Нет» или недоступная игра больше не
+ * мозолят глаза; при успешном входе joinOnline запишет её заново. Валидацию (жива ли
+ * игра, в ростере ли мы) делаем только по «Да» — не сетевым запросом на каждый старт.
+ */
+export function promptResume(): void {
+  const code = savedSession();
+  if (!code) return;
+  forgetSession();
+  openConfirm(
+    strings.online.resumeTitle(code),
+    strings.online.resumeYes,
+    async () => {
+      const known = await session.memberName(code);
+      if (!known) {
+        showToast(strings.online.gameGone);
+        return;
+      }
+      rememberName(known);
+      joinOnline(code, known, false); // тот же путь, что и реконнект по ссылке
+    },
+    { danger: false },
+  );
 }
 
 export function start(): void {
