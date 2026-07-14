@@ -333,6 +333,10 @@ function startAiRace(difficulty: Difficulty): void {
 
 /** Сбросить всё к чистому редактору (новая трасса / выход из онлайна). */
 function resetToEdit(): void {
+  // Если ещё в онлайн-сессии (например, финишировал, а другой игрок ещё гоняет,
+  // и жмёшь «Новый заезд» → «Начертить новую») — выходим из неё, иначе прилетевший
+  // ход соперника через onGameState реанимировал бы гонку и выдернул из редактора.
+  if (session.active()) session.leave();
   clearAi();
   game = null;
   raceNav = null;
