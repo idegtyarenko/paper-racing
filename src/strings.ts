@@ -123,6 +123,15 @@ export const strings = {
     orderRotate: 'По кругу',
     orderSnake: 'Змейкой',
     orderFixed: 'Постоянная',
+    // Лимит времени на ход (только онлайн).
+    turnLimitLabel: 'Время на ход',
+    turnLimitHint:
+      'Сколько даётся на ход. Если игрок думает дольше — остальные могут ' +
+      'пропустить его ход.',
+    limit30s: '30 сек',
+    limit1m: '1 мин',
+    limit2m: '2 мин',
+    limit5m: '5 мин',
     done: 'Готово',
   },
 

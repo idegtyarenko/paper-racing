@@ -243,22 +243,25 @@ function armTurnWatch(): void {
   const cur = game.current;
   if (cur === session.mySeat()) return; // мой ход — не слежу за собой
 
+  // Лимит на ход — из правил заезда (задаёт хост в настройках); старые стейты без
+  // поля подстрахованы дефолтом.
+  const limit = game.rules.turnLimitMs ?? TURN_TIMEOUT_MS;
+
   if (session.isPresent(cur)) {
-    // Онлайн, но задумался — через 30 с открываем ручной пропуск остальным.
+    // Онлайн, но задумался — по истечении лимита открываем ручной пропуск остальным.
     // Пропускать чужой ход может лишь активный игрок (не сдавшийся и не
     // финишировавший) — выбывшие в гонке уже не участвуют.
     if (!iAmActive(game)) return;
     skipTimer = window.setTimeout(() => {
       skipVisible = true;
       deps.updateUI();
-    }, TURN_TIMEOUT_MS);
+    }, limit);
     return;
   }
   // Отсутствует: авто-пропуск выполняет назначенный присутствующий клиент.
   if (session.designatedSkipper() !== session.mySeat()) return;
   const left = session.leftAtOf(cur);
-  const grace =
-    left === null ? TURN_TIMEOUT_MS : Math.max(0, TURN_TIMEOUT_MS - (Date.now() - left));
+  const grace = left === null ? limit : Math.max(0, limit - (Date.now() - left));
   skipTimer = window.setTimeout(() => autoSkip(cur), grace);
 }
 

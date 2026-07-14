@@ -381,6 +381,46 @@
             ></button>
           </div>
         </div>
+        <div id="turnLimitRow" class="setting">
+          <div class="setting__labelrow">
+            <span class="setting__label" data-i18n="settings.turnLimitLabel"></span>
+            <button
+              type="button"
+              class="setting__help"
+              aria-expanded="false"
+              data-i18n-aria-label="settings.helpLabel"
+            >
+              ?
+            </button>
+          </div>
+          <p class="setting__hint" data-i18n="settings.turnLimitHint" hidden></p>
+          <div id="turnLimitType" class="seg">
+            <button
+              type="button"
+              class="seg__btn"
+              data-limit="30000"
+              data-i18n="settings.limit30s"
+            ></button>
+            <button
+              type="button"
+              class="seg__btn"
+              data-limit="60000"
+              data-i18n="settings.limit1m"
+            ></button>
+            <button
+              type="button"
+              class="seg__btn"
+              data-limit="120000"
+              data-i18n="settings.limit2m"
+            ></button>
+            <button
+              type="button"
+              class="seg__btn"
+              data-limit="300000"
+              data-i18n="settings.limit5m"
+            ></button>
+          </div>
+        </div>
         <button
           class="button button--center"
           data-i18n="settings.done"

@@ -1,7 +1,8 @@
 // Лист-модалка настроек правил заезда: тип штрафа за вылет (по скорости или
-// статический), строгость динамической формулы, размер статического штрафа и
-// очерёдность ходов. Владеет своими DOM-элементами; текущие правила держит
-// вызывающий — сюда они приходят копией, а изменения уезжают через onChange.
+// статический), строгость динамической формулы, размер статического штрафа,
+// очерёдность ходов и лимит времени на ход (только онлайн). Владеет своими
+// DOM-элементами; текущие правила держит вызывающий — сюда они приходят копией,
+// а изменения уезжают через onChange.
 
 import { Rules } from '../model/game';
 import { CRASH_EXPONENT_STANDARD, CRASH_EXPONENT_STRICT } from '../config';
@@ -16,14 +17,19 @@ const staticRow = document.getElementById('staticRow')!;
 const staticSlider = document.getElementById('staticSlider') as HTMLInputElement;
 const staticTurnsValue = document.getElementById('staticTurnsValue')!;
 const turnOrderType = document.getElementById('turnOrderType')!;
+const turnLimitRow = document.getElementById('turnLimitRow')!;
+const turnLimitType = document.getElementById('turnLimitType')!;
 
 /** Показатель степени, соответствующий выбору сегмента строгости. */
 const exponentOf = (kind: string): number =>
   kind === 'strict' ? CRASH_EXPONENT_STRICT : CRASH_EXPONENT_STANDARD;
 
-// Рабочая копия правил (мутируется контролами) и колбэк наружу — задаются при открытии.
+// Рабочая копия правил (мутируется контролами) и колбэк наружу — задаются при
+// открытии. online — показывать ли строку лимита времени на ход (актуальна только
+// для сетевой игры).
 let rules: Rules;
 let onChange: ((r: Rules) => void) | null = null;
+let online = false;
 
 /** Обновить вид контролов под текущие rules (активные сегменты, значения, видимость строк). */
 function render(): void {
@@ -42,6 +48,13 @@ function render(): void {
   turnOrderType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
     btn.classList.toggle('seg__btn--active', btn.dataset.order === rules.turnOrder);
   });
+  turnLimitRow.hidden = !online;
+  turnLimitType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
+    btn.classList.toggle(
+      'seg__btn--active',
+      Number(btn.dataset.limit) === rules.turnLimitMs,
+    );
+  });
   const dynamic = rules.penalty === 'dynamic';
   exponentRow.hidden = !dynamic;
   staticRow.hidden = dynamic;
@@ -57,10 +70,16 @@ function commit(): void {
 
 /**
  * Открыть настройки. current — текущие правила (копируем: изменения сразу отдаём
- * через onChange, чужой объект не трогаем).
+ * через onChange, чужой объект не трогаем). isOnline — сетевой заезд: тогда
+ * показываем строку лимита времени на ход.
  */
-export function openSettings(current: Rules, onChangeCb: (r: Rules) => void): void {
+export function openSettings(
+  current: Rules,
+  isOnline: boolean,
+  onChangeCb: (r: Rules) => void,
+): void {
   rules = { ...current };
+  online = isOnline;
   onChange = onChangeCb;
   render();
   openSheet(sheet);
@@ -101,6 +120,12 @@ export function bindSettings(): void {
   turnOrderType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
     bindTap(btn, () => {
       rules.turnOrder = btn.dataset.order as Rules['turnOrder'];
+      commit();
+    });
+  });
+  turnLimitType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
+    bindTap(btn, () => {
+      rules.turnLimitMs = Number(btn.dataset.limit);
       commit();
     });
   });

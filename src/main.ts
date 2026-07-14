@@ -427,11 +427,11 @@ bindButtons({
   },
   onPlayerCount: (n) => startRace(n),
   onOpenSettings: () =>
-    openSettings(raceRules, (r) => {
+    openSettings(raceRules, false, (r) => {
       raceRules = r;
     }),
   onLobbySettings: () =>
-    openSettings(raceRules, (r) => {
+    openSettings(raceRules, true, (r) => {
       raceRules = r;
     }),
   onNewTrack: () => resetToEdit(),
@@ -494,7 +494,10 @@ function restoreState(): PanelMode | null {
   editor = snap.editor;
   raceTrack = snap.raceTrack;
   game = snap.game;
-  raceRules = snap.rules;
+  // Бэкфилл дефолтами: снимок мог быть записан старой версией без новых полей
+  // правил (напр. turnLimitMs) — иначе они окажутся undefined. Так же чинит
+  // серверные стейты net.ts при десериализации.
+  raceRules = { ...DEFAULT_RULES, ...snap.rules };
   playersReturn = snap.playersReturn;
   lastLocalRace = snap.lastLocalRace;
   // nav-поле не сериализуем — пересобираем из трассы (нужно ботам и полосе мест).

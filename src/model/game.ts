@@ -12,6 +12,7 @@ import {
   CRASH_PENALTY_MAX,
   OFFROAD_FORGIVE,
   CRASH_SAMPLE_STEP,
+  TURN_TIMEOUT_MS,
 } from '../config';
 
 export interface TrailSeg {
@@ -75,6 +76,13 @@ export interface Rules {
    *   классику (ai.ts перебирает ходы по классической модели).
    */
   physics: 'classic' | 'realistic';
+  /**
+   * Лимит времени на ход, мс. Действует только в онлайне: по его истечении ход
+   * присутствующего, но задумавшегося игрока становится доступен остальным для
+   * ручного пропуска, а ход отсутствующего авто-пропускает назначенный клиент
+   * (см. armTurnWatch в online-controller.ts). В hotseat/против бота не влияет.
+   */
+  turnLimitMs: number;
 }
 
 /** Правила по умолчанию: динамический штраф со стандартной (линейной) строгостью, классическая физика. */
@@ -84,6 +92,7 @@ export const DEFAULT_RULES: Rules = {
   dynamicExponent: 1,
   turnOrder: 'rotate',
   physics: 'classic',
+  turnLimitMs: TURN_TIMEOUT_MS,
 };
 
 /**
