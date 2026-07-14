@@ -11,7 +11,7 @@ import { describe, it, expect } from 'vitest';
 import { chooseMove, Difficulty } from './ai';
 import { buildNavField, navAt } from './nav';
 import { candidates, applyMove, coastMove } from './turns';
-import { GameState, Player, computeOutcome } from './game';
+import { GameState, Player, computeOutcome, WIN_CROSSINGS } from './game';
 import { Track, key, unkey, finalizeTrack } from './track';
 import { Vec, dist } from '../geometry';
 import { OUTER, INNER, gameOn } from './test-fixtures';
@@ -169,6 +169,45 @@ describe('chooseMove', () => {
     expect(state.players[0].crashes).toHaveLength(0);
   });
 
+  // Сила hard: A* минимизирует ЧИСЛО ХОДОВ (не длину пути), поэтому несёт скорость
+  // через связки и проходит извилистую трассу заметно быстрее прежнего жадного бота.
+  // Шпилька (два разворота на 180° вокруг тонкого языка) — где жадная внутренняя
+  // линия особенно медленна. Порог с запасом над измеренным (~29); срабатывает,
+  // если планировщик деградирует к «оптимизации пути».
+  it('сложный бот проходит извилистую трассу за мало ходов (time-оптимум)', () => {
+    const hp = finalizeTrack(
+      [
+        { x: 0, y: 0 },
+        { x: 40, y: 0 },
+        { x: 40, y: 20 },
+        { x: 0, y: 20 },
+      ],
+      [
+        { x: 4, y: 8 },
+        { x: 36, y: 8 },
+        { x: 36, y: 12 },
+        { x: 4, y: 12 },
+      ],
+      { a: { x: 20, y: -0.25 }, b: { x: 20, y: 8.25 } },
+      { x: 1, y: 0 },
+    );
+    if ('error' in hp) throw new Error(`fixture invalid: ${hp.error}`);
+    const hpNav = buildNavField(hp.track);
+    const state = gameOn(hp.track, 2);
+    state.players[1].retired = true; // соло: соперник не мешает
+    const rng = rngConst(0.99);
+    let moves = 0;
+    for (let i = 0; i < 400 && state.winner === null; i++) {
+      const cand = chooseMove(state, hpNav, 'hard', rng);
+      if (cand) applyMove(state, cand);
+      else coastMove(state);
+      moves += 1;
+    }
+    expect(state.winner).toBe(0);
+    expect(state.players[0].crashes).toHaveLength(0);
+    expect(moves).toBeLessThanOrEqual(34);
+  });
+
   it('сложные боты доигрывают гонку почти без аварий', () => {
     // В плотном трафике вынужденная авария возможна (соперники глубже первого
     // слоя не прогнозируются) — но должна оставаться редкостью.
@@ -258,12 +297,14 @@ describe('chooseMove', () => {
     expect(a.target).toEqual(b.target);
   });
 
-  // Расталкивание пачки: одинаковые детерминированные боты не должны съезжаться на
-  // одну линию и пилить друг друга блокировками (тогда лидер-человек легко
-  // отрывается, а хвост сам себя тормозит). На широкой трассе штраф за близость
-  // к сопернику разводит болиды веером. Числа сняты с текущего бота; у прежнего
-  // (без crowdPenalty) на этой же трассе кучность ≈3.2 и ≈63 хода с блокировками.
-  it('боты не сбиваются в кучу (расталкивание пачки)', () => {
+  // Соперник не саботирует темп бота. Прежнее «расталкивание» (штраф за близость к
+  // сопернику) заставляло бота уступать гоночную линию любому противнику и теряло
+  // ~40% темпа (в пачке ~68 ходов против ~46 соло), из-за чего человек легко
+  // отрывался даже 1-на-1. Теперь расталкивания нет: болиды обводят друг друга самим
+  // поиском (blocked-ходы отсеяны, план строится в объезд), и в пачке идут почти
+  // соло-темпом. Проверяем: лидер пачки укладывается около соло, все финишируют без
+  // дедлока, и никто не едет против трассы.
+  it('соперник не саботирует темп бота (в пачке ≈ соло)', () => {
     const wide = finalizeTrack(
       [
         { x: 0, y: 0 },
@@ -282,31 +323,48 @@ describe('chooseMove', () => {
     );
     if ('error' in wide) throw new Error(`fixture invalid: ${wide.error}`);
     const wnav = buildNavField(wide.track);
+    const rng = rngConst(0.37);
+
+    // Соло: один бот (соперник снят) — эталон темпа.
+    const s0 = gameOn(wide.track, 2);
+    s0.players[1].retired = true;
+    let soloMoves = 0;
+    for (let i = 0; i < 600 && s0.winner === null; i++) {
+      const c = chooseMove(s0, wnav, 'hard', rng);
+      if (c) applyMove(s0, c);
+      else coastMove(s0);
+      soloMoves += 1;
+    }
+    expect(s0.winner).toBe(0);
+
+    // Пачка из 4: личные ходы каждого до завершения круга + контроль заднего хода.
     const state = gameOn(wide.track, 4);
-    const rng = rngConst(0.37); // без epsilon-случайности — детерминированный прогон
-    let blockedTurns = 0;
-    let nearestSum = 0;
-    let nearestN = 0;
-    for (let i = 0; i < 800 && state.phase === 'race'; i++) {
+    const my = state.players.map(() => 0);
+    const lap: (number | null)[] = state.players.map(() => null);
+    let backward = 0;
+    for (let i = 0; i < 1600 && state.phase === 'race'; i++) {
       const seat = state.current;
       const p = state.players[seat];
-      const others = state.players.filter(
-        (q, j) => j !== seat && q.place === null && !q.retired,
-      );
-      if (others.length && p.place === null && !p.retired) {
-        let nd = Infinity;
-        for (const q of others) nd = Math.min(nd, dist(p.pos, q.pos));
-        nearestSum += nd;
-        nearestN += 1;
+      if (p.place !== null || p.retired || p.skipTurns > 0) {
+        coastMove(state);
+        continue;
       }
-      if (candidates(state).some((c) => c.blocked)) blockedTurns += 1;
+      my[seat] += 1;
+      const navBefore = navAt(wnav, p.pos);
+      const crossBefore = p.crossings;
       const cand = chooseMove(state, wnav, 'hard', rng);
       if (cand) applyMove(state, cand);
       else coastMove(state);
+      const sp = state.players[seat];
+      if (lap[seat] === null && sp.crossings >= WIN_CROSSINGS) lap[seat] = my[seat];
+      if (sp.crossings === crossBefore && sp.skipTurns === 0) {
+        if (navAt(wnav, sp.pos) > navBefore + 3) backward += 1;
+      }
     }
-    expect(state.players.filter((q) => q.place !== null).length).toBe(4); // все финишировали
-    const avgNearest = nearestSum / Math.max(1, nearestN);
-    expect(avgNearest).toBeGreaterThan(5); // болиды держат дистанцию (у прежнего ≈3.2)
-    expect(blockedTurns).toBeLessThan(40); // мало взаимных блокировок (у прежнего ≈63)
+    expect(state.players.filter((q) => q.place !== null).length).toBe(4); // без дедлока
+    expect(backward).toBe(0); // никто не едет против трассы
+    const winnerMoves = Math.min(...lap.filter((x): x is number => x !== null));
+    // Лидер пачки — около соло (не раздут вдвое, как при старом расталкивании).
+    expect(winnerMoves).toBeLessThanOrEqual(soloMoves + 6);
   });
 });
