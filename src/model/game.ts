@@ -285,6 +285,27 @@ export interface MoveOutcome {
  * пересечение финиша, новые скорость/след. Чистая функция, ничего не мутирует;
  * применяет результат applyOutcome.
  */
+/**
+ * Знак пересечения финиша отрезком from→to: +1 (вперёд), −1 (назад) или 0. Точка
+ * ровно на линии считается стороной «впереди» (sideOfFinish >= 0), чтобы не
+ * засчитывать одно пересечение дважды. tCrashCutoff отсекает пересечения после
+ * аварии (для чистого хода; телепорт возврата аварии не имеет — Infinity).
+ */
+function finishCrossingDelta(
+  track: Track,
+  from: Vec,
+  to: Vec,
+  tCrashCutoff = Infinity,
+): number {
+  const fin = segSegIntersection(from, to, track.finish.a, track.finish.b);
+  if (!fin || fin.t >= tCrashCutoff) return 0;
+  const sFrom = sideOfFinish(track, from);
+  const sTo = sideOfFinish(track, to);
+  if (sFrom < 0 && sTo >= 0) return 1;
+  if (sFrom >= 0 && sTo < 0) return -1;
+  return 0;
+}
+
 export function computeOutcome(
   track: Track,
   rules: Rules,
@@ -295,17 +316,8 @@ export function computeOutcome(
   const { tCrash, crashAt } = scanMove(track, from, to);
 
   // Пересечение финишной линии засчитывается, только если случилось до аварии
-  // и сторона линии реально сменилась (точка ровно на линии считается стороной
-  // «впереди», чтобы не засчитывать одно пересечение дважды).
-  const end = crashAt ?? to;
-  let crossingDelta = 0;
-  const fin = segSegIntersection(from, to, track.finish.a, track.finish.b);
-  if (fin && fin.t < tCrash) {
-    const sFrom = sideOfFinish(track, from);
-    const sTo = sideOfFinish(track, end);
-    if (sFrom < 0 && sTo >= 0) crossingDelta = 1;
-    else if (sFrom >= 0 && sTo < 0) crossingDelta = -1;
-  }
+  // (tCrash отсекает пересечения после точки вылета).
+  const crossingDelta = finishCrossingDelta(track, from, to, tCrash);
 
   if (crashAt) {
     return {
@@ -395,7 +407,15 @@ export function nearestFreeInsidePoint(state: GameState, q: Vec, exclude: number
  */
 export function returnFromPenalty(state: GameState, seat: number): void {
   const p = state.players[seat];
+  const { track } = state;
   const resetTo = nearestFreeInsidePoint(state, p.pos, seat);
+  // Телепорт возврата может перебросить болид за линию финиша — засчитываем
+  // пересечение, иначе круг, «доеханный» до аварии, потеряется. Смена стороны
+  // считается так же, как в computeOutcome (afterAction затем поймает финиш).
+  p.crossings += finishCrossingDelta(track, p.pos, resetTo);
+  if (p.crossings >= WIN_CROSSINGS && p.finishOvershoot === null) {
+    p.finishOvershoot = sideOfFinish(track, resetTo);
+  }
   p.trail.push({ from: { ...p.pos }, to: { ...resetTo }, jump: true });
   p.pos = resetTo;
 }
