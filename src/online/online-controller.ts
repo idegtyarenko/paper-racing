@@ -222,6 +222,15 @@ function pruneAbsentLobby(): void {
   }
 }
 
+/**
+ * Активен ли на этом стейте локальный игрок: ещё в гонке — не сдался и не
+ * финишировал. Только такие игроки вправе пропускать чужие ходы.
+ */
+function iAmActive(game: GameState): boolean {
+  const me = game.players[session.mySeat()];
+  return !!me && me.place === null && !me.retired;
+}
+
 /** Пересчитать слежение за текущим ходом. Зовётся на каждый стейт и presence-событие. */
 function armTurnWatch(): void {
   clearTurnWatch();
@@ -232,6 +241,9 @@ function armTurnWatch(): void {
 
   if (session.isPresent(cur)) {
     // Онлайн, но задумался — через 30 с открываем ручной пропуск остальным.
+    // Пропускать чужой ход может лишь активный игрок (не сдавшийся и не
+    // финишировавший) — выбывшие в гонке уже не участвуют.
+    if (!iAmActive(game)) return;
     skipTimer = window.setTimeout(() => {
       skipVisible = true;
       deps.updateUI();
@@ -306,6 +318,7 @@ export function skip(): void {
   const game = deps.getGame();
   if (!game || game.phase !== 'race' || !skipVisible) return;
   if (game.current === session.mySeat()) return;
+  if (!iAmActive(game)) return; // выбывший игрок чужой ход не пропускает
   applySkip(game);
 }
 
