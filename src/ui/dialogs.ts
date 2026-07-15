@@ -27,15 +27,23 @@ export function openNameDialog(
 ): void {
   nameConfirm.textContent = confirmLabel;
   nameInput.value = defaultName;
+  nameInput.classList.remove('field--invalid');
   nameCb = onConfirm;
   openSheet(nameDialog);
   setTimeout(() => nameInput.focus(), 50);
 }
 
+/** Пометить поле как пустое-обязательное (красная рамка) и увести на него фокус,
+ *  если это первое найденное пустое. Рамка снимается при первом вводе. */
+function flagEmpty(field: HTMLInputElement, focusFirst: boolean): void {
+  field.classList.add('field--invalid');
+  if (focusFirst) field.focus();
+}
+
 function submitName(): void {
   const v = nameInput.value.trim();
   if (!v) {
-    nameInput.focus();
+    flagEmpty(nameInput, true);
     return;
   }
   const cb = nameCb;
@@ -51,6 +59,8 @@ export function openJoinDialog(
 ): void {
   joinCodeInput.value = defaultCode;
   joinNameInput.value = defaultName;
+  joinCodeInput.classList.remove('field--invalid');
+  joinNameInput.classList.remove('field--invalid');
   joinError.hidden = true;
   setJoinBusy(false);
   joinCb = onConfirm;
@@ -68,7 +78,11 @@ export function setJoinBusy(busy: boolean): void {
 function submitJoin(): void {
   const code = joinCodeInput.value.trim().toUpperCase();
   const name = joinNameInput.value.trim();
-  if (!code || !name) return;
+  if (!code || !name) {
+    if (!code) flagEmpty(joinCodeInput, true);
+    if (!name) flagEmpty(joinNameInput, !!code);
+    return;
+  }
   joinError.hidden = true;
   joinCb?.(code, name);
 }
@@ -104,4 +118,8 @@ export function bindDialogs(): void {
   joinNameInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') submitJoin();
   });
+  // Снять красную рамку, как только в поле начали вводить.
+  for (const f of [nameInput, joinCodeInput, joinNameInput]) {
+    f.addEventListener('input', () => f.classList.remove('field--invalid'));
+  }
 }

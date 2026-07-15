@@ -91,6 +91,16 @@
   outline-offset: 1px;
 }
 
+/* Пустое обязательное поле при попытке подтвердить — красная рамка (снимается
+   при вводе). Фокус-обводка тоже краснеет, чтобы поле в фокусе читалось как
+   ошибочное, а не зелёное. */
+.field--invalid {
+  border-color: #b3261e;
+}
+.field--invalid:focus {
+  outline-color: #b3261e;
+}
+
 .field--code {
   text-transform: uppercase;
   letter-spacing: 4px;
