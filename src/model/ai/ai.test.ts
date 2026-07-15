@@ -8,13 +8,13 @@
 // Гонка в +x: sideOfFinish(p) = p.x − 20, старты — слева от линии.
 
 import { describe, it, expect } from 'vitest';
-import { chooseMove, Difficulty } from './ai';
-import { buildNavField, navAt } from './nav';
-import { candidates, applyMove, coastMove } from './turns';
-import { GameState, Player, computeOutcome, WIN_CROSSINGS } from './game';
-import { Track, key, unkey, finalizeTrack } from './track';
-import { Vec, dist } from '../geometry';
-import { OUTER, INNER, gameOn } from './test-fixtures';
+import { chooseMove, Difficulty } from './index';
+import { buildNavField, navAt } from '../nav';
+import { candidates, applyMove, coastMove } from '../turns';
+import { GameState, Player, computeOutcome, WIN_CROSSINGS } from '../game';
+import { Track, key, unkey, finalizeTrack } from '../track';
+import { Vec, dist } from '../../geometry';
+import { OUTER, INNER, gameOn } from '../test-fixtures';
 
 const FIN_X = 20;
 
