@@ -134,3 +134,31 @@
   color: #8a8575;
   font-variant-numeric: tabular-nums;
 }
+
+/* Три ползунка управляемости в режиме «Своя». */
+#driveSliders {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#driveSliders[hidden] {
+  display: none;
+}
+
+/* Живой предпросмотр облака доступных ходов под настройкой управляемости. */
+.drive-preview {
+  display: block;
+  width: 100%;
+  height: 150px;
+  background: #fbf9f1;
+  border: 1px solid #d8d2c2;
+  border-radius: 8px;
+}
+
+/* Разделитель между блоком управляемости и гоночными правилами. */
+.setting__divider {
+  height: 1px;
+  margin: 4px 0;
+  background: #d8d2c2;
+}

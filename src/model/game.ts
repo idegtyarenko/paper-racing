@@ -13,6 +13,7 @@ import {
   OFFROAD_FORGIVE,
   CRASH_SAMPLE_STEP,
   TURN_TIMEOUT_MS,
+  DRIVE_PRESETS,
 } from '../config';
 
 export interface TrailSeg {
@@ -48,6 +49,17 @@ export interface Player {
 export { WIN_CROSSINGS };
 
 /**
+ * Управляемость машины: три независимых полуоси «эллипса сцепления» (клетки/ход) —
+ * разгон вперёд, торможение назад, маневр вбок. См. reachableTargets в turns.ts и
+ * пресеты DRIVE_PRESETS в config.
+ */
+export interface Drive {
+  accel: number;
+  brake: number;
+  maneuver: number;
+}
+
+/**
  * Настройки правил заезда. В онлайне их задаёт хост, и они едут вместе со стейтом
  * (rules — часть GameState, а сериализуется весь стейт кроме track), поэтому у всех
  * игроков применяются одни и те же правила.
@@ -68,14 +80,13 @@ export interface Rules {
    */
   turnOrder: 'rotate' | 'snake' | 'fixed';
   /**
-   * Модель движения (генерация ходов, см. candidates в turns.ts):
-   * 'classic' — классический Racetrack: ускорение ±1 клетка по каждой оси (9 точек);
-   * 'realistic' — «круг сцепления»: любой целый узел с |a| ≤ REALISTIC_GRIP и потолком
-   *   разгона REALISTIC_ACCEL — нельзя одновременно резко менять скорость и круто
-   *   поворачивать, отсюда реалистичные гоночные траектории. Бот пока играет только
-   *   классику (ai.ts перебирает ходы по классической модели).
+   * Управляемость машины (генерация ходов, см. reachableTargets в turns.ts): три
+   * независимых полуоси «эллипса сцепления» в клетках/ход — разгон вперёд, торможение
+   * назад, маневр вбок. Все три равны → изотропный круг = классика 3×3; анизотропия
+   * даёт гоночные траектории. Пресеты — DRIVE_PRESETS в config. Бот играет по этой же
+   * модели (планировщик зовёт reachableTargets), отдельной «классики для бота» нет.
    */
-  physics: 'classic' | 'realistic';
+  drive: Drive;
   /**
    * Лимит времени на ход, мс. Действует только в онлайне: по его истечении ход
    * присутствующего, но задумавшегося игрока становится доступен остальным для
@@ -85,15 +96,37 @@ export interface Rules {
   turnLimitMs: number;
 }
 
-/** Правила по умолчанию: динамический штраф со стандартной (линейной) строгостью, классическая физика. */
+/** Правила по умолчанию: динамический штраф со стандартной (линейной) строгостью, реалистичная управляемость. */
 export const DEFAULT_RULES: Rules = {
   penalty: 'dynamic',
   staticTurns: CRASH_SKIP_TURNS,
   dynamicExponent: 1,
   turnOrder: 'rotate',
-  physics: 'classic',
+  drive: { ...DRIVE_PRESETS.realistic },
   turnLimitMs: TURN_TIMEOUT_MS,
 };
+
+/**
+ * Привести (частичные) правила из стейта/снимка к полным, с бэкфиллом дефолтами и
+ * миграцией легаси-поля physics ('classic'|'realistic') в drive. Используется на всех
+ * точках десериализации (онлайн-стейт, восстановление из persist), чтобы старые
+ * строки без drive поднимались корректно. drive всегда клонируется — свежий объект,
+ * не связанный с исходным снимком (настройки его мутируют).
+ */
+export function normalizeRules(
+  partial: (Partial<Rules> & { physics?: string }) | undefined,
+): Rules {
+  const { physics, ...rest } = partial ?? {};
+  const legacy =
+    physics === 'realistic'
+      ? DRIVE_PRESETS.realistic
+      : physics === 'classic'
+        ? DRIVE_PRESETS.classic
+        : null;
+  const merged = { ...DEFAULT_RULES, ...rest };
+  merged.drive = { ...(rest.drive ?? legacy ?? DEFAULT_RULES.drive) };
+  return merged;
+}
 
 /**
  * Штраф за аварию в ходах. Статический — фиксированное число. Динамический —

@@ -115,7 +115,7 @@ export function scoreByPlan(
   enforceStop: boolean,
 ): Ranking {
   const { track, rules } = state;
-  const physics = rules.physics;
+  const drive = rules.drive;
   const me = state.players[state.current];
   const cl = clearanceFor(track);
 
@@ -154,7 +154,7 @@ export function scoreByPlan(
     const hit = stopMemo.get(key);
     if (hit !== undefined) return hit;
     // Пробуем сильнее тормозить первыми — быстрее находим цепочку до нуля.
-    const opts = reachableTargets(pos, vel, physics).sort(
+    const opts = reachableTargets(pos, vel, drive).sort(
       (A, B) =>
         Math.hypot(A.x - pos.x, A.y - pos.y) - Math.hypot(B.x - pos.x, B.y - pos.y),
     );
@@ -258,7 +258,7 @@ export function scoreByPlan(
       fallbackFirst = cur.first;
     }
     exp++;
-    for (const target of reachableTargets(cur.pos, cur.vel, physics)) {
+    for (const target of reachableTargets(cur.pos, cur.vel, drive)) {
       const cd = crossDelta(track, cur.pos, target);
       if (cd === -1) continue; // назад через финиш не едем
       const g = cur.g + 1 + overspeed(cur.pos, target);

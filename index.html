@@ -246,32 +246,49 @@
         <h2 class="sheet__title" data-i18n="settings.title"></h2>
         <div class="setting">
           <div class="setting__labelrow">
-            <span class="setting__label" data-i18n="settings.physicsLabel"></span>
-            <button
-              type="button"
-              class="setting__help"
-              aria-expanded="false"
-              data-i18n-aria-label="settings.helpLabel"
-            >
-              ?
-            </button>
+            <span class="setting__label" data-i18n="settings.driveLabel"></span>
           </div>
-          <p class="setting__hint" data-i18n="settings.physicsHint" hidden></p>
-          <div id="physicsType" class="seg">
+          <div id="driveMode" class="seg">
             <button
               type="button"
               class="seg__btn"
-              data-physics="classic"
-              data-i18n="settings.physicsClassic"
+              data-mode="realistic"
+              data-i18n="settings.driveModeRealistic"
             ></button>
             <button
               type="button"
               class="seg__btn"
-              data-physics="realistic"
-              data-i18n="settings.physicsRealistic"
+              data-mode="classic"
+              data-i18n="settings.driveModeClassic"
+            ></button>
+            <button
+              type="button"
+              class="seg__btn"
+              data-mode="custom"
+              data-i18n="settings.driveModeCustom"
             ></button>
           </div>
+          <p id="driveExplain" class="setting__hint"></p>
+          <div id="driveSliders" hidden>
+            <div class="setting__head">
+              <span class="setting__label" data-i18n="settings.driveAccel"></span>
+              <span id="accelValue" class="setting__value"></span>
+            </div>
+            <input id="accelSlider" class="slider" type="range" />
+            <div class="setting__head">
+              <span class="setting__label" data-i18n="settings.driveBrake"></span>
+              <span id="brakeValue" class="setting__value"></span>
+            </div>
+            <input id="brakeSlider" class="slider" type="range" />
+            <div class="setting__head">
+              <span class="setting__label" data-i18n="settings.driveManeuver"></span>
+              <span id="maneuverValue" class="setting__value"></span>
+            </div>
+            <input id="maneuverSlider" class="slider" type="range" />
+          </div>
+          <canvas id="drivePreview" class="drive-preview"></canvas>
         </div>
+        <div class="setting__divider"></div>
         <div class="setting">
           <div class="setting__labelrow">
             <span class="setting__label" data-i18n="settings.penaltyLabel"></span>

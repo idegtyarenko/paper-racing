@@ -9,6 +9,7 @@ import {
   Candidate,
   Rules,
   DEFAULT_RULES,
+  normalizeRules,
   MAX_PLAYERS,
   newGame,
 } from './model/game';
@@ -497,7 +498,7 @@ function restoreState(): PanelMode | null {
   // Бэкфилл дефолтами: снимок мог быть записан старой версией без новых полей
   // правил (напр. turnLimitMs) — иначе они окажутся undefined. Так же чинит
   // серверные стейты net.ts при десериализации.
-  raceRules = { ...DEFAULT_RULES, ...snap.rules };
+  raceRules = normalizeRules(snap.rules);
   playersReturn = snap.playersReturn;
   lastLocalRace = snap.lastLocalRace;
   // nav-поле не сериализуем — пересобираем из трассы (нужно ботам и полосе мест).

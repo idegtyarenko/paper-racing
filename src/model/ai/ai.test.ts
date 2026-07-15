@@ -20,6 +20,7 @@ import {
   WIN_CROSSINGS,
 } from '../game';
 import { Track, key, unkey, finalizeTrack } from '../track';
+import { DRIVE_PRESETS } from '../../config';
 import { Vec, dist } from '../../geometry';
 import { OUTER, INNER, gameOn } from '../test-fixtures';
 
@@ -283,6 +284,9 @@ describe('chooseMove', () => {
 
   it('при безвыходной аварии выбирает наименьший штраф', () => {
     const state = gameOn(track, 2);
+    // Классика: ровно 3 цели впереди, все за стенкой — безвыходность (в реалистике
+    // торможением можно уйти, ловушка перестала бы быть ловушкой).
+    state.rules.drive = { ...DRIVE_PRESETS.classic };
     const me = state.players[0];
     me.pos = { x: 36, y: 3 };
     me.vel = { x: 6, y: 0 }; // цели x∈41..43 — все за внешней стенкой (x=40)
@@ -514,7 +518,7 @@ describe('уровни сложности (единый A*)', () => {
   // Бот раскрывает узлы поиска тем же генератором целей, что и движок (turns.ts),
   // поэтому играет реалистичную физику (круг сцепления), а не только классику.
   it('бот проходит круг в реалистичной физике без аварий', () => {
-    const rules: Rules = { ...DEFAULT_RULES, physics: 'realistic' };
+    const rules: Rules = { ...DEFAULT_RULES, drive: { ...DRIVE_PRESETS.realistic } };
     const t = bigTrack();
     const n = buildNavField(t);
     const r = soloFinish(t, n, 'hard', rngConst(0.99), rules);

@@ -3,8 +3,8 @@
 import { Vec, Polyline, add, sub, scale, normalize, lerp } from '../geometry';
 import { Track } from '../model/track';
 import { EditorState, Arrow } from '../model/editor';
-import { GameState, Candidate } from '../model/game';
-import { REALISTIC_GRIP, REALISTIC_ACCEL } from '../config';
+import { GameState, Candidate, Drive } from '../model/game';
+import { MIN_LAUNCH } from '../config';
 import { Camera } from './camera';
 
 export interface AppView {
@@ -441,34 +441,36 @@ function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): 
 }
 
 /**
- * Заливка «круга сцепления» реалистичной физики — зоны вокруг точки наката
- * C = pos + vel, внутри которой лежат точки-кандидаты. Это круг радиуса
- * REALISTIC_GRIP, срезанный спереди хордой на расстоянии REALISTIC_ACCEL (потолок
- * разгона); на старте (vel = 0) — просто круг радиуса REALISTIC_ACCEL вокруг болида.
- * Рисуется бледной заливкой без обводки — обозначить границу с минимумом шума.
+ * Заливка «эллипса сцепления» управляемости — зоны вокруг точки наката C = pos + vel,
+ * внутри которой лежат точки-кандидаты. В системе координат скорости: перёд —
+ * полуэллипс с полуосями (accel × maneuver), зад — (brake × maneuver); на старте
+ * (vel = 0) — круг радиуса max(accel, MIN_LAUNCH). Рисуется бледной заливкой без
+ * обводки — обозначить границу с минимумом шума.
  */
-function drawGripArea(
+function drawDriveArea(
   ctx: CanvasRenderingContext2D,
   s: number,
   pos: Vec,
   vel: Vec,
+  drive: Drive,
   color: string,
 ): void {
+  const { accel, brake, maneuver } = drive;
   const speed = Math.hypot(vel.x, vel.y);
   ctx.save();
   ctx.fillStyle = color;
   ctx.globalAlpha = 0.1;
   ctx.beginPath();
   if (speed === 0) {
-    ctx.arc(pos.x * s, pos.y * s, REALISTIC_ACCEL * s, 0, Math.PI * 2);
+    ctx.arc(pos.x * s, pos.y * s, Math.max(accel, MIN_LAUNCH) * s, 0, Math.PI * 2);
   } else {
     const cx = (pos.x + vel.x) * s;
     const cy = (pos.y + vel.y) * s;
-    const phi = Math.atan2(vel.y, vel.x); // направление движения = продольная ось
-    // ±θ0 от направления — где круг сцепления встречает срез потолка разгона
-    // (cos θ0 = ACCEL/GRIP). Большую дугу (сзади) замыкаем хордой спереди.
-    const th0 = Math.acos(Math.min(1, Math.max(-1, REALISTIC_ACCEL / REALISTIC_GRIP)));
-    ctx.arc(cx, cy, REALISTIC_GRIP * s, phi + th0, phi + 2 * Math.PI - th0);
+    const phi = Math.atan2(vel.y, vel.x); // продольная ось = направление движения
+    // Две полудуги эллипса, стыкующиеся по поперечной оси (углы ±π/2): передняя с
+    // полуосью accel вдоль движения, задняя с полуосью brake; обе с maneuver вбок.
+    ctx.ellipse(cx, cy, accel * s, maneuver * s, phi, -Math.PI / 2, Math.PI / 2);
+    ctx.ellipse(cx, cy, brake * s, maneuver * s, phi, Math.PI / 2, (3 * Math.PI) / 2);
     ctx.closePath();
   }
   ctx.fill();
@@ -599,8 +601,12 @@ function drawRace(
   // Кандидаты хода текущего игрока.
   if (cands && game.phase === 'race') {
     const p = game.players[game.current];
-    // Заливка зоны сцепления — под точками, только в реалистичной физике.
-    if (game.rules.physics === 'realistic') drawGripArea(ctx, s, p.pos, p.vel, p.color);
+    // Заливка зоны сцепления — под точками; изотропную управляемость (как классика)
+    // не рисуем, там квадрат и так очевиден.
+    const d = game.rules.drive;
+    if (!(d.accel === d.brake && d.brake === d.maneuver)) {
+      drawDriveArea(ctx, s, p.pos, p.vel, d, p.color);
+    }
     if (hover && !hover.blocked) {
       ctx.save();
       ctx.strokeStyle = p.color;

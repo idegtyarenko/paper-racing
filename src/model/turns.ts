@@ -5,10 +5,11 @@
 // Общий расчёт исхода/победителя/возврата из штрафа — в game.ts.
 
 import { Vec, pointOnSegment } from '../geometry';
-import { REALISTIC_GRIP, REALISTIC_ACCEL } from '../config';
+import { MIN_LAUNCH } from '../config';
 import {
   GameState,
   Candidate,
+  Drive,
   Rules,
   WIN_CROSSINGS,
   computeOutcome,
@@ -19,61 +20,49 @@ import {
 } from './game';
 
 /**
- * Достижимые цели хода из состояния (pos, vel) по модели физики. Единая точка
- * генерации целей — её зовут и движок (candidates), и планировщик бота (ai/planner),
- * поэтому бот раскрывает ровно те же ходы, что доступны игроку. В следующем пункте
- * арки две ветки сольются в одну параметризованную модель (классика = пресет
- * управляемости/разгона = 1) — тогда меняется только тело этой функции.
- */
-export function reachableTargets(pos: Vec, vel: Vec, physics: Rules['physics']): Vec[] {
-  return physics === 'realistic' ? realisticTargets(pos, vel) : classicTargets(pos, vel);
-}
-
-/**
- * Классическая модель Racetrack: 9 целей — ускорение ±1 клетка по каждой оси вокруг
- * точки наката C = pos + vel.
- */
-function classicTargets(pos: Vec, vel: Vec): Vec[] {
-  const out: Vec[] = [];
-  for (let ay = -1; ay <= 1; ay++) {
-    for (let ax = -1; ax <= 1; ax++) {
-      out.push({ x: pos.x + vel.x + ax, y: pos.y + vel.y + ay });
-    }
-  }
-  return out;
-}
-
-/**
- * Реалистичная модель («круг сцепления»): целые узлы вокруг точки наката C = pos + vel,
- * для которых изменение скорости a = target − C проходит по бюджету сцепления:
- *  - |a| ≤ REALISTIC_GRIP — общий круг сцепления (делится между разгоном/торможением и
- *    поворотом: тормозишь в пол — a смотрит назад, на поворот не осталось; и наоборот);
- *  - вперёд продольная составляющая a·û ≤ REALISTIC_ACCEL (û = vel/|vel|) — потолок
- *    разгона; назад (торможение) доступен весь GRIP, поэтому тормозит быстрее, чем
- *    разгоняется;
- *  - на старте (vel = 0) направления нет: разгон в любую сторону |a| ≤ REALISTIC_ACCEL.
+ * Достижимые цели хода из состояния (pos, vel) по управляемости drive — единая
+ * параметризованная модель для всех режимов (классика — изотропный пресет). Её зовут
+ * и движок (candidates), и планировщик бота (ai/planner), поэтому бот раскрывает ровно
+ * те же ходы, что доступны игроку.
+ *
+ * Вокруг точки наката C = pos + vel лежит «эллипс сцепления» в системе координат
+ * скорости: целые узлы, у которых изменение скорости a = target − C влезает в эллипс с
+ * полуосями drive (клетки/ход):
+ *  - продольно вперёд (a·û ≥ 0) — полуось accel; назад (торможение) — полуось brake;
+ *  - поперечно (вбок) — полуось maneuver;
+ *  - условие эллипса (a_along/cap)² + (a_lat/maneuver)² ≤ 1 связывает разгон и доворот:
+ *    разгоняешься в пол — на доворот не осталось, и наоборот (скруглённые углы).
  * Скорость учитывается сама: доворот на угол θ требует поперечного Δv ≈ |vel|·θ, значит
- * θ_max ≈ GRIP/|vel| — чем быстрее, тем меньше доворот за ход. Точка наката (a = 0)
- * всегда в наборе (0 ≤ любой порог), так что инерция/пропуск работают как в классике.
+ * θ_max ≈ maneuver/|vel| — чем быстрее, тем меньше доворот за ход. Точка наката (a = 0)
+ * всегда в наборе (0 ≤ 1), так что инерция/пропуск работают как в классике.
+ *
+ * На старте (vel = 0) направления нет: изотропный диск радиуса max(accel, MIN_LAUNCH).
+ * Пол MIN_LAUNCH = √2 гарантирует диагональный старт (набор 3×3) при любом разгоне.
+ * Все три полуоси равны → изотропный круг: grip в [√2, 2) даёт ровно квадрат 3×3
+ * (классика).
  */
-function realisticTargets(pos: Vec, vel: Vec): Vec[] {
+export function reachableTargets(pos: Vec, vel: Vec, drive: Drive): Vec[] {
+  const { accel, brake, maneuver } = drive;
   const cx = pos.x + vel.x;
   const cy = pos.y + vel.y;
   const speed = Math.hypot(vel.x, vel.y);
-  const grip2 = REALISTIC_GRIP * REALISTIC_GRIP;
-  const accel2 = REALISTIC_ACCEL * REALISTIC_ACCEL;
-  const r = Math.floor(REALISTIC_GRIP); // целых узлов дальше радиуса круга не бывает
+  const r = Math.ceil(Math.max(accel, brake, maneuver, MIN_LAUNCH)); // рамка перебора узлов
   const EPS = 1e-9;
   const out: Vec[] = [];
   for (let ay = -r; ay <= r; ay++) {
     for (let ax = -r; ax <= r; ax++) {
-      const len2 = ax * ax + ay * ay;
-      if (len2 > grip2 + EPS) continue; // вне круга сцепления
-      if (speed > 0) {
-        const along = (ax * vel.x + ay * vel.y) / speed; // продольно вдоль скорости
-        if (along > REALISTIC_ACCEL + EPS) continue; // потолок разгона вперёд
-      } else if (len2 > accel2 + EPS) {
-        continue; // старт: разгон не больше потолка
+      if (speed === 0) {
+        const rad = Math.max(accel, MIN_LAUNCH); // старт: диагональ доступна всем
+        if (ax * ax + ay * ay > rad * rad + EPS) continue;
+      } else {
+        const ux = vel.x / speed;
+        const uy = vel.y / speed;
+        const along = ax * ux + ay * uy; // продольная составляющая a (вдоль скорости)
+        const lat = -ax * uy + ay * ux; // поперечная составляющая a (вбок)
+        const cap = along >= 0 ? accel : brake; // перёд — разгон, зад — тормоза
+        const nl = cap === 0 ? (along === 0 ? 0 : Infinity) : along / cap;
+        const nt = maneuver === 0 ? (lat === 0 ? 0 : Infinity) : lat / maneuver;
+        if (nl * nl + nt * nt > 1 + EPS) continue; // вне эллипса сцепления
       }
       out.push({ x: cx + ax, y: cy + ay });
     }
@@ -86,7 +75,7 @@ export function candidates(state: GameState): Candidate[] {
   const occupied = otherPositions(state, state.current);
   const cx = p.pos.x + p.vel.x; // точка наката C (чистая инерция, a = 0)
   const cy = p.pos.y + p.vel.y;
-  const targets = reachableTargets(p.pos, p.vel, state.rules.physics);
+  const targets = reachableTargets(p.pos, p.vel, state.rules.drive);
   return targets.map((target) => ({
     target,
     // Ход запрещён, если соперник стоит в конечной точке или отрезок хода проходит

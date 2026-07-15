@@ -7,7 +7,7 @@
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { Vec } from '../geometry';
 import { Track } from '../model/track';
-import { GameState, DEFAULT_RULES } from '../model/game';
+import { GameState, normalizeRules } from '../model/game';
 import { WORLD_SIZE, NET_TIMEOUT_MS } from '../config';
 
 // ── Сериализация ────────────────────────────────────────────────────────────────
@@ -80,9 +80,9 @@ export function deserializeState(s: SerializedState, track: Track): GameState {
   // подставляем дефолт (turn 0 — безопасный старт ротации).
   return {
     ...s,
-    // Мержим с дефолтом, чтобы новые поля правил (turnOrder) не были undefined в
-    // старых строках, где rules есть, но снят до их появления.
-    rules: { ...DEFAULT_RULES, ...s.rules },
+    // Нормализуем правила: бэкфилл дефолтами (новые поля не undefined в старых
+    // строках) + миграция легаси physics → drive.
+    rules: normalizeRules(s.rules),
     turn: s.turn ?? 0,
     track,
   };
