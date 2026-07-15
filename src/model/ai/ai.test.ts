@@ -11,7 +11,14 @@ import { describe, it, expect } from 'vitest';
 import { chooseMove, Difficulty } from './index';
 import { buildNavField, navAt } from '../nav';
 import { candidates, applyMove, coastMove } from '../turns';
-import { GameState, Player, computeOutcome, WIN_CROSSINGS } from '../game';
+import {
+  GameState,
+  Player,
+  Rules,
+  DEFAULT_RULES,
+  computeOutcome,
+  WIN_CROSSINGS,
+} from '../game';
 import { Track, key, unkey, finalizeTrack } from '../track';
 import { Vec, dist } from '../../geometry';
 import { OUTER, INNER, gameOn } from '../test-fixtures';
@@ -366,5 +373,153 @@ describe('chooseMove', () => {
     const winnerMoves = Math.min(...lap.filter((x): x is number => x !== null));
     // Лидер пачки — около соло (не раздут вдвое, как при старом расталкивании).
     expect(winnerMoves).toBeLessThanOrEqual(soloMoves + 6);
+  });
+});
+
+// ── Единый A*: все уровни на одном движке, различаются «ослаблением» ──
+
+/** Варьирующийся детерминированный PRNG (в отличие от rngConst — одно значение).
+ *  Нужен, чтобы мерить настоящую частоту «живых» аварий easy: с постоянным rng
+ *  один и тот же промах повторялся бы каждый круг и зацикливал бота у одного угла. */
+function mulberry32(seed: number): () => number {
+  let a = seed;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Просторная трасса: длинные прямые упираются в мягкий потолок скорости, поэтому
+ *  уровни расходятся по числу ходов (на тесных трассах они сближаются). */
+function bigTrack(): Track {
+  const res = finalizeTrack(
+    [
+      { x: 0, y: 0 },
+      { x: 120, y: 0 },
+      { x: 120, y: 70 },
+      { x: 0, y: 70 },
+    ],
+    [
+      { x: 20, y: 20 },
+      { x: 100, y: 20 },
+      { x: 100, y: 50 },
+      { x: 20, y: 50 },
+    ],
+    { a: { x: 60, y: -0.25 }, b: { x: 60, y: 20.25 } },
+    { x: 1, y: 0 },
+  );
+  if ('error' in res) throw new Error(`bigTrack fixture invalid: ${res.error}`);
+  return res.track;
+}
+
+/** Извилистая трасса-шпилька (тонкий язык, два разворота на 180°): узкие связки,
+ *  где easy у края чаще всего не успевает затормозить. */
+function hairpinTrack(): Track {
+  const res = finalizeTrack(
+    [
+      { x: 0, y: 0 },
+      { x: 40, y: 0 },
+      { x: 40, y: 20 },
+      { x: 0, y: 20 },
+    ],
+    [
+      { x: 4, y: 8 },
+      { x: 36, y: 8 },
+      { x: 36, y: 12 },
+      { x: 4, y: 12 },
+    ],
+    { a: { x: 20, y: -0.25 }, b: { x: 20, y: 8.25 } },
+    { x: 1, y: 0 },
+  );
+  if ('error' in res) throw new Error(`hairpinTrack fixture invalid: ${res.error}`);
+  return res.track;
+}
+
+/** Соло-заезд бота (соперник снят): ходов до финиша, число аварий, финишировал ли. */
+function soloFinish(
+  t: Track,
+  n: ReturnType<typeof buildNavField>,
+  difficulty: Difficulty,
+  rng: () => number,
+  rules?: Rules,
+): { moves: number; crashes: number; won: boolean } {
+  const state = gameOn(t, 2, rules);
+  state.players[1].retired = true;
+  let moves = 0;
+  for (let i = 0; i < 1200 && state.winner === null; i++) {
+    const cand = chooseMove(state, n, difficulty, rng);
+    if (cand) applyMove(state, cand);
+    else coastMove(state);
+    moves += 1;
+  }
+  return { moves, crashes: state.players[0].crashes.length, won: state.winner === 0 };
+}
+
+describe('уровни сложности (единый A*)', () => {
+  // Провал между уровнями лечится тем, что все уровни — один A*, ослабленный
+  // горизонтом/жадностью/потолком скорости. На просторной трассе это даёт чёткую
+  // монотонную лестницу по числу ходов (замеры ~50/59/71 для hard/medium/easy).
+  it('лестница монотонна: hard < medium < easy по числу ходов', () => {
+    const t = bigTrack();
+    const n = buildNavField(t);
+    const h = soloFinish(t, n, 'hard', rngConst(0.99));
+    const m = soloFinish(t, n, 'medium', rngConst(0.99));
+    const e = soloFinish(t, n, 'easy', rngConst(0.99));
+    expect(h.won && m.won && e.won).toBe(true);
+    expect(h.crashes).toBe(0);
+    expect(h.moves).toBeLessThan(m.moves);
+    expect(m.moves).toBeLessThan(e.moves);
+    // Запас над шумом: каждый уровень заметно отделён (замеры дают разрывы 9 и 12).
+    expect(m.moves - h.moves).toBeGreaterThanOrEqual(4);
+    expect(e.moves - m.moves).toBeGreaterThanOrEqual(4);
+  });
+
+  // easy идёт по краю (enforceStop=false) и изредка не успевает затормозить —
+  // «живость» слабого уровня. Ключевое: авария случается редко и НЕ зацикливается
+  // (после возврата из гравия скорость сброшена, бот едет дальше). medium/hard держат
+  // инвариант безопасности и не бьются вовсе.
+  it('easy иногда бьётся (без зацикливания), medium и hard — никогда', () => {
+    const t = hairpinTrack();
+    const n = buildNavField(t);
+    const N = 20;
+
+    let easyCrashRaces = 0;
+    let easyMaxPerRace = 0;
+    let easyAllFinished = true;
+    for (let k = 0; k < N; k++) {
+      const r = soloFinish(t, n, 'easy', mulberry32(1000 + k * 7));
+      if (r.crashes > 0) easyCrashRaces += 1;
+      easyMaxPerRace = Math.max(easyMaxPerRace, r.crashes);
+      if (!r.won) easyAllFinished = false;
+    }
+    expect(easyCrashRaces).toBeGreaterThanOrEqual(1); // рычаг аварий жив
+    expect(easyCrashRaces).toBeLessThan(N); // но не в каждом заезде — именно «иногда»
+    expect(easyMaxPerRace).toBeLessThanOrEqual(3); // не зацикливается у одного угла
+    expect(easyAllFinished).toBe(true); // без дедлока
+
+    // medium/hard: инвариант безопасности — ни одной аварии на тех же сидах.
+    // Меньше прогонов: они дороже (глубже поиск) и детерминированно безопасны.
+    for (const level of ['medium', 'hard'] as const) {
+      let crashes = 0;
+      for (let k = 0; k < 8; k++) {
+        crashes += soloFinish(t, n, level, mulberry32(1000 + k * 7)).crashes;
+      }
+      expect(crashes, `${level} не должен биться`).toBe(0);
+    }
+  }, 15000);
+
+  // Бот раскрывает узлы поиска тем же генератором целей, что и движок (turns.ts),
+  // поэтому играет реалистичную физику (круг сцепления), а не только классику.
+  it('бот проходит круг в реалистичной физике без аварий', () => {
+    const rules: Rules = { ...DEFAULT_RULES, physics: 'realistic' };
+    const t = bigTrack();
+    const n = buildNavField(t);
+    const r = soloFinish(t, n, 'hard', rngConst(0.99), rules);
+    expect(r.won).toBe(true);
+    expect(r.crashes).toBe(0);
+    expect(r.moves).toBeLessThanOrEqual(70); // замер ~42; порог с запасом
   });
 });

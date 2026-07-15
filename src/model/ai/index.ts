@@ -5,11 +5,11 @@
 // финишной линии вперёд (см. nav.ts).
 //
 // Выбор хода зависит от сложности:
-//  • easy/medium — перебор с ограниченной глубиной по потенциалу (см. depth.ts).
-//    Быстро, но оптимизирует ПУТЬ (расстояние), а не время.
-//  • hard — планировщик A* по состояниям (pos, vel), минимизирующий ЧИСЛО ХОДОВ
-//    до следующего пересечения финиша вперёд (см. planner.ts). Так рождаются
-//    гоночная траектория и торможение перед поворотом.
+// Все уровни — один планировщик A* по состояниям (pos, vel), минимизирующий ЧИСЛО
+// ХОДОВ до следующего пересечения финиша вперёд (см. planner.ts). Так рождаются
+// гоночная траектория и торможение перед поворотом. Уровни различаются «ослаблением»:
+// горизонт планирования, жадность эвристики, потолок скорости, шум выбора и инвариант
+// торможения (easy идёт по краю и иногда бьётся) — см. таблицу DIFFICULTY.
 //
 // Соперники учитываются только на первом слое (blocked-ходы отсеяны в candidates():
 // нельзя встать на чужую клетку или проехать сквозь неё) — к более глубоким слоям
@@ -23,7 +23,6 @@ import { NavField } from '../nav';
 import { candidates } from '../turns';
 import { Difficulty, DIFFICULTY } from './difficulty';
 import { scoreByPlan } from './planner';
-import { scoreByDepth } from './depth';
 import { pickMove } from './scoring';
 
 export type { Difficulty };
@@ -45,9 +44,15 @@ export function chooseMove(
 
   // Ранжирование корней: best — оптимальный ход стратегии, scored — почти-оптимальные
   // (для epsilon-разнообразия easy/medium), terminal — финиш/безвыходная авария.
-  const rank = P.plan
-    ? scoreByPlan(state, nav, open, P.plan, P.maxSpeed, P.stopCap)
-    : scoreByDepth(state, nav, open, P);
+  const rank = scoreByPlan(
+    state,
+    nav,
+    open,
+    P.plan,
+    P.maxSpeed,
+    P.stopCap,
+    P.enforceStop,
+  );
 
   return pickMove(rank, P, rng);
 }

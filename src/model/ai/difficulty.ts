@@ -2,7 +2,7 @@
 
 export type Difficulty = 'easy' | 'medium' | 'hard';
 
-/** Настройки планировщика A* (только hard). */
+/** Настройки планировщика A* — общий движок всех уровней. */
 export interface PlanParams {
   /** Лимит раскрытий узлов A*: выше — дальновиднее и оптимальнее план. */
   budget: number;
@@ -12,31 +12,50 @@ export interface PlanParams {
   weight: number;
 }
 
-/** Ручки силы бота — см. таблицу в DIFFICULTY. */
+/** Ручки силы бота — см. таблицу в DIFFICULTY. Все уровни — один A*, различаются
+ *  «ослаблением»: горизонт (budget), жадность (weight), потолок скорости (maxSpeed),
+ *  шум выбора (epsilon), инвариант торможения (enforceStop). */
 export interface DifficultyParams {
-  /** Глубина поиска в ходах (easy/medium). */
-  depth: number;
-  /** Лимит рекурсии canStop (easy/medium); на срезе — оптимистичное «успею». */
+  /** Лимит рекурсии canStop; на срезе — оптимистичное «успею». */
   stopCap: number;
   /** Мягкий потолок скорости: превышение штрафуется, но не запрещено. */
   maxSpeed: number;
   /** Вероятность взять случайный из почти-лучших ходов (разнообразие без дёрганья). */
   epsilon: number;
-  /** Планировщик A* вместо перебора глубины (задан только у hard). */
-  plan?: PlanParams;
+  /** Держать инвариант безопасности (предпочитать корни, из которых тормозим). false
+   *  у easy — бот идёт по краю и иногда не успевает затормозить (намеренные аварии). */
+  enforceStop: boolean;
+  /** Параметры A*-поиска. */
+  plan: PlanParams;
 }
 
+// Все уровни планируют время (A*), а не путь. Значения откалиброваны на плотную
+// лестницу: на просторной трассе medium ~+18%, easy ~+42% ходов/круг над оптимумом
+// hard (на тесных трассах уровни сближаются — потолок скорости не упирается). hard —
+// оптимум и едет чисто; medium аккуратен; easy заметно медленнее, короткозорче и
+// иногда бьётся (enforceStop=false → изредка не успевает затормозить, ~раз в несколько
+// заездов, макс. одна авария). Поиск укладывается в единицы-десятки мс на ход
+// (маскируется паузой AI_MOVE_DELAY_MS=600).
 export const DIFFICULTY: Record<Difficulty, DifficultyParams> = {
-  easy: { depth: 1, stopCap: 2, maxSpeed: 4, epsilon: 0.3 },
-  medium: { depth: 2, stopCap: 6, maxSpeed: 6, epsilon: 0.1 },
-  // hard планирует время (A*), а не путь: vref/weight откалиброваны так, что на
-  // рисованных извилистых трассах круг проходится за ~оптимум ходов, укладываясь
-  // в единицы-десятки мс на ход (маскируется паузой AI_MOVE_DELAY_MS=600).
+  easy: {
+    stopCap: 6,
+    maxSpeed: 4,
+    epsilon: 0.12,
+    enforceStop: false,
+    plan: { budget: 500, vref: 2.5, weight: 1.9 },
+  },
+  medium: {
+    stopCap: 8,
+    maxSpeed: 5,
+    epsilon: 0.08,
+    enforceStop: true,
+    plan: { budget: 1200, vref: 2.5, weight: 1.6 },
+  },
   hard: {
-    depth: 3,
     stopCap: 12,
     maxSpeed: Infinity,
     epsilon: 0,
+    enforceStop: true,
     plan: { budget: 4000, vref: 2.5, weight: 1.2 },
   },
 };

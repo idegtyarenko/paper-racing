@@ -1,11 +1,13 @@
-// Генератор целей-кандидатов хода: из состояния (pos, vel) через ускорение a
-// следующая клетка — pos + vel + a. Пока это лишь базис из 9 ускорений; сюда же
-// ляжет единый генератор целей поиска. Чистая логика без DOM.
+// Раскрытие узлов поиска у бота: из состояния (pos, vel) — достижимые цели хода.
+// Единственная точка, где бот раскрывает ходы; физика заезда «приходит» сюда
+// параметром и разворачивается тем же генератором, что у движка (turns.ts).
+// В следующем пункте арки меняется только тело reachableTargets — этот адаптер нет.
 
 import { Vec } from '../../geometry';
+import { Rules } from '../game';
+import { reachableTargets } from '../turns';
 
-/** Все 9 векторов ускорения одного хода. */
-export const ACCELS: Vec[] = [];
-for (let ay = -1; ay <= 1; ay++) {
-  for (let ax = -1; ax <= 1; ax++) ACCELS.push({ x: ax, y: ay });
+/** Достижимые цели хода из (pos, vel) по физике заезда. */
+export function expand(pos: Vec, vel: Vec, physics: Rules['physics']): Vec[] {
+  return reachableTargets(pos, vel, physics);
 }

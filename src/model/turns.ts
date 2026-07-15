@@ -19,6 +19,17 @@ import {
 } from './game';
 
 /**
+ * Достижимые цели хода из состояния (pos, vel) по модели физики. Единая точка
+ * генерации целей — её зовут и движок (candidates), и планировщик бота (ai/targets),
+ * поэтому бот раскрывает ровно те же ходы, что доступны игроку. В следующем пункте
+ * арки две ветки сольются в одну параметризованную модель (классика = пресет
+ * управляемости/разгона = 1) — тогда меняется только тело этой функции.
+ */
+export function reachableTargets(pos: Vec, vel: Vec, physics: Rules['physics']): Vec[] {
+  return physics === 'realistic' ? realisticTargets(pos, vel) : classicTargets(pos, vel);
+}
+
+/**
  * Классическая модель Racetrack: 9 целей — ускорение ±1 клетка по каждой оси вокруг
  * точки наката C = pos + vel.
  */
@@ -75,10 +86,7 @@ export function candidates(state: GameState): Candidate[] {
   const occupied = otherPositions(state, state.current);
   const cx = p.pos.x + p.vel.x; // точка наката C (чистая инерция, a = 0)
   const cy = p.pos.y + p.vel.y;
-  const targets =
-    state.rules.physics === 'realistic'
-      ? realisticTargets(p.pos, p.vel)
-      : classicTargets(p.pos, p.vel);
+  const targets = reachableTargets(p.pos, p.vel, state.rules.physics);
   return targets.map((target) => ({
     target,
     // Ход запрещён, если соперник стоит в конечной точке или отрезок хода проходит

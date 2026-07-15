@@ -16,7 +16,7 @@ import { GameState, Candidate, WIN_CROSSINGS, computeOutcome } from '../game';
 import { NavField, navAt } from '../nav';
 import { Clearance, buildClearance, segClear } from './clearance';
 import { PlanParams } from './difficulty';
-import { ACCELS } from './targets';
+import { expand } from './targets';
 import { Ranking, OVERSPEED_PENALTY, EPS_MARGIN } from './scoring';
 
 /** Растр зазора кэшируем на трассу: строится раз на гонку при первом ходе hard-бота
@@ -104,7 +104,7 @@ class Heap {
   }
 }
 
-/** Ранжирование корней планировщиком A* (hard). */
+/** Ранжирование корней планировщиком A* (все уровни). */
 export function scoreByPlan(
   state: GameState,
   nav: NavField,
@@ -112,8 +112,10 @@ export function scoreByPlan(
   plan: PlanParams,
   maxSpeed: number,
   stopCap: number,
+  enforceStop: boolean,
 ): Ranking {
   const { track, rules } = state;
+  const physics = rules.physics;
   const me = state.players[state.current];
   const cl = clearanceFor(track);
 
@@ -152,10 +154,7 @@ export function scoreByPlan(
     const hit = stopMemo.get(key);
     if (hit !== undefined) return hit;
     // Пробуем сильнее тормозить первыми — быстрее находим цепочку до нуля.
-    const opts = ACCELS.map((a) => ({
-      x: pos.x + vel.x + a.x,
-      y: pos.y + vel.y + a.y,
-    })).sort(
+    const opts = expand(pos, vel, physics).sort(
       (A, B) =>
         Math.hypot(A.x - pos.x, A.y - pos.y) - Math.hypot(B.x - pos.x, B.y - pos.y),
     );
@@ -178,10 +177,15 @@ export function scoreByPlan(
   open.forEach((c, i) => {
     if (!rootOutcome[i].crash && rootOutcome[i].crossingDelta !== -1) noCrash.push(i);
   });
-  const safe = noCrash.filter((i) => {
-    const o = rootOutcome[i];
-    return o.crossingDelta === 1 || canStop(o.end, o.vel, stopCap);
-  });
+  // enforceStop: предпочитаем корни, из которых гарантированно тормозим (medium/hard
+  // едут чисто). easy (enforceStop=false) идёт по краю — берём любые не-аварийные, и
+  // иногда не успевает затормозить → авария (намеренная «живость» слабого уровня).
+  const safe = enforceStop
+    ? noCrash.filter((i) => {
+        const o = rootOutcome[i];
+        return o.crossingDelta === 1 || canStop(o.end, o.vel, stopCap);
+      })
+    : noCrash;
   const rootIdx = safe.length > 0 ? safe : noCrash;
   // Все ходы — авария: выбираем наименьший штраф простоя.
   if (rootIdx.length === 0) {
@@ -254,8 +258,7 @@ export function scoreByPlan(
       fallbackFirst = cur.first;
     }
     exp++;
-    for (const a of ACCELS) {
-      const target = { x: cur.pos.x + cur.vel.x + a.x, y: cur.pos.y + cur.vel.y + a.y };
+    for (const target of expand(cur.pos, cur.vel, physics)) {
       const cd = crossDelta(track, cur.pos, target);
       if (cd === -1) continue; // назад через финиш не едем
       const g = cur.g + 1 + overspeed(cur.pos, target);
