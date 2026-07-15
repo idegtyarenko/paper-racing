@@ -513,6 +513,10 @@ export function initInput(d: InputDeps): void {
   // по такой скрытой точке перехватываем в прицеливание, а не в подтверждение —
   // иначе подтвердится ранее выбранный (чужой) ход. Обычный тап по кнопке (рядом
   // кандидата нет) проходит как есть и коммитит.
+  // Контракт с `ui/dom.ts` (bindTap): коммит завязан на приход `pointerup` на кнопку.
+  // `setPointerCapture` ниже забирает указатель на canvas — тогда `pointerup` до кнопки
+  // не долетает и bindTap не коммитит. Не менять на перехват по `pointerup`/добавление
+  // capture на саму кнопку — сломает это разделение «прицел vs коммит».
   document.getElementById('confirmMove')?.addEventListener('pointerdown', (e) => {
     if (e.pointerType !== 'touch' || pinch || activeId !== null) return;
     const game = deps.getGame();
