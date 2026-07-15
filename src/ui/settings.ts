@@ -259,9 +259,10 @@ export function bindSettings(): void {
   driveMode.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
     bindTap(btn, () => {
       mode = btn.dataset.mode as DriveMode;
-      // Пресеты задают числа; «Своя» оставляет текущий drive, открывая ползунки.
-      if (mode === 'realistic') rules.drive = { ...DRIVE_PRESETS.realistic };
-      else if (mode === 'classic') rules.drive = { ...DRIVE_PRESETS.classic };
+      // Пресеты задают числа; «Своя» стартует от «Реалистичной» — ползунки
+      // открываются на её значениях, дальше правь как хочешь.
+      if (mode === 'classic') rules.drive = { ...DRIVE_PRESETS.classic };
+      else rules.drive = { ...DRIVE_PRESETS.realistic };
       commit();
     });
   });
