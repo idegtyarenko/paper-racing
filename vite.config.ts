@@ -1,9 +1,25 @@
 /// <reference types="vitest/config" />
+import { execSync } from 'node:child_process';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// Короткий SHA текущего коммита — метка сборки. Работает и локально, и в CI
+// (checkout даёт HEAD); фолбэк на GITHUB_SHA/'dev' для окружений без git.
+const commit = (() => {
+  try {
+    return execSync('git rev-parse --short HEAD').toString().trim();
+  } catch {
+    return (process.env.GITHUB_SHA ?? 'dev').slice(0, 7);
+  }
+})();
+
 export default defineConfig({
   base: '/paper-racing/',
+  // Метка сборки для индикатора версии в попапе «Правила».
+  define: {
+    __COMMIT__: JSON.stringify(commit),
+    __BUILD_TIME__: JSON.stringify(Date.now()),
+  },
   // Юнит-тесты покрывают только чистое детерминированное ядро (model, geometry).
   test: {
     include: ['src/**/*.test.ts'],
@@ -12,7 +28,9 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'auto',
+      // Регистрируем SW сами в src/pwa.ts (registerSW из virtual:pwa-register),
+      // чтобы не было двойной регистрации.
+      injectRegister: false,
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Paper Racing',

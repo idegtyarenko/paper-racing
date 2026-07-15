@@ -4,3 +4,12 @@
   color: #6b675d;
   line-height: 1.5;
 }
+
+/* Метка версии сборки внизу шторки — незаметный признак, что PWA обновилась. */
+.rules__version {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 11px;
+  color: #a49c86;
+  font-variant-numeric: tabular-nums;
+}

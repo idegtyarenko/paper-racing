@@ -31,6 +31,8 @@ import * as session from './online/online';
 import * as online from './online/online-controller';
 import * as input from './view/input';
 import { initInstallPrompt } from './ui/install-prompt';
+import { showToast } from './ui/dialogs';
+import { initPwa } from './pwa';
 import * as persist from './persist';
 
 const canvas = document.getElementById('board') as HTMLCanvasElement;
@@ -521,6 +523,31 @@ document.addEventListener('visibilitychange', () => {
 // Заполнить статичные тексты разметки из strings до первого показа панели.
 localizeDom();
 
+// Метка сборки внизу шторки «Правила» — честный признак, какой код сейчас крутится
+// (строка вкомпилирована в бандл): коммит + время сборки. Время форматируем в
+// локальный час, чтобы «только что» совпадало с настенным временем.
+const buildLabel = new Date(__BUILD_TIME__).toLocaleString('ru-RU', {
+  day: '2-digit',
+  month: '2-digit',
+  year: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+document.getElementById('appVersion')!.textContent = `${__COMMIT__} · ${buildLabel}`;
+
+// Если коммит сменился с прошлого запуска — приложение обновилось: покажем тост.
+// Сравниваем вкомпилированный коммит с сохранённым, не завязываясь на механику SW.
+try {
+  const BUILD_KEY = 'pr-build';
+  const seen = localStorage.getItem(BUILD_KEY);
+  if (seen && seen !== __COMMIT__) {
+    showToast(`Обновлено до ${__COMMIT__}`, 3000);
+  }
+  localStorage.setItem(BUILD_KEY, __COMMIT__);
+} catch {
+  // приватный режим/недоступный localStorage — молча пропускаем
+}
+
 // Онлайн-входы показываем только если бэкенд настроен (иначе — только локальная игра).
 setOnlineEnabled(onlineAvailable());
 
@@ -553,3 +580,6 @@ if (joining) {
 
 // Предложить установить игру ярлыком на телефон (Android/Chromium и iOS Safari).
 initInstallPrompt();
+
+// Зарегистрировать service worker: авто-обновление PWA с одной перезагрузкой.
+initPwa();

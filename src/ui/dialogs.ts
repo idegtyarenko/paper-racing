@@ -101,11 +101,11 @@ export function setConnBanner(lost: boolean): void {
 let toastTimer: number | undefined;
 
 /** Короткое всплывающее уведомление (ссылка/код скопированы и т.п.). */
-export function showToast(msg: string): void {
+export function showToast(msg: string, ms = 1800): void {
   toast.textContent = msg;
   toast.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => (toast.hidden = true), 1800);
+  toastTimer = window.setTimeout(() => (toast.hidden = true), ms);
 }
 
 /** Навесить подтверждение диалогов (кнопки + Enter в полях ввода). */
