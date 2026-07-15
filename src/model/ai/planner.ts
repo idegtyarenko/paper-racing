@@ -14,9 +14,9 @@ import { Vec, dist, segSegIntersection } from '../../geometry';
 import { Track, sideOfFinish } from '../track';
 import { GameState, Candidate, WIN_CROSSINGS, computeOutcome } from '../game';
 import { NavField, navAt } from '../nav';
+import { reachableTargets } from '../turns';
 import { Clearance, buildClearance, segClear } from './clearance';
 import { PlanParams } from './difficulty';
-import { expand } from './targets';
 import { Ranking, OVERSPEED_PENALTY, EPS_MARGIN } from './scoring';
 
 /** Растр зазора кэшируем на трассу: строится раз на гонку при первом ходе hard-бота
@@ -154,7 +154,7 @@ export function scoreByPlan(
     const hit = stopMemo.get(key);
     if (hit !== undefined) return hit;
     // Пробуем сильнее тормозить первыми — быстрее находим цепочку до нуля.
-    const opts = expand(pos, vel, physics).sort(
+    const opts = reachableTargets(pos, vel, physics).sort(
       (A, B) =>
         Math.hypot(A.x - pos.x, A.y - pos.y) - Math.hypot(B.x - pos.x, B.y - pos.y),
     );
@@ -258,7 +258,7 @@ export function scoreByPlan(
       fallbackFirst = cur.first;
     }
     exp++;
-    for (const target of expand(cur.pos, cur.vel, physics)) {
+    for (const target of reachableTargets(cur.pos, cur.vel, physics)) {
       const cd = crossDelta(track, cur.pos, target);
       if (cd === -1) continue; // назад через финиш не едем
       const g = cur.g + 1 + overspeed(cur.pos, target);
