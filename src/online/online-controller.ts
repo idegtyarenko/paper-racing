@@ -56,6 +56,8 @@ export interface OnlineDeps {
   fitToContent(): void;
   refreshCands(): void;
   updateUI(): void;
+  /** Показать остаток времени на текущий ход (мой — на кнопке, чужой — в статусе). */
+  setTurnCountdown(msLeft: number | null, mine: boolean): void;
   redraw(): void;
   /** Полный сброс к чистому редактору (выход из онлайна). */
   resetToEdit(): void;
@@ -90,6 +92,11 @@ let skipTimer: number | null = null;
 let lobbyPruneTimer: number | null = null;
 /** Таймер отложенного хода бота (host-only) — гасится вместе со слежением за ходом. */
 let botTimer: number | null = null;
+/** Отсчёт остатка времени на ход: момент начала хода (локальные часы) + тикер обновления
+ *  метки. Локальный per-client отсчёт (без общего timestamp в стейте) — небольшой разброс
+ *  между клиентами допустим для «мягкого» таймера. */
+let turnStartAt: number | null = null;
+let tickTimer: number | null = null;
 /** Показывать ли кнопку ручного пропуска (истинно только для присутствующего игрока). */
 let skipVisible = false;
 
@@ -225,6 +232,12 @@ function clearTurnWatch(): void {
     clearTimeout(botTimer);
     botTimer = null;
   }
+  if (tickTimer !== null) {
+    clearInterval(tickTimer);
+    tickTimer = null;
+  }
+  turnStartAt = null;
+  deps.setTurnCountdown(null, false); // снять таймер — иначе завис бы «· 0:00»
   skipVisible = false;
 }
 
@@ -278,11 +291,10 @@ function armTurnWatch(): void {
   const game = deps.getGame();
   if (!session.active() || !game || game.phase !== 'race') return;
   const cur = game.current;
-  if (cur === session.mySeat()) return; // мой ход — не слежу за собой
 
   // Ход бота считает и коммитит только хост; гости просто ждут его pushMove как
-  // обычный чужой ход. Ветка до логики присутствия: бот-место никогда не «present»,
-  // иначе его авто-пропустил бы designatedSkipper вместо настоящего хода.
+  // обычный чужой ход. Бот-место никогда не «present» (иначе его авто-пропустил бы
+  // designatedSkipper) и не тикает таймером — боты по времени не лимитируются.
   if (isBotSeat(game, cur)) {
     if (session.isHost()) scheduleBotMove(cur);
     return;
@@ -291,6 +303,20 @@ function armTurnWatch(): void {
   // Лимит на ход — из правил заезда (задаёт хост в настройках); старые стейты без
   // поля подстрахованы дефолтом.
   const limit = game.rules.turnLimitMs ?? TURN_TIMEOUT_MS;
+
+  // Локальный отсчёт остатка времени — для меня (метка на кнопке) и для соперников
+  // (суффикс в статусе). Стартуем до early-return «мой ход», чтобы был виден и мне.
+  turnStartAt = Date.now();
+  const tick = (): void => {
+    const g = deps.getGame();
+    if (!session.active() || !g || g.phase !== 'race' || turnStartAt === null) return;
+    const msLeft = Math.max(0, limit - (Date.now() - turnStartAt));
+    deps.setTurnCountdown(msLeft, g.current === session.mySeat());
+  };
+  tick();
+  tickTimer = window.setInterval(tick, 500);
+
+  if (cur === session.mySeat()) return; // мой ход — за собой не слежу (пропуск не нужен)
 
   if (session.isPresent(cur)) {
     // Онлайн, но задумался — по истечении лимита открываем ручной пропуск остальным.

@@ -6,6 +6,7 @@ import { KMH_PER_CELL } from '../config';
 import { EditorState, canStepBack } from '../model/editor';
 import { GameState, Player, MIN_PLAYERS } from '../model/game';
 import { Difficulty } from '../model/ai';
+import { msToClock } from './format';
 import { len } from '../geometry';
 import { strings } from '../strings';
 import { coarsePointer, bindTap, openSheet, closeOverlay, bindOverlayClose } from './dom';
@@ -145,10 +146,49 @@ export interface PanelHandlers {
 
 /** Состояние отправки хода в онлайне: покой / идёт запись / запись не удалась. */
 export type SendState = 'idle' | 'sending' | 'failed';
+
+// ── Кнопка подтверждения хода: единый рендер из четырёх входов ─────────────────────
+// Её вид (текст/disabled/hidden) зависит от состояния отправки (setMoveSendState),
+// выбора кандидата (showConfirmMove), а в онлайне ещё и от того, мой ли сейчас ход и
+// сколько осталось времени (setTurnCountdown). Входы приходят из разных модулей, поэтому
+// держим их в состоянии панели и собираем кнопку в одном месте — refreshConfirmBtn().
 let sendState: SendState = 'idle';
+let confirmSelected = false; // выбран кандидат (тач-прицеливание) — можно коммитить
+let confirmAnchorTop = false; // кнопку увели в верхнюю половину поля
+let confirmMyTurn = false; // онлайн: сейчас мой ход (кнопку держим видимой под таймер)
+let confirmCountdownMs: number | null = null; // остаток времени на мой ход (для метки)
+
+// Базовый (без суффикса-таймера) текст строки статуса в онлайн-гонке — его декорирует
+// тикающий setTurnCountdown, чтобы не зависеть от следующего полного updatePanel и не
+// накапливать суффиксы. null — не онлайн-гонка (суффикс не приписываем).
+let raceStatusBase: string | null = null;
 
 /** Настроен ли онлайн-бэкенд: без него «Войти по коду» прячем всегда. */
 let onlineEnabled = false;
+
+/** Собрать вид кнопки подтверждения из текущего состояния панели. */
+function refreshConfirmBtn(): void {
+  const timer = confirmCountdownMs !== null ? msToClock(confirmCountdownMs) : null;
+  // Кнопка-таймер: мой ход, но цель ещё не выбрана — некликабельная заглушка с отсчётом.
+  const timerOnly =
+    confirmMyTurn && !confirmSelected && sendState !== 'failed' && !!timer;
+  confirmMoveBtn.classList.toggle('confirm-move--top', confirmAnchorTop);
+  // Только-таймер — не кликается и пропускает клики к полю (иначе накрыла бы кандидата).
+  confirmMoveBtn.classList.toggle('confirm-move--timer', timerOnly);
+  // Видима, если есть что подтверждать / идёт отправка (или ошибка) / это мой онлайн-ход.
+  confirmMoveBtn.hidden = !(confirmSelected || sendState !== 'idle' || confirmMyTurn);
+  confirmMoveBtn.disabled = sendState === 'sending' || timerOnly;
+  confirmMoveBtn.textContent =
+    sendState === 'sending'
+      ? strings.online.sending
+      : sendState === 'failed'
+        ? strings.online.retrySend
+        : timerOnly
+          ? `⏱ ${timer}`
+          : confirmSelected && timer
+            ? `${strings.buttons.confirmMove} · ${timer}`
+            : strings.buttons.confirmMove;
+}
 
 /**
  * Отразить состояние отправки хода на кнопке подтверждения: «Отправка…» (заблокирована,
@@ -157,14 +197,7 @@ let onlineEnabled = false;
  * игрок видел прогресс и мог повторить. */
 export function setMoveSendState(s: SendState): void {
   sendState = s;
-  confirmMoveBtn.disabled = s === 'sending';
-  confirmMoveBtn.textContent =
-    s === 'sending'
-      ? strings.online.sending
-      : s === 'failed'
-        ? strings.online.retrySend
-        : strings.buttons.confirmMove;
-  if (s !== 'idle') confirmMoveBtn.hidden = false;
+  refreshConfirmBtn();
 }
 
 /** Показать/спрятать плавающую кнопку подтверждения хода (тач-прицеливание).
@@ -175,8 +208,27 @@ export function showConfirmMove(
   show: boolean,
   anchor: 'top' | 'bottom' = 'bottom',
 ): void {
-  confirmMoveBtn.classList.toggle('confirm-move--top', anchor === 'top');
-  confirmMoveBtn.hidden = !(show || sendState !== 'idle');
+  confirmSelected = show;
+  confirmAnchorTop = anchor === 'top';
+  refreshConfirmBtn();
+}
+
+/**
+ * Онлайн-отсчёт времени на ход. Мой ход → таймер живёт на кнопке подтверждения (её
+ * держим видимой всегда, даже до выбора цели). Чужой ход → приписываем «· м:сс» к строке
+ * статуса. `null` — хода/гонки нет: снять таймер и вернуть базовый статус. Локальный
+ * (не онлайн) флоу этой функции не касается — там она не зовётся. */
+export function setTurnCountdown(msLeft: number | null, mine = false): void {
+  confirmMyTurn = mine && msLeft !== null;
+  confirmCountdownMs = mine ? msLeft : null;
+  if (raceStatusBase !== null) {
+    // Свой таймер — на кнопке, статус («Твой ход…») не трогаем; чужой — суффикс в статус.
+    statusEl.textContent =
+      !mine && msLeft !== null
+        ? `${raceStatusBase} · ${msToClock(msLeft)}`
+        : raceStatusBase;
+  }
+  refreshConfirmBtn();
 }
 
 /** Спрятать онлайн-входы, если бэкенд не настроен (играем только локально). */
@@ -509,6 +561,7 @@ export function updatePanel(
   }
 
   statusEl.className = 'status';
+  raceStatusBase = null; // по умолчанию не декорируем статус таймером (задаём в ветке net)
   if (!game) return;
 
   const cur = game.players[game.current];
@@ -529,7 +582,8 @@ export function updatePanel(
 
   if (net) {
     if (net.canSkip) {
-      statusEl.textContent = strings.online.skippable(net.currentName);
+      raceStatusBase = strings.online.skippable(net.currentName);
+      statusEl.textContent = raceStatusBase;
       const name = document.createElement('b');
       name.className = 'skip-btn__name';
       name.style.color = cur.color;
@@ -543,10 +597,13 @@ export function updatePanel(
       // Ход не ушёл на сервер — держим заметный текст ошибки, пока игрок не повторит.
       statusEl.classList.add('status--error');
       statusEl.textContent = strings.online.sendFailed;
+    } else if (net.yourTurn) {
+      // Мой ход: таймер живёт на кнопке подтверждения, статус не декорируем.
+      statusEl.textContent = strings.online.yourTurn;
     } else {
-      statusEl.textContent = net.yourTurn
-        ? strings.online.yourTurn
-        : strings.online.turnOf(cur.name);
+      // Чужой ход: базу запоминаем — тикающий отсчёт припишет к ней «· м:сс».
+      raceStatusBase = strings.online.turnOf(cur.name);
+      statusEl.textContent = raceStatusBase;
     }
     return;
   }

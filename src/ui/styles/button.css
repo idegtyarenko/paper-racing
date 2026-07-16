@@ -84,6 +84,13 @@
 .confirm-move:active {
   background: #097843;
 }
+/* Режим «только таймер»: цель ещё не выбрана — кнопка показывает отсчёт, но не
+   кликается и пропускает клики/тапы к полю (иначе накрыла бы кандидата под собой). */
+.confirm-move--timer {
+  pointer-events: none;
+  background: rgba(10, 138, 79, 0.55);
+  cursor: default;
+}
 .confirm-move[hidden] {
   display: none;
 }

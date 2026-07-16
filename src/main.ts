@@ -20,7 +20,13 @@ import { AI_MOVE_DELAY_MS } from './config';
 import { render, AppView } from './view/render';
 import { Bounds, polylineBounds } from './view/camera';
 import * as vp from './view/viewport';
-import { bindButtons, updatePanel, setOnlineEnabled, PanelMode } from './ui/panel';
+import {
+  bindButtons,
+  updatePanel,
+  setOnlineEnabled,
+  setTurnCountdown,
+  PanelMode,
+} from './ui/panel';
 import { renderTurnQueue } from './ui/turn-queue';
 import { renderStandings } from './ui/standings';
 import { openSettings } from './ui/settings';
@@ -362,6 +368,7 @@ online.initOnline({
   fitToContent: () => vp.fitToContent(),
   refreshCands,
   updateUI,
+  setTurnCountdown,
   redraw,
   resetToEdit,
 });
