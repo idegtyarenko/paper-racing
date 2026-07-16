@@ -565,3 +565,73 @@ initInstallPrompt();
 
 // Зарегистрировать service worker: авто-обновление PWA с одной перезагрузкой.
 initPwa();
+
+// ─── Dev-only тест-хелперы (`window.__pr`) ─────────────────────────────────────
+// Ручное прохождение мастера редактора (нарисовать петлю → кромки → финиш →
+// направление → режим → игроки) при браузерной валидации сжигает уйму шагов и
+// токенов. Эти хелперы прыгают сразу в нужное состояние на готовой трассе и
+// возвращают дешёвый JSON-снимок — читать состояние можно одним вызовом вместо
+// цепочки скриншотов. В ПРОД-БАНДЛ НЕ ПОПАДАЮТ: Vite заменяет `import.meta.env.DEV`
+// на `false`, и вся ветка (вместе с трассой-фикстурой) удаляется как мёртвый код —
+// проверяется `npm run build` + grep по dist. Пользователю не видны.
+if (import.meta.env.DEV) {
+  // Готовая прямоугольная трасса-«бублик»: дорога — рамка между внешним и
+  // внутренним прямоугольниками, финиш поперёк нижней прямой, гонка в +x.
+  const devTrack = (): Track => {
+    const res = finalizeTrack(
+      [
+        { x: 0, y: 0 },
+        { x: 40, y: 0 },
+        { x: 40, y: 24 },
+        { x: 0, y: 24 },
+      ],
+      [
+        { x: 8, y: 8 },
+        { x: 32, y: 8 },
+        { x: 32, y: 16 },
+        { x: 8, y: 16 },
+      ],
+      { a: { x: 6, y: 0 }, b: { x: 6, y: 8 } },
+      { x: 1, y: 0 },
+    );
+    if ('error' in res) throw new Error(`dev track invalid: ${res.error}`);
+    return res.track;
+  };
+  // Дешёвый снимок ключевого состояния для ассертов без скриншотов.
+  const snap = () => ({
+    mode,
+    phase: game?.phase ?? null,
+    current: game?.current ?? null,
+    players:
+      game?.players.map((p) => ({ name: p.name, bot: p.bot ?? null, place: p.place })) ??
+      null,
+    lastLocalRace,
+  });
+  (window as unknown as Record<string, unknown>).__pr = {
+    /** Готовая трасса + сразу локальная гонка: humans людей, bots ботов. */
+    race(humans = 1, bots = 1, difficulty: Difficulty = 'medium') {
+      raceTrack = devTrack();
+      startRace(humans, bots, difficulty);
+      return snap();
+    },
+    /** Готовая трасса → экран выбора режима (минуя рисование). */
+    toMode() {
+      raceTrack = devTrack();
+      playersReturn = 'edit';
+      cancelAiMove();
+      mode = 'mode';
+      updateUI();
+      redraw();
+      return snap();
+    },
+    /** Обнулить сохранённый локальный состав (эмуляция «после онлайн-гонки»,
+     *  когда рематч одним тапом недоступен и кнопка «Реванш» прячется). */
+    clearLastRace() {
+      lastLocalRace = null;
+      updateUI();
+      return snap();
+    },
+    /** Снимок состояния приложения для ассертов. */
+    state: snap,
+  };
+}
