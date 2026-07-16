@@ -1,7 +1,87 @@
-/* Шаг выбора числа игроков (2–6): ряд крупных кнопок-цифр. */
+/* Ряд выбора числа (люди/боты/сложность): ряд крупных кнопок. */
 .players-select {
   display: flex;
   gap: 6px;
+}
+
+/* Строка настройки состава: подпись над рядом кнопок. */
+.setup-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.setup-row__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b6455;
+}
+
+/* display:flex ниже перебивает атрибут [hidden] (одинаковая специфичность, но
+   правило позже) — возвращаем скрытие через более специфичный селектор. */
+.setup-row[hidden],
+.lobby__bots[hidden] {
+  display: none;
+}
+
+/* Выбранная кнопка в ряду (число людей/ботов или сложность). */
+.count-btn--selected {
+  border-color: #2e7d32;
+  background: #e3f0dd;
+  box-shadow: inset 0 0 0 1px #2e7d32;
+}
+@media (hover: hover) {
+  .count-btn--selected:hover:not(:disabled) {
+    background: #d7e9cf;
+  }
+}
+
+/* Досаживание ботов в лобби (только хост): подпись, ряд-степпер и ряд сложности.
+   На узкой боковой панели (десктоп) степпер и сложность идут отдельными строками,
+   чтобы 5 кнопок не переполняли ширину; на широкой нижней панели телефона — в одну
+   строку (см. медиазапрос ниже). */
+.lobby__bots {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lobby__bots-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* − и + делят ширину ряда поровну (как кнопки в рядах ниже), число — между ними. */
+.lobby__bots-controls .count-btn {
+  flex: 1;
+}
+.lobby__bots-count {
+  flex: 0 0 auto;
+  min-width: 32px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+/* Телефон: панель во всю ширину — степпер и сложность помещаются в одну строку.
+   Подпись остаётся сверху (basis 100% → переносится на свою строку). */
+@media (max-width: 700px) {
+  .lobby__bots {
+    flex-flow: row wrap;
+    align-items: center;
+  }
+  .lobby__bots > .setup-row__label {
+    flex: 0 0 100%;
+  }
+  .lobby__bots-controls {
+    flex: 0 0 auto;
+  }
+  /* В одной строке − и + компактные, не растягиваются на всю ширину. */
+  .lobby__bots-controls .count-btn {
+    flex: 0 0 auto;
+    min-width: 40px;
+  }
+  #lobbyBotDifficulty {
+    flex: 1;
+  }
 }
 
 /* Квадратная кнопка-цифра выбора числа игроков. */

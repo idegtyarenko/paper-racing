@@ -4,7 +4,7 @@
 
 import { KMH_PER_CELL } from '../config';
 import { EditorState, canStepBack } from '../model/editor';
-import { GameState, Player } from '../model/game';
+import { GameState, Player, MIN_PLAYERS } from '../model/game';
 import { Difficulty } from '../model/ai';
 import { len } from '../geometry';
 import { strings } from '../strings';
@@ -39,7 +39,13 @@ const dlgSameTrack = document.getElementById('dlgSameTrack') as HTMLButtonElemen
 const dlgNewTrack = document.getElementById('dlgNewTrack') as HTMLButtonElement;
 const winnerBanner = document.querySelector('.winner')!;
 const winnerWho = winnerBanner.querySelector('.winner__title') as HTMLElement;
-const playerCount = document.getElementById('playerCount')!;
+
+// Экран состава хотсита: ряды «Люди», «Боты», «Сложность» (последний виден при
+// ботах ≥ 1) и кнопка старта.
+const humanCount = document.getElementById('humanCount')!;
+const playersBotCount = document.getElementById('playersBotCount')!;
+const playersDifficulty = document.getElementById('playersDifficulty')!;
+const playersStartBtn = document.getElementById('playersStart') as HTMLButtonElement;
 
 // Онлайн-режим: кнопки выбора режима (лобби и диалоги — в соседних модулях).
 const modeLocalBtn = document.getElementById('modeLocal') as HTMLButtonElement;
@@ -47,11 +53,30 @@ const modeOnlineBtn = document.getElementById('modeOnline') as HTMLButtonElement
 const modeBackBtn = document.getElementById('modeBack') as HTMLButtonElement;
 const joinByCodeBtn = document.getElementById('joinByCode') as HTMLButtonElement;
 
-// Режим «С компьютером»: кнопка режима и экран выбора сложности ботов.
+// Режим «С компьютером»: кнопка режима, ряды «Боты» (1–5) и «Сложность», старт.
 const modeAiBtn = document.getElementById('modeAI') as HTMLButtonElement;
+const aiBotCount = document.getElementById('aiBotCount')!;
 const aiDifficulty = document.getElementById('aiDifficulty')!;
+const aiStartBtn = document.getElementById('aiStart') as HTMLButtonElement;
 const aiSettingsBtn = document.getElementById('aiSettingsBtn') as HTMLButtonElement;
 const aiBackBtn = document.getElementById('aiBack') as HTMLButtonElement;
+
+// ── Состояние экранов состава (люди/боты/сложность) ───────────────────────────────
+// Локальная гонка собирается на экранах «На одном устройстве» (хотсит) и «С
+// компьютером» (сингл, человек всегда один). Число мест на решётке (capacity)
+// приходит в updatePanel и ограничивает выбор; пере-рендер по каждому тапу.
+let setupHumans = 2;
+let setupBots = 0;
+let aiBots = 1;
+let setupDifficulty: Difficulty = 'medium';
+let seatCapacity = 6;
+
+/** Подсветить выбранную кнопку в ряду (по значению data-атрибута). */
+function markSelected(container: HTMLElement, attr: string, value: string): void {
+  container.querySelectorAll<HTMLButtonElement>('.count-btn').forEach((btn) => {
+    btn.classList.toggle('count-btn--selected', btn.dataset[attr] === value);
+  });
+}
 
 /** Режим панели: рисование трассы, выбор режима/числа игроков/сложности ботов,
  *  лобби, гонка. */
@@ -68,9 +93,10 @@ export interface PanelHandlers {
   onNewTrack: () => void;
   /** Назад из шага выбора игроков. */
   onPlayersBack: () => void;
-  /** Выбрано число игроков — сразу стартуем гонку. */
-  onPlayerCount: (n: number) => void;
-  /** Открыть настройки правил заезда (кнопка ⚙ на экране числа игроков). */
+  /** Старт локальной гонки: humans людей + bots ботов заданной сложности (боты
+   *  садятся в замыкающие места). Общий обработчик хотсита и «С компьютером». */
+  onStartLocal: (humans: number, bots: number, difficulty: Difficulty) => void;
+  /** Открыть настройки правил заезда (кнопка ⚙ на экране состава). */
   onOpenSettings: () => void;
   /** Открыть настройки правил из лобби (кнопка ⚙, только хост). */
   onLobbySettings: () => void;
@@ -78,11 +104,9 @@ export interface PanelHandlers {
   onModeLocal: () => void;
   /** Шаг выбора режима: онлайн (открыть диалог имени → создать игру). */
   onModeOnline: () => void;
-  /** Шаг выбора режима: с компьютером (перейти к выбору сложности ботов). */
+  /** Шаг выбора режима: с компьютером (перейти к настройке числа ботов). */
   onModeAI: () => void;
-  /** Выбрана сложность ботов — сразу стартуем гонку против компьютера. */
-  onAiDifficulty: (d: Difficulty) => void;
-  /** Назад из шага выбора сложности ботов. */
+  /** Назад из шага «С компьютером». */
   onAiBack: () => void;
   /** Назад из шага выбора режима. */
   onModeBack: () => void;
@@ -94,6 +118,12 @@ export interface PanelHandlers {
   onLobbyShare: () => void;
   /** Скопировать код игры. */
   onLobbyCopyCode: () => void;
+  /** Хост: досадить ещё одного бота на свободное место лобби. */
+  onLobbyBotAdd: () => void;
+  /** Хост: убрать одного бота. */
+  onLobbyBotRemove: () => void;
+  /** Хост: сложность досаживаемых ботов. */
+  onLobbyBotDifficulty: (d: Difficulty) => void;
   /** Выйти из лобби. */
   onLobbyLeave: () => void;
   /** Пропустить ход задержавшегося игрока (болид едет по инерции). */
@@ -152,16 +182,46 @@ export function bindButtons(h: PanelHandlers): void {
   bindTap(nextBtn, h.onNext);
   bindTap(playersBackBtn, h.onPlayersBack);
   bindTap(confirmMoveBtn, h.onConfirmMove);
-  playerCount.querySelectorAll<HTMLButtonElement>('.count-btn').forEach((btn) => {
-    bindTap(btn, () => h.onPlayerCount(Number(btn.dataset.count)));
+  // Экран состава (хотсит): люди / боты / сложность — тап меняет выбор и пере-рендерит.
+  humanCount.querySelectorAll<HTMLButtonElement>('.count-btn').forEach((btn) => {
+    bindTap(btn, () => {
+      setupHumans = Number(btn.dataset.humans);
+      renderPlayersSetup();
+    });
   });
+  playersBotCount.querySelectorAll<HTMLButtonElement>('.count-btn').forEach((btn) => {
+    bindTap(btn, () => {
+      setupBots = Number(btn.dataset.bots);
+      renderPlayersSetup();
+    });
+  });
+  playersDifficulty
+    .querySelectorAll<HTMLButtonElement>('[data-difficulty]')
+    .forEach((btn) => {
+      bindTap(btn, () => {
+        setupDifficulty = btn.dataset.difficulty as Difficulty;
+        renderPlayersSetup();
+      });
+    });
+  bindTap(playersStartBtn, () => h.onStartLocal(setupHumans, setupBots, setupDifficulty));
   bindTap(settingsBtn, h.onOpenSettings);
   bindTap(modeLocalBtn, h.onModeLocal);
   bindTap(modeOnlineBtn, h.onModeOnline);
   bindTap(modeAiBtn, h.onModeAI);
-  aiDifficulty.querySelectorAll<HTMLButtonElement>('[data-difficulty]').forEach((btn) => {
-    bindTap(btn, () => h.onAiDifficulty(btn.dataset.difficulty as Difficulty));
+  // Экран «С компьютером» (сингл, человек всегда один): число ботов + их сложность.
+  aiBotCount.querySelectorAll<HTMLButtonElement>('.count-btn').forEach((btn) => {
+    bindTap(btn, () => {
+      aiBots = Number(btn.dataset.bots);
+      renderAiSetup();
+    });
   });
+  aiDifficulty.querySelectorAll<HTMLButtonElement>('[data-difficulty]').forEach((btn) => {
+    bindTap(btn, () => {
+      setupDifficulty = btn.dataset.difficulty as Difficulty;
+      renderAiSetup();
+    });
+  });
+  bindTap(aiStartBtn, () => h.onStartLocal(1, aiBots, setupDifficulty));
   bindTap(aiSettingsBtn, h.onOpenSettings);
   bindTap(aiBackBtn, h.onAiBack);
   bindTap(modeBackBtn, h.onModeBack);
@@ -332,6 +392,45 @@ export interface NetTurn {
   code: string;
 }
 
+/**
+ * Экран состава хотсита: применить ограничения решётки к рядам «Люди»/«Боты»,
+ * подсветить выбор, показать ряд сложности при ботах ≥ 1 и разрешить старт, когда
+ * участников хотя бы MIN_PLAYERS и они влезают на стартовую решётку (seatCapacity).
+ * Людей минимум MIN_PLAYERS: гонка с одним человеком — это режим «С компьютером»
+ * (см. renderAiSetup), а не хотсит, поэтому ряд «Люди» начинается с 2.
+ */
+function renderPlayersSetup(): void {
+  // Клампим выбор под вместимость: людей от MIN_PLAYERS до решётки, ботов — под остаток.
+  setupHumans = Math.max(MIN_PLAYERS, Math.min(setupHumans, seatCapacity));
+  setupBots = Math.max(0, Math.min(setupBots, seatCapacity - setupHumans));
+  humanCount.querySelectorAll<HTMLButtonElement>('.count-btn').forEach((btn) => {
+    btn.disabled = Number(btn.dataset.humans) > seatCapacity;
+  });
+  playersBotCount.querySelectorAll<HTMLButtonElement>('.count-btn').forEach((btn) => {
+    btn.disabled = setupHumans + Number(btn.dataset.bots) > seatCapacity;
+  });
+  markSelected(humanCount, 'humans', String(setupHumans));
+  markSelected(playersBotCount, 'bots', String(setupBots));
+  playersDifficulty.hidden = setupBots === 0;
+  markSelected(playersDifficulty, 'difficulty', setupDifficulty);
+  const total = setupHumans + setupBots;
+  playersStartBtn.disabled = total < MIN_PLAYERS || total > seatCapacity;
+}
+
+/**
+ * Экран «С компьютером»: человек один, число ботов 1..(решётка−1), ряд сложности
+ * всегда виден. Старт доступен, когда на решётке помещается человек и хотя бы бот.
+ */
+function renderAiSetup(): void {
+  aiBots = Math.max(1, Math.min(aiBots, Math.max(1, seatCapacity - 1)));
+  aiBotCount.querySelectorAll<HTMLButtonElement>('.count-btn').forEach((btn) => {
+    btn.disabled = 1 + Number(btn.dataset.bots) > seatCapacity;
+  });
+  markSelected(aiBotCount, 'bots', String(aiBots));
+  markSelected(aiDifficulty, 'difficulty', setupDifficulty);
+  aiStartBtn.disabled = seatCapacity < MIN_PLAYERS;
+}
+
 export function updatePanel(
   mode: PanelMode,
   editor: EditorState,
@@ -341,6 +440,7 @@ export function updatePanel(
   aiTurn = false,
   canRetire = false,
 ): void {
+  seatCapacity = playersMax;
   editButtons.hidden = mode !== 'edit';
   modeButtons.hidden = mode !== 'mode';
   aiButtons.hidden = mode !== 'ai';
@@ -375,6 +475,7 @@ export function updatePanel(
 
   if (mode === 'ai') {
     renderStepStatus(strings.aiSelect.promptBadge, strings.aiSelect.prompt);
+    renderAiSetup();
     return;
   }
 
@@ -385,9 +486,7 @@ export function updatePanel(
 
   if (mode === 'players') {
     renderStepStatus(strings.players.promptBadge, strings.players.prompt);
-    playerCount.querySelectorAll<HTMLButtonElement>('.count-btn').forEach((btn) => {
-      btn.disabled = Number(btn.dataset.count) > playersMax;
-    });
+    renderPlayersSetup();
     return;
   }
 

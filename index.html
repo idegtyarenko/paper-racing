@@ -118,26 +118,50 @@
           ></button>
         </div>
         <div id="aiButtons" class="panel__group" hidden>
-          <div id="aiDifficulty" class="panel__group">
-            <button
-              type="button"
-              class="button button--center"
-              data-difficulty="easy"
-              data-i18n="aiSelect.easy"
-            ></button>
-            <button
-              type="button"
-              class="button button--center"
-              data-difficulty="medium"
-              data-i18n="aiSelect.medium"
-            ></button>
-            <button
-              type="button"
-              class="button button--center"
-              data-difficulty="hard"
-              data-i18n="aiSelect.hard"
-            ></button>
+          <div class="setup-row">
+            <span class="setup-row__label" data-i18n="aiSelect.botsLabel"></span>
+            <div id="aiBotCount" class="players-select">
+              <button type="button" class="count-btn" data-bots="1">1</button>
+              <button type="button" class="count-btn" data-bots="2">2</button>
+              <button type="button" class="count-btn" data-bots="3">3</button>
+              <button type="button" class="count-btn" data-bots="4">4</button>
+              <button type="button" class="count-btn" data-bots="5">5</button>
+            </div>
           </div>
+          <div class="setup-row">
+            <span class="setup-row__label" data-i18n="aiSelect.difficultyLabel"></span>
+            <div id="aiDifficulty" class="players-select">
+              <button
+                type="button"
+                class="count-btn diff-btn"
+                data-difficulty="easy"
+                data-i18n-title="aiSelect.easy"
+              >
+                🟢
+              </button>
+              <button
+                type="button"
+                class="count-btn diff-btn"
+                data-difficulty="medium"
+                data-i18n-title="aiSelect.medium"
+              >
+                🟡
+              </button>
+              <button
+                type="button"
+                class="count-btn diff-btn"
+                data-difficulty="hard"
+                data-i18n-title="aiSelect.hard"
+              >
+                🔴
+              </button>
+            </div>
+          </div>
+          <button
+            id="aiStart"
+            class="button button--primary"
+            data-i18n="aiSelect.start"
+          ></button>
           <button
             id="aiSettingsBtn"
             class="button button--center"
@@ -167,6 +191,40 @@
             data-i18n="online.share"
           ></button>
           <ul id="lobbyRoster" class="lobby__roster"></ul>
+          <div id="lobbyBots" class="lobby__bots" hidden>
+            <span class="setup-row__label" data-i18n="online.botsLabel"></span>
+            <div class="lobby__bots-controls">
+              <button id="lobbyBotRemove" type="button" class="count-btn">−</button>
+              <span id="lobbyBotCount" class="lobby__bots-count">0</span>
+              <button id="lobbyBotAdd" type="button" class="count-btn">+</button>
+            </div>
+            <div id="lobbyBotDifficulty" class="players-select">
+              <button
+                type="button"
+                class="count-btn diff-btn"
+                data-difficulty="easy"
+                data-i18n-title="aiSelect.easy"
+              >
+                🟢
+              </button>
+              <button
+                type="button"
+                class="count-btn diff-btn"
+                data-difficulty="medium"
+                data-i18n-title="aiSelect.medium"
+              >
+                🟡
+              </button>
+              <button
+                type="button"
+                class="count-btn diff-btn"
+                data-difficulty="hard"
+                data-i18n-title="aiSelect.hard"
+              >
+                🔴
+              </button>
+            </div>
+          </div>
           <button
             id="lobbySettings"
             class="button button--center"
@@ -186,13 +244,61 @@
           ></button>
         </div>
         <div id="playersButtons" class="panel__group" hidden>
-          <div id="playerCount" class="players-select">
-            <button type="button" class="count-btn" data-count="2">2</button>
-            <button type="button" class="count-btn" data-count="3">3</button>
-            <button type="button" class="count-btn" data-count="4">4</button>
-            <button type="button" class="count-btn" data-count="5">5</button>
-            <button type="button" class="count-btn" data-count="6">6</button>
+          <div class="setup-row">
+            <span class="setup-row__label" data-i18n="players.humansLabel"></span>
+            <div id="humanCount" class="players-select">
+              <button type="button" class="count-btn" data-humans="2">2</button>
+              <button type="button" class="count-btn" data-humans="3">3</button>
+              <button type="button" class="count-btn" data-humans="4">4</button>
+              <button type="button" class="count-btn" data-humans="5">5</button>
+              <button type="button" class="count-btn" data-humans="6">6</button>
+            </div>
           </div>
+          <div class="setup-row">
+            <span class="setup-row__label" data-i18n="players.botsLabel"></span>
+            <div id="playersBotCount" class="players-select">
+              <button type="button" class="count-btn" data-bots="0">0</button>
+              <button type="button" class="count-btn" data-bots="1">1</button>
+              <button type="button" class="count-btn" data-bots="2">2</button>
+              <button type="button" class="count-btn" data-bots="3">3</button>
+              <button type="button" class="count-btn" data-bots="4">4</button>
+              <button type="button" class="count-btn" data-bots="5">5</button>
+            </div>
+          </div>
+          <div id="playersDifficulty" class="setup-row" hidden>
+            <span class="setup-row__label" data-i18n="players.difficultyLabel"></span>
+            <div class="players-select">
+              <button
+                type="button"
+                class="count-btn diff-btn"
+                data-difficulty="easy"
+                data-i18n-title="aiSelect.easy"
+              >
+                🟢
+              </button>
+              <button
+                type="button"
+                class="count-btn diff-btn"
+                data-difficulty="medium"
+                data-i18n-title="aiSelect.medium"
+              >
+                🟡
+              </button>
+              <button
+                type="button"
+                class="count-btn diff-btn"
+                data-difficulty="hard"
+                data-i18n-title="aiSelect.hard"
+              >
+                🔴
+              </button>
+            </div>
+          </div>
+          <button
+            id="playersStart"
+            class="button button--primary"
+            data-i18n="players.start"
+          ></button>
           <button
             id="settingsBtn"
             class="button button--center"

@@ -18,15 +18,17 @@ import {
 } from './online/net';
 
 const KEY = 'pr-local-state';
-// v2: у игроков появились place/retired, у стейта — roundFinishers (гонка идёт
-// до финиша всех). Старые снимки без этих полей несовместимы — их отбрасываем.
-const VERSION = 2;
+// v3: бот-ность мест переехала в стейт (Player.bot) — отдельного поля `ai` больше
+// нет, а lastLocalRace хранит состав (люди+боты+сложность). Старые снимки (v2 с
+// сайд-каналом ai / прежним lastLocalRace) несовместимы — их отбрасываем.
+const VERSION = 3;
 
-/** Последний локальный режим/состав — для «По той же трассе» одним тапом. */
-export type LastLocalRace =
-  { mode: 'local'; count: number } | { mode: 'ai'; difficulty: Difficulty };
+/** Последний локальный состав — для «По той же трассе» одним тапом. Покрывает и
+ *  хотсит (bots 0), и игру против компьютера (humans 1). */
+export type LastLocalRace = { humans: number; bots: number; difficulty: Difficulty };
 
-/** Живой снимок локального состояния приложения (то, что держит main.ts). */
+/** Живой снимок локального состояния приложения (то, что держит main.ts). Бот-места
+ *  едут внутри game.players (Player.bot) — отдельного поля под ботов нет. */
 export interface LocalSnapshot {
   mode: PanelMode;
   editor: EditorState;
@@ -35,8 +37,6 @@ export interface LocalSnapshot {
   rules: Rules;
   playersReturn: 'edit' | 'race';
   lastLocalRace: LastLocalRace | null;
-  /** Гонка с ботами: места ботов и сложность (nav-поле пересобирается из трассы). */
-  ai: { seats: boolean[]; difficulty: Difficulty } | null;
 }
 
 /** JSON-форма снимка: трассы с Set `inside` разворачиваются в массивы. */
@@ -49,7 +49,6 @@ interface Stored {
   rules: Rules;
   playersReturn: 'edit' | 'race';
   lastLocalRace: LastLocalRace | null;
-  ai: { seats: boolean[]; difficulty: Difficulty } | null;
 }
 
 /** Записать снимок. Ошибку записи (квота/приватный режим) молча глотаем. */
@@ -66,7 +65,6 @@ export function save(snap: LocalSnapshot): void {
       rules: snap.rules,
       playersReturn: snap.playersReturn,
       lastLocalRace: snap.lastLocalRace,
-      ai: snap.ai,
     };
     localStorage.setItem(KEY, JSON.stringify(stored));
   } catch {
@@ -113,7 +111,6 @@ export function load(): LocalSnapshot | null {
       rules: s.rules,
       playersReturn: s.playersReturn ?? 'edit',
       lastLocalRace: s.lastLocalRace ?? null,
-      ai: game && s.ai ? s.ai : null,
     };
   } catch {
     return null;

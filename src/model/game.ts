@@ -4,6 +4,7 @@
 
 import { Vec, dist, lerp, distPointToPolyline, segSegIntersection } from '../geometry';
 import { Track, key, unkey, sideOfFinish, onRoad } from './track';
+import type { Difficulty } from './ai/difficulty';
 import { strings } from '../strings';
 import {
   MIN_PLAYERS,
@@ -43,6 +44,14 @@ export interface Player {
   place: number | null;
   /** Игрок сдался — выбыл из гонки, места не занимает и ходов не делает. */
   retired: boolean;
+  /**
+   * Место занято ботом этой сложности; undefined — за местом человек. Хранится в
+   * модели (а не сайд-каналом), поэтому едет вместе со стейтом: и в онлайн-синк
+   * (гости видят ботов), и в локальный снимок persist — отдельной сериализации не
+   * нужно (serializeState структурно копирует все поля игрока). Ходы ботов считает
+   * chooseMove; в онлайне их коммитит только хост (см. online-controller).
+   */
+  bot?: Difficulty;
 }
 
 // Число пересечений финиша для победы (см. WIN_CROSSINGS в config) — реэкспорт.

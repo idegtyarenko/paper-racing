@@ -14,6 +14,8 @@ import {
   seatColor,
 } from '../model/game';
 import { coastMove, applyMove, retireSeat } from '../model/turns';
+import { NavField } from '../model/nav';
+import { Difficulty, chooseMove } from '../model/ai';
 import { EditorState, editorFromTrack } from '../model/editor';
 import { renderLobby, setLobbyStarting } from '../ui/lobby';
 import {
@@ -27,7 +29,12 @@ import {
 import { closeOverlay } from '../ui/dom';
 import { openConfirm } from '../ui/confirm';
 import { NetTurn, PanelMode, setMoveSendState } from '../ui/panel';
-import { TURN_TIMEOUT_MS, LOBBY_PRUNE_MS, SKIP_RETRY_MS } from '../config';
+import {
+  TURN_TIMEOUT_MS,
+  LOBBY_PRUNE_MS,
+  SKIP_RETRY_MS,
+  AI_MOVE_DELAY_MS,
+} from '../config';
 import { strings } from '../strings';
 import * as session from './online';
 import { OnlineHandlers } from './online';
@@ -42,6 +49,8 @@ export interface OnlineDeps {
   setGame(g: GameState): void;
   /** Текущие правила заезда (их задаёт хост; едут в стейте при старте). */
   getRules(): Rules;
+  /** Навигационное поле текущей гонки — нужно хосту, чтобы считать ходы ботов. */
+  getNav(): NavField | null;
   setEditor(e: EditorState): void;
   /** Вписать текущее содержимое (трассу) по центру вьюпорта. */
   fitToContent(): void;
@@ -79,8 +88,32 @@ export function initOnline(d: OnlineDeps): void {
 
 let skipTimer: number | null = null;
 let lobbyPruneTimer: number | null = null;
+/** Таймер отложенного хода бота (host-only) — гасится вместе со слежением за ходом. */
+let botTimer: number | null = null;
 /** Показывать ли кнопку ручного пропуска (истинно только для присутствующего игрока). */
 let skipVisible = false;
+
+// ── Боты в онлайне (host-local fill) ──────────────────────────────────────────────
+// Хост держит число ботов и их сложность локально; при старте они материализуются в
+// замыкающие свободные места (startOnline) и едут гостям в стейте (Player.bot). Гости
+// ботов не ведут — ходы бота считает и коммитит только хост (см. scheduleBotMove).
+// Живые игроки приоритетнее: боты не занимают серверных мест лобби, поэтому вошедший
+// игрок никогда не блокируется ботом, а lobbyBots пере-клампится по свободным местам.
+let lobbyBots = 0;
+let lobbyBotDifficulty: Difficulty = 'medium';
+/** Идёт ли запись хода бота (host-only) — защита от дублей, как skipSending. */
+let botSending = false;
+
+/** Свободные места лобби под ботов: вместимость трассы минус реальные игроки. */
+function freeSeats(): number {
+  const cap = deps.getRaceTrack()?.startPoints.length ?? 0;
+  return Math.max(0, cap - session.getRoster().length);
+}
+
+/** Место занято ботом (в идущей гонке)? Бот-ность живёт в стейте (Player.bot). */
+function isBotSeat(game: GameState, seat: number): boolean {
+  return !!game.players[seat]?.bot;
+}
 
 // ── Защита от дублей и confirm-first отправка ─────────────────────────────────────
 
@@ -188,6 +221,10 @@ function clearTurnWatch(): void {
     clearTimeout(skipTimer);
     skipTimer = null;
   }
+  if (botTimer !== null) {
+    clearTimeout(botTimer);
+    botTimer = null;
+  }
   skipVisible = false;
 }
 
@@ -242,6 +279,14 @@ function armTurnWatch(): void {
   if (!session.active() || !game || game.phase !== 'race') return;
   const cur = game.current;
   if (cur === session.mySeat()) return; // мой ход — не слежу за собой
+
+  // Ход бота считает и коммитит только хост; гости просто ждут его pushMove как
+  // обычный чужой ход. Ветка до логики присутствия: бот-место никогда не «present»,
+  // иначе его авто-пропустил бы designatedSkipper вместо настоящего хода.
+  if (isBotSeat(game, cur)) {
+    if (session.isHost()) scheduleBotMove(cur);
+    return;
+  }
 
   // Лимит на ход — из правил заезда (задаёт хост в настройках); старые стейты без
   // поля подстрахованы дефолтом.
@@ -308,6 +353,66 @@ async function applySkip(game: GameState): Promise<void> {
   }
 }
 
+/**
+ * Запланировать ход бота (host-only): пауза AI_MOVE_DELAY_MS, чтобы человек успел
+ * следить за ходом бота, как в локальной игре. Один таймер за раз (clearTurnWatch
+ * гасит его на каждом ре-планировании слежения).
+ */
+function scheduleBotMove(seat: number): void {
+  if (botTimer !== null) return;
+  botTimer = window.setTimeout(() => {
+    botTimer = null;
+    runBotMove(seat);
+  }, AI_MOVE_DELAY_MS);
+}
+
+/**
+ * Посчитать и закоммитить ход бота (host-only, confirm-first): применяем ход бота к
+ * копии стейта, пишем на сервер и лишь при успехе делаем её текущей — гости получат
+ * ход как обычный чужой (echo-guard, как в applySkip). Нет хода/нет nav → пас по
+ * инерции. Ошибка — тихий повтор через SKIP_RETRY_MS. botSending защищает от
+ * параллельных записей, пока запущенная ждёт сервер.
+ */
+async function runBotMove(seat: number): Promise<void> {
+  if (botSending) return;
+  const game = deps.getGame();
+  if (
+    !game ||
+    game.phase !== 'race' ||
+    game.current !== seat ||
+    !isBotSeat(game, seat) ||
+    !session.isHost()
+  )
+    return;
+  botSending = true;
+  const nav = deps.getNav();
+  const next = cloneState(game);
+  const cand = nav ? chooseMove(next, nav, game.players[seat].bot!) : null;
+  if (cand) applyMove(next, cand);
+  else coastMove(next);
+  try {
+    await session.pushMove(next);
+    if (deps.getGame() === game) {
+      // Эхо ещё не пришло — применяем сами; иначе авторитетный стейт уже на месте.
+      deps.setGame(next);
+      clearTurnWatch();
+      deps.refreshCands();
+      deps.updateUI();
+      deps.redraw();
+      armTurnWatch();
+    }
+  } catch {
+    showToast(strings.online.error);
+    // Тихий повтор: ход всё ещё за ботом и мы всё ещё хост — runBotMove перепроверит.
+    botTimer = window.setTimeout(() => {
+      botTimer = null;
+      runBotMove(seat);
+    }, SKIP_RETRY_MS);
+  } finally {
+    botSending = false;
+  }
+}
+
 /** Онлайн-контекст текущего хода для панели: чей ход, мой ли, можно ли пропустить,
  *  кто сейчас офлайн. Null — если не в онлайн-игре. */
 export function netTurn(game: GameState | null): NetTurn | null {
@@ -316,7 +421,8 @@ export function netTurn(game: GameState | null): NetTurn | null {
     yourTurn: session.mySeat() === game.current,
     canSkip: skipVisible,
     currentName: game.players[game.current]?.name ?? '',
-    present: game.players.map((_, i) => session.isPresent(i)),
+    // Бот-места всегда «в сети» (их ведёт хост) — не помечаем их офлайном.
+    present: game.players.map((p, i) => !!p.bot || session.isPresent(i)),
     code: session.getCode() ?? '',
   };
 }
@@ -387,6 +493,11 @@ function joinErrorText(e: unknown): string {
 function renderLobbyPanel(): void {
   const roster = session.getRoster();
   const mine = session.mySeat();
+  const maxBots = freeSeats();
+  // Живые игроки приоритетнее ботов: если вошёл новый игрок, свободных мест стало
+  // меньше — ужимаем число ботов под них (при выходе игрока максимум снова вырастет,
+  // но текущее число не восстанавливаем — только верхнюю границу).
+  if (lobbyBots > maxBots) lobbyBots = maxBots;
   renderLobby({
     code: session.getCode() ?? '',
     players: roster.map((r, i) => ({
@@ -397,7 +508,31 @@ function renderLobbyPanel(): void {
     })),
     canStart: session.canStart(),
     isHost: session.isHost(),
+    botCount: lobbyBots,
+    maxBots,
+    botDifficulty: lobbyBotDifficulty,
   });
+}
+
+/** Хост: досадить ещё одного бота на свободное место лобби (в пределах вместимости). */
+export function addBot(): void {
+  if (!session.isHost() || lobbyBots >= freeSeats()) return;
+  lobbyBots++;
+  renderLobbyPanel();
+}
+
+/** Хост: убрать одного бота. */
+export function removeBot(): void {
+  if (!session.isHost() || lobbyBots <= 0) return;
+  lobbyBots--;
+  renderLobbyPanel();
+}
+
+/** Хост: сменить сложность досаживаемых ботов. */
+export function setBotDifficulty(d: Difficulty): void {
+  if (!session.isHost()) return;
+  lobbyBotDifficulty = d;
+  renderLobbyPanel();
 }
 
 const handlers: OnlineHandlers = {
@@ -462,6 +597,7 @@ function hostOnline(name: string): Promise<void> {
   return guarded(async () => {
     const raceTrack = deps.getRaceTrack();
     if (!raceTrack) return;
+    lobbyBots = 0; // свежее лобби — без досаженных ботов
     try {
       await session.host(raceTrack, name, handlers);
       deps.setMode('lobby');
@@ -525,10 +661,19 @@ function startOnline(): Promise<void> {
     const raceTrack = deps.getRaceTrack();
     if (!raceTrack || !session.canStart()) return;
     const roster = session.getRoster();
-    const g = newGame(raceTrack, roster.length, deps.getRules());
+    const humans = roster.length;
+    const bots = Math.min(lobbyBots, freeSeats());
+    const g = newGame(raceTrack, humans + bots, deps.getRules());
     roster.forEach((r, i) => {
       if (g.players[i]) g.players[i].name = r.name;
     });
+    // Досадить ботов в замыкающие свободные места (после реальных игроков): их
+    // бот-ность едет в стейте (Player.bot), гости получат их обычным синком, а ходы
+    // считает только хост (scheduleBotMove).
+    for (let i = humans; i < g.players.length; i++) {
+      g.players[i].bot = lobbyBotDifficulty;
+      g.players[i].name = `${strings.aiSelect.botPrefix} ${g.players[i].name}`;
+    }
     setLobbyStarting(true);
     try {
       await session.start(g);
