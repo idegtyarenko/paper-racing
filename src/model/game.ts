@@ -211,10 +211,28 @@ export interface Candidate {
   inertial: boolean;
 }
 
+/**
+ * Случайная перестановка индексов [0..n) (Фишер—Йетс). rng инъектируется (как в
+ * chooseMove бота) — по умолчанию Math.random. Используется для случайной раздачи
+ * стартовых слотов болидам: в онлайне зовётся только у хоста и уезжает в
+ * сериализованном стейте, так что сеять одинаково у всех клиентов не нужно.
+ */
+export function shuffledIndices(n: number, rng: () => number = Math.random): number[] {
+  const a = Array.from({ length: n }, (_, i) => i);
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 export function newGame(
   track: Track,
   playerCount = 2,
   rules: Rules = DEFAULT_RULES,
+  // Перестановка стартовых слотов: болид i встаёт на startPoints[startOrder[i]].
+  // По умолчанию — тождественная (поул у seat 0): детерминизм тестов/фикстуры.
+  startOrder?: number[],
 ): GameState {
   const n = Math.max(
     MIN_PLAYERS,
@@ -223,7 +241,7 @@ export function newGame(
   const mk = (i: number): Player => ({
     name: NAMES[i],
     color: COLORS[i],
-    pos: { ...track.startPoints[i] },
+    pos: { ...track.startPoints[startOrder?.[i] ?? i] },
     vel: { x: 0, y: 0 },
     trail: [],
     crashes: [],

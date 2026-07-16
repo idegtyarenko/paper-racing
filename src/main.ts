@@ -11,6 +11,7 @@ import {
   DEFAULT_RULES,
   normalizeRules,
   newGame,
+  shuffledIndices,
 } from './model/game';
 import { candidates, applyMove, coastMove, retireSeat } from './model/turns';
 import { Difficulty, chooseMove } from './model/ai';
@@ -297,16 +298,17 @@ function backFromSetup(): void {
 /**
  * Стартовать локальную гонку на подготовленной трассе: сначала `humans` мест за
  * людьми, следом `bots` мест за ботами заданной сложности. Боты садятся в
- * замыкающие места, поэтому «против компьютера» (humans 1) человек стоит на поуле
- * — месте 0 («Красный», стартовая клетка ближе всех к финишу). Общее число
- * участников зажимается по стартовой решётке в newGame; `difficulty` не важен при
- * bots = 0. Бот раскрывает ходы тем же генератором целей, что и движок, поэтому
- * играет физику самого заезда — отдельной «классики для бота» нет.
+ * замыкающие места (seat), но стартовые клетки раздаются случайной перестановкой
+ * среди всех участников — так что поул может достаться и боту (место старта больше
+ * не привязано к тому, кто раньше «зашёл»). Общее число участников зажимается по
+ * стартовой решётке в newGame; `difficulty` не важен при bots = 0. Бот раскрывает
+ * ходы тем же генератором целей, что и движок, поэтому играет физику самого заезда
+ * — отдельной «классики для бота» нет.
  */
 function startRace(humans: number, bots: number, difficulty: Difficulty): void {
   if (!raceTrack) return;
   cancelAiMove();
-  game = newGame(raceTrack, humans + bots, raceRules);
+  game = newGame(raceTrack, humans + bots, raceRules, shuffledIndices(humans + bots));
   for (let i = humans; i < game.players.length; i++) {
     game.players[i].bot = difficulty;
     game.players[i].name = `${strings.aiSelect.botPrefix} ${game.players[i].name}`;
@@ -610,8 +612,12 @@ if (import.meta.env.DEV) {
     phase: game?.phase ?? null,
     current: game?.current ?? null,
     players:
-      game?.players.map((p) => ({ name: p.name, bot: p.bot ?? null, place: p.place })) ??
-      null,
+      game?.players.map((p) => ({
+        name: p.name,
+        bot: p.bot ?? null,
+        place: p.place,
+        pos: p.pos,
+      })) ?? null,
     lastLocalRace,
   });
   (window as unknown as Record<string, unknown>).__pr = {

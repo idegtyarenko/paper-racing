@@ -10,6 +10,7 @@ import {
   Candidate,
   Rules,
   newGame,
+  shuffledIndices,
   cloneState,
   seatColor,
 } from '../model/game';
@@ -689,7 +690,15 @@ function startOnline(): Promise<void> {
     const roster = session.getRoster();
     const humans = roster.length;
     const bots = Math.min(lobbyBots, freeSeats());
-    const g = newGame(raceTrack, humans + bots, deps.getRules());
+    // Стартовые клетки раздаём случайной перестановкой среди всех участников.
+    // Это делает только хост, результат уезжает в сериализованном стейте (гости
+    // players не пересобирают), поэтому одинаковый сид у клиентов не нужен.
+    const g = newGame(
+      raceTrack,
+      humans + bots,
+      deps.getRules(),
+      shuffledIndices(humans + bots),
+    );
     roster.forEach((r, i) => {
       if (g.players[i]) g.players[i].name = r.name;
     });

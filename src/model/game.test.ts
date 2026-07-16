@@ -4,12 +4,54 @@ import {
   DEFAULT_RULES,
   crashPenalty,
   newGame,
+  shuffledIndices,
   cloneState,
   returnFromPenalty,
   WIN_CROSSINGS,
 } from './game';
 import { CRASH_PENALTY_MAX } from '../config';
 import { ringTrack } from './test-fixtures';
+
+describe('shuffledIndices', () => {
+  // Детерминированный PRNG для повторяемости (как mulberry32 в ai.test.ts).
+  const mulberry32 = (seed: number) => () => {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+
+  it('возвращает перестановку [0..n)', () => {
+    const p = shuffledIndices(6, mulberry32(1));
+    expect([...p].sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5]);
+  });
+
+  it('детерминирован при одном и том же rng', () => {
+    expect(shuffledIndices(6, mulberry32(42))).toEqual(
+      shuffledIndices(6, mulberry32(42)),
+    );
+  });
+});
+
+describe('newGame startOrder', () => {
+  it('раздаёт стартовые клетки по перестановке', () => {
+    const t = ringTrack();
+    const order = [2, 0, 1];
+    const g = newGame(t, 3, DEFAULT_RULES, order);
+    for (let i = 0; i < 3; i++) {
+      expect(g.players[i].pos).toEqual(t.startPoints[order[i]]);
+    }
+  });
+
+  it('по умолчанию — тождественная раздача (поул у seat 0)', () => {
+    const t = ringTrack();
+    const g = newGame(t, 3);
+    for (let i = 0; i < 3; i++) {
+      expect(g.players[i].pos).toEqual(t.startPoints[i]);
+    }
+  });
+});
 
 describe('crashPenalty', () => {
   const dyn = (exp: number): Rules => ({

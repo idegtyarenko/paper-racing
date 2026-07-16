@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Polyline } from '../geometry';
+import { Vec, Polyline } from '../geometry';
 import { strings } from '../strings';
 import {
   onRoad,
@@ -7,9 +7,10 @@ import {
   processStroke,
   clipFinishLine,
   finalizeTrack,
+  layoutStartGrid,
 } from './track';
 import { OUTER, INNER, FINISH, FORWARD, ringTrack } from './test-fixtures';
-import { MIN_ROAD_CELLS } from '../config';
+import { MIN_ROAD_CELLS, MAX_START_POINTS, START_ROW_MAX } from '../config';
 
 describe('onRoad', () => {
   it('точка в рамке — на дороге; в дыре и снаружи — нет', () => {
@@ -109,12 +110,27 @@ describe('finalizeTrack', () => {
     }
   });
 
-  it('старты упорядочены от ближних к финишу', () => {
+  it('старты упорядочены от ближних к финишу (поул — index 0)', () => {
     const t = ringTrack();
-    const d = (p: { x: number; y: number }) => Math.abs(p.x - 6); // расстояние до линии x=6
+    const d = (p: Vec) => Math.abs(p.x - 6); // расстояние до линии x=6
     for (let i = 1; i < t.startPoints.length; i++) {
       expect(d(t.startPoints[i])).toBeGreaterThanOrEqual(d(t.startPoints[i - 1]) - 1e-9);
     }
+  });
+
+  it('старты — центрированная решётка: минимум рядов, не по краям', () => {
+    // Нижняя прямая: дорога y≈1..7, центр y=4. Старты жмутся к центру (не сбоку) и
+    // укладываются в минимум рядов: 6 болидов = 2 ряда по 3 (глубина всего 1 клетка).
+    const t = ringTrack();
+    expect(t.startPoints.length).toBe(MAX_START_POINTS);
+    for (const p of t.startPoints) {
+      expect(Math.abs(p.y - 4)).toBeLessThanOrEqual(1); // близко к центру, не у стенок
+    }
+    expect(new Set(t.startPoints.map((p) => p.y)).size).toBeLessThanOrEqual(
+      START_ROW_MAX,
+    );
+    // Глубина: не больше ceil(6/3)=2 рядов (в фикстуре ряды различаются по x).
+    expect(new Set(t.startPoints.map((p) => p.x)).size).toBeLessThanOrEqual(2);
   });
 
   it('слишком тесное кольцо → ошибка', () => {
@@ -132,5 +148,52 @@ describe('finalizeTrack', () => {
     ];
     const res = finalizeTrack(outer, inner, FINISH, FORWARD);
     expect('error' in res).toBe(true);
+  });
+});
+
+describe('layoutStartGrid', () => {
+  // Финиш поперёк (a=(6,0),b=(6,8)), гонка в +x: для точки back = 6−x, lat = y−4.
+  const finish = { a: { x: 6, y: 0 }, b: { x: 6, y: 8 } };
+  const forward: Vec = { x: 1, y: 0 };
+  const backOf = (p: Vec) => 6 - p.x;
+
+  it('широкая зона → центрированная решётка ≤ MAX, спереди назад', () => {
+    const behind: Vec[] = [];
+    for (let x = 1; x <= 5; x++) for (let y = 1; y <= 7; y++) behind.push({ x, y });
+    const grid = layoutStartGrid(finish, forward, behind);
+    expect(grid.length).toBe(MAX_START_POINTS);
+    // Упорядочены по возрастанию отступа назад.
+    for (let i = 1; i < grid.length; i++) {
+      expect(backOf(grid[i])).toBeGreaterThanOrEqual(backOf(grid[i - 1]) - 1e-9);
+    }
+    // Жмутся к центру (y=4), не к краям; ряд шириной до START_ROW_MAX.
+    for (const p of grid) expect(Math.abs(p.y - 4)).toBeLessThanOrEqual(1);
+    expect(new Set(grid.map((p) => p.y)).size).toBeLessThanOrEqual(START_ROW_MAX);
+    // Минимум глубины: 6 болидов = 2 ряда (по x), не больше.
+    expect(new Set(grid.map((p) => backOf(p))).size).toBeLessThanOrEqual(2);
+    // Первый ряд заполнен до START_ROW_MAX на самой линии — малые составы (2–3
+    // болида берут передние слоты) стартуют без глубины.
+    const front = grid.slice(0, START_ROW_MAX).map(backOf);
+    expect(new Set(front).size).toBe(1);
+    // Без повторов клеток.
+    expect(new Set(grid.map((p) => `${p.x},${p.y}`)).size).toBe(grid.length);
+  });
+
+  it('одна колонка узлов → паровозиком, все рассажены', () => {
+    // Единственный поперечный ряд y=4 (узкий старт): решётка вырождается в
+    // одну линию, но всех кандидатов всё равно рассаживает по глубине.
+    const behind: Vec[] = [1, 2, 3, 4, 5].map((x) => ({ x, y: 4 }));
+    const grid = layoutStartGrid(finish, forward, behind);
+    expect(grid.length).toBe(5);
+    expect(grid.every((p) => p.y === 4)).toBe(true);
+    expect(grid.map((p) => p.x)).toEqual([5, 4, 3, 2, 1]); // спереди (ближе к линии) назад
+  });
+
+  it('всего две клетки → обе становятся стартами', () => {
+    const behind: Vec[] = [
+      { x: 5, y: 4 },
+      { x: 4, y: 4 },
+    ];
+    expect(layoutStartGrid(finish, forward, behind)).toHaveLength(2);
   });
 });
