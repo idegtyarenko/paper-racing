@@ -14,7 +14,7 @@ import {
   pointerCancel,
 } from '../model/editor';
 import { GameState, Candidate } from '../model/game';
-import { worldToScreen, clampScale } from './camera';
+import { worldToScreen, screenToWorld, clampScale } from './camera';
 import * as vp from './viewport';
 import { showConfirmMove, PanelMode } from '../ui/panel';
 import {
@@ -37,6 +37,10 @@ export interface InputDeps {
   getCands(): Candidate[] | null;
   /** Применить выбранный ход (мышь-клик или подтверждение тача). */
   commitMove(cand: Candidate): void;
+  /** Сейчас не мой ход, но своё место может наметить ход заранее (онлайн/vs-боты). */
+  isPreselect(): boolean;
+  /** Наметить ход (предвыбор в чужую очередь) — вместо коммита/выбора-под-кнопку. */
+  setPending(cand: Candidate): void;
   /** Перейти к настройке гонки из редактора (тап по стрелке направления). */
   goToMode(from: 'edit' | 'race'): void;
   updateUI(): void;
@@ -48,6 +52,10 @@ let canvas: HTMLCanvasElement;
 
 // ── Визуальная подсветка, которую читает рендер ─────────────────────────────
 let hover: Candidate | null = null;
+/** Последняя экранная позиция курсора мыши (css-px) — чтобы пересобрать hover после
+ *  пересчёта кандидатов (в чужой ход бот/соперник ходит, пока курсор стоит на точке;
+ *  без этого наведение мигало бы). Только мышь; на тач-устройстве остаётся null. */
+let lastMouseScreen: Vec | null = null;
 /** Тач: кандидат, выбранный первым касанием и ждущий подтверждения. */
 let selected: Candidate | null = null;
 /** Тач: позиция пальца (css-px canvas) во время прицеливания — включает лупу. */
@@ -61,6 +69,20 @@ export function getSelected(): Candidate | null {
 }
 export function getLoupe(): Vec | null {
   return loupe;
+}
+
+/**
+ * Пересобрать наведение мышью по последней позиции курсора после пересчёта кандидатов.
+ * Нужно в чужой ход (предвыбор): входящий стейт (ход бота/соперника) обновляет cands,
+ * но курсор стоит на месте — без этого hover бы гас на каждом чужом ходе. Пересчёт от
+ * экранной позиции корректен и после пана/зума. Тач сюда не попадает (lastMouseScreen
+ * не задаётся касанием). Перерисовку делает вызывающий (refreshCands → redraw).
+ */
+export function reaimHover(): void {
+  if (lastMouseScreen === null) return;
+  const game = deps.getGame();
+  if (deps.getMode() !== 'race' || !game || game.phase !== 'race') return;
+  hover = findCandidate(screenToWorld(vp.camera(), lastMouseScreen));
 }
 
 /** Сбросить подсветку/выбор (при пересчёте кандидатов и сбросе к редактору). */
@@ -368,15 +390,24 @@ function endGesture(e: PointerEvent): void {
       break;
     }
     case 'move':
-      deps.commitMove(g.cand);
+      // Десктоп-клик: в чужой ход — наметка, в свой — коммит.
+      if (deps.isPreselect()) deps.setPending(g.cand);
+      else deps.commitMove(g.cand);
       break;
-    case 'aim':
-      // Отпускание: выбрать кандидата (превью + плавающая кнопка «Газу!»).
+    case 'aim': {
+      // Отпускание: выбрать кандидата. В свой ход — превью + плавающая кнопка «Газу!»;
+      // в чужой ход (предвыбор) — наметка (кнопку не показываем, ждём своей очереди).
       loupe = null;
       hover = null;
-      selected = findCandidate(vp.toWorld(e, aimLift()), touchTol());
-      showConfirmMove(!!selected, confirmAnchor());
+      const cand = findCandidate(vp.toWorld(e, aimLift()), touchTol());
+      if (deps.isPreselect()) {
+        if (cand) deps.setPending(cand);
+      } else {
+        selected = cand;
+        showConfirmMove(!!selected, confirmAnchor());
+      }
       break;
+    }
     case 'pan':
       break;
   }
@@ -429,6 +460,8 @@ export function initInput(d: InputDeps): void {
     const touch = e.pointerType === 'touch';
     const scr = vp.toScreen(e);
     if (touch && activePointers.has(e.pointerId)) activePointers.set(e.pointerId, scr);
+    // Позиция курсора мыши — для пересборки hover после чужого хода (reaimHover).
+    if (!touch) lastMouseScreen = scr;
 
     if (pinch && activePointers.size >= 2) {
       updatePinch();
@@ -493,6 +526,18 @@ export function initInput(d: InputDeps): void {
     showConfirmMove(false);
     canvas.classList.remove('grabbing');
     deps.redraw();
+  });
+
+  // Курсор ушёл с поля: гасим наведение и забываем позицию, чтобы reaimHover не
+  // воскрешал hover на чужом ходе, когда мыши над полем уже нет. Во время жеста
+  // (указатель захвачен) это событие не приходит — там hover ведёт сам жест.
+  canvas.addEventListener('pointerleave', (e) => {
+    if (e.pointerType === 'touch' || activeId !== null) return;
+    lastMouseScreen = null;
+    if (hover) {
+      hover = null;
+      deps.redraw();
+    }
   });
 
   // Зум колесом мыши — относительно курсора.

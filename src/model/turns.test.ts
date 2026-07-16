@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { newGame, cloneState, Candidate, Player, DEFAULT_RULES } from './game';
 import {
   candidates,
+  candidatesForSeat,
   applyMove,
   coastMove,
   playerForTurn,
@@ -84,6 +85,37 @@ describe('candidates', () => {
     expect(cs).toHaveLength(9);
     // диагональ доступна
     expect(cs.some((c) => c.target.x === 11 && c.target.y === 5)).toBe(true);
+  });
+});
+
+describe('candidatesForSeat — веер не-ходящего места (предвыбор)', () => {
+  const classicGame = () =>
+    newGame(ringTrack(), 2, { ...DEFAULT_RULES, drive: { ...DRIVE_PRESETS.classic } });
+
+  it('считает от pos/vel указанного места, а не текущего', () => {
+    const g = classicGame();
+    place(g.players[0], [10, 4], [0, 0]); // current, но нас интересует место 1
+    place(g.players[1], [20, 6], [2, 1]);
+    const cs = candidatesForSeat(g, 1);
+    expect(cs).toHaveLength(9);
+    const inertial = cs.filter((c) => c.inertial);
+    expect(inertial).toHaveLength(1);
+    expect(inertial[0].target).toEqual({ x: 22, y: 7 }); // pos + vel места 1
+  });
+
+  it('blocked учитывает чужие позиции (текущего игрока на пути)', () => {
+    const g = classicGame();
+    place(g.players[1], [10, 4], [2, 0]);
+    place(g.players[0], [11, 4]); // соперник (текущий) на отрезке (10,4)→(12,4)
+    const inertial = candidatesForSeat(g, 1).find((c) => c.inertial)!;
+    expect(inertial.target).toEqual({ x: 12, y: 4 });
+    expect(inertial.blocked).toBe(true);
+  });
+
+  it('candidates(state) эквивалентен candidatesForSeat(state, current)', () => {
+    const g = classicGame();
+    place(g.players[0], [10, 4], [1, -1]);
+    expect(candidatesForSeat(g, g.current)).toEqual(candidates(g));
   });
 });
 

@@ -15,11 +15,14 @@ export interface AppView {
   hover: Candidate | null;
   /** Кандидат, выбранный касанием и ждущий подтверждающего тапа. */
   selected: Candidate | null;
+  /** Наметка: ход, предвыбранный своим местом в чужую очередь (онлайн/vs-боты),
+   *  ждущий ручного «Газу!». Рисуется отдельным стилем (пунктирное кольцо). */
+  pending: Candidate | null;
+  /** Место-владелец веера кандидатов: в свой ход — game.current; в чужой ход при
+   *  предвыборе — своё место. −1 — веера нет. */
+  candSeat: number;
   /** Позиция пальца в css-пикселях canvas — включает «лупу» при прицеливании. */
   loupe: Vec | null;
-  /** Места (seat), чьи предыдущие точки показать бледно, пока их кандидаты
-   *  скрыты (ждём чужой ход) — чтобы прикинуть скорость болида. */
-  ghostSeats: number[];
   /** Камера: единый переход мир↔экран (масштаб + смещение). */
   cam: Camera;
 }
@@ -83,7 +86,15 @@ export function render(ctx: CanvasRenderingContext2D, app: AppView): void {
   if (app.mode === 'edit') {
     drawEditor(ctx, s, app.editor);
   } else if (app.game) {
-    drawRace(ctx, s, app.game, app.cands, app.hover ?? app.selected, app.ghostSeats);
+    drawRace(
+      ctx,
+      s,
+      app.game,
+      app.cands,
+      app.hover ?? app.selected,
+      app.pending,
+      app.candSeat,
+    );
   }
   ctx.restore();
 
@@ -120,7 +131,15 @@ function drawLoupe(
   const oy2 = cy - wy * s2;
   ctx.translate(ox2, oy2);
   drawGrid(ctx, s2, ox2, oy2, cx - R, cy - R, cx + R, cy + R);
-  drawRace(ctx, s2, app.game!, app.cands, app.hover ?? app.selected, app.ghostSeats);
+  drawRace(
+    ctx,
+    s2,
+    app.game!,
+    app.cands,
+    app.hover ?? app.selected,
+    app.pending,
+    app.candSeat,
+  );
   ctx.restore();
 
   ctx.strokeStyle = '#55524a';
@@ -483,13 +502,13 @@ function drawRace(
   game: GameState,
   cands: Candidate[] | null,
   hover: Candidate | null,
-  ghostSeats: number[],
+  pending: Candidate | null,
+  candSeat: number,
 ): void {
   drawTrackDecor(ctx, s, game.track);
   for (const p of game.players) drawTrail(ctx, s, p);
-  drawGhostMarkers(ctx, s, game, ghostSeats);
   drawCars(ctx, s, game);
-  drawCandidates(ctx, s, game, cands, hover);
+  drawCandidates(ctx, s, game, cands, hover, pending, candSeat);
 }
 
 /** Статичный декор трассы: заливка за бортом, финиш и стрелка направления. */
@@ -573,38 +592,6 @@ function drawTrail(ctx: CanvasRenderingContext2D, s: number, p: Player): void {
 }
 
 /**
- * Предыдущая точка болида, пока ждём чужой ход (кандидатов ещё нет): бледный
- * кружок в узле pos−vel и тонкая линия к текущей позиции — видно, откуда и с
- * какой скоростью приехал болид. На старте (vel=0) точки нет — не рисуем.
- */
-function drawGhostMarkers(
-  ctx: CanvasRenderingContext2D,
-  s: number,
-  game: GameState,
-  ghostSeats: number[],
-): void {
-  for (const i of ghostSeats) {
-    const p = game.players[i];
-    if (Math.abs(p.vel.x) < 1e-9 && Math.abs(p.vel.y) < 1e-9) continue;
-    const prev = sub(p.pos, p.vel);
-    ctx.save();
-    ctx.globalAlpha = 0.22;
-    ctx.strokeStyle = p.color;
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([3, 3]);
-    ctx.beginPath();
-    ctx.moveTo(prev.x * s, prev.y * s);
-    ctx.lineTo(p.pos.x * s, p.pos.y * s);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.beginPath();
-    ctx.arc(prev.x * s, prev.y * s, Math.max(3, s * 0.16), 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-  }
-}
-
-/**
  * Болиды. Выбывшие (получили место в разрешённом раунде или сдались) ушли с
  * трассы — их маркер не рисуем (и клетки они не блокируют, см. otherPositions).
  * След остаётся как история проезда.
@@ -629,9 +616,13 @@ function drawCandidates(
   game: GameState,
   cands: Candidate[] | null,
   hover: Candidate | null,
+  pending: Candidate | null,
+  candSeat: number,
 ): void {
-  if (!cands || game.phase !== 'race') return;
-  const p = game.players[game.current];
+  if (!cands || candSeat < 0 || game.phase !== 'race') return;
+  // Владелец веера: в свой ход — ходящий, в чужой (предвыбор) — своё место. Позиция,
+  // цвет и зона сцепления берутся отсюда, а не от game.current.
+  const p = game.players[candSeat];
   // Заливка зоны сцепления — под точками; изотропную управляемость (как классика)
   // не рисуем, там квадрат и так очевиден.
   const d = game.rules.drive;
@@ -682,6 +673,27 @@ function drawCandidates(
       ctx.arc(x, y, r + 3, 0, Math.PI * 2);
       ctx.stroke();
     }
+  }
+  // Наметка (предвыбор в чужую очередь): пунктирное кольцо + направляющая от болида —
+  // «намечено, ещё не подтверждено», отличается от сплошного выбора на своём ходу.
+  if (pending) {
+    const px = pending.target.x * s;
+    const py = pending.target.y * s;
+    const pr = Math.max(3, s * (pending.inertial ? 0.2 : 0.14)) + 3;
+    ctx.save();
+    ctx.strokeStyle = p.color;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    ctx.globalAlpha = 0.4;
+    ctx.beginPath();
+    ctx.moveTo(p.pos.x * s, p.pos.y * s);
+    ctx.lineTo(px, py);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.beginPath();
+    ctx.arc(px, py, pr, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 }
 

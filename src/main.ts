@@ -13,19 +13,20 @@ import {
   newGame,
   shuffledIndices,
 } from './model/game';
-import { candidates, applyMove, coastMove, retireSeat } from './model/turns';
+import { candidatesForSeat, applyMove, coastMove, retireSeat } from './model/turns';
 import { Difficulty, chooseMove } from './model/ai';
 import { NavField, buildNavField } from './model/nav';
 import { strings } from './strings';
 import { AI_MOVE_DELAY_MS } from './config';
 import { render, AppView } from './view/render';
-import { Bounds, polylineBounds } from './view/camera';
+import { Bounds, polylineBounds, worldToScreen } from './view/camera';
 import * as vp from './view/viewport';
 import {
   bindButtons,
   updatePanel,
   setOnlineEnabled,
   setTurnCountdown,
+  showConfirmMove,
   PanelMode,
 } from './ui/panel';
 import { renderTurnQueue } from './ui/turn-queue';
@@ -63,6 +64,12 @@ let playersReturn: 'edit' | 'race' = 'edit';
 let lastLocalRace: { humans: number; bots: number; difficulty: Difficulty } | null = null;
 let game: GameState | null = null;
 let cands: Candidate[] | null = null;
+/**
+ * Предвыбор хода («наметка»): кандидат, намеченный своим местом ещё в чужую очередь
+ * (онлайн/vs-боты), ждущий ручного подтверждения «Газу!» в свой ход. Живёт здесь, а не
+ * в input.selected (тот транзиентный и стирается каждым refreshCands). null — наметки нет.
+ */
+let pending: Candidate | null = null;
 /** Правила заезда, выбранные в настройках (⚙). В онлайне их задаёт хост. */
 let raceRules: Rules = { ...DEFAULT_RULES };
 /**
@@ -102,26 +109,56 @@ function redraw(): void {
     cands,
     hover: input.getHover(),
     selected: input.getSelected(),
+    pending,
+    candSeat: candOwner(),
     loupe: input.getLoupe(),
-    ghostSeats: ghostSeats(),
     cam: vp.camera(),
   };
   render(ctx, app);
 }
 
-/** Места, чьи предыдущие точки показать бледно, пока ждём их/чужого хода
- *  (кандидаты скрыты). Текущий ходящий не в счёт (у него кандидаты), боты —
- *  тоже; в hotseat — все остальные, в онлайне — только своё место. */
-function ghostSeats(): number[] {
-  if (mode !== 'race' || !game || game.phase !== 'race') return [];
-  const seats: number[] = [];
+/**
+ * Единственное человеческое место в локальной игре (все прочие — боты): это тот,
+ * кому показываем веер кандидатов/наметку в ход бота. −1, если людей не ровно один
+ * (hotseat: несколько людей — предвыбор не применяется). Онлайн сюда не смотрит.
+ */
+function soloHumanSeat(): number {
+  if (!game) return -1;
+  let seat = -1;
   for (let i = 0; i < game.players.length; i++) {
-    if (i === game.current) continue;
-    if (isBotSeat(i)) continue;
-    if (session.active() && session.mySeat() !== i) continue;
-    seats.push(i);
+    if (game.players[i].bot) continue;
+    if (seat !== -1) return -1; // второй человек — это hotseat, не vs-боты
+    seat = i;
   }
-  return seats;
+  return seat;
+}
+
+/**
+ * Место, для которого показываем веер кандидатов и разрешаем наметку, — независимо
+ * от того, чей сейчас ход: онлайн → своё место; локально vs-боты → единственный
+ * человек. Требуем, чтобы место было активно (не в гравии, не финишировало, не
+ * сдалось). −1 — предвыбор недоступен (в т.ч. hotseat). При своём ходе совпадает с
+ * game.current, так что обычная игра идёт тем же путём.
+ */
+function preselectSeat(): number {
+  if (mode !== 'race' || !game || game.phase !== 'race') return -1;
+  const seat = session.active() ? session.mySeat() : soloHumanSeat();
+  if (seat < 0) return -1;
+  const p = game.players[seat];
+  if (p.place !== null || p.retired || p.skipTurns !== 0) return -1;
+  return seat;
+}
+
+/**
+ * Место, чей веер кандидатов сейчас показываем/с которым взаимодействуем: в свой ход —
+ * ходящий (`game.current`) в любом режиме (hotseat/vs-боты/онлайн); в чужой ход — место
+ * предвыбора (`preselectSeat`, только онлайн/vs-боты). −1 — кандидатов нет (чужой ход в
+ * hotseat, штраф, вне гонки). При своём ходе даёт тот же веер, что и раньше.
+ */
+function candOwner(): number {
+  if (!game || game.phase !== 'race') return -1;
+  if (myTurn()) return game.players[game.current].skipTurns === 0 ? game.current : -1;
+  return preselectSeat();
 }
 
 /**
@@ -203,6 +240,7 @@ function scheduleAiMove(): void {
  */
 function commitMove(cand: Candidate): void {
   if (!game || game.phase !== 'race' || !myTurn()) return;
+  pending = null; // ход сделан — наметка отыграна
   if (session.active()) {
     // Онлайн: confirm-first — локальный стейт двинется только после успешной записи
     // (см. online.sendMove), чтобы при обрыве ход не потерялся и его можно было повторить.
@@ -236,16 +274,39 @@ function retire(): void {
 
 function refreshCands(): void {
   input.clearSelection();
-  if (
-    !game ||
-    game.phase !== 'race' ||
-    game.players[game.current].skipTurns !== 0 ||
-    !myTurn()
-  ) {
+  const seat = candOwner();
+  if (seat < 0) {
     cands = null;
+    pending = null;
     return;
   }
-  cands = candidates(game);
+  // В свой ход seat === game.current (обычная игра); в чужой ход (онлайн/vs-боты) —
+  // своё место, чтобы наметить ход заранее.
+  cands = candidatesForSeat(game!, seat);
+  revalidatePending();
+  // Курсор мог стоять на точке, пока прилетел чужой ход (предвыбор) — восстанавливаем
+  // наведение по реальной позиции мыши, иначе clearSelection выше погасил бы его.
+  input.reaimHover();
+  // Наметка дожила до своего хода — вооружаем «Газу!», чтобы подтвердить одним тапом.
+  if (myTurn() && pending) showConfirmMove(true);
+}
+
+/**
+ * Проверить наметку против свежего состояния: если намеченная точка стала занята
+ * соперником (встал в неё или на путь — blocked) либо аварийной, наметку сбрасываем
+ * с тостом; иначе обновляем ссылку на актуальный кандидат. Зовётся из refreshCands —
+ * единой воронки входящих состояний (onGameState в онлайне, цикл ботов локально).
+ */
+function revalidatePending(): void {
+  if (!pending || !cands) return;
+  const t = pending.target;
+  const match = cands.find((c) => c.target.x === t.x && c.target.y === t.y);
+  if (match && !match.blocked && !match.crash) {
+    pending = match;
+  } else {
+    pending = null;
+    showToast(strings.race.preselectCleared);
+  }
 }
 
 /**
@@ -308,6 +369,7 @@ function backFromSetup(): void {
 function startRace(humans: number, bots: number, difficulty: Difficulty): void {
   if (!raceTrack) return;
   cancelAiMove();
+  pending = null;
   game = newGame(raceTrack, humans + bots, raceRules, shuffledIndices(humans + bots));
   for (let i = humans; i < game.players.length; i++) {
     game.players[i].bot = difficulty;
@@ -334,6 +396,7 @@ function resetToEdit(): void {
   raceNav = null;
   raceTrack = null;
   cands = null;
+  pending = null;
   input.clearSelection();
   editor = newEditor();
   mode = 'edit';
@@ -384,6 +447,13 @@ input.initInput({
   getGame: () => game,
   getCands: () => cands,
   commitMove,
+  // Предвыбор: сейчас не мой ход, но своё место может намечать (онлайн/vs-боты).
+  isPreselect: () => !myTurn() && candOwner() >= 0,
+  setPending: (cand) => {
+    pending = cand;
+    showConfirmMove(false); // не мой ход — кнопку не показываем, наметка видна на поле
+    redraw();
+  },
   goToMode,
   updateUI,
   redraw,
@@ -403,6 +473,8 @@ bindButtons({
   onConfirmMove: () => {
     const sel = input.getSelected();
     if (sel) commitMove(sel);
+    // Свой ход с дожившей наметкой: «Газу!» коммитит её без повторного тапа.
+    else if (pending && myTurn()) commitMove(pending);
     else online.retryMove(); // десктоп: выделение не хранится — повторяем последний ход
   },
   // «Реванш» одним тапом: тот же локальный состав на той же трассе, без мастера.
@@ -619,6 +691,11 @@ if (import.meta.env.DEV) {
         pos: p.pos,
       })) ?? null,
     lastLocalRace,
+    // Предвыбор: место-владелец веера, число кандидатов и текущая наметка.
+    candSeat: candOwner(),
+    candsCount: cands?.length ?? null,
+    pending: pending?.target ?? null,
+    hover: input.getHover()?.target ?? null,
   });
   (window as unknown as Record<string, unknown>).__pr = {
     /** Готовая трасса + сразу локальная гонка: humans людей, bots ботов. */
@@ -646,5 +723,56 @@ if (import.meta.env.DEV) {
     },
     /** Снимок состояния приложения для ассертов. */
     state: snap,
+    /**
+     * Тап по кандидату с ускорением (ax, ay) у места-владельца веера — тем же
+     * решением, что input.endGesture: в чужой ход это наметка (setPending), в свой —
+     * коммит. Позволяет прогнать предвыбор без синтетики pointer-событий по canvas.
+     */
+    tapAccel(ax: number, ay: number) {
+      const seat = candOwner();
+      if (seat < 0 || !cands) return snap();
+      const p = game!.players[seat];
+      const tx = p.pos.x + p.vel.x + ax;
+      const ty = p.pos.y + p.vel.y + ay;
+      const c = cands.find((k) => k.target.x === tx && k.target.y === ty);
+      if (!c) return snap();
+      if (!myTurn() && seat >= 0) {
+        pending = c; // наметка (как setPending в input-deps)
+        redraw();
+      } else {
+        commitMove(c);
+      }
+      return snap();
+    },
+    /** Подтвердить наметку в свой ход (эквивалент кнопки «Газу!»). */
+    confirm() {
+      if (pending && myTurn()) commitMove(pending);
+      return snap();
+    },
+    /** Синтетический ховер мышью над кандидатом с ускорением (ax, ay) — проверить,
+     *  что наведение переживает чужой ход (reaimHover). */
+    hoverAccel(ax: number, ay: number) {
+      const seat = candOwner();
+      if (seat < 0) return snap();
+      const p = game!.players[seat];
+      const target = { x: p.pos.x + p.vel.x + ax, y: p.pos.y + p.vel.y + ay };
+      const scr = worldToScreen(vp.camera(), target);
+      const r = canvas.getBoundingClientRect();
+      canvas.dispatchEvent(
+        new PointerEvent('pointermove', {
+          pointerType: 'mouse',
+          clientX: r.left + scr.x,
+          clientY: r.top + scr.y,
+          bubbles: true,
+        }),
+      );
+      return snap();
+    },
+    /** Прогнать refreshCands+redraw — эмуляция входящего чужого хода без смены стейта. */
+    refresh() {
+      refreshCands();
+      redraw();
+      return snap();
+    },
   };
 }

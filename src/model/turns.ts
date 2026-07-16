@@ -68,9 +68,14 @@ export function reachableTargets(pos: Vec, vel: Vec, drive: Drive): Vec[] {
   return out;
 }
 
-export function candidates(state: GameState): Candidate[] {
-  const p = state.players[state.current];
-  const occupied = otherPositions(state, state.current);
+/**
+ * Ходы-кандидаты произвольного места `seat` от его текущих pos/vel. Вынесено из
+ * candidates(), чтобы считать веер не только для ходящего игрока: онлайн/vs-боты
+ * показывают его для своего места ещё до наступления хода (предвыбор — «наметка»).
+ */
+export function candidatesForSeat(state: GameState, seat: number): Candidate[] {
+  const p = state.players[seat];
+  const occupied = otherPositions(state, seat);
   const cx = p.pos.x + p.vel.x; // точка наката C (чистая инерция, a = 0)
   const cy = p.pos.y + p.vel.y;
   const targets = reachableTargets(p.pos, p.vel, state.rules.drive);
@@ -82,6 +87,10 @@ export function candidates(state: GameState): Candidate[] {
     crash: computeOutcome(state.track, state.rules, p.pos, target).crash,
     inertial: target.x === cx && target.y === cy,
   }));
+}
+
+export function candidates(state: GameState): Candidate[] {
+  return candidatesForSeat(state, state.current);
 }
 
 export function applyMove(state: GameState, cand: Candidate): void {
