@@ -8,11 +8,11 @@ import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabas
 import { Vec } from '../geometry';
 import { Track } from '../model/track';
 import { GameState, normalizeRules } from '../model/game';
-import { WORLD_SIZE, NET_TIMEOUT_MS } from '../config';
+import { NET_TIMEOUT_MS } from '../config';
 
 // ── Сериализация ────────────────────────────────────────────────────────────────
 
-/** Трасса в JSON-виде: Set `inside` → массив, плюс размеры мира хоста. */
+/** Трасса в JSON-виде: Set `inside` разворачивается в массив. */
 export interface SerializedTrack {
   outer: Vec[];
   inner: Vec[];
@@ -20,8 +20,6 @@ export interface SerializedTrack {
   forward: Vec;
   inside: number[];
   startPoints: Vec[];
-  worldW: number;
-  worldH: number;
 }
 
 /** Стейт гонки без поля `track` (трасса хранится в строке отдельно и неизменна). */
@@ -49,15 +47,13 @@ export function serializeTrack(t: Track): SerializedTrack {
     forward: t.forward,
     inside: [...t.inside],
     startPoints: t.startPoints,
-    worldW: WORLD_SIZE,
-    worldH: WORLD_SIZE,
   };
 }
 
 /**
- * Восстанавливает трассу. Поля worldW/worldH больше не влияют на рендер —
- * кадрирование берётся из bbox трассы (fit-to-track), одинаково на всех
- * устройствах; поля оставлены в JSON для обратной совместимости.
+ * Восстанавливает трассу. Кадрирование берётся из bbox трассы (fit-to-track),
+ * одинаково на всех устройствах. Старые JSON-строки могут ещё нести мёртвые поля
+ * `worldW`/`worldH` (когда-то — размеры мира хоста) — мы их просто игнорируем.
  */
 export function deserializeTrack(s: SerializedTrack): Track {
   return {
