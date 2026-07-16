@@ -3,7 +3,7 @@
 import { Vec, Polyline, add, sub, scale, normalize, lerp } from '../geometry';
 import { Track } from '../model/track';
 import { EditorState, Arrow } from '../model/editor';
-import { GameState, Candidate, Drive } from '../model/game';
+import { GameState, Candidate, Drive, Player } from '../model/game';
 import { MIN_LAUNCH } from '../config';
 import { Camera } from './camera';
 
@@ -485,7 +485,15 @@ function drawRace(
   hover: Candidate | null,
   ghostSeats: number[],
 ): void {
-  const track: Track = game.track;
+  drawTrackDecor(ctx, s, game.track);
+  for (const p of game.players) drawTrail(ctx, s, p);
+  drawGhostMarkers(ctx, s, game, ghostSeats);
+  drawCars(ctx, s, game);
+  drawCandidates(ctx, s, game, cands, hover);
+}
+
+/** Статичный декор трассы: заливка за бортом, финиш и стрелка направления. */
+function drawTrackDecor(ctx: CanvasRenderingContext2D, s: number, track: Track): void {
   drawOffTrack(ctx, s, track.outer, track.inner);
   drawFinishLine(ctx, s, track.finish.a, track.finish.b);
 
@@ -499,71 +507,82 @@ function drawRace(
     ARROW_COLOR,
     2,
   );
+}
 
-  // Следы обоих игроков. Насыщенность и толщина следа растут со скоростью хода;
-  // чтобы цвет менялся плавно вдоль трассы, а не ступенькой на каждой границе
-  // ходов, каждый сегмент заливаем линейным градиентом между «цветами скорости» в
-  // его узлах-концах. Фактор в узле — среднее скоростей примыкающих сегментов
-  // (если сосед есть, не «прыжок» и делит с сегментом этот узел), иначе — скорость
-  // самого сегмента.
-  for (const p of game.players) {
-    const trail = p.trail;
-    // Фактор насыщенности 0..1 по скорости сегмента. Степень >1 растягивает
-    // разрыв между медленным и быстрым ходом — контраст резче.
-    const segFactor = (i: number): number => {
-      const seg = trail[i];
-      const speed = Math.hypot(seg.to.x - seg.from.x, seg.to.y - seg.from.y);
-      return Math.pow(Math.min(1, speed / TRAIL_SPEED_REF), 1.5);
-    };
-    const colorAt = (f: number): string =>
-      mixHex(PAPER, p.color, TRAIL_MIX_MIN + (1 - TRAIL_MIX_MIN) * f);
-    const connected = (
-      a: { to: Vec; jump?: boolean },
-      b: { from: Vec; jump?: boolean },
-    ): boolean => !a.jump && !b.jump && a.to.x === b.from.x && a.to.y === b.from.y;
+/**
+ * След одного игрока плюс отметки аварий. Насыщенность и толщина следа растут
+ * со скоростью хода; чтобы цвет менялся плавно вдоль трассы, а не ступенькой на
+ * каждой границе ходов, каждый сегмент заливаем линейным градиентом между
+ * «цветами скорости» в его узлах-концах. Фактор в узле — среднее скоростей
+ * примыкающих сегментов (если сосед есть, не «прыжок» и делит с сегментом этот
+ * узел), иначе — скорость самого сегмента.
+ */
+function drawTrail(ctx: CanvasRenderingContext2D, s: number, p: Player): void {
+  const trail = p.trail;
+  // Фактор насыщенности 0..1 по скорости сегмента. Степень >1 растягивает
+  // разрыв между медленным и быстрым ходом — контраст резче.
+  const segFactor = (i: number): number => {
+    const seg = trail[i];
+    const speed = Math.hypot(seg.to.x - seg.from.x, seg.to.y - seg.from.y);
+    return Math.pow(Math.min(1, speed / TRAIL_SPEED_REF), 1.5);
+  };
+  const colorAt = (f: number): string =>
+    mixHex(PAPER, p.color, TRAIL_MIX_MIN + (1 - TRAIL_MIX_MIN) * f);
+  const connected = (
+    a: { to: Vec; jump?: boolean },
+    b: { from: Vec; jump?: boolean },
+  ): boolean => !a.jump && !b.jump && a.to.x === b.from.x && a.to.y === b.from.y;
 
-    for (let i = 0; i < trail.length; i++) {
-      const seg = trail[i];
-      ctx.save();
-      if (seg.jump) {
-        ctx.strokeStyle = '#999';
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash([4, 4]);
-      } else {
-        const f = segFactor(i);
-        // Фактор в концах — усреднён с соседним сегментом, чтобы цвет перетекал
-        // через границу хода без скачка.
-        const fFrom =
-          i > 0 && connected(trail[i - 1], seg) ? (segFactor(i - 1) + f) / 2 : f;
-        const fTo =
-          i + 1 < trail.length && connected(seg, trail[i + 1])
-            ? (f + segFactor(i + 1)) / 2
-            : f;
-        const grad = ctx.createLinearGradient(
-          seg.from.x * s,
-          seg.from.y * s,
-          seg.to.x * s,
-          seg.to.y * s,
-        );
-        grad.addColorStop(0, colorAt(fFrom));
-        grad.addColorStop(1, colorAt(fTo));
-        ctx.strokeStyle = grad;
-        ctx.lineWidth = TRAIL_WIDTH_MIN + (TRAIL_WIDTH_MAX - TRAIL_WIDTH_MIN) * f;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-      }
-      ctx.beginPath();
-      ctx.moveTo(seg.from.x * s, seg.from.y * s);
-      ctx.lineTo(seg.to.x * s, seg.to.y * s);
-      ctx.stroke();
-      ctx.restore();
+  for (let i = 0; i < trail.length; i++) {
+    const seg = trail[i];
+    ctx.save();
+    if (seg.jump) {
+      ctx.strokeStyle = '#999';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+    } else {
+      const f = segFactor(i);
+      // Фактор в концах — усреднён с соседним сегментом, чтобы цвет перетекал
+      // через границу хода без скачка.
+      const fFrom =
+        i > 0 && connected(trail[i - 1], seg) ? (segFactor(i - 1) + f) / 2 : f;
+      const fTo =
+        i + 1 < trail.length && connected(seg, trail[i + 1])
+          ? (f + segFactor(i + 1)) / 2
+          : f;
+      const grad = ctx.createLinearGradient(
+        seg.from.x * s,
+        seg.from.y * s,
+        seg.to.x * s,
+        seg.to.y * s,
+      );
+      grad.addColorStop(0, colorAt(fFrom));
+      grad.addColorStop(1, colorAt(fTo));
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = TRAIL_WIDTH_MIN + (TRAIL_WIDTH_MAX - TRAIL_WIDTH_MIN) * f;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
     }
-    for (const c of p.crashes) drawCrashMark(ctx, s, c, p.color);
+    ctx.beginPath();
+    ctx.moveTo(seg.from.x * s, seg.from.y * s);
+    ctx.lineTo(seg.to.x * s, seg.to.y * s);
+    ctx.stroke();
+    ctx.restore();
   }
+  for (const c of p.crashes) drawCrashMark(ctx, s, c, p.color);
+}
 
-  // Предыдущая точка болида, пока ждём чужой ход (кандидатов ещё нет): бледный
-  // кружок в узле pos−vel и тонкая линия к текущей позиции — видно, откуда и с
-  // какой скоростью приехал болид. На старте (vel=0) точки нет — не рисуем.
+/**
+ * Предыдущая точка болида, пока ждём чужой ход (кандидатов ещё нет): бледный
+ * кружок в узле pos−vel и тонкая линия к текущей позиции — видно, откуда и с
+ * какой скоростью приехал болид. На старте (vel=0) точки нет — не рисуем.
+ */
+function drawGhostMarkers(
+  ctx: CanvasRenderingContext2D,
+  s: number,
+  game: GameState,
+  ghostSeats: number[],
+): void {
   for (const i of ghostSeats) {
     const p = game.players[i];
     if (Math.abs(p.vel.x) < 1e-9 && Math.abs(p.vel.y) < 1e-9) continue;
@@ -583,10 +602,14 @@ function drawRace(
     ctx.stroke();
     ctx.restore();
   }
+}
 
-  // Болиды. Выбывшие (получили место в разрешённом раунде или сдались) ушли с
-  // трассы — их маркер не рисуем (и клетки они не блокируют, см. otherPositions).
-  // След остаётся как история проезда.
+/**
+ * Болиды. Выбывшие (получили место в разрешённом раунде или сдались) ушли с
+ * трассы — их маркер не рисуем (и клетки они не блокируют, см. otherPositions).
+ * След остаётся как история проезда.
+ */
+function drawCars(ctx: CanvasRenderingContext2D, s: number, game: GameState): void {
   for (const p of game.players) {
     if (p.place !== null || p.retired) continue;
     ctx.beginPath();
@@ -597,66 +620,78 @@ function drawRace(
     ctx.lineWidth = 1.5;
     ctx.stroke();
   }
+}
 
-  // Кандидаты хода текущего игрока.
-  if (cands && game.phase === 'race') {
-    const p = game.players[game.current];
-    // Заливка зоны сцепления — под точками; изотропную управляемость (как классика)
-    // не рисуем, там квадрат и так очевиден.
-    const d = game.rules.drive;
-    if (!(d.accel === d.brake && d.brake === d.maneuver)) {
-      drawDriveArea(ctx, s, p.pos, p.vel, d, p.color);
-    }
-    if (hover && !hover.blocked) {
-      ctx.save();
-      ctx.strokeStyle = p.color;
-      ctx.globalAlpha = 0.35;
+/** Кандидаты хода текущего игрока: зона сцепления, линия наведения и точки. */
+function drawCandidates(
+  ctx: CanvasRenderingContext2D,
+  s: number,
+  game: GameState,
+  cands: Candidate[] | null,
+  hover: Candidate | null,
+): void {
+  if (!cands || game.phase !== 'race') return;
+  const p = game.players[game.current];
+  // Заливка зоны сцепления — под точками; изотропную управляемость (как классика)
+  // не рисуем, там квадрат и так очевиден.
+  const d = game.rules.drive;
+  if (!(d.accel === d.brake && d.brake === d.maneuver)) {
+    drawDriveArea(ctx, s, p.pos, p.vel, d, p.color);
+  }
+  if (hover && !hover.blocked) {
+    ctx.save();
+    ctx.strokeStyle = p.color;
+    ctx.globalAlpha = 0.35;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(p.pos.x * s, p.pos.y * s);
+    ctx.lineTo(hover.target.x * s, hover.target.y * s);
+    ctx.stroke();
+    ctx.restore();
+  }
+  for (const c of cands) {
+    const x = c.target.x * s;
+    const y = c.target.y * s;
+    const r = Math.max(3, s * (c.inertial ? 0.2 : 0.14));
+    if (c.blocked) {
+      ctx.strokeStyle = '#999';
+      ctx.lineWidth = 1.5;
+      crossPath(ctx, x, y, r);
+      ctx.stroke();
+    } else if (c.crash) {
+      ctx.strokeStyle = '#d32f2f';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(p.pos.x * s, p.pos.y * s);
-      ctx.lineTo(hover.target.x * s, hover.target.y * s);
+      ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.stroke();
+    } else {
+      // Кандидаты — полупрозрачные, чтобы отличаться от болида и выбранной
+      // точки; наведённый/выбранный кандидат рисуем непрозрачным.
+      ctx.save();
+      ctx.globalAlpha = c === hover ? 1 : 0.4;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
     }
-    for (const c of cands) {
-      const x = c.target.x * s;
-      const y = c.target.y * s;
-      const r = Math.max(3, s * (c.inertial ? 0.2 : 0.14));
-      if (c.blocked) {
-        ctx.strokeStyle = '#999';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(x - r, y - r);
-        ctx.lineTo(x + r, y + r);
-        ctx.moveTo(x + r, y - r);
-        ctx.lineTo(x - r, y + r);
-        ctx.stroke();
-      } else if (c.crash) {
-        ctx.strokeStyle = '#d32f2f';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.stroke();
-      } else {
-        // Кандидаты — полупрозрачные, чтобы отличаться от болида и выбранной
-        // точки; наведённый/выбранный кандидат рисуем непрозрачным.
-        ctx.save();
-        ctx.globalAlpha = c === hover ? 1 : 0.4;
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      }
-      if (c === hover && !c.blocked) {
-        ctx.strokeStyle = p.color;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(x, y, r + 3, 0, Math.PI * 2);
-        ctx.stroke();
-      }
+    if (c === hover && !c.blocked) {
+      ctx.strokeStyle = p.color;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(x, y, r + 3, 0, Math.PI * 2);
+      ctx.stroke();
     }
   }
+}
+
+/** Путь диагонального крестика ✕ (радиус r) — общий для аварии и блок-клетки. */
+function crossPath(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  ctx.beginPath();
+  ctx.moveTo(x - r, y - r);
+  ctx.lineTo(x + r, y + r);
+  ctx.moveTo(x + r, y - r);
+  ctx.lineTo(x - r, y + r);
 }
 
 function drawCrashMark(
@@ -669,20 +704,13 @@ function drawCrashMark(
   const x = at.x * s;
   const y = at.y * s;
   ctx.lineCap = 'round';
-  const path = (): void => {
-    ctx.beginPath();
-    ctx.moveTo(x - r, y - r);
-    ctx.lineTo(x + r, y + r);
-    ctx.moveTo(x + r, y - r);
-    ctx.lineTo(x - r, y + r);
-  };
   // Белый нимб под крестиком — контраст над следом того же цвета.
   ctx.strokeStyle = '#fff';
   ctx.lineWidth = 3;
-  path();
+  crossPath(ctx, x, y, r);
   ctx.stroke();
   ctx.strokeStyle = color;
   ctx.lineWidth = 1.6;
-  path();
+  crossPath(ctx, x, y, r);
   ctx.stroke();
 }
