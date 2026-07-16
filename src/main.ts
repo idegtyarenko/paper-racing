@@ -396,15 +396,16 @@ bindButtons({
     if (sel) commitMove(sel);
     else online.retryMove(); // десктоп: выделение не хранится — повторяем последний ход
   },
+  // «Реванш» одним тапом: тот же локальный состав на той же трассе, без мастера.
+  // Кнопка видна только при canRematch, но защищаемся и здесь.
   onChooseSameTrack: () => {
-    if (!game) return;
-    if (lastLocalRace) {
-      raceTrack = game.track;
-      startRace(lastLocalRace.humans, lastLocalRace.bots, lastLocalRace.difficulty);
-      return;
-    }
-    goToMode('race');
+    if (!game || !lastLocalRace) return;
+    raceTrack = game.track;
+    startRace(lastLocalRace.humans, lastLocalRace.bots, lastLocalRace.difficulty);
   },
+  // «Та же трасса, другой режим»: сохранить трассу, заново выбрать режим/игроков.
+  onSameTrackNewMode: () => goToMode('race'),
+  canRematch: () => !!game && !!lastLocalRace,
   onPlayersBack: () => {
     // С экрана числа игроков назад — к выбору режима (он теперь есть всегда).
     mode = 'mode';

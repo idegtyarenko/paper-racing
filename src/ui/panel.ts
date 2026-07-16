@@ -36,6 +36,9 @@ const raceCodeBtn = document.getElementById('raceCode') as HTMLButtonElement;
 const rulesSheet = document.getElementById('rulesSheet')!;
 const raceDialog = document.getElementById('raceDialog')!;
 const dlgSameTrack = document.getElementById('dlgSameTrack') as HTMLButtonElement;
+const dlgSameTrackNewMode = document.getElementById(
+  'dlgSameTrackNewMode',
+) as HTMLButtonElement;
 const dlgNewTrack = document.getElementById('dlgNewTrack') as HTMLButtonElement;
 const winnerBanner = document.querySelector('.winner')!;
 const winnerWho = winnerBanner.querySelector('.winner__title') as HTMLElement;
@@ -88,8 +91,14 @@ export interface PanelHandlers {
   /** Подтвердить кромки (фаза adjust) и перейти к старт/финишу. */
   onNext: () => void;
   onConfirmMove: () => void;
-  /** «Та же трасса» — перейти к повторному выбору режима. */
+  /** «Реванш» — повтор того же локального состава на той же трассе одним тапом
+   *  (без мастера выбора режима). Видна только когда доступен рематч (canRematch). */
   onChooseSameTrack: () => void;
+  /** «Та же трасса, другой режим» — сохранить трассу, но заново пройти выбор
+   *  режима/игроков, минуя рисование. */
+  onSameTrackNewMode: () => void;
+  /** Доступен ли рематч одним тапом (есть сохранённый локальный состав). */
+  canRematch: () => boolean;
   onNewTrack: () => void;
   /** Назад из шага выбора игроков. */
   onPlayersBack: () => void;
@@ -237,10 +246,19 @@ export function bindButtons(h: PanelHandlers): void {
     ),
   );
   bindTap(helpBtn, () => openSheet(rulesSheet));
-  bindTap(newRaceBtn, () => openSheet(raceDialog));
+  bindTap(newRaceBtn, () => {
+    // «Реванш» показываем только когда есть что повторить (локальный состав);
+    // после онлайн-гонки остаются «другой режим» и «начертить новую».
+    dlgSameTrack.hidden = !h.canRematch();
+    openSheet(raceDialog);
+  });
   bindTap(dlgSameTrack, () => {
     closeOverlay();
     h.onChooseSameTrack();
+  });
+  bindTap(dlgSameTrackNewMode, () => {
+    closeOverlay();
+    h.onSameTrackNewMode();
   });
   bindTap(dlgNewTrack, () => {
     closeOverlay();
