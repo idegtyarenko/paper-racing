@@ -1,5 +1,4 @@
-// Очерёдность ходов: игроки ходят по очереди (схема очерёдности — rules.turnOrder:
-// по кругу / змейкой / постоянная).
+// Очерёдность ходов: игроки ходят по кругу (стартовый сдвигается каждый круг).
 // Генерация кандидатов с блокировкой занятых клеток, применение хода одного
 // болида, смена очереди и отбытие штрафа, пропуск по инерции (для онлайна).
 // Общий расчёт исхода/победителя/возврата из штрафа — в game.ts.
@@ -10,7 +9,6 @@ import {
   GameState,
   Candidate,
   Drive,
-  Rules,
   WIN_CROSSINGS,
   computeOutcome,
   applyOutcome,
@@ -96,38 +94,15 @@ export function applyMove(state: GameState, cand: Candidate): void {
 
 /**
  * Индекс игрока для сквозного слота хода. Круг = n слотов; позиция в круге (seat) —
- * turn % n, номер круга (round) — floor(turn / n). Схема очерёдности задаётся order:
- *  - 'rotate' — стартовый игрок сдвигается на round: (round + seat) % n.
- *    n=3: круг 1 — 0,1,2; круг 2 — 1,2,0; круг 3 — 2,0,1 (по кругу, без преимущества
- *    первого хода).
- *  - 'snake' — направление разворота задаётся последовательностью Тьюе-Морса
- *    (чётность числа единичных битов в номере круга), а не простым чередованием:
- *    это балансирует очерёдность так, что разворот на стыке кругов иногда
- *    повторяется, компенсируя предыдущий блок. n=3: 0,1,2 → 2,1,0 → 2,1,0 →
- *    0,1,2 → 2,1,0 → 0,1,2 → 0,1,2 → 2,1,0 (abc cba cba abc cba abc abc cba).
- *  - 'fixed' — очерёдность не меняется: всегда seat. n=3: 0,1,2 каждый круг.
- * Любая схема — перестановка всех игроков в каждом круге (никто не пропущен и не
- * ходит дважды) и детерминирована: одинаковый turn у всех клиентов даёт один индекс.
+ * turn % n, номер круга (round) — floor(turn / n). Игроки ходят по кругу: стартовый
+ * сдвигается на round — (round + seat) % n. n=3: круг 1 — 0,1,2; круг 2 — 1,2,0;
+ * круг 3 — 2,0,1 (без преимущества первого хода). Это перестановка всех игроков в
+ * каждом круге (никто не пропущен и не ходит дважды) и детерминирована: одинаковый
+ * turn у всех клиентов даёт один индекс.
  */
-function thueMorseParity(x: number): number {
-  let n = x;
-  let parity = 0;
-  while (n > 0) {
-    parity ^= n & 1;
-    n >>>= 1;
-  }
-  return parity;
-}
-
-export function playerForTurn(
-  turn: number,
-  n: number,
-  order: Rules['turnOrder'],
-): number {
+export function playerForTurn(turn: number, n: number): number {
   const round = Math.floor(turn / n);
   const seat = turn % n;
-  if (order === 'fixed') return seat;
-  if (order === 'snake') return thueMorseParity(round) === 0 ? seat : n - 1 - seat;
   return (round + seat) % n;
 }
 
@@ -148,7 +123,7 @@ export function upcomingTurns(state: GameState, count: number): number[] {
   let turn = state.turn;
   let slotsLeft = state.finalTurnsLeft; // null — раунд не идёт, слотов не ограничено
   while (out.length < count && (slotsLeft === null || slotsLeft > 0)) {
-    const seat = playerForTurn(turn, n, state.rules.turnOrder);
+    const seat = playerForTurn(turn, n);
     const p = state.players[seat];
     if (p.place !== null || p.retired) {
       // Выбывший (получил место / сдался) хода не делает — слот сгорает.
@@ -164,8 +139,8 @@ export function upcomingTurns(state: GameState, count: number): number[] {
 }
 
 /**
- * Смена хода и учёт финиша. Игроки ходят по кругу; конкретную очерёдность внутри
- * круга задаёт схема rules.turnOrder (см. playerForTurn). Как только кто-то
+ * Смена хода и учёт финиша. Игроки ходят по кругу; очерёдность внутри круга
+ * задаёт playerForTurn (стартовый сдвигается каждый круг). Как только кто-то
  * пересекает финиш, открывается «раунд»: остальные болиды этого же круга (после
  * текущего seat) доигрывают свои ходы — те, кто ходил раньше, свой шанс в этом
  * круге уже использовали. По исчерпании раунда resolveRound раздаёт места
@@ -209,7 +184,7 @@ function afterAction(state: GameState): void {
   }
 
   state.turn += 1;
-  state.current = playerForTurn(state.turn, n, state.rules.turnOrder);
+  state.current = playerForTurn(state.turn, n);
   const next = state.players[state.current];
   if (next.skipTurns > 0) {
     next.skipTurns -= 1;

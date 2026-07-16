@@ -1,8 +1,8 @@
 // Лист-модалка настроек правил заезда: управляемость машины (пресеты Реалистичная/
 // Классическая или ручная «Своя» с тремя ползунками разгон/тормоза/маневр и живым
 // предпросмотром облака ходов), тип штрафа за вылет, строгость динамической формулы,
-// размер статического штрафа, очерёдность ходов и лимит времени на ход (только
-// онлайн). Владеет своими DOM-элементами; текущие правила держит вызывающий — сюда
+// размер статического штрафа и лимит времени на ход (только онлайн). Владеет своими
+// DOM-элементами; текущие правила держит вызывающий — сюда
 // они приходят копией, а изменения уезжают через onChange.
 
 import { Rules, Drive } from '../model/game';
@@ -35,7 +35,6 @@ const exponentType = document.getElementById('exponentType')!;
 const staticRow = document.getElementById('staticRow')!;
 const staticSlider = document.getElementById('staticSlider') as HTMLInputElement;
 const staticTurnsValue = document.getElementById('staticTurnsValue')!;
-const turnOrderType = document.getElementById('turnOrderType')!;
 const turnLimitRow = document.getElementById('turnLimitRow')!;
 const turnLimitType = document.getElementById('turnLimitType')!;
 
@@ -95,9 +94,6 @@ function render(): void {
       'seg__btn--active',
       exponentOf(btn.dataset.exponent!) === rules.dynamicExponent,
     );
-  });
-  turnOrderType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
-    btn.classList.toggle('seg__btn--active', btn.dataset.order === rules.turnOrder);
   });
   turnLimitRow.hidden = !online;
   turnLimitType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
@@ -291,12 +287,6 @@ export function bindSettings(): void {
   staticSlider.addEventListener('input', () => {
     rules.staticTurns = Number(staticSlider.value);
     commit();
-  });
-  turnOrderType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
-    bindTap(btn, () => {
-      rules.turnOrder = btn.dataset.order as Rules['turnOrder'];
-      commit();
-    });
   });
   turnLimitType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
     bindTap(btn, () => {

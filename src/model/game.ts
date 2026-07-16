@@ -81,14 +81,6 @@ export interface Rules {
   /** Показатель степени («строгость») формулы динамического штрафа. */
   dynamicExponent: number;
   /**
-   * Очерёдность игроков внутри круга (см. playerForTurn):
-   * 'rotate' — А,Б,В → Б,В,А → В,А,Б (стартовый сдвигается каждый круг);
-   * 'snake' — змейкой с балансировкой направления по Тьюе-Морсу (не простое
-   *   чередование): А,Б,В → В,Б,А → В,Б,А → А,Б,В → … (см. playerForTurn в turns.ts);
-   * 'fixed' — А,Б,В → А,Б,В → А,Б,В (порядок не меняется).
-   */
-  turnOrder: 'rotate' | 'snake' | 'fixed';
-  /**
    * Управляемость машины (генерация ходов, см. reachableTargets в turns.ts): три
    * независимых полуоси «эллипса сцепления» в клетках/ход — разгон вперёд, торможение
    * назад, маневр вбок. Все три равны → изотропный круг = классика 3×3; анизотропия
@@ -110,7 +102,6 @@ export const DEFAULT_RULES: Rules = {
   penalty: 'dynamic',
   staticTurns: CRASH_SKIP_TURNS,
   dynamicExponent: 1,
-  turnOrder: 'rotate',
   drive: { ...DRIVE_PRESETS.realistic },
   turnLimitMs: TURN_TIMEOUT_MS,
 };

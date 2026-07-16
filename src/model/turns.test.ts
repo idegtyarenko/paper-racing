@@ -275,44 +275,23 @@ describe('порядок ходов и отбытие штрафа', () => {
 });
 
 describe('честная очерёдность хода', () => {
-  it("'rotate' — стартовый игрок сдвигается каждый круг: А,Б,В → Б,В,А → В,А,Б", () => {
-    const order = (turn: number) => playerForTurn(turn, 3, 'rotate');
+  it('стартовый игрок сдвигается каждый круг: А,Б,В → Б,В,А → В,А,Б', () => {
+    const order = (turn: number) => playerForTurn(turn, 3);
     expect([0, 1, 2].map(order)).toEqual([0, 1, 2]); // круг 1
     expect([3, 4, 5].map(order)).toEqual([1, 2, 0]); // круг 2
     expect([6, 7, 8].map(order)).toEqual([2, 0, 1]); // круг 3
     expect([9, 10, 11].map(order)).toEqual([0, 1, 2]); // цикл замкнулся
   });
 
-  it("'snake' — направление задаётся последовательностью Тьюе-Морса: abc cba cba abc cba abc abc cba", () => {
-    const order = (turn: number) => playerForTurn(turn, 3, 'snake');
-    expect([0, 1, 2].map(order)).toEqual([0, 1, 2]); // круг 1
-    expect([3, 4, 5].map(order)).toEqual([2, 1, 0]); // круг 2
-    expect([6, 7, 8].map(order)).toEqual([2, 1, 0]); // круг 3
-    expect([9, 10, 11].map(order)).toEqual([0, 1, 2]); // круг 4
-    expect([12, 13, 14].map(order)).toEqual([2, 1, 0]); // круг 5
-    expect([15, 16, 17].map(order)).toEqual([0, 1, 2]); // круг 6
-    expect([18, 19, 20].map(order)).toEqual([0, 1, 2]); // круг 7
-    expect([21, 22, 23].map(order)).toEqual([2, 1, 0]); // круг 8
-  });
-
-  it("'fixed' — очерёдность не меняется: А,Б,В каждый круг", () => {
-    const order = (turn: number) => playerForTurn(turn, 3, 'fixed');
-    expect([0, 1, 2].map(order)).toEqual([0, 1, 2]);
-    expect([3, 4, 5].map(order)).toEqual([0, 1, 2]);
-    expect([6, 7, 8].map(order)).toEqual([0, 1, 2]);
-  });
-
-  it('любая схема — перестановка всех игроков в круге (никто не пропущен и не сходит дважды)', () => {
-    for (const scheme of ['rotate', 'snake', 'fixed'] as const) {
-      for (let n = 2; n <= 6; n++) {
-        for (let round = 0; round < 4; round++) {
-          const seats = Array.from({ length: n }, (_, s) =>
-            playerForTurn(round * n + s, n, scheme),
-          );
-          expect([...seats].sort((a, b) => a - b)).toEqual(
-            Array.from({ length: n }, (_, i) => i),
-          );
-        }
+  it('каждый круг — перестановка всех игроков (никто не пропущен и не сходит дважды)', () => {
+    for (let n = 2; n <= 6; n++) {
+      for (let round = 0; round < 4; round++) {
+        const seats = Array.from({ length: n }, (_, s) =>
+          playerForTurn(round * n + s, n),
+        );
+        expect([...seats].sort((a, b) => a - b)).toEqual(
+          Array.from({ length: n }, (_, i) => i),
+        );
       }
     }
   });
@@ -334,20 +313,15 @@ describe('честная очерёдность хода', () => {
 });
 
 describe('upcomingTurns — очередь ближайших ходов', () => {
-  it('первый элемент — текущий игрок; порядок следует схеме очерёдности', () => {
-    const g = newGame(ringTrack(), 3); // rotate по умолчанию
+  it('первый элемент — текущий игрок; порядок следует ротации', () => {
+    const g = newGame(ringTrack(), 3);
     expect(upcomingTurns(g, 6)).toEqual([0, 1, 2, 1, 2, 0]); // как реальные ходы
-  });
-
-  it('уважает схему fixed', () => {
-    const g = newGame(ringTrack(), 3, { ...DEFAULT_RULES, turnOrder: 'fixed' });
-    expect(upcomingTurns(g, 5)).toEqual([0, 1, 2, 0, 1]);
   });
 
   it('смотрит вперёд от текущего слота (turn != 0)', () => {
     const g = newGame(ringTrack(), 3);
     g.turn = 4;
-    g.current = playerForTurn(4, 3, 'rotate'); // держим инвариант current == playerForTurn(turn)
+    g.current = playerForTurn(4, 3); // держим инвариант current == playerForTurn(turn)
     expect(upcomingTurns(g, 4)).toEqual([2, 0, 2, 0]); // слоты 4,5,6,7 = 2,0,2,0
   });
 
