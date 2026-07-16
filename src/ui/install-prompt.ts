@@ -14,6 +14,13 @@ import { strings } from '../strings';
 const DISMISS_KEY = 'pr-install-dismissed';
 const DISMISS_MS = 14 * 864e5; // молчим 14 дней после «Закрыть»
 
+// «Мягкое» снятие: пользователь тапнул по доске (начал играть), не закрыв ×.
+// Раньше это вообще не запоминалось, и плашка выпрыгивала каждый запуск. Теперь
+// молчим по нарастающей — с каждым таком окно тишины растёт (1 → 3 → 7 → 14 дней),
+// чтобы не навязываться, но всё же напомнить установить, если игрок не закрыл её сам.
+const SOFT_KEY = 'pr-install-soft';
+const SOFT_STEPS_MS = [1, 3, 7, 14].map((d) => d * 864e5);
+
 /** Нестандартное событие Chromium: даёт вызвать нативный диалог установки. */
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -59,6 +66,33 @@ function recentlyDismissed(): boolean {
 function markDismissed(): void {
   try {
     localStorage.setItem(DISMISS_KEY, String(Date.now()));
+  } catch {}
+}
+
+/** Сколько ещё молчать после «мягкого» снятия (по нарастающей). */
+function softlySilenced(): boolean {
+  try {
+    const raw = localStorage.getItem(SOFT_KEY);
+    if (!raw) return false;
+    const { at, n } = JSON.parse(raw) as { at: number; n: number };
+    if (typeof at !== 'number' || typeof n !== 'number') return false;
+    const window = SOFT_STEPS_MS[Math.min(n, SOFT_STEPS_MS.length - 1)];
+    return Date.now() - at < window;
+  } catch {
+    return false;
+  }
+}
+
+/** Запомнить «мягкое» снятие и удлинить следующее окно тишины на шаг. */
+function markSoftDismissed(): void {
+  try {
+    let n = 0;
+    const raw = localStorage.getItem(SOFT_KEY);
+    if (raw) {
+      const prev = JSON.parse(raw) as { n?: number };
+      if (typeof prev.n === 'number') n = prev.n + 1;
+    }
+    localStorage.setItem(SOFT_KEY, JSON.stringify({ at: Date.now(), n }));
   } catch {}
 }
 
@@ -130,7 +164,7 @@ function build(
  * Ничего не делает на десктопе и в уже установленном приложении.
  */
 export function initInstallPrompt(): void {
-  if (!isMobile() || isStandalone() || recentlyDismissed()) return;
+  if (!isMobile() || isStandalone() || recentlyDismissed() || softlySilenced()) return;
 
   let deferred: BeforeInstallPromptEvent | null = null;
   let el: HTMLElement | null = null;
@@ -161,11 +195,16 @@ export function initInstallPrompt(): void {
     document.body.append(el);
     requestAnimationFrame(() => el?.classList.add('install-prompt--in'));
 
-    // Пользователь начал играть — убираем всплывашку с дороги (без «молчания»,
-    // чтобы она могла напомнить о себе в следующий раз).
-    document.getElementById('board')?.addEventListener('pointerdown', remove, {
-      once: true,
-    });
+    // Пользователь начал играть — убираем всплывашку с дороги и «мягко» молчим по
+    // нарастающей, чтобы она не выпрыгивала каждый запуск, но напомнила позже.
+    document.getElementById('board')?.addEventListener(
+      'pointerdown',
+      () => {
+        remove();
+        markSoftDismissed();
+      },
+      { once: true },
+    );
   }
 
   window.addEventListener('beforeinstallprompt', (e) => {
