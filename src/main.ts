@@ -222,18 +222,35 @@ function cancelAiMove(): void {
  */
 function scheduleAiMove(): void {
   if (aiTimer !== null || session.active()) return;
-  if (!game || game.phase !== 'race' || !isBotSeat(game.current)) return;
+  // mode-гейт: бот ходит только в открытой гонке. Пока открыт экран настройки
+  // (mode !== 'race'), боты на паузе, даже если game ещё в phase 'race'. Без этой
+  // проверки commit() из меню-переходов запускал бы ход бота под настройками.
+  if (mode !== 'race' || !game || game.phase !== 'race' || !isBotSeat(game.current))
+    return;
   aiTimer = window.setTimeout(() => {
     aiTimer = null;
     if (!game || game.phase !== 'race' || !isBotSeat(game.current) || !raceNav) return;
     const cand = chooseMove(game, raceNav, game.players[game.current].bot!);
     if (cand) applyMove(game, cand);
     else coastMove(game); // все кандидаты заняты соперниками — пас по инерции
-    refreshCands();
-    updateUI();
-    redraw();
-    scheduleAiMove();
+    commit();
   }, AI_MOVE_DELAY_MS);
+}
+
+/**
+ * Единая точка «состояние изменилось — привести экран в порядок»: пересчёт
+ * кандидатов → панель → канвас → (если локальная гонка с ботами) следующий ход
+ * бота. Звать после любой мутации локального состояния вместо ручной связки
+ * refreshCands/updateUI/redraw/scheduleAiMove — так шаг нельзя забыть или
+ * переставить. `fit` дополнительно вписывает содержимое в кадр (старт гонки).
+ * Онлайн ведёт свою перерисовку через commitOnline (там нужен armTurnWatch).
+ */
+function commit(opts: { fit?: boolean } = {}): void {
+  if (opts.fit) vp.fitToContent();
+  refreshCands();
+  updateUI();
+  redraw();
+  scheduleAiMove();
 }
 
 /**
@@ -250,10 +267,7 @@ function commitMove(cand: Candidate): void {
     return;
   }
   applyMove(game, cand);
-  refreshCands();
-  updateUI();
-  redraw();
-  scheduleAiMove(); // в гонке с ботами после хода человека очередь едет к ботам
+  commit(); // в гонке с ботами после хода человека очередь едет к ботам
 }
 
 /**
@@ -268,10 +282,7 @@ function retire(): void {
     return;
   }
   retireSeat(game!, localHumanSeat());
-  refreshCands();
-  updateUI();
-  redraw();
-  scheduleAiMove(); // после выбытия человека очередь может уйти к ботам
+  commit(); // после выбытия человека очередь может уйти к ботам
 }
 
 function refreshCands(): void {
@@ -328,8 +339,7 @@ function goToMode(from: 'edit' | 'race'): void {
     if ('error' in res) {
       editor.message = res.error;
       editor.error = true;
-      updateUI();
-      redraw();
+      commit();
       return;
     }
     raceTrack = res.track;
@@ -340,22 +350,19 @@ function goToMode(from: 'edit' | 'race'): void {
   playersReturn = from;
   cancelAiMove(); // гонка с ботами на паузе, пока открыты экраны настройки
   mode = 'mode';
-  updateUI();
-  redraw();
+  commit();
 }
 
 /** Назад из шага настройки (режим/игроки): в редактор или к текущей гонке. */
 function backFromSetup(): void {
   if (playersReturn === 'race') {
-    mode = 'race';
-    scheduleAiMove(); // вернулись в гонку с ботами — продолжить их ходы
+    mode = 'race'; // commit() ниже возобновит ходы ботов (mode-гейт в scheduleAiMove)
   } else {
     mode = 'edit';
     stepBack(editor); // ready → direction
   }
   raceTrack = null;
-  updateUI();
-  redraw();
+  commit();
 }
 
 /**
@@ -380,11 +387,7 @@ function startRace(humans: number, bots: number, difficulty: Difficulty): void {
   raceNav = buildNavField(raceTrack); // нужно ботам (chooseMove) и полосе мест
   lastLocalRace = { humans, bots, difficulty };
   mode = 'race';
-  vp.fitToContent();
-  refreshCands();
-  updateUI();
-  redraw();
-  scheduleAiMove(); // если первым ходит бот — запустить цикл
+  commit({ fit: true }); // fit вписывает трассу в кадр; scheduleAiMove — если первым ходит бот
 }
 
 /** Сбросить всё к чистому редактору (новая трасса / выход из онлайна). */
@@ -464,13 +467,11 @@ input.initInput({
 bindButtons({
   onBack: () => {
     stepBack(editor);
-    updateUI();
-    redraw();
+    commit();
   },
   onNext: () => {
     confirmEdges(editor);
-    updateUI();
-    redraw();
+    commit();
   },
   onConfirmMove: () => {
     const sel = input.getSelected();
@@ -498,8 +499,7 @@ bindButtons({
   onPlayersBack: () => {
     // С экрана числа игроков назад — к выбору режима (он теперь есть всегда).
     mode = 'mode';
-    updateUI();
-    redraw();
+    commit();
   },
   onStartLocal: (humans, bots, difficulty) => startRace(humans, bots, difficulty),
   onOpenSettings: () =>
@@ -513,19 +513,16 @@ bindButtons({
   onNewTrack: () => resetToEdit(),
   onModeLocal: () => {
     mode = 'players';
-    updateUI();
-    redraw();
+    commit();
   },
   onModeOnline: () => online.promptCreate(),
   onModeAI: () => {
     mode = 'ai';
-    updateUI();
-    redraw();
+    commit();
   },
   onAiBack: () => {
     mode = 'mode';
-    updateUI();
-    redraw();
+    commit();
   },
   onModeBack: () => backFromSetup(),
   onJoinByCode: () => online.promptJoin(),

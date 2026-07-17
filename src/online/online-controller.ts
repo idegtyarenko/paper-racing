@@ -169,10 +169,7 @@ export async function sendMove(cand: Candidate): Promise<void> {
     setMoveSendState('idle');
     if (deps.getGame() !== base) return; // авторитетный стейт уже применился
     deps.setGame(next);
-    deps.refreshCands();
-    deps.updateUI();
-    deps.redraw();
-    armTurnWatch();
+    commitOnline();
   } catch {
     sending = false;
     if (deps.getGame() !== base) {
@@ -214,10 +211,7 @@ export async function sendRetire(): Promise<void> {
     setMoveSendState('idle');
     if (deps.getGame() !== base) return; // авторитетный стейт уже применился
     deps.setGame(next);
-    deps.refreshCands();
-    deps.updateUI();
-    deps.redraw();
-    armTurnWatch();
+    commitOnline();
   } catch {
     sending = false;
     setMoveSendState('idle');
@@ -338,6 +332,21 @@ function armTurnWatch(): void {
   skipTimer = window.setTimeout(() => autoSkip(cur), grace);
 }
 
+/**
+ * Онлайн-аналог локального commit(): пересчёт кандидатов → панель → канвас →
+ * перевзвод слежения за ходом (armTurnWatch). Звать после того, как setGame сделал
+ * свой/входящий стейт текущим. Отличается от main.commit тем, что вместо
+ * scheduleAiMove завершается armTurnWatch (онлайн-специфика: таймер хода, авто-пропуск,
+ * ход бота у хоста). onGameState не использует — там особый порядок (armTurnWatch до
+ * updateUI, чтобы skipVisible сбросился под новый ход).
+ */
+function commitOnline(): void {
+  deps.refreshCands();
+  deps.updateUI();
+  deps.redraw();
+  armTurnWatch();
+}
+
 /** Авто-пропуск отсутствующего игрока (если он всё ещё офлайн и ходит сейчас). */
 function autoSkip(seat: number): void {
   const game = deps.getGame();
@@ -363,11 +372,8 @@ async function applySkip(game: GameState): Promise<void> {
     if (deps.getGame() === game) {
       // Эхо ещё не пришло — применяем сами; иначе авторитетный стейт уже на месте.
       deps.setGame(next);
-      clearTurnWatch();
-      deps.refreshCands();
-      deps.updateUI();
-      deps.redraw();
-      armTurnWatch();
+      clearTurnWatch(); // сбросить skipVisible/countdown до перерисовки панели
+      commitOnline();
     }
   } catch {
     showToast(strings.online.error);
@@ -423,11 +429,8 @@ async function runBotMove(seat: number): Promise<void> {
     if (deps.getGame() === game) {
       // Эхо ещё не пришло — применяем сами; иначе авторитетный стейт уже на месте.
       deps.setGame(next);
-      clearTurnWatch();
-      deps.refreshCands();
-      deps.updateUI();
-      deps.redraw();
-      armTurnWatch();
+      clearTurnWatch(); // сбросить skipVisible/countdown до перерисовки панели
+      commitOnline();
     }
   } catch {
     showToast(strings.online.error);
@@ -736,10 +739,7 @@ function startOnline(): Promise<void> {
         deps.setGame(g);
         deps.setMode('race');
         deps.fitToContent();
-        deps.refreshCands();
-        deps.updateUI();
-        deps.redraw();
-        armTurnWatch();
+        commitOnline();
       }
     } catch {
       showToast(strings.online.startFailed);
@@ -778,10 +778,7 @@ function rematchOnline(): Promise<void> {
         deps.setGame(g);
         closeOverlay();
         deps.fitToContent();
-        deps.refreshCands();
-        deps.updateUI();
-        deps.redraw();
-        armTurnWatch();
+        commitOnline();
       }
     } catch {
       showToast(strings.online.startFailed);
