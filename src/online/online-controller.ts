@@ -8,7 +8,6 @@ import { Track } from '../model/track';
 import {
   GameState,
   Candidate,
-  Rules,
   newGame,
   shuffledIndices,
   cloneState,
@@ -16,9 +15,8 @@ import {
   isFinished,
 } from '../model/game';
 import { coastMove, applyMove, retireSeat } from '../model/turns';
-import { NavField } from '../model/nav';
 import { Difficulty, chooseMove } from '../model/ai';
-import { EditorState, editorFromTrack } from '../model/editor';
+import { editorFromTrack } from '../model/editor';
 import { renderLobby, setLobbyStarting } from '../ui/lobby';
 import {
   openNameDialog,
@@ -30,7 +28,8 @@ import {
 } from '../ui/dialogs';
 import { closeOverlay } from '../ui/dom';
 import { openConfirm } from '../ui/confirm';
-import { NetTurn, PanelMode, setMoveSendState } from '../ui/panel';
+import { AppState } from '../app-state';
+import { NetTurn, setMoveSendState } from '../ui/panel';
 import {
   TURN_TIMEOUT_MS,
   LOBBY_PRUNE_MS,
@@ -41,19 +40,18 @@ import { strings } from '../strings';
 import * as session from './online';
 import { OnlineHandlers } from './online';
 
-/** Мост к состоянию и флоу главного модуля: контроллер не держит их сам. */
+/**
+ * Мост к главному модулю: контроллер не держит состояние сам. Данные читает и
+ * мутирует по ссылке через `state` (`state.game`, `state.mode`, …); отдельные
+ * get/set-переходники на каждое поле больше не нужны. Остаются только колбэки-
+ * поведение: `setGame` (у него побочные эффекты — гасит цикл ботов, пересобирает
+ * nav) и перерисовка/сброс/таймер.
+ */
 export interface OnlineDeps {
-  getMode(): PanelMode;
-  setMode(m: PanelMode): void;
-  getRaceTrack(): Track | null;
-  setRaceTrack(t: Track | null): void;
-  getGame(): GameState | null;
+  /** Единое состояние приложения (по ссылке, см. app-state.ts). */
+  state: AppState;
+  /** Заменить гонку: гасит локальный цикл ботов, пересобирает nav, сбрасывает рематч. */
   setGame(g: GameState): void;
-  /** Текущие правила заезда (их задаёт хост; едут в стейте при старте). */
-  getRules(): Rules;
-  /** Навигационное поле текущей гонки — нужно хосту, чтобы считать ходы ботов. */
-  getNav(): NavField | null;
-  setEditor(e: EditorState): void;
   /** Вписать текущее содержимое (трассу) по центру вьюпорта. */
   fitToContent(): void;
   refreshCands(): void;
@@ -76,7 +74,7 @@ export function initOnline(d: OnlineDeps): void {
   window.addEventListener('pagehide', (e: PageTransitionEvent) => {
     if (!session.active()) return;
     session.untrack();
-    if (!e.persisted && deps.getMode() === 'lobby') {
+    if (!e.persisted && deps.state.mode === 'lobby') {
       session.leave();
       forgetSession(); // место освобождено — возвращаться некуда
     }
@@ -115,7 +113,7 @@ let botSending = false;
 
 /** Свободные места лобби под ботов: вместимость трассы минус реальные игроки. */
 function freeSeats(): number {
-  const cap = deps.getRaceTrack()?.startPoints.length ?? 0;
+  const cap = deps.state.raceTrack?.startPoints.length ?? 0;
   return Math.max(0, cap - session.getRoster().length);
 }
 
@@ -153,7 +151,7 @@ let skipSending = false;
  * пропускаем.
  */
 export async function sendMove(cand: Candidate): Promise<void> {
-  const game = deps.getGame();
+  const game = deps.state.game;
   if (!game || game.phase !== 'race' || sending) return;
   if (session.mySeat() !== game.current) return; // уже не мой ход
   sending = true;
@@ -167,12 +165,12 @@ export async function sendMove(cand: Candidate): Promise<void> {
     sending = false;
     pendingCand = null;
     setMoveSendState('idle');
-    if (deps.getGame() !== base) return; // авторитетный стейт уже применился
+    if (deps.state.game !== base) return; // авторитетный стейт уже применился
     deps.setGame(next);
     commitOnline();
   } catch {
     sending = false;
-    if (deps.getGame() !== base) {
+    if (deps.state.game !== base) {
       pendingCand = null;
       setMoveSendState('idle');
       return;
@@ -195,7 +193,7 @@ export function retryMove(): void {
  * (повтора нет: сдача не критична, игрок может нажать снова).
  */
 export async function sendRetire(): Promise<void> {
-  const game = deps.getGame();
+  const game = deps.state.game;
   if (!game || game.phase !== 'race' || sending) return;
   const seat = session.mySeat();
   const me = game.players[seat];
@@ -209,7 +207,7 @@ export async function sendRetire(): Promise<void> {
     await session.pushMove(next);
     sending = false;
     setMoveSendState('idle');
-    if (deps.getGame() !== base) return; // авторитетный стейт уже применился
+    if (deps.state.game !== base) return; // авторитетный стейт уже применился
     deps.setGame(next);
     commitOnline();
   } catch {
@@ -267,7 +265,7 @@ function pruneAbsentLobby(): void {
   });
   if (soonest !== Infinity) {
     lobbyPruneTimer = window.setTimeout(() => {
-      if (deps.getMode() === 'lobby') pruneAbsentLobby();
+      if (deps.state.mode === 'lobby') pruneAbsentLobby();
     }, soonest);
   }
 }
@@ -284,7 +282,7 @@ function iAmActive(game: GameState): boolean {
 /** Пересчитать слежение за текущим ходом. Зовётся на каждый стейт и presence-событие. */
 function armTurnWatch(): void {
   clearTurnWatch();
-  const game = deps.getGame();
+  const game = deps.state.game;
   if (!session.active() || !game || game.phase !== 'race') return;
   const cur = game.current;
 
@@ -304,7 +302,7 @@ function armTurnWatch(): void {
   // (суффикс в статусе). Стартуем до early-return «мой ход», чтобы был виден и мне.
   turnStartAt = Date.now();
   const tick = (): void => {
-    const g = deps.getGame();
+    const g = deps.state.game;
     if (!session.active() || !g || g.phase !== 'race' || turnStartAt === null) return;
     const msLeft = Math.max(0, limit - (Date.now() - turnStartAt));
     deps.setTurnCountdown(msLeft, g.current === session.mySeat());
@@ -349,7 +347,7 @@ function commitOnline(): void {
 
 /** Авто-пропуск отсутствующего игрока (если он всё ещё офлайн и ходит сейчас). */
 function autoSkip(seat: number): void {
-  const game = deps.getGame();
+  const game = deps.state.game;
   if (!game || game.phase !== 'race' || game.current !== seat) return;
   if (session.isPresent(seat)) return; // вернулся — ждём его самого
   if (session.designatedSkipper() !== session.mySeat()) return;
@@ -369,7 +367,7 @@ async function applySkip(game: GameState): Promise<void> {
   coastMove(next);
   try {
     await session.pushMove(next);
-    if (deps.getGame() === game) {
+    if (deps.state.game === game) {
       // Эхо ещё не пришло — применяем сами; иначе авторитетный стейт уже на месте.
       deps.setGame(next);
       clearTurnWatch(); // сбросить skipVisible/countdown до перерисовки панели
@@ -409,7 +407,7 @@ function scheduleBotMove(seat: number): void {
  */
 async function runBotMove(seat: number): Promise<void> {
   if (botSending) return;
-  const game = deps.getGame();
+  const game = deps.state.game;
   if (
     !game ||
     game.phase !== 'race' ||
@@ -419,14 +417,14 @@ async function runBotMove(seat: number): Promise<void> {
   )
     return;
   botSending = true;
-  const nav = deps.getNav();
+  const nav = deps.state.raceNav;
   const next = cloneState(game);
   const cand = nav ? chooseMove(next, nav, game.players[seat].bot!) : null;
   if (cand) applyMove(next, cand);
   else coastMove(next);
   try {
     await session.pushMove(next);
-    if (deps.getGame() === game) {
+    if (deps.state.game === game) {
       // Эхо ещё не пришло — применяем сами; иначе авторитетный стейт уже на месте.
       deps.setGame(next);
       clearTurnWatch(); // сбросить skipVisible/countdown до перерисовки панели
@@ -461,7 +459,7 @@ export function netTurn(game: GameState | null): NetTurn | null {
 
 /** Кнопка «Пропустить ход» (доступна, когда истёк таймаут присутствующего игрока). */
 export function skip(): void {
-  const game = deps.getGame();
+  const game = deps.state.game;
   if (!game || game.phase !== 'race' || !skipVisible) return;
   if (game.current === session.mySeat()) return;
   if (!iAmActive(game)) return; // выбывший игрок чужой ход не пропускает
@@ -571,7 +569,7 @@ const handlers: OnlineHandlers = {
   onLobby: () => {
     // Мы в живом лобби — запомним код для возврата после дисконнекта (идемпотентно).
     rememberSession(session.getCode()!);
-    if (deps.getMode() === 'lobby') renderLobbyPanel();
+    if (deps.state.mode === 'lobby') renderLobbyPanel();
   },
   onGameState: (g) => {
     // Входящий авторитетный стейт перекрывает наш незавершённый/провалившийся ход:
@@ -587,10 +585,10 @@ const handlers: OnlineHandlers = {
     // Рематч: свежая гонка прилетела поверх экрана итогов. Хост режим race не покидал,
     // поэтому обычный переход ниже (mode !== 'race') не сработает — ловим over→race
     // отдельно, чтобы закрыть диалог/баннер победителя и заново вписать поле.
-    const wasOver = deps.getGame()?.phase === 'over';
+    const wasOver = deps.state.game?.phase === 'over';
     deps.setGame(g);
-    if (deps.getMode() !== 'race') {
-      deps.setMode('race');
+    if (deps.state.mode !== 'race') {
+      deps.state.mode = 'race';
       closeOverlay();
       deps.fitToContent();
     } else if (wasOver && g.phase === 'race') {
@@ -623,7 +621,7 @@ const handlers: OnlineHandlers = {
     // Присутствие влияет на «ждать/пропускать» и на метки офлайна в панели/лобби;
     // в лобби ещё и вычищаем брошенные места.
     armTurnWatch();
-    if (deps.getMode() === 'lobby') {
+    if (deps.state.mode === 'lobby') {
       pruneAbsentLobby();
       renderLobbyPanel();
     }
@@ -634,12 +632,12 @@ const handlers: OnlineHandlers = {
 /** Создать онлайн-игру (хост) с введённым именем и открыть лобби. */
 function hostOnline(name: string): Promise<void> {
   return guarded(async () => {
-    const raceTrack = deps.getRaceTrack();
+    const raceTrack = deps.state.raceTrack;
     if (!raceTrack) return;
     lobbyBots = 0; // свежее лобби — без досаженных ботов
     try {
       await session.host(raceTrack, name, handlers);
-      deps.setMode('lobby');
+      deps.state.mode = 'lobby';
       deps.updateUI();
       renderLobbyPanel();
       deps.redraw();
@@ -664,16 +662,16 @@ function joinOnline(code: string, name: string, inJoinDialog: boolean): Promise<
       closeOverlay();
       const t = session.getTrack();
       if (t) {
-        deps.setEditor(editorFromTrack(t)); // превью трассы хоста в лобби
-        deps.setRaceTrack(null); // гость не владеет трассой
+        deps.state.editor = editorFromTrack(t); // превью трассы хоста в лобби
+        deps.state.raceTrack = null; // гость не владеет трассой
       }
       // Реконнект в уже идущую гонку: onGameState уже перевёл в режим race —
       // не сбрасываем обратно в лобби. Иначе (игра ещё не начата) — в лобби.
-      if (deps.getMode() !== 'race') deps.setMode('lobby');
+      if (deps.state.mode !== 'race') deps.state.mode = 'lobby';
       deps.fitToContent(); // вписать трассу хоста по центру
       deps.redraw();
       deps.updateUI();
-      if (deps.getMode() === 'lobby') renderLobbyPanel();
+      if (deps.state.mode === 'lobby') renderLobbyPanel();
     } catch (e) {
       if (inJoinDialog) {
         showJoinError(joinErrorText(e));
@@ -705,7 +703,7 @@ function buildStartState(raceTrack: Track): GameState {
   const g = newGame(
     raceTrack,
     humans + bots,
-    deps.getRules(),
+    deps.state.rules,
     shuffledIndices(humans + bots),
   );
   roster.forEach((r, i) => {
@@ -728,16 +726,16 @@ function buildStartState(raceTrack: Track): GameState {
  */
 function startOnline(): Promise<void> {
   return guarded(async () => {
-    const raceTrack = deps.getRaceTrack();
+    const raceTrack = deps.state.raceTrack;
     if (!raceTrack || !session.canStart()) return;
     const g = buildStartState(raceTrack);
     setLobbyStarting(true);
     try {
       await session.start(g);
-      if (deps.getMode() !== 'race') {
+      if (deps.state.mode !== 'race') {
         // Эхо собственной записи могло уже перевести в гонку — не дублируем.
         deps.setGame(g);
-        deps.setMode('race');
+        deps.state.mode = 'race';
         deps.fitToContent();
         commitOnline();
       }
@@ -752,7 +750,7 @@ function startOnline(): Promise<void> {
 /** Может ли этот клиент запустить рематч: он хост, гонка окончена — тогда одним тапом
  *  переигрываем на той же трассе тем же составом (кнопка «🔄 Рематч» на экране итогов). */
 export function canRematch(): boolean {
-  const game = deps.getGame();
+  const game = deps.state.game;
   return session.isHost() && !!game && game.phase === 'over';
 }
 
@@ -766,7 +764,7 @@ export function canRematch(): boolean {
  */
 function rematchOnline(): Promise<void> {
   return guarded(async () => {
-    const raceTrack = deps.getRaceTrack();
+    const raceTrack = deps.state.raceTrack;
     if (!raceTrack || !canRematch()) return;
     const g = buildStartState(raceTrack);
     try {
@@ -774,7 +772,7 @@ function rematchOnline(): Promise<void> {
       // Хост не покидал режим race на финише — эхо собственной записи придёт через
       // onGameState с переходом over→race и там переведёт нас в новую гонку. Если эхо
       // задержится, подстрахуемся тем же путём, что startOnline.
-      if (deps.getGame()?.phase === 'over') {
+      if (deps.state.game?.phase === 'over') {
         deps.setGame(g);
         closeOverlay();
         deps.fitToContent();
@@ -795,10 +793,10 @@ function leaveLobby(): Promise<void> {
     setMoveSendState('idle');
     setConnBanner(false);
     setLobbyStarting(false);
-    const wasHost = deps.getRaceTrack() !== null;
+    const wasHost = deps.state.raceTrack !== null;
     await session.leave();
     if (wasHost) {
-      deps.setMode('mode');
+      deps.state.mode = 'mode';
       deps.updateUI();
       deps.redraw();
     } else {

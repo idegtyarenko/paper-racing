@@ -1,14 +1,15 @@
 // Оркестрация: состояние приложения, переключение фаз редактор/гонка, сборка
 // зависимостей ввода/онлайна/кнопок. Сами жесты указателя живут в input.ts.
+// Всё игровое состояние собрано в одном объекте `S` (app-state.ts); онлайн и ввод
+// читают и мутируют его по ссылке через deps.state — отдельных get/set-переходников
+// на каждое поле больше нет.
 
 import './ui/styles/index.css';
+import { newAppState, PanelMode } from './app-state';
 import { Track, finalizeTrack, clipFinishLine } from './model/track';
 import { newEditor, stepBack, confirmEdges } from './model/editor';
 import {
-  GameState,
   Candidate,
-  Rules,
-  DEFAULT_RULES,
   normalizeRules,
   newGame,
   shuffledIndices,
@@ -17,7 +18,7 @@ import {
 } from './model/game';
 import { candidatesForSeat, applyMove, coastMove, retireSeat } from './model/turns';
 import { Difficulty, chooseMove } from './model/ai';
-import { NavField, buildNavField } from './model/nav';
+import { buildNavField } from './model/nav';
 import { strings } from './strings';
 import { AI_MOVE_DELAY_MS } from './config';
 import { render, AppView } from './view/render';
@@ -29,7 +30,6 @@ import {
   setOnlineEnabled,
   setTurnCountdown,
   showConfirmMove,
-  PanelMode,
 } from './ui/panel';
 import { renderTurnQueue } from './ui/turn-queue';
 import { renderStandings } from './ui/standings';
@@ -48,51 +48,24 @@ const canvas = document.getElementById('board') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
 const wrap = document.querySelector('.app__board')!;
 
-let mode: PanelMode = 'edit';
-let editor = newEditor();
-/**
- * Готовая трасса, ожидающая выбора числа игроков (шаг «players»). Приходит либо
- * из редактора после выбора направления, либо из «Новая гонка → та же трасса».
- */
-let raceTrack: Track | null = null;
-/** Куда вернуться из шага выбора игроков по «Назад»: в редактор или в гонку. */
-let playersReturn: 'edit' | 'race' = 'edit';
-/**
- * Последний локальный состав (люди + боты + сложность) — чтобы «По той же трассе»
- * стартовала одним тапом, без повторного мастера выбора режима/игроков. Покрывает и
- * хотсит (bots 0), и игру против компьютера (humans 1). Онлайн сюда не попадает:
- * рематч с тем же составом участников — отдельная задача.
- */
-let lastLocalRace: { humans: number; bots: number; difficulty: Difficulty } | null = null;
-let game: GameState | null = null;
-let cands: Candidate[] | null = null;
-/**
- * Предвыбор хода («наметка»): кандидат, намеченный своим местом ещё в чужую очередь
- * (онлайн/vs-боты), ждущий ручного подтверждения «Газу!» в свой ход. Живёт здесь, а не
- * в input.selected (тот транзиентный и стирается каждым refreshCands). null — наметки нет.
- */
-let pending: Candidate | null = null;
-/** Правила заезда, выбранные в настройках (⚙). В онлайне их задаёт хост. */
-let raceRules: Rules = { ...DEFAULT_RULES };
-/**
- * Навигационное поле трассы текущей гонки (расстояния до финиша). Строится на
- * старте любой гонки: нужно и ботам (chooseMove), и полосе текущих мест
- * (renderStandings). null — вне гонки.
- */
-let raceNav: NavField | null = null;
-/** Таймер отложенного хода бота — гасится при любом выходе из гонки. */
+/** Единое состояние приложения (см. app-state.ts). Онлайн/ввод получают его по
+ *  ссылке и читают/пишут поля напрямую. */
+const S = newAppState();
+/** Таймер отложенного хода бота — не состояние, а служебная ручка: остаётся
+ *  приватным в main.ts, в коробку S не кладём. Гасится при любом выходе из гонки. */
 let aiTimer: number | null = null;
 
 /** Место за ботом (и какой сложности)? Бот-ность живёт в стейте (Player.bot). */
 function isBotSeat(i: number): boolean {
-  return !!game?.players[i]?.bot;
+  return !!S.game?.players[i]?.bot;
 }
 
 /** Bbox содержимого для fit/clamp: трасса гонки или редактируемая трасса.
  *  Провайдер границ для вьюпорта — «что сейчас на экране» знает приложение. */
 function contentBounds(): Bounds | null {
-  if (mode === 'race' && game) return polylineBounds(game.track.outer, game.track.inner);
-  return polylineBounds(editor.outer, editor.inner, editor.center);
+  if (S.mode === 'race' && S.game)
+    return polylineBounds(S.game.track.outer, S.game.track.inner);
+  return polylineBounds(S.editor.outer, S.editor.inner, S.editor.center);
 }
 
 /** Пересчитать вьюпорт под новый размер поля и перерисовать. */
@@ -103,15 +76,15 @@ function resize(): void {
 
 function redraw(): void {
   // Шаг выбора игроков рисуется как редактор: показываем готовую трассу-превью.
-  const viewMode = mode === 'race' ? 'race' : 'edit';
+  const viewMode = S.mode === 'race' ? 'race' : 'edit';
   const app: AppView = {
     mode: viewMode,
-    editor,
-    game,
-    cands,
+    editor: S.editor,
+    game: S.game,
+    cands: S.cands,
     hover: input.getHover(),
     selected: input.getSelected(),
-    pending,
+    pending: S.pending,
     candSeat: candOwner(),
     loupe: input.getLoupe(),
     cam: vp.camera(),
@@ -125,10 +98,10 @@ function redraw(): void {
  * (hotseat: несколько людей — предвыбор не применяется). Онлайн сюда не смотрит.
  */
 function soloHumanSeat(): number {
-  if (!game) return -1;
+  if (!S.game) return -1;
   let seat = -1;
-  for (let i = 0; i < game.players.length; i++) {
-    if (game.players[i].bot) continue;
+  for (let i = 0; i < S.game.players.length; i++) {
+    if (S.game.players[i].bot) continue;
     if (seat !== -1) return -1; // второй человек — это hotseat, не vs-боты
     seat = i;
   }
@@ -143,10 +116,10 @@ function soloHumanSeat(): number {
  * game.current, так что обычная игра идёт тем же путём.
  */
 function preselectSeat(): number {
-  if (mode !== 'race' || !game || game.phase !== 'race') return -1;
+  if (S.mode !== 'race' || !S.game || S.game.phase !== 'race') return -1;
   const seat = session.active() ? session.mySeat() : soloHumanSeat();
   if (seat < 0) return -1;
-  const p = game.players[seat];
+  const p = S.game.players[seat];
   if (isFinished(p) || p.retired || p.skipTurns !== 0) return -1;
   return seat;
 }
@@ -158,8 +131,9 @@ function preselectSeat(): number {
  * hotseat, штраф, вне гонки). При своём ходе даёт тот же веер, что и раньше.
  */
 function candOwner(): number {
-  if (!game || game.phase !== 'race') return -1;
-  if (myTurn()) return game.players[game.current].skipTurns === 0 ? game.current : -1;
+  if (!S.game || S.game.phase !== 'race') return -1;
+  if (myTurn())
+    return S.game.players[S.game.current].skipTurns === 0 ? S.game.current : -1;
   return preselectSeat();
 }
 
@@ -169,41 +143,41 @@ function candOwner(): number {
  * некому — кнопка скрыта). −1, если гонки нет или сейчас ходит бот.
  */
 function localHumanSeat(): number {
-  if (!game) return -1;
+  if (!S.game) return -1;
   if (session.active()) return session.mySeat();
-  return isBotSeat(game.current) ? -1 : game.current;
+  return isBotSeat(S.game.current) ? -1 : S.game.current;
 }
 
 /** Доступна ли сейчас кнопка «Сдаться»: идёт гонка и локальный игрок ещё в ней
  *  (не финишировал и не сошёл). Сдаться можно в любой момент, не только в свой ход. */
 function canRetire(): boolean {
-  if (!game || mode !== 'race' || game.phase !== 'race') return false;
+  if (!S.game || S.mode !== 'race' || S.game.phase !== 'race') return false;
   const seat = localHumanSeat();
-  return seat >= 0 && !isFinished(game.players[seat]) && !game.players[seat].retired;
+  return seat >= 0 && !isFinished(S.game.players[seat]) && !S.game.players[seat].retired;
 }
 
 function updateUI(): void {
-  const net = online.netTurn(game);
-  const aiTurn = !!game && isBotSeat(game.current);
+  const net = online.netTurn(S.game);
+  const aiTurn = !!S.game && isBotSeat(S.game.current);
   updatePanel(
-    mode,
-    editor,
-    game,
-    raceTrack?.startPoints.length ?? 6,
+    S.mode,
+    S.editor,
+    S.game,
+    S.raceTrack?.startPoints.length ?? 6,
     net,
     aiTurn,
     canRetire(),
   );
-  renderTurnQueue(mode === 'race' ? game : null);
-  renderStandings(mode === 'race' ? game : null, raceNav);
+  renderTurnQueue(S.mode === 'race' ? S.game : null);
+  renderStandings(S.mode === 'race' ? S.game : null, S.raceNav);
 }
 
 /** Может ли этот клиент ходить сейчас: в локальной игре — всегда (кроме хода
  *  бота), в онлайне — на своём месте. */
 function myTurn(): boolean {
-  if (game && isBotSeat(game.current)) return false;
+  if (S.game && isBotSeat(S.game.current)) return false;
   if (!session.active()) return true;
-  return game !== null && session.mySeat() === game.current;
+  return S.game !== null && session.mySeat() === S.game.current;
 }
 
 function cancelAiMove(): void {
@@ -225,14 +199,20 @@ function scheduleAiMove(): void {
   // mode-гейт: бот ходит только в открытой гонке. Пока открыт экран настройки
   // (mode !== 'race'), боты на паузе, даже если game ещё в phase 'race'. Без этой
   // проверки commit() из меню-переходов запускал бы ход бота под настройками.
-  if (mode !== 'race' || !game || game.phase !== 'race' || !isBotSeat(game.current))
+  if (
+    S.mode !== 'race' ||
+    !S.game ||
+    S.game.phase !== 'race' ||
+    !isBotSeat(S.game.current)
+  )
     return;
   aiTimer = window.setTimeout(() => {
     aiTimer = null;
-    if (!game || game.phase !== 'race' || !isBotSeat(game.current) || !raceNav) return;
-    const cand = chooseMove(game, raceNav, game.players[game.current].bot!);
-    if (cand) applyMove(game, cand);
-    else coastMove(game); // все кандидаты заняты соперниками — пас по инерции
+    if (!S.game || S.game.phase !== 'race' || !isBotSeat(S.game.current) || !S.raceNav)
+      return;
+    const cand = chooseMove(S.game, S.raceNav, S.game.players[S.game.current].bot!);
+    if (cand) applyMove(S.game, cand);
+    else coastMove(S.game); // все кандидаты заняты соперниками — пас по инерции
     commit();
   }, AI_MOVE_DELAY_MS);
 }
@@ -258,15 +238,15 @@ function commit(opts: { fit?: boolean } = {}): void {
  * его остальным. Не даём ходить не в свой ход / не в фазе гонки.
  */
 function commitMove(cand: Candidate): void {
-  if (!game || game.phase !== 'race' || !myTurn()) return;
-  pending = null; // ход сделан — наметка отыграна
+  if (!S.game || S.game.phase !== 'race' || !myTurn()) return;
+  S.pending = null; // ход сделан — наметка отыграна
   if (session.active()) {
     // Онлайн: confirm-first — локальный стейт двинется только после успешной записи
     // (см. online.sendMove), чтобы при обрыве ход не потерялся и его можно было повторить.
     online.sendMove(cand);
     return;
   }
-  applyMove(game, cand);
+  applyMove(S.game, cand);
   commit(); // в гонке с ботами после хода человека очередь едет к ботам
 }
 
@@ -281,7 +261,7 @@ function retire(): void {
     online.sendRetire();
     return;
   }
-  retireSeat(game!, localHumanSeat());
+  retireSeat(S.game!, localHumanSeat());
   commit(); // после выбытия человека очередь может уйти к ботам
 }
 
@@ -289,19 +269,19 @@ function refreshCands(): void {
   input.clearSelection();
   const seat = candOwner();
   if (seat < 0) {
-    cands = null;
-    pending = null;
+    S.cands = null;
+    S.pending = null;
     return;
   }
   // В свой ход seat === game.current (обычная игра); в чужой ход (онлайн/vs-боты) —
   // своё место, чтобы наметить ход заранее.
-  cands = candidatesForSeat(game!, seat);
+  S.cands = candidatesForSeat(S.game!, seat);
   revalidatePending();
   // Курсор мог стоять на точке, пока прилетел чужой ход (предвыбор) — восстанавливаем
   // наведение по реальной позиции мыши, иначе clearSelection выше погасил бы его.
   input.reaimHover();
   // Наметка дожила до своего хода — вооружаем «Газу!», чтобы подтвердить одним тапом.
-  if (myTurn() && pending) showConfirmMove(true);
+  if (myTurn() && S.pending) showConfirmMove(true);
 }
 
 /**
@@ -311,13 +291,13 @@ function refreshCands(): void {
  * единой воронки входящих состояний (onGameState в онлайне, цикл ботов локально).
  */
 function revalidatePending(): void {
-  if (!pending || !cands) return;
-  const t = pending.target;
-  const match = cands.find((c) => c.target.x === t.x && c.target.y === t.y);
+  if (!S.pending || !S.cands) return;
+  const t = S.pending.target;
+  const match = S.cands.find((c) => c.target.x === t.x && c.target.y === t.y);
   if (match && !match.blocked && !match.crash) {
-    pending = match;
+    S.pending = match;
   } else {
-    pending = null;
+    S.pending = null;
     showToast(strings.race.preselectCleared);
   }
 }
@@ -331,37 +311,37 @@ function revalidatePending(): void {
 function goToMode(from: 'edit' | 'race'): void {
   if (from === 'edit') {
     const res = finalizeTrack(
-      editor.outer!,
-      editor.inner!,
-      editor.finish!,
-      editor.forward!,
+      S.editor.outer!,
+      S.editor.inner!,
+      S.editor.finish!,
+      S.editor.forward!,
     );
     if ('error' in res) {
-      editor.message = res.error;
-      editor.error = true;
+      S.editor.message = res.error;
+      S.editor.error = true;
       commit();
       return;
     }
-    raceTrack = res.track;
+    S.raceTrack = res.track;
   } else {
-    if (!game) return;
-    raceTrack = game.track;
+    if (!S.game) return;
+    S.raceTrack = S.game.track;
   }
-  playersReturn = from;
+  S.playersReturn = from;
   cancelAiMove(); // гонка с ботами на паузе, пока открыты экраны настройки
-  mode = 'mode';
+  S.mode = 'mode';
   commit();
 }
 
 /** Назад из шага настройки (режим/игроки): в редактор или к текущей гонке. */
 function backFromSetup(): void {
-  if (playersReturn === 'race') {
-    mode = 'race'; // commit() ниже возобновит ходы ботов (mode-гейт в scheduleAiMove)
+  if (S.playersReturn === 'race') {
+    S.mode = 'race'; // commit() ниже возобновит ходы ботов (mode-гейт в scheduleAiMove)
   } else {
-    mode = 'edit';
-    stepBack(editor); // ready → direction
+    S.mode = 'edit';
+    stepBack(S.editor); // ready → direction
   }
-  raceTrack = null;
+  S.raceTrack = null;
   commit();
 }
 
@@ -376,17 +356,17 @@ function backFromSetup(): void {
  * — отдельной «классики для бота» нет.
  */
 function startRace(humans: number, bots: number, difficulty: Difficulty): void {
-  if (!raceTrack) return;
+  if (!S.raceTrack) return;
   cancelAiMove();
-  pending = null;
-  game = newGame(raceTrack, humans + bots, raceRules, shuffledIndices(humans + bots));
-  for (let i = humans; i < game.players.length; i++) {
-    game.players[i].bot = difficulty;
-    game.players[i].name = `${strings.aiSelect.botPrefix} ${game.players[i].name}`;
+  S.pending = null;
+  S.game = newGame(S.raceTrack, humans + bots, S.rules, shuffledIndices(humans + bots));
+  for (let i = humans; i < S.game.players.length; i++) {
+    S.game.players[i].bot = difficulty;
+    S.game.players[i].name = `${strings.aiSelect.botPrefix} ${S.game.players[i].name}`;
   }
-  raceNav = buildNavField(raceTrack); // нужно ботам (chooseMove) и полосе мест
-  lastLocalRace = { humans, bots, difficulty };
-  mode = 'race';
+  S.raceNav = buildNavField(S.raceTrack); // нужно ботам (chooseMove) и полосе мест
+  S.lastLocalRace = { humans, bots, difficulty };
+  S.mode = 'race';
   commit({ fit: true }); // fit вписывает трассу в кадр; scheduleAiMove — если первым ходит бот
 }
 
@@ -397,43 +377,31 @@ function resetToEdit(): void {
   // ход соперника через onGameState реанимировал бы гонку и выдернул из редактора.
   if (session.active()) session.leave();
   cancelAiMove();
-  game = null;
-  raceNav = null;
-  raceTrack = null;
-  cands = null;
-  pending = null;
+  S.game = null;
+  S.raceNav = null;
+  S.raceTrack = null;
+  S.cands = null;
+  S.pending = null;
   input.clearSelection();
-  editor = newEditor();
-  mode = 'edit';
+  S.editor = newEditor();
+  S.mode = 'edit';
   // Пустое поле → resize() покажет дефолтный вид (границ содержимого нет).
   updateUI();
   resize();
 }
 
 // Онлайн-флоу (host/join/start/leave/share) вынесен в online-controller.ts;
-// он читает и мутирует состояние приложения через эти зависимости.
+// он читает и мутирует состояние приложения S по ссылке, а перерисовку/сброс делает
+// колбэками. setGame — колбэк (а не запись в S.game): у него побочные эффекты.
 online.initOnline({
-  getMode: () => mode,
-  setMode: (m) => {
-    mode = m;
-  },
-  getRaceTrack: () => raceTrack,
-  setRaceTrack: (t) => {
-    raceTrack = t;
-  },
-  getGame: () => game,
+  state: S,
   setGame: (g) => {
     // Онлайн-гонка заменяет локальную: гасим локальный цикл ботов (в онлайне их ведёт
     // хост через online-controller). Бот-ность самих мест едет в стейте g (Player.bot).
     cancelAiMove();
-    game = g;
-    raceNav = g ? buildNavField(g.track) : null; // ботам (chooseMove) и полосе мест
-    lastLocalRace = null; // онлайн-гонка — не локальный рематч, сбрасываем «ту же трассу»
-  },
-  getRules: () => raceRules,
-  getNav: () => raceNav,
-  setEditor: (e) => {
-    editor = e;
+    S.game = g;
+    S.raceNav = g ? buildNavField(g.track) : null; // ботам (chooseMove) и полосе мест
+    S.lastLocalRace = null; // онлайн-гонка — не локальный рематч, сбрасываем «ту же трассу»
   },
   fitToContent: () => vp.fitToContent(),
   refreshCands,
@@ -443,19 +411,16 @@ online.initOnline({
   resetToEdit,
 });
 
-// Жесты указателя и зум вынесены в input.ts; он читает состояние приложения и
-// применяет ходы через эти зависимости, а подсветку (hover/selected/loupe) держит сам.
+// Жесты указателя и зум вынесены в input.ts; он читает состояние приложения S по
+// ссылке и применяет ходы через эти колбэки, а подсветку (hover/selected/loupe) держит сам.
 input.initInput({
   canvas,
-  getMode: () => mode,
-  getEditor: () => editor,
-  getGame: () => game,
-  getCands: () => cands,
+  state: S,
   commitMove,
   // Предвыбор: сейчас не мой ход, но своё место может намечать (онлайн/vs-боты).
   isPreselect: () => !myTurn() && candOwner() >= 0,
   setPending: (cand) => {
-    pending = cand;
+    S.pending = cand;
     showConfirmMove(false); // не мой ход — кнопку не показываем, наметка видна на поле
     redraw();
   },
@@ -466,18 +431,18 @@ input.initInput({
 
 bindButtons({
   onBack: () => {
-    stepBack(editor);
+    stepBack(S.editor);
     commit();
   },
   onNext: () => {
-    confirmEdges(editor);
+    confirmEdges(S.editor);
     commit();
   },
   onConfirmMove: () => {
     const sel = input.getSelected();
     if (sel) commitMove(sel);
     // Свой ход с дожившей наметкой: «Газу!» коммитит её без повторного тапа.
-    else if (pending && myTurn()) commitMove(pending);
+    else if (S.pending && myTurn()) commitMove(S.pending);
     else online.retryMove(); // десктоп: выделение не хранится — повторяем последний ход
   },
   // «Рематч» одним тапом: тот же состав на той же трассе, без мастера. В онлайне
@@ -488,40 +453,40 @@ bindButtons({
       online.rematch();
       return;
     }
-    if (!game || !lastLocalRace) return;
-    raceTrack = game.track;
-    startRace(lastLocalRace.humans, lastLocalRace.bots, lastLocalRace.difficulty);
+    if (!S.game || !S.lastLocalRace) return;
+    S.raceTrack = S.game.track;
+    startRace(S.lastLocalRace.humans, S.lastLocalRace.bots, S.lastLocalRace.difficulty);
   },
   // «Та же трасса, другой режим»: сохранить трассу, заново выбрать режим/игроков.
   onSameTrackNewMode: () => goToMode('race'),
-  canRematch: () => (!!game && !!lastLocalRace) || online.canRematch(),
+  canRematch: () => (!!S.game && !!S.lastLocalRace) || online.canRematch(),
   isOnline: () => session.active(),
   onPlayersBack: () => {
     // С экрана числа игроков назад — к выбору режима (он теперь есть всегда).
-    mode = 'mode';
+    S.mode = 'mode';
     commit();
   },
   onStartLocal: (humans, bots, difficulty) => startRace(humans, bots, difficulty),
   onOpenSettings: () =>
-    openSettings(raceRules, false, (r) => {
-      raceRules = r;
+    openSettings(S.rules, false, (r) => {
+      S.rules = r;
     }),
   onLobbySettings: () =>
-    openSettings(raceRules, true, (r) => {
-      raceRules = r;
+    openSettings(S.rules, true, (r) => {
+      S.rules = r;
     }),
   onNewTrack: () => resetToEdit(),
   onModeLocal: () => {
-    mode = 'players';
+    S.mode = 'players';
     commit();
   },
   onModeOnline: () => online.promptCreate(),
   onModeAI: () => {
-    mode = 'ai';
+    S.mode = 'ai';
     commit();
   },
   onAiBack: () => {
-    mode = 'mode';
+    S.mode = 'mode';
     commit();
   },
   onModeBack: () => backFromSetup(),
@@ -541,22 +506,15 @@ bindButtons({
 /**
  * Сохранить локальное состояние игры, чтобы перезагрузка/жест «назад»/сворачивание
  * вкладки не сбрасывали игру к первому экрану. Онлайн-сессию не сохраняем (она
- * живёт на сервере) — вместо этого стираем прошлый локальный снимок.
+ * живёт на сервере) — вместо этого стираем прошлый локальный снимок. persist сам
+ * берёт из S лишь персистентное подмножество (cands/pending/raceNav не пишутся).
  */
 function saveState(): void {
   if (session.active()) {
     persist.clear();
     return;
   }
-  persist.save({
-    mode,
-    editor,
-    raceTrack,
-    game,
-    rules: raceRules,
-    playersReturn,
-    lastLocalRace,
-  });
+  persist.save(S);
 }
 
 /** Восстановить локальное состояние из снимка. Возвращает восстановленный режим
@@ -564,19 +522,19 @@ function saveState(): void {
 function restoreState(): PanelMode | null {
   const snap = persist.load();
   if (!snap) return null;
-  mode = snap.mode;
-  editor = snap.editor;
-  raceTrack = snap.raceTrack;
-  game = snap.game;
+  S.mode = snap.mode;
+  S.editor = snap.editor;
+  S.raceTrack = snap.raceTrack;
+  S.game = snap.game;
   // Бэкфилл дефолтами: снимок мог быть записан старой версией без новых полей
   // правил (напр. turnLimitMs) — иначе они окажутся undefined. Так же чинит
   // серверные стейты net.ts при десериализации.
-  raceRules = normalizeRules(snap.rules);
-  playersReturn = snap.playersReturn;
-  lastLocalRace = snap.lastLocalRace;
+  S.rules = normalizeRules(snap.rules);
+  S.playersReturn = snap.playersReturn;
+  S.lastLocalRace = snap.lastLocalRace;
   // nav-поле не сериализуем — пересобираем из трассы (нужно ботам и полосе мест).
   // Бот-ность мест едет внутри game.players (Player.bot) — отдельно не восстанавливаем.
-  if (game) raceNav = buildNavField(game.track);
+  if (S.game) S.raceNav = buildNavField(S.game.track);
   return snap.mode;
 }
 
@@ -690,11 +648,11 @@ if (import.meta.env.DEV) {
   };
   // Дешёвый снимок ключевого состояния для ассертов без скриншотов.
   const snap = () => ({
-    mode,
-    phase: game?.phase ?? null,
-    current: game?.current ?? null,
+    mode: S.mode,
+    phase: S.game?.phase ?? null,
+    current: S.game?.current ?? null,
     players:
-      game?.players.map((p) => ({
+      S.game?.players.map((p) => ({
         name: p.name,
         bot: p.bot ?? null,
         place: p.place,
@@ -703,17 +661,17 @@ if (import.meta.env.DEV) {
         crossings: p.crossings,
         finished: isFinished(p),
       })) ?? null,
-    lastLocalRace,
+    lastLocalRace: S.lastLocalRace,
     // Предвыбор: место-владелец веера, число кандидатов и текущая наметка.
     candSeat: candOwner(),
-    candsCount: cands?.length ?? null,
-    pending: pending?.target ?? null,
+    candsCount: S.cands?.length ?? null,
+    pending: S.pending?.target ?? null,
     hover: input.getHover()?.target ?? null,
   });
   (window as unknown as Record<string, unknown>).__pr = {
     /** Готовая трасса + сразу локальная гонка: humans людей, bots ботов. */
     race(humans = 1, bots = 1, difficulty: Difficulty = 'medium') {
-      raceTrack = devTrack();
+      S.raceTrack = devTrack();
       startRace(humans, bots, difficulty);
       return snap();
     },
@@ -723,9 +681,9 @@ if (import.meta.env.DEV) {
      *  удобно доиграть концовку вручную (расстановка мест, заморозка порядка,
      *  переход в phase='over', win-экран), не наматывая круги. */
     nearFinish(humans = 1, bots = 1, laps = 1, difficulty: Difficulty = 'medium') {
-      raceTrack = devTrack();
+      S.raceTrack = devTrack();
       startRace(humans, bots, difficulty);
-      for (const p of game!.players) p.crossings = WIN_CROSSINGS - laps;
+      for (const p of S.game!.players) p.crossings = WIN_CROSSINGS - laps;
       refreshCands();
       updateUI();
       redraw();
@@ -738,14 +696,14 @@ if (import.meta.env.DEV) {
      *  доигровка раунда) — это и есть «окно финиша», в котором финишёру НЕ должен
      *  предлагаться ход. */
     raceAtWin(bots = 1, difficulty: Difficulty = 'medium') {
-      raceTrack = devTrack();
+      S.raceTrack = devTrack();
       startRace(1, bots, difficulty);
-      const h = game!.players[0];
+      const h = S.game!.players[0];
       h.crossings = WIN_CROSSINGS - 1;
       h.pos = { x: 18, y: 4 };
       h.vel = { x: 2, y: 0 };
-      for (let i = 1; i < game!.players.length; i++) {
-        game!.players[i].pos = { x: 16, y: 20 }; // верхняя прямая, не блокируют финиш
+      for (let i = 1; i < S.game!.players.length; i++) {
+        S.game!.players[i].pos = { x: 16, y: 20 }; // верхняя прямая, не блокируют финиш
       }
       refreshCands();
       updateUI();
@@ -754,10 +712,10 @@ if (import.meta.env.DEV) {
     },
     /** Готовая трасса → экран выбора режима (минуя рисование). */
     toMode() {
-      raceTrack = devTrack();
-      playersReturn = 'edit';
+      S.raceTrack = devTrack();
+      S.playersReturn = 'edit';
       cancelAiMove();
-      mode = 'mode';
+      S.mode = 'mode';
       updateUI();
       redraw();
       return snap();
@@ -765,7 +723,7 @@ if (import.meta.env.DEV) {
     /** Обнулить сохранённый локальный состав (эмуляция «после онлайн-гонки»,
      *  когда рематч одним тапом недоступен и кнопка «Рематч» прячется). */
     clearLastRace() {
-      lastLocalRace = null;
+      S.lastLocalRace = null;
       updateUI();
       return snap();
     },
@@ -778,14 +736,14 @@ if (import.meta.env.DEV) {
      */
     tapAccel(ax: number, ay: number) {
       const seat = candOwner();
-      if (seat < 0 || !cands) return snap();
-      const p = game!.players[seat];
+      if (seat < 0 || !S.cands) return snap();
+      const p = S.game!.players[seat];
       const tx = p.pos.x + p.vel.x + ax;
       const ty = p.pos.y + p.vel.y + ay;
-      const c = cands.find((k) => k.target.x === tx && k.target.y === ty);
+      const c = S.cands.find((k) => k.target.x === tx && k.target.y === ty);
       if (!c) return snap();
       if (!myTurn() && seat >= 0) {
-        pending = c; // наметка (как setPending в input-deps)
+        S.pending = c; // наметка (как setPending в input-deps)
         redraw();
       } else {
         commitMove(c);
@@ -794,7 +752,7 @@ if (import.meta.env.DEV) {
     },
     /** Подтвердить наметку в свой ход (эквивалент кнопки «Газу!»). */
     confirm() {
-      if (pending && myTurn()) commitMove(pending);
+      if (S.pending && myTurn()) commitMove(S.pending);
       return snap();
     },
     /** Синтетический ховер мышью над кандидатом с ускорением (ax, ay) — проверить,
@@ -802,7 +760,7 @@ if (import.meta.env.DEV) {
     hoverAccel(ax: number, ay: number) {
       const seat = candOwner();
       if (seat < 0) return snap();
-      const p = game!.players[seat];
+      const p = S.game!.players[seat];
       const target = { x: p.pos.x + p.vel.x + ax, y: p.pos.y + p.vel.y + ay };
       const scr = worldToScreen(vp.camera(), target);
       const r = canvas.getBoundingClientRect();

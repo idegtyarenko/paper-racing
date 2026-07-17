@@ -3,6 +3,7 @@
 // единая точка навешивания обработчиков, композирует их проводку.
 
 import { KMH_PER_CELL } from '../config';
+import { PanelMode } from '../app-state';
 import { EditorState, canStepBack } from '../model/editor';
 import { GameState, Player, MIN_PLAYERS } from '../model/game';
 import { Difficulty } from '../model/ai';
@@ -81,10 +82,6 @@ function markSelected(container: HTMLElement, attr: string, value: string): void
     btn.classList.toggle('count-btn--selected', btn.dataset[attr] === value);
   });
 }
-
-/** Режим панели: рисование трассы, выбор режима/числа игроков/сложности ботов,
- *  лобби, гонка. */
-export type PanelMode = 'edit' | 'mode' | 'players' | 'ai' | 'lobby' | 'race';
 
 export interface PanelHandlers {
   /** Шаг назад в редакторе трассы. */

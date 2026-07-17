@@ -3,11 +3,10 @@
 // сбрасывала игру к первому экрану рисования трассы. Онлайн сюда не попадает —
 // его сессия живёт на сервере и восстанавливается своим путём.
 
-import { PanelMode } from './ui/panel';
+import { AppState, PanelMode, LastLocalRace } from './app-state';
 import { EditorState } from './model/editor';
 import { Track } from './model/track';
 import { GameState, Rules } from './model/game';
-import { Difficulty } from './model/ai';
 import {
   SerializedTrack,
   SerializedState,
@@ -22,10 +21,6 @@ const KEY = 'pr-local-state';
 // нет, а lastLocalRace хранит состав (люди+боты+сложность). Старые снимки (v2 с
 // сайд-каналом ai / прежним lastLocalRace) несовместимы — их отбрасываем.
 const VERSION = 3;
-
-/** Последний локальный состав — для «По той же трассе» одним тапом. Покрывает и
- *  хотсит (bots 0), и игру против компьютера (humans 1). */
-export type LastLocalRace = { humans: number; bots: number; difficulty: Difficulty };
 
 /** Живой снимок локального состояния приложения (то, что держит main.ts). Бот-места
  *  едут внутри game.players (Player.bot) — отдельного поля под ботов нет. */
@@ -51,8 +46,10 @@ interface Stored {
   lastLocalRace: LastLocalRace | null;
 }
 
-/** Записать снимок. Ошибку записи (квота/приватный режим) молча глотаем. */
-export function save(snap: LocalSnapshot): void {
+/** Записать снимок. Принимает всё состояние приложения, но сохраняет лишь
+ *  персистентное подмножество (cands/pending/raceNav — производные, не пишем).
+ *  Ошибку записи (квота/приватный режим) молча глотаем. */
+export function save(snap: AppState): void {
   try {
     const stored: Stored = {
       v: VERSION,
