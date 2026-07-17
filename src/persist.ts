@@ -14,6 +14,8 @@ import {
   deserializeTrack,
   serializeState,
   deserializeState,
+  isSerializedTrack,
+  isSerializedState,
 } from './online/net';
 
 const KEY = 'pr-local-state';
@@ -69,6 +71,26 @@ export function save(snap: AppState): void {
   }
 }
 
+/** Проверка формы прочитанного из localStorage снимка: раньше `JSON.parse(raw) as
+ *  Stored` верил на слово. Убеждаемся в каркасе (версия/режим/редактор/правила + форма
+ *  трасс и стейта) прежде, чем идти в deserialize — иначе битая/чужая строка втекала
+ *  бы в стейт «белым экраном». Форма, не миграция; нормализацию делает deserialize. */
+function isStored(v: unknown): v is Stored {
+  if (typeof v !== 'object' || v === null) return false;
+  const s = v as Record<string, unknown>;
+  if (typeof s.v !== 'number') return false;
+  if (typeof s.mode !== 'string') return false;
+  if (typeof s.editor !== 'object' || s.editor === null) return false;
+  if (typeof s.rules !== 'object' || s.rules === null) return false;
+  if (s.raceTrack !== null && !isSerializedTrack(s.raceTrack)) return false;
+  if (s.game !== null) {
+    if (typeof s.game !== 'object' || s.game === null) return false;
+    const g = s.game as Record<string, unknown>;
+    if (!isSerializedTrack(g.track) || !isSerializedState(g.state)) return false;
+  }
+  return true;
+}
+
 /** Стереть сохранённый снимок (выход в онлайн / повреждённые данные). */
 export function clear(): void {
   try {
@@ -88,7 +110,9 @@ export function load(): LocalSnapshot | null {
   }
   if (!raw) return null;
   try {
-    const s = JSON.parse(raw) as Stored;
+    const parsed: unknown = JSON.parse(raw);
+    if (!isStored(parsed)) return null;
+    const s = parsed;
     if (s.v !== VERSION) return null;
     // Онлайн-лобби локально не восстанавливается — снимок такого режима игнорируем.
     if (s.mode === 'lobby') return null;

@@ -84,6 +84,65 @@ export function deserializeState(s: SerializedState, track: Track): GameState {
   };
 }
 
+// ── Проверка присланных данных ────────────────────────────────────────────────────
+//
+// Данные из сети (realtime-строка, RPC/запрос) приходят как `unknown`. Раньше они
+// приводились к типу через `as` — обещание, а не проверка. Здесь лёгкая проверка
+// ФОРМЫ (не полная схема): убеждаемся, что каркас на месте и нужного типа, чтобы
+// дальше безопасно нормализовать (deserializeState) и не въехать в поломанный стейт
+// после будущих изменений формата. Значения не мигрируем — только форму.
+
+function isObj(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null;
+}
+
+function isVec(v: unknown): v is Vec {
+  return isObj(v) && typeof v.x === 'number' && typeof v.y === 'number';
+}
+
+function isVecArray(v: unknown): v is Vec[] {
+  return Array.isArray(v) && v.every(isVec);
+}
+
+/** Форма сериализованной трассы: базовые поля на месте и нужного типа. */
+export function isSerializedTrack(v: unknown): v is SerializedTrack {
+  if (!isObj(v)) return false;
+  const f = v.finish;
+  return (
+    isVecArray(v.outer) &&
+    isVecArray(v.inner) &&
+    isObj(f) &&
+    isVec(f.a) &&
+    isVec(f.b) &&
+    isVec(v.forward) &&
+    Array.isArray(v.inside) &&
+    isVecArray(v.startPoints)
+  );
+}
+
+/** Форма сериализованного стейта гонки (без track — он в строке отдельно). Не полная
+ *  валидация — только каркас, по которому дальше безопасно нормализовать. */
+export function isSerializedState(v: unknown): v is SerializedState {
+  return isObj(v) && Array.isArray(v.players) && typeof v.current === 'number';
+}
+
+/**
+ * Проверить присланную строку игры и вернуть её либо null, если данные негодные
+ * (не та форма — обрыв на полуслове, чужой/старый формат). Вызывающий на null
+ * штатно откатывается (держит последний валидный стейт / считает игру ненайденной),
+ * а не въезжает в поломанное состояние.
+ */
+export function parseGameRow(raw: unknown): GameRow | null {
+  if (!isObj(raw)) return null;
+  if (typeof raw.id !== 'string') return null;
+  if (!isSerializedTrack(raw.track)) return null;
+  if (raw.state !== null && !isSerializedState(raw.state)) return null;
+  if (!Array.isArray(raw.lobby)) return null;
+  if (typeof raw.host_id !== 'string') return null;
+  if (raw.status !== 'lobby' && raw.status !== 'race' && raw.status !== 'over') return null;
+  return raw as unknown as GameRow;
+}
+
 // ── Идентичность и код игры ──────────────────────────────────────────────────────
 
 const CLIENT_ID_KEY = 'pr-client-id';
@@ -199,16 +258,18 @@ export async function joinGame(code: string, name: string): Promise<GameRow> {
     }),
   );
   if (error) throw error;
-  return data as GameRow;
+  const row = parseGameRow(data);
+  if (!row) throw new Error('bad-game-row');
+  return row;
 }
 
-/** Прочитать строку игры по коду (null — если не найдена). */
+/** Прочитать строку игры по коду (null — если не найдена или данные негодные). */
 export async function fetchGame(code: string): Promise<GameRow | null> {
   const { data, error } = await withTimeout(
     db().from('games').select().eq('id', code).maybeSingle(),
   );
   if (error) throw error;
-  return (data as GameRow) ?? null;
+  return parseGameRow(data);
 }
 
 /** Записать текущий стейт гонки (после хода или при старте). Обновляет status. */
@@ -260,7 +321,12 @@ export function subscribeGame(
       { event: '*', schema: 'public', table: 'games', filter: `id=eq.${code}` },
       (payload) => {
         if (payload.eventType === 'DELETE') onChange(null);
-        else onChange(payload.new as GameRow);
+        else {
+          const row = parseGameRow(payload.new);
+          // Негодную строку игнорируем — держим последний валидный стейт; следующий
+          // валидный апдейт (или ресинк по SUBSCRIBED → fetchGame) поправит.
+          if (row) onChange(row);
+        }
       },
     );
   if (onPresence) {
