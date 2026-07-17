@@ -13,7 +13,6 @@ import {
   cross,
   len,
   dist,
-  normalize,
   closedNormals,
   distPointToSegment,
   closestPointOnSegment,
