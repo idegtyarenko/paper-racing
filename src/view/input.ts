@@ -26,6 +26,11 @@ import {
   DRAG_PX,
   ZOOM_BTN_FACTOR,
   WHEEL_FACTOR,
+  DOUBLE_TAP_MS,
+  DOUBLE_TAP_SLOP_PX,
+  DOUBLE_TAP_ZOOM,
+  SCALE_DEFAULT,
+  SCALE_MAX,
 } from '../config';
 
 /** Мост к состоянию и флоу главного модуля: ввод не держит их сам. */
@@ -117,9 +122,19 @@ type Gesture =
   | { kind: 'finish'; downX: number; downY: number } // тап-финиш; драг → пан
   | { kind: 'aim' } // тач-прицеливание в гонке (лупа)
   | { kind: 'move'; cand: Candidate; downX: number; downY: number } // мышь-ход; драг → пан
+  | { kind: 'dtap'; downX: number; downY: number } // второй тач двойного тапа; в покое → зум, драг → пан
   | { kind: 'pan'; ox0: number; oy0: number; sx0: number; sy0: number };
 let gesture: Gesture | null = null;
 let activeId: number | null = null;
+
+// ── Двойной тап (тач) → зум камеры поля к точке ─────────────────────────────
+// Свой жест вместо нативного iOS-зума (тот хайджекит пан/лупу). Помним последний
+// «чистый» тап (без протяжки); следующий тап рядом и вовремя — двойной.
+let lastTapT = 0;
+let lastTapScr: Vec | null = null;
+/** Начало текущего одиночного тач-жеста — чтобы отличить тап от протяжки на up. */
+let tapDownT = 0;
+let tapDownScr: Vec | null = null;
 
 /** Радиус попадания по кандидату в клетках: для пальца — не меньше TOUCH_TOL_PX. */
 function touchTol(): number {
@@ -272,6 +287,46 @@ function beginPan(sx: number, sy: number, id: number): void {
   canvas.classList.add('grabbing');
 }
 
+/** Только в гонке (racing/финал): двойной тап зумит поле, а не рисует. */
+function doubleTapEnabled(): boolean {
+  return deps.getMode() === 'race';
+}
+
+/** Этот тач-даун — второй тап двойного тапа (рядом и вовремя с прошлым)? */
+function isDoubleTapDown(scr: Vec): boolean {
+  return (
+    doubleTapEnabled() &&
+    lastTapScr !== null &&
+    performance.now() - lastTapT < DOUBLE_TAP_MS &&
+    dist(scr, lastTapScr) < DOUBLE_TAP_SLOP_PX
+  );
+}
+
+/** Запомнить «чистый» тап (up без протяжки) — кандидат на первый тап двойного. */
+function recordTap(upScr: Vec): void {
+  if (
+    tapDownScr &&
+    performance.now() - tapDownT < DOUBLE_TAP_MS &&
+    dist(upScr, tapDownScr) < DRAG_PX
+  ) {
+    lastTapT = performance.now();
+    lastTapScr = upScr;
+  }
+}
+
+/** Двойной тап: тоггл-зум камеры поля к точке (приблизить / вписать обратно). */
+function doubleTapZoom(scr: Vec): void {
+  if (vp.scale() >= SCALE_DEFAULT * 1.8) {
+    vp.fitToContent(); // уже прилично приближено — возвращаемся к обзору
+  } else {
+    const target = Math.min(
+      SCALE_MAX,
+      Math.max(vp.scale() * DOUBLE_TAP_ZOOM, SCALE_DEFAULT * 2),
+    );
+    vp.zoomAt(target / vp.scale(), scr.x, scr.y);
+  }
+}
+
 /** Сдвинуть камеру за указателем (жест pan). */
 function movePan(scr: Vec): void {
   if (gesture?.kind !== 'pan') return;
@@ -359,6 +414,8 @@ function handleGestureMove(e: PointerEvent, scr: Vec): void {
       }
       break;
     case 'move':
+    case 'dtap':
+      // Протяжка (в т.ч. второго тапа) — это пан, не зум: так пан/лупа не хайджекятся.
       if (Math.hypot(scr.x - g.downX, scr.y - g.downY) > DRAG_PX) {
         beginPan(g.downX, g.downY, activeId!);
         movePan(scr);
@@ -376,7 +433,12 @@ function handleGestureMove(e: PointerEvent, scr: Vec): void {
 /** Завершение одиночного жеста на pointerup. */
 function endGesture(e: PointerEvent): void {
   const g = gesture;
+  const touch = e.pointerType === 'touch';
+  const upScr = vp.toScreen(e);
   switch (g?.kind) {
+    case 'dtap':
+      doubleTapZoom({ x: g.downX, y: g.downY }); // зум к точке первого касания второго тапа
+      break;
     case 'draw':
     case 'edge':
     case 'finish': {
@@ -411,6 +473,8 @@ function endGesture(e: PointerEvent): void {
     case 'pan':
       break;
   }
+  // Тач-тап без протяжки (кроме самого зума) — кандидат на первый тап двойного.
+  if (touch && g?.kind !== 'dtap') recordTap(upScr);
   gesture = null;
   activeId = null;
   canvas.classList.remove('grabbing');
@@ -446,6 +510,25 @@ export function initInput(d: InputDeps): void {
     }
     // Уже идёт пинч или уже есть активный указатель — новый игнорируем.
     if (pinch || activeId !== null) return;
+
+    // Начало одиночного тач-жеста: запоминаем точку/время для детекта тапа на up.
+    if (touch) {
+      tapDownScr = scr;
+      tapDownT = performance.now();
+    }
+    // Второй тап рядом и вовремя — свой зум камеры (а не рисование/прицел). Драг
+    // этого тапа уйдёт в пан (handleGestureMove), так что пан/лупа не хайджекятся.
+    if (touch && isDoubleTapDown(scr)) {
+      lastTapScr = null; // погасить, чтобы третий тап не зумил повторно
+      loupe = null;
+      hover = null;
+      selected = null;
+      showConfirmMove(false);
+      gesture = { kind: 'dtap', downX: scr.x, downY: scr.y };
+      activeId = e.pointerId;
+      deps.redraw();
+      return;
+    }
 
     const game = deps.getGame();
     if (deps.getMode() === 'edit') handleEditDown(e, scr, touch);
@@ -550,6 +633,15 @@ export function initInput(d: InputDeps): void {
     },
     { passive: false },
   );
+
+  // iOS Safari игнорирует `user-scalable=no`, а `touch-action:none` глушит зум не
+  // всегда (double-tap-drag/page-pinch протекают и хайджекят пан/лупу). Глушим
+  // нативные жест-события напрямую: свой зум даём двойным тапом и пинчем. `dblclick`
+  // — страховка от double-tap-зума. Пассивно нельзя (нужен preventDefault).
+  for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
+    document.addEventListener(type, (e) => e.preventDefault(), { passive: false });
+  }
+  canvas.addEventListener('dblclick', (e) => e.preventDefault());
 
   document.getElementById('zoomIn')?.addEventListener('click', () => zoomByButton(1));
   document.getElementById('zoomOut')?.addEventListener('click', () => zoomByButton(-1));
