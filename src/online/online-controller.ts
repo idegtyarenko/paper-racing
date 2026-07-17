@@ -143,6 +143,31 @@ let pendingCand: Candidate | null = null;
 /** Идёт ли запись пропуска (авто/ручного) — защита от дублей. */
 let skipSending = false;
 
+/** Результат confirm-first: применили копию у себя (`applied`) или за время записи
+ *  прилетел авторитетный чужой стейт и локальное применение пропущено (`superseded`). */
+type PushResult = 'applied' | 'superseded';
+
+/**
+ * Общее ядро всех «confirm-first» операций (ход/сдача/пропуск/ход бота): применяем
+ * mutate к КОПИИ base, пишем на сервер и лишь при успехе (и если за время записи не
+ * прилетел авторитетный чужой стейт) делаем копию текущим стейтом. Оригинал не
+ * трогаем — при ошибке выбор/кандидаты целы. Ошибку записи ПРОБРАСЫВАЕМ: ветка
+ * ошибки у каждого вызывающего своя (флаги, тост, повтор). Перерисовку (commitOnline)
+ * и сброс флагов делает вызывающий по результату — так сохраняется точный порядок
+ * (сброс send-state до перерисовки; clearTurnWatch до перерисовки у пропуска/бота).
+ */
+async function confirmFirst(
+  base: GameState,
+  mutate: (next: GameState) => void,
+): Promise<PushResult> {
+  const next = cloneState(base);
+  mutate(next);
+  await session.pushMove(next);
+  if (deps.state.game !== base) return 'superseded'; // эхо/чужой ход уже применился
+  deps.setGame(next);
+  return 'applied';
+}
+
 /**
  * Отправить свой ход (confirm-first): применяем к копии, пишем на сервер и лишь при
  * успехе делаем копию текущим стейтом. Оригинал не трогаем — при ошибке выбор игрока
@@ -157,20 +182,15 @@ export async function sendMove(cand: Candidate): Promise<void> {
   sending = true;
   pendingCand = cand;
   setMoveSendState('sending');
-  const base = game;
-  const next = cloneState(game);
-  applyMove(next, cand);
   try {
-    await session.pushMove(next);
+    const r = await confirmFirst(game, (next) => applyMove(next, cand));
     sending = false;
     pendingCand = null;
     setMoveSendState('idle');
-    if (deps.state.game !== base) return; // авторитетный стейт уже применился
-    deps.setGame(next);
-    commitOnline();
+    if (r === 'applied') commitOnline();
   } catch {
     sending = false;
-    if (deps.state.game !== base) {
+    if (deps.state.game !== game) {
       pendingCand = null;
       setMoveSendState('idle');
       return;
@@ -200,16 +220,11 @@ export async function sendRetire(): Promise<void> {
   if (!me || isFinished(me) || me.retired) return; // уже финишировал/сошёл
   sending = true;
   setMoveSendState('sending');
-  const base = game;
-  const next = cloneState(game);
-  retireSeat(next, seat);
   try {
-    await session.pushMove(next);
+    const r = await confirmFirst(game, (next) => retireSeat(next, seat));
     sending = false;
     setMoveSendState('idle');
-    if (deps.state.game !== base) return; // авторитетный стейт уже применился
-    deps.setGame(next);
-    commitOnline();
+    if (r === 'applied') commitOnline();
   } catch {
     sending = false;
     setMoveSendState('idle');
@@ -363,13 +378,9 @@ function autoSkip(seat: number): void {
 async function applySkip(game: GameState): Promise<void> {
   if (skipSending) return;
   skipSending = true;
-  const next = cloneState(game);
-  coastMove(next);
   try {
-    await session.pushMove(next);
-    if (deps.state.game === game) {
-      // Эхо ещё не пришло — применяем сами; иначе авторитетный стейт уже на месте.
-      deps.setGame(next);
+    const r = await confirmFirst(game, (next) => coastMove(next));
+    if (r === 'applied') {
       clearTurnWatch(); // сбросить skipVisible/countdown до перерисовки панели
       commitOnline();
     }
@@ -418,15 +429,14 @@ async function runBotMove(seat: number): Promise<void> {
     return;
   botSending = true;
   const nav = deps.state.raceNav;
-  const next = cloneState(game);
-  const cand = nav ? chooseMove(next, nav, game.players[seat].bot!) : null;
-  if (cand) applyMove(next, cand);
-  else coastMove(next);
   try {
-    await session.pushMove(next);
-    if (deps.state.game === game) {
-      // Эхо ещё не пришло — применяем сами; иначе авторитетный стейт уже на месте.
-      deps.setGame(next);
+    const r = await confirmFirst(game, (next) => {
+      // Нет хода/нет nav → пас по инерции. cand считаем на копии внутри mutate.
+      const cand = nav ? chooseMove(next, nav, game.players[seat].bot!) : null;
+      if (cand) applyMove(next, cand);
+      else coastMove(next);
+    });
+    if (r === 'applied') {
       clearTurnWatch(); // сбросить skipVisible/countdown до перерисовки панели
       commitOnline();
     }
