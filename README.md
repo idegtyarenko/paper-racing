@@ -31,6 +31,15 @@ npm run dev        # локальный dev-сервер
 Для онлайн-режима скопируй `.env.example` → `.env` и подставь ключи своего проекта Supabase. Без них сборка проходит и локальная игра работает — просто скрыты онлайн-входы.
 
 ```bash
-npm run build      # typecheck + тесты + прод-сборка
-npm run test       # только тесты
+npm run build       # typecheck + тесты + прод-сборка
+npm run preview     # предпросмотр прод-сборки
+
+npm run test        # тесты (vitest, разовый прогон)
+npm run test:watch  # тесты в watch-режиме
+npm run typecheck   # только проверка типов (tsc --noEmit)
+
+npm run format      # отформатировать всё (prettier)
+npm run format:check # проверить форматирование без правок
+npm run typo        # расставить неразрывные пробелы в строках UI (src/strings.ts)
+npm run typo:check  # проверить неразрывные пробелы без правок
 ```
