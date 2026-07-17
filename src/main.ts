@@ -2,7 +2,7 @@
 // зависимостей ввода/онлайна/кнопок. Сами жесты указателя живут в input.ts.
 
 import './ui/styles/index.css';
-import { Track, finalizeTrack } from './model/track';
+import { Track, finalizeTrack, clipFinishLine } from './model/track';
 import { newEditor, stepBack, confirmEdges } from './model/editor';
 import {
   GameState,
@@ -665,24 +665,29 @@ initPwa();
 // проверяется `npm run build` + grep по dist. Пользователю не видны.
 if (import.meta.env.DEV) {
   // Готовая прямоугольная трасса-«бублик»: дорога — рамка между внешним и
-  // внутренним прямоугольниками, финиш поперёк нижней прямой, гонка в +x.
+  // внутренним прямоугольниками, финиш поперёк НИЖНЕЙ прямой, гонка в +x.
+  // Финиш строится так же, как в редакторе, — коротким штрихом поперёк дороги,
+  // обрезанным по кромкам через `clipFinishLine` (концы вынесены за кромки на
+  // 0.25). Так фикстура остаётся реально рисуемой мастером: линия пересекает всю
+  // ширину дороги от кромки до кромки (y=0 внешняя → y=8 внутренняя), а не
+  // обрывается посередине, как раньше на ЛЕВОЙ прямой (x=6, где дорога тянется
+  // до y=24, а линия доходила лишь до y=8).
   const devTrack = (): Track => {
-    const res = finalizeTrack(
-      [
-        { x: 0, y: 0 },
-        { x: 40, y: 0 },
-        { x: 40, y: 24 },
-        { x: 0, y: 24 },
-      ],
-      [
-        { x: 8, y: 8 },
-        { x: 32, y: 8 },
-        { x: 32, y: 16 },
-        { x: 8, y: 16 },
-      ],
-      { a: { x: 6, y: 0 }, b: { x: 6, y: 8 } },
-      { x: 1, y: 0 },
-    );
+    const outer = [
+      { x: 0, y: 0 },
+      { x: 40, y: 0 },
+      { x: 40, y: 24 },
+      { x: 0, y: 24 },
+    ];
+    const inner = [
+      { x: 8, y: 8 },
+      { x: 32, y: 8 },
+      { x: 32, y: 16 },
+      { x: 8, y: 16 },
+    ];
+    const fin = clipFinishLine({ x: 20, y: 3 }, { x: 20, y: 5 }, outer, inner);
+    if ('error' in fin) throw new Error(`dev finish invalid: ${fin.error}`);
+    const res = finalizeTrack(outer, inner, fin.finish, { x: 1, y: 0 });
     if ('error' in res) throw new Error(`dev track invalid: ${res.error}`);
     return res.track;
   };
@@ -715,20 +720,35 @@ if (import.meta.env.DEV) {
       startRace(humans, bots, difficulty);
       return snap();
     },
+    /** Живая гонка, придвинутая к финишу: всем (людям и ботам) выставляется
+     *  crossings = WIN−laps, позиции не трогаем (болиды остаются на стартовой
+     *  решётке за линией). При laps=1 первое же пересечение финиша побеждает —
+     *  удобно доиграть концовку вручную (расстановка мест, заморозка порядка,
+     *  переход в phase='over', win-экран), не наматывая круги. */
+    nearFinish(humans = 1, bots = 1, laps = 1, difficulty: Difficulty = 'medium') {
+      raceTrack = devTrack();
+      startRace(humans, bots, difficulty);
+      for (const p of game!.players) p.crossings = WIN_CROSSINGS - laps;
+      refreshCands();
+      updateUI();
+      redraw();
+      return snap();
+    },
     /** Гонка, где человек (seat 0) в одном ходе от победы: crossings = WIN−1, стоит
-     *  перед линией финиша с инерцией (2,0) сквозь неё; соперники убраны в сторону,
-     *  чтобы не мешать и не финишировать. После tapAccel(0,0) человек побеждает, но
-     *  place ещё null (идёт доигровка раунда) — это и есть «окно финиша», в котором
-     *  финишёру НЕ должен предлагаться ход. */
+     *  на нижней прямой перед линией финиша (x=20) с инерцией (2,0) сквозь неё
+     *  (18→20); соперники убраны на верхнюю прямую, чтобы не мешать и не
+     *  финишировать. После tapAccel(0,0) человек побеждает, но place ещё null (идёт
+     *  доигровка раунда) — это и есть «окно финиша», в котором финишёру НЕ должен
+     *  предлагаться ход. */
     raceAtWin(bots = 1, difficulty: Difficulty = 'medium') {
       raceTrack = devTrack();
       startRace(1, bots, difficulty);
       const h = game!.players[0];
       h.crossings = WIN_CROSSINGS - 1;
-      h.pos = { x: 4, y: 2 };
+      h.pos = { x: 18, y: 4 };
       h.vel = { x: 2, y: 0 };
       for (let i = 1; i < game!.players.length; i++) {
-        game!.players[i].pos = { x: 20, y: 4 }; // в стороне, не блокируют финиш
+        game!.players[i].pos = { x: 16, y: 20 }; // верхняя прямая, не блокируют финиш
       }
       refreshCands();
       updateUI();
