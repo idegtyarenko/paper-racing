@@ -9,6 +9,8 @@
     "test:watch": "vitest",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "typo": "node scripts/typography.mjs",
+    "typo:check": "node scripts/typography.mjs --check",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

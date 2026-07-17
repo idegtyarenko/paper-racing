@@ -22,7 +22,7 @@ export default defineConfig({
   },
   // Юнит-тесты покрывают только чистое детерминированное ядро (model, geometry).
   test: {
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'scripts/**/*.test.mjs'],
     environment: 'node',
   },
   plugins: [
