@@ -452,6 +452,7 @@ export function netTurn(game: GameState | null): NetTurn | null {
     // Бот-места всегда «в сети» (их ведёт хост) — не помечаем их офлайном.
     present: game.players.map((p, i) => !!p.bot || session.isPresent(i)),
     code: session.getCode() ?? '',
+    isHost: session.isHost(),
   };
 }
 
@@ -580,9 +581,16 @@ const handlers: OnlineHandlers = {
     // «запомнить/забыть» по авторитетному стейту — вызывается на каждый applyRow.
     if (g.phase === 'over') forgetSession();
     else rememberSession(session.getCode()!);
+    // Рематч: свежая гонка прилетела поверх экрана итогов. Хост режим race не покидал,
+    // поэтому обычный переход ниже (mode !== 'race') не сработает — ловим over→race
+    // отдельно, чтобы закрыть диалог/баннер победителя и заново вписать поле.
+    const wasOver = deps.getGame()?.phase === 'over';
     deps.setGame(g);
     if (deps.getMode() !== 'race') {
       deps.setMode('race');
+      closeOverlay();
+      deps.fitToContent();
+    } else if (wasOver && g.phase === 'race') {
       closeOverlay();
       deps.fitToContent();
     }
@@ -680,6 +688,37 @@ function joinOnline(code: string, name: string, inJoinDialog: boolean): Promise<
 }
 
 /**
+ * Собрать стартовый стейт онлайн-гонки из текущего ростера и host-local конфигурации
+ * ботов. Общий для старта из лобби (startOnline) и рематча (rematchOnline) — состав
+ * тот же (те же люди + те же боты), меняется лишь случайная раздача стартовых клеток.
+ * Стартовые клетки раздаём случайной перестановкой среди всех участников. Это делает
+ * только хост, результат уезжает в сериализованном стейте (гости players не
+ * пересобирают), поэтому одинаковый сид у клиентов не нужен.
+ */
+function buildStartState(raceTrack: Track): GameState {
+  const roster = session.getRoster();
+  const humans = roster.length;
+  const bots = Math.min(lobbyBots, freeSeats());
+  const g = newGame(
+    raceTrack,
+    humans + bots,
+    deps.getRules(),
+    shuffledIndices(humans + bots),
+  );
+  roster.forEach((r, i) => {
+    if (g.players[i]) g.players[i].name = r.name;
+  });
+  // Досадить ботов в замыкающие свободные места (после реальных игроков): их
+  // бот-ность едет в стейте (Player.bot), гости получат их обычным синком, а ходы
+  // считает только хост (scheduleBotMove).
+  for (let i = humans; i < g.players.length; i++) {
+    g.players[i].bot = lobbyBotDifficulty;
+    g.players[i].name = `${strings.aiSelect.botPrefix} ${g.players[i].name}`;
+  }
+  return g;
+}
+
+/**
  * Хост стартует онлайн-гонку (confirm-first): строит стейт, сначала пишет его на
  * сервер и только при успехе входит в гонку. При ошибке остаёмся в лобби — «Начать
  * игру» снова активна, гости ничего не увидели (записи не было).
@@ -688,28 +727,7 @@ function startOnline(): Promise<void> {
   return guarded(async () => {
     const raceTrack = deps.getRaceTrack();
     if (!raceTrack || !session.canStart()) return;
-    const roster = session.getRoster();
-    const humans = roster.length;
-    const bots = Math.min(lobbyBots, freeSeats());
-    // Стартовые клетки раздаём случайной перестановкой среди всех участников.
-    // Это делает только хост, результат уезжает в сериализованном стейте (гости
-    // players не пересобирают), поэтому одинаковый сид у клиентов не нужен.
-    const g = newGame(
-      raceTrack,
-      humans + bots,
-      deps.getRules(),
-      shuffledIndices(humans + bots),
-    );
-    roster.forEach((r, i) => {
-      if (g.players[i]) g.players[i].name = r.name;
-    });
-    // Досадить ботов в замыкающие свободные места (после реальных игроков): их
-    // бот-ность едет в стейте (Player.bot), гости получат их обычным синком, а ходы
-    // считает только хост (scheduleBotMove).
-    for (let i = humans; i < g.players.length; i++) {
-      g.players[i].bot = lobbyBotDifficulty;
-      g.players[i].name = `${strings.aiSelect.botPrefix} ${g.players[i].name}`;
-    }
+    const g = buildStartState(raceTrack);
     setLobbyStarting(true);
     try {
       await session.start(g);
@@ -727,6 +745,46 @@ function startOnline(): Promise<void> {
       showToast(strings.online.startFailed);
     } finally {
       setLobbyStarting(false);
+    }
+  });
+}
+
+/** Может ли этот клиент запустить рематч: он хост, гонка окончена — тогда одним тапом
+ *  переигрываем на той же трассе тем же составом (кнопка «🔄 Рематч» на экране итогов). */
+export function canRematch(): boolean {
+  const game = deps.getGame();
+  return session.isHost() && !!game && game.phase === 'over';
+}
+
+/**
+ * Хост запускает рематч на той же трассе тем же составом (после онлайн-гонки).
+ * Переиспользуем ту же комнату: строим свежий стейт из текущего ростера + host-local
+ * ботов и пишем его в существующую строку игры (status over→race). Все клиенты, всё
+ * ещё подписанные на канал, получат его обычным onGameState и провалятся в новую
+ * гонку — без нового кода, без перезахода в лобби. При ошибке остаёмся на экране
+ * итогов (записи не было — гости ничего не увидели).
+ */
+function rematchOnline(): Promise<void> {
+  return guarded(async () => {
+    const raceTrack = deps.getRaceTrack();
+    if (!raceTrack || !canRematch()) return;
+    const g = buildStartState(raceTrack);
+    try {
+      await session.start(g);
+      // Хост не покидал режим race на финише — эхо собственной записи придёт через
+      // onGameState с переходом over→race и там переведёт нас в новую гонку. Если эхо
+      // задержится, подстрахуемся тем же путём, что startOnline.
+      if (deps.getGame()?.phase === 'over') {
+        deps.setGame(g);
+        closeOverlay();
+        deps.fitToContent();
+        deps.refreshCands();
+        deps.updateUI();
+        deps.redraw();
+        armTurnWatch();
+      }
+    } catch {
+      showToast(strings.online.startFailed);
     }
   });
 }
@@ -855,6 +913,9 @@ export function promptResume(): void {
 
 export function start(): void {
   startOnline();
+}
+export function rematch(): void {
+  rematchOnline();
 }
 export function leave(): void {
   leaveLobby();
