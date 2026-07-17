@@ -115,20 +115,28 @@ export function playerForTurn(turn: number, n: number): number {
   return (round + seat) % n;
 }
 
+/** Слот очереди ходов: чей ход и в каком круге он состоится. */
+export interface UpcomingSlot {
+  /** Индекс игрока (seat), который ходит в этом слоте. */
+  seat: number;
+  /** Номер круга слота (floor(turn / n)) — для группировки очереди по кругам в UI. */
+  round: number;
+}
+
 /**
- * Очередь ближайших ходов: индексы игроков, которые реально будут ходить,
- * начиная с текущего (первый элемент — state.current). count — сколько ходов
- * вернуть. Учитывает штрафные пропуски (болид в гравии не появляется в очереди,
- * пока не отбудет штраф) и доигровку решающего круга (finalTurnsLeft ограничивает
- * число оставшихся слотов) — ровно как afterAction. Прогноз детерминирован и верен
- * в предположении, что новых аварий не случится: каждый слот продвигает turn на 1,
- * слот игрока в боксах «сгорает» на отбытие штрафа и хода не даёт. Прошлые ходы не
- * восстанавливаются (журнала ходов нет) — очередь смотрит только вперёд.
+ * Очередь ближайших ходов со слотами (seat + номер круга), начиная с текущего
+ * (первый элемент — state.current). count — сколько ходов вернуть. Учитывает
+ * штрафные пропуски (болид в гравии не появляется в очереди, пока не отбудет штраф)
+ * и доигровку решающего круга (finalTurnsLeft ограничивает число оставшихся слотов) —
+ * ровно как afterAction. Прогноз детерминирован и верен в предположении, что новых
+ * аварий не случится: каждый слот продвигает turn на 1, слот игрока в боксах
+ * «сгорает» на отбытие штрафа и хода не даёт. Прошлые ходы не восстанавливаются
+ * (журнала ходов нет) — очередь смотрит только вперёд.
  */
-export function upcomingTurns(state: GameState, count: number): number[] {
+export function upcomingSlots(state: GameState, count: number): UpcomingSlot[] {
   const n = state.players.length;
   const skips = state.players.map((p) => p.skipTurns);
-  const out: number[] = [];
+  const out: UpcomingSlot[] = [];
   let turn = state.turn;
   let slotsLeft = state.finalTurnsLeft; // null — раунд не идёт, слотов не ограничено
   while (out.length < count && (slotsLeft === null || slotsLeft > 0)) {
@@ -139,12 +147,17 @@ export function upcomingTurns(state: GameState, count: number): number[] {
     } else if (skips[seat] > 0) {
       skips[seat] -= 1; // слот сгорает на отбытие штрафа
     } else {
-      out.push(seat);
+      out.push({ seat, round: Math.floor(turn / n) });
     }
     turn += 1;
     if (slotsLeft !== null) slotsLeft -= 1;
   }
   return out;
+}
+
+/** Индексы игроков ближайших ходов (без номеров кругов) — см. upcomingSlots. */
+export function upcomingTurns(state: GameState, count: number): number[] {
+  return upcomingSlots(state, count).map((s) => s.seat);
 }
 
 /**
