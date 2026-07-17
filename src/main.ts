@@ -612,7 +612,7 @@ try {
   const BUILD_KEY = 'pr-build';
   const seen = localStorage.getItem(BUILD_KEY);
   if (seen && seen !== __COMMIT__) {
-    showToast(`Обновлено до ${__COMMIT__}`, 3000);
+    showToast(strings.race.updated, 3000);
   }
   localStorage.setItem(BUILD_KEY, __COMMIT__);
 } catch {
