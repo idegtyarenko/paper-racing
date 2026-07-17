@@ -12,6 +12,8 @@ import {
   normalizeRules,
   newGame,
   shuffledIndices,
+  isFinished,
+  WIN_CROSSINGS,
 } from './model/game';
 import { candidatesForSeat, applyMove, coastMove, retireSeat } from './model/turns';
 import { Difficulty, chooseMove } from './model/ai';
@@ -145,7 +147,7 @@ function preselectSeat(): number {
   const seat = session.active() ? session.mySeat() : soloHumanSeat();
   if (seat < 0) return -1;
   const p = game.players[seat];
-  if (p.place !== null || p.retired || p.skipTurns !== 0) return -1;
+  if (isFinished(p) || p.retired || p.skipTurns !== 0) return -1;
   return seat;
 }
 
@@ -177,7 +179,7 @@ function localHumanSeat(): number {
 function canRetire(): boolean {
   if (!game || mode !== 'race' || game.phase !== 'race') return false;
   const seat = localHumanSeat();
-  return seat >= 0 && game.players[seat].place === null && !game.players[seat].retired;
+  return seat >= 0 && !isFinished(game.players[seat]) && !game.players[seat].retired;
 }
 
 function updateUI(): void {
@@ -689,6 +691,9 @@ if (import.meta.env.DEV) {
         bot: p.bot ?? null,
         place: p.place,
         pos: p.pos,
+        vel: p.vel,
+        crossings: p.crossings,
+        finished: isFinished(p),
       })) ?? null,
     lastLocalRace,
     // Предвыбор: место-владелец веера, число кандидатов и текущая наметка.
@@ -702,6 +707,26 @@ if (import.meta.env.DEV) {
     race(humans = 1, bots = 1, difficulty: Difficulty = 'medium') {
       raceTrack = devTrack();
       startRace(humans, bots, difficulty);
+      return snap();
+    },
+    /** Гонка, где человек (seat 0) в одном ходе от победы: crossings = WIN−1, стоит
+     *  перед линией финиша с инерцией (2,0) сквозь неё; соперники убраны в сторону,
+     *  чтобы не мешать и не финишировать. После tapAccel(0,0) человек побеждает, но
+     *  place ещё null (идёт доигровка раунда) — это и есть «окно финиша», в котором
+     *  финишёру НЕ должен предлагаться ход. */
+    raceAtWin(bots = 1, difficulty: Difficulty = 'medium') {
+      raceTrack = devTrack();
+      startRace(1, bots, difficulty);
+      const h = game!.players[0];
+      h.crossings = WIN_CROSSINGS - 1;
+      h.pos = { x: 4, y: 2 };
+      h.vel = { x: 2, y: 0 };
+      for (let i = 1; i < game!.players.length; i++) {
+        game!.players[i].pos = { x: 20, y: 4 }; // в стороне, не блокируют финиш
+      }
+      refreshCands();
+      updateUI();
+      redraw();
       return snap();
     },
     /** Готовая трасса → экран выбора режима (минуя рисование). */

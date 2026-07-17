@@ -13,6 +13,7 @@ import {
   shuffledIndices,
   cloneState,
   seatColor,
+  isFinished,
 } from '../model/game';
 import { coastMove, applyMove, retireSeat } from '../model/turns';
 import { NavField } from '../model/nav';
@@ -201,7 +202,7 @@ export async function sendRetire(): Promise<void> {
   if (!game || game.phase !== 'race' || sending) return;
   const seat = session.mySeat();
   const me = game.players[seat];
-  if (!me || me.place !== null || me.retired) return; // уже финишировал/сошёл
+  if (!me || isFinished(me) || me.retired) return; // уже финишировал/сошёл
   sending = true;
   setMoveSendState('sending');
   const base = game;
@@ -283,7 +284,7 @@ function pruneAbsentLobby(): void {
  */
 function iAmActive(game: GameState): boolean {
   const me = game.players[session.mySeat()];
-  return !!me && me.place === null && !me.retired;
+  return !!me && !isFinished(me) && !me.retired;
 }
 
 /** Пересчитать слежение за текущим ходом. Зовётся на каждый стейт и presence-событие. */

@@ -7,6 +7,7 @@ import {
   shuffledIndices,
   cloneState,
   returnFromPenalty,
+  isFinished,
   WIN_CROSSINGS,
 } from './game';
 import { CRASH_PENALTY_MAX } from '../config';
@@ -118,6 +119,28 @@ describe('returnFromPenalty — пересечение финиша телепо
     returnFromPenalty(g, 0);
     expect(g.players[0].crossings).toBe(WIN_CROSSINGS);
     expect(g.players[0].finishOvershoot).toBe(1); // sideOfFinish(7,1) = 1
+  });
+});
+
+describe('isFinished — окно «пересёк финиш, но место ещё не присвоено»', () => {
+  it('активный болид не считается финишировавшим', () => {
+    const g = newGame(ringTrack(), 2);
+    expect(isFinished(g.players[0])).toBe(false);
+  });
+
+  it('пересёкший финиш (finishOvershoot есть, place ещё null) уже финишировал', () => {
+    // Ровно окно доигровки раунда: resolveRound ещё не проставил place.
+    const g = newGame(ringTrack(), 2);
+    g.players[0].crossings = WIN_CROSSINGS;
+    g.players[0].finishOvershoot = 1;
+    expect(g.players[0].place).toBeNull();
+    expect(isFinished(g.players[0])).toBe(true);
+  });
+
+  it('получивший место — финишировал', () => {
+    const g = newGame(ringTrack(), 2);
+    g.players[0].place = 1;
+    expect(isFinished(g.players[0])).toBe(true);
   });
 });
 
