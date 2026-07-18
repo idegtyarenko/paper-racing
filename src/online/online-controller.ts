@@ -298,7 +298,11 @@ function iAmActive(game: GameState): boolean {
 function armTurnWatch(): void {
   clearTurnWatch();
   const game = deps.state.game;
-  if (!session.active() || !game || game.phase !== 'race') return;
+  // mode-гейт (как у scheduleAiMove): presence-событие в лобби зовёт armTurnWatch, но
+  // прошлая гонка могла остаться в S.game с phase 'race' (создание нового лобби её не
+  // чистит) — без проверки режима в лобби всплывала бы кнопка-таймер чужого/своего хода.
+  if (!session.active() || !game || game.phase !== 'race' || deps.state.mode !== 'race')
+    return;
   const cur = game.current;
 
   // Ход бота считает и коммитит только хост; гости просто ждут его pushMove как
