@@ -356,111 +356,67 @@
       </div>
       <div id="settingsSheet" class="sheet" hidden>
         <h2 class="sheet__title" data-i18n="settings.title"></h2>
-        <div class="setting">
-          <div class="setting__labelrow">
-            <span class="setting__label" data-i18n="settings.driveLabel"></span>
-          </div>
-          <div id="driveMode" class="seg">
-            <button
-              type="button"
-              class="seg__btn"
-              data-mode="realistic"
-              data-i18n="settings.driveModeRealistic"
-            ></button>
-            <button
-              type="button"
-              class="seg__btn"
-              data-mode="classic"
-              data-i18n="settings.driveModeClassic"
-            ></button>
-            <button
-              type="button"
-              class="seg__btn"
-              data-mode="custom"
-              data-i18n="settings.driveModeCustom"
-            ></button>
-          </div>
-          <p id="driveExplain" class="setting__hint"></p>
-          <div id="driveSliders" hidden>
-            <div class="setting__head">
-              <span class="setting__label" data-i18n="settings.driveAccel"></span>
-              <span id="accelValue" class="setting__value"></span>
-            </div>
-            <input id="accelSlider" class="slider" type="range" />
-            <div class="setting__head">
-              <span class="setting__label" data-i18n="settings.driveBrake"></span>
-              <span id="brakeValue" class="setting__value"></span>
-            </div>
-            <input id="brakeSlider" class="slider" type="range" />
-            <div class="setting__head">
-              <span class="setting__label" data-i18n="settings.driveManeuver"></span>
-              <span id="maneuverValue" class="setting__value"></span>
-            </div>
-            <input id="maneuverSlider" class="slider" type="range" />
-          </div>
-          <canvas id="drivePreview" class="drive-preview"></canvas>
+        <div id="settingsTabs" class="seg seg--tabs">
+          <button
+            type="button"
+            class="seg__btn"
+            data-tab="drive"
+            data-i18n="settings.tabDrive"
+          ></button>
+          <button
+            type="button"
+            class="seg__btn"
+            data-tab="rules"
+            data-i18n="settings.tabRules"
+          ></button>
         </div>
-        <div class="setting__divider"></div>
-        <div class="setting">
-          <div class="setting__labelrow">
-            <span class="setting__label" data-i18n="settings.penaltyLabel"></span>
-            <button
-              type="button"
-              class="setting__help"
-              aria-expanded="false"
-              data-i18n-aria-label="settings.helpLabel"
-            >
-              ?
-            </button>
-          </div>
-          <p class="setting__hint" data-i18n="settings.penaltyHint" hidden></p>
-          <div id="penaltyType" class="seg seg--stack">
-            <button
-              type="button"
-              class="seg__btn"
-              data-penalty="dynamic"
-              data-i18n="settings.dynamic"
-            ></button>
-            <button
-              type="button"
-              class="seg__btn"
-              data-penalty="static"
-              data-i18n="settings.static"
-            ></button>
+        <div id="driveTab">
+          <div class="setting">
+            <div id="driveMode" class="seg">
+              <button
+                type="button"
+                class="seg__btn"
+                data-mode="realistic"
+                data-i18n="settings.driveModeRealistic"
+              ></button>
+              <button
+                type="button"
+                class="seg__btn"
+                data-mode="classic"
+                data-i18n="settings.driveModeClassic"
+              ></button>
+              <button
+                type="button"
+                class="seg__btn"
+                data-mode="custom"
+                data-i18n="settings.driveModeCustom"
+              ></button>
+            </div>
+            <p id="driveExplain" class="setting__hint"></p>
+            <div id="driveSliders" hidden>
+              <div class="setting__head">
+                <span class="setting__label" data-i18n="settings.driveAccel"></span>
+                <span id="accelValue" class="setting__value"></span>
+              </div>
+              <input id="accelSlider" class="slider" type="range" />
+              <div class="setting__head">
+                <span class="setting__label" data-i18n="settings.driveBrake"></span>
+                <span id="brakeValue" class="setting__value"></span>
+              </div>
+              <input id="brakeSlider" class="slider" type="range" />
+              <div class="setting__head">
+                <span class="setting__label" data-i18n="settings.driveManeuver"></span>
+                <span id="maneuverValue" class="setting__value"></span>
+              </div>
+              <input id="maneuverSlider" class="slider" type="range" />
+            </div>
+            <canvas id="drivePreview" class="drive-preview"></canvas>
           </div>
         </div>
-        <div id="exponentRow" class="setting">
-          <div class="setting__labelrow">
-            <span class="setting__label" data-i18n="settings.exponentLabel"></span>
-            <button
-              type="button"
-              class="setting__help"
-              aria-expanded="false"
-              data-i18n-aria-label="settings.helpLabel"
-            >
-              ?
-            </button>
-          </div>
-          <p class="setting__hint" data-i18n="settings.exponentHint" hidden></p>
-          <div id="exponentType" class="seg">
-            <button
-              type="button"
-              class="seg__btn"
-              data-exponent="standard"
-              data-i18n="settings.exponentStandard"
-            ></button>
-            <button
-              type="button"
-              class="seg__btn"
-              data-exponent="strict"
-              data-i18n="settings.exponentStrict"
-            ></button>
-          </div>
-        </div>
-        <div id="staticRow" class="setting">
-          <div class="setting__head">
+        <div id="rulesTab" hidden>
+          <div class="setting">
             <div class="setting__labelrow">
-              <span class="setting__label" data-i18n="settings.staticTurnsLabel"></span>
+              <span class="setting__label" data-i18n="settings.penaltyLabel"></span>
               <button
                 type="button"
                 class="setting__help"
@@ -470,50 +426,115 @@
                 ?
               </button>
             </div>
-            <span id="staticTurnsValue" class="setting__value"></span>
+            <p class="setting__hint" data-i18n="settings.penaltyHint" hidden></p>
+            <div id="penaltyType" class="seg seg--stack">
+              <button
+                type="button"
+                class="seg__btn"
+                data-penalty="dynamic"
+                data-i18n="settings.dynamic"
+              ></button>
+              <button
+                type="button"
+                class="seg__btn"
+                data-penalty="static"
+                data-i18n="settings.static"
+              ></button>
+            </div>
           </div>
-          <p class="setting__hint" data-i18n="settings.staticTurnsHint" hidden></p>
-          <input id="staticSlider" class="slider" type="range" min="1" max="8" step="1" />
-          <div class="slider__scale"><span>1</span><span>8</span></div>
-        </div>
-        <div id="turnLimitRow" class="setting">
-          <div class="setting__labelrow">
-            <span class="setting__label" data-i18n="settings.turnLimitLabel"></span>
-            <button
-              type="button"
-              class="setting__help"
-              aria-expanded="false"
-              data-i18n-aria-label="settings.helpLabel"
-            >
-              ?
-            </button>
+          <div id="exponentRow" class="setting">
+            <div class="setting__labelrow">
+              <span class="setting__label" data-i18n="settings.exponentLabel"></span>
+              <button
+                type="button"
+                class="setting__help"
+                aria-expanded="false"
+                data-i18n-aria-label="settings.helpLabel"
+              >
+                ?
+              </button>
+            </div>
+            <p class="setting__hint" data-i18n="settings.exponentHint" hidden></p>
+            <div id="exponentType" class="seg">
+              <button
+                type="button"
+                class="seg__btn"
+                data-exponent="standard"
+                data-i18n="settings.exponentStandard"
+              ></button>
+              <button
+                type="button"
+                class="seg__btn"
+                data-exponent="strict"
+                data-i18n="settings.exponentStrict"
+              ></button>
+            </div>
           </div>
-          <p class="setting__hint" data-i18n="settings.turnLimitHint" hidden></p>
-          <div id="turnLimitType" class="seg">
-            <button
-              type="button"
-              class="seg__btn"
-              data-limit="30000"
-              data-i18n="settings.limit30s"
-            ></button>
-            <button
-              type="button"
-              class="seg__btn"
-              data-limit="60000"
-              data-i18n="settings.limit1m"
-            ></button>
-            <button
-              type="button"
-              class="seg__btn"
-              data-limit="120000"
-              data-i18n="settings.limit2m"
-            ></button>
-            <button
-              type="button"
-              class="seg__btn"
-              data-limit="300000"
-              data-i18n="settings.limit5m"
-            ></button>
+          <div id="staticRow" class="setting">
+            <div class="setting__head">
+              <div class="setting__labelrow">
+                <span class="setting__label" data-i18n="settings.staticTurnsLabel"></span>
+                <button
+                  type="button"
+                  class="setting__help"
+                  aria-expanded="false"
+                  data-i18n-aria-label="settings.helpLabel"
+                >
+                  ?
+                </button>
+              </div>
+              <span id="staticTurnsValue" class="setting__value"></span>
+            </div>
+            <p class="setting__hint" data-i18n="settings.staticTurnsHint" hidden></p>
+            <input
+              id="staticSlider"
+              class="slider"
+              type="range"
+              min="1"
+              max="8"
+              step="1"
+            />
+            <div class="slider__scale"><span>1</span><span>8</span></div>
+          </div>
+          <div id="turnLimitRow" class="setting">
+            <div class="setting__labelrow">
+              <span class="setting__label" data-i18n="settings.turnLimitLabel"></span>
+              <button
+                type="button"
+                class="setting__help"
+                aria-expanded="false"
+                data-i18n-aria-label="settings.helpLabel"
+              >
+                ?
+              </button>
+            </div>
+            <p class="setting__hint" data-i18n="settings.turnLimitHint" hidden></p>
+            <div id="turnLimitType" class="seg">
+              <button
+                type="button"
+                class="seg__btn"
+                data-limit="30000"
+                data-i18n="settings.limit30s"
+              ></button>
+              <button
+                type="button"
+                class="seg__btn"
+                data-limit="60000"
+                data-i18n="settings.limit1m"
+              ></button>
+              <button
+                type="button"
+                class="seg__btn"
+                data-limit="120000"
+                data-i18n="settings.limit2m"
+              ></button>
+              <button
+                type="button"
+                class="seg__btn"
+                data-limit="300000"
+                data-i18n="settings.limit5m"
+              ></button>
+            </div>
           </div>
         </div>
         <button

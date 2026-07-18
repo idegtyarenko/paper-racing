@@ -19,6 +19,9 @@ import { strings } from '../strings';
 import { bindTap, openSheet } from './dom';
 
 const sheet = document.getElementById('settingsSheet')!;
+const settingsTabs = document.getElementById('settingsTabs')!;
+const driveTab = document.getElementById('driveTab')!;
+const rulesTab = document.getElementById('rulesTab')!;
 const driveMode = document.getElementById('driveMode')!;
 const driveExplain = document.getElementById('driveExplain')!;
 const driveSliders = document.getElementById('driveSliders')!;
@@ -39,6 +42,7 @@ const turnLimitRow = document.getElementById('turnLimitRow')!;
 const turnLimitType = document.getElementById('turnLimitType')!;
 
 type DriveMode = 'realistic' | 'classic' | 'custom';
+type SettingsTab = 'drive' | 'rules';
 
 /** Показатель степени, соответствующий выбору сегмента строгости. */
 const exponentOf = (kind: string): number =>
@@ -62,9 +66,21 @@ let rules: Rules;
 let mode: DriveMode = 'realistic';
 let onChange: ((r: Rules) => void) | null = null;
 let online = false;
+// Какая вкладка листа открыта («Управляемость»/«Правила»). Локально, в Rules не хранится.
+let activeTab: SettingsTab = 'drive';
+
+/** Показать активную вкладку: переключить видимость групп и подсветку кнопок-табов. */
+function applyTab(): void {
+  driveTab.hidden = activeTab !== 'drive';
+  rulesTab.hidden = activeTab !== 'rules';
+  settingsTabs.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
+    btn.classList.toggle('seg__btn--active', btn.dataset.tab === activeTab);
+  });
+}
 
 /** Обновить вид контролов под текущие rules (активные сегменты, значения, видимость строк). */
 function render(): void {
+  applyTab();
   driveMode.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
     btn.classList.toggle('seg__btn--active', btn.dataset.mode === mode);
   });
@@ -230,6 +246,7 @@ export function openSettings(
   mode = driveModeOf(rules.drive);
   online = isOnline;
   onChange = onChangeCb;
+  activeTab = 'drive'; // лист всегда открывается на «Управляемости»
   render();
   openSheet(sheet);
   // Первый render шёл при скрытом листе (нулевая ширина канваса) — перерисуем превью,
@@ -244,6 +261,15 @@ export function bindSettings(): void {
     el.max = String(DRIVE_MAX);
     el.step = String(DRIVE_STEP);
   }
+  settingsTabs.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
+    bindTap(btn, () => {
+      activeTab = btn.dataset.tab as SettingsTab;
+      applyTab();
+      // Возврат на «Управляемость»: канвас мог лежать скрытым (нулевая ширина) —
+      // перерисуем превью, когда он снова видим (как в openSettings).
+      if (activeTab === 'drive') requestAnimationFrame(() => drawPreview());
+    });
+  });
   // Кнопки-подсказки «?»: тап раскрывает/прячет пояснение в своей строке настройки.
   sheet.querySelectorAll<HTMLButtonElement>('.setting__help').forEach((btn) => {
     const hint = btn.closest('.setting')!.querySelector<HTMLElement>('.setting__hint')!;
