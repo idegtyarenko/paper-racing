@@ -23,9 +23,7 @@ import {
   WHEEL_FACTOR,
   DOUBLE_TAP_MS,
   DOUBLE_TAP_SLOP_PX,
-  DOUBLE_TAP_ZOOM,
-  SCALE_DEFAULT,
-  SCALE_MAX,
+  DOUBLE_TAP_DRAG_PX_PER_2X,
 } from '../config';
 
 /**
@@ -119,7 +117,7 @@ type Gesture =
   | { kind: 'finish'; downX: number; downY: number } // тап-финиш; драг → пан
   | { kind: 'aim' } // тач-прицеливание в гонке (лупа)
   | { kind: 'move'; cand: Candidate; downX: number; downY: number } // мышь-ход; драг → пан
-  | { kind: 'dtap'; downX: number; downY: number } // второй тач двойного тапа; в покое → зум, драг → пан
+  | { kind: 'dtap'; downX: number; downY: number; scale0: number } // второй тач двойного тапа: в покое → ничего, драг вниз/вверх → плавный зум
   | { kind: 'pan'; ox0: number; oy0: number; sx0: number; sy0: number };
 let gesture: Gesture | null = null;
 let activeId: number | null = null;
@@ -311,19 +309,6 @@ function recordTap(upScr: Vec): void {
   }
 }
 
-/** Двойной тап: тоггл-зум камеры поля к точке (приблизить / вписать обратно). */
-function doubleTapZoom(scr: Vec): void {
-  if (vp.scale() >= SCALE_DEFAULT * 1.8) {
-    vp.fitToContent(); // уже прилично приближено — возвращаемся к обзору
-  } else {
-    const target = Math.min(
-      SCALE_MAX,
-      Math.max(vp.scale() * DOUBLE_TAP_ZOOM, SCALE_DEFAULT * 2),
-    );
-    vp.zoomAt(target / vp.scale(), scr.x, scr.y);
-  }
-}
-
 /** Сдвинуть камеру за указателем (жест pan). */
 function movePan(scr: Vec): void {
   if (gesture?.kind !== 'pan') return;
@@ -411,13 +396,20 @@ function handleGestureMove(e: PointerEvent, scr: Vec): void {
       }
       break;
     case 'move':
-    case 'dtap':
-      // Протяжка (в т.ч. второго тапа) — это пан, не зум: так пан/лупа не хайджекятся.
+      // Протяжка мыши-хода — это пан, не коммит: так пан/лупа не хайджекятся.
       if (Math.hypot(scr.x - g.downX, scr.y - g.downY) > DRAG_PX) {
         beginPan(g.downX, g.downY, activeId!);
         movePan(scr);
       }
       break;
+    case 'dtap': {
+      // Двойной тап + тяни: непрерывный зум к точке первого касания (как в картах).
+      // Вниз (dy > 0) приближает, вверх — отдаляет; масштаб абсолютный от scale0.
+      const dy = scr.y - g.downY;
+      const target = clampScale(g.scale0 * 2 ** (dy / DOUBLE_TAP_DRAG_PX_PER_2X));
+      vp.zoomAt(target / vp.scale(), g.downX, g.downY); // redraw делает вызывающий
+      break;
+    }
     case 'aim':
       aimAt(e);
       break;
@@ -433,9 +425,7 @@ function endGesture(e: PointerEvent): void {
   const touch = e.pointerType === 'touch';
   const upScr = vp.toScreen(e);
   switch (g?.kind) {
-    case 'dtap':
-      doubleTapZoom({ x: g.downX, y: g.downY }); // зум к точке первого касания второго тапа
-      break;
+    // 'dtap' зумит вживую на move; на отпускании делать нечего.
     case 'draw':
     case 'edge':
     case 'finish': {
@@ -513,15 +503,15 @@ export function initInput(d: InputDeps): void {
       tapDownScr = scr;
       tapDownT = performance.now();
     }
-    // Второй тап рядом и вовремя — свой зум камеры (а не рисование/прицел). Драг
-    // этого тапа уйдёт в пан (handleGestureMove), так что пан/лупа не хайджекятся.
+    // Второй тап рядом и вовремя — свой зум камеры (а не рисование/прицел). Протяжка
+    // этого тапа вниз/вверх плавно зумит (handleGestureMove), так что лупа не хайджекится.
     if (touch && isDoubleTapDown(scr)) {
       lastTapScr = null; // погасить, чтобы третий тап не зумил повторно
       loupe = null;
       hover = null;
       selected = null;
       showConfirmMove(false);
-      gesture = { kind: 'dtap', downX: scr.x, downY: scr.y };
+      gesture = { kind: 'dtap', downX: scr.x, downY: scr.y, scale0: vp.scale() };
       activeId = e.pointerId;
       deps.redraw();
       return;
