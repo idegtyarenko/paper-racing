@@ -44,3 +44,38 @@
   font-weight: 600;
   line-height: 1.45;
 }
+
+/* Ждём чужой онлайн-ход: анимированное многоточие («…» набегает по точке и зациклено),
+   чтобы неинтерактивная доска читалась как «ждём», а не «зависла» (m1). Резервируем
+   ширину трёх точек через min-width, чтобы соседний текст-таймер не дёргался на цикле. */
+.waiting-dots::after {
+  content: '';
+  display: inline-block;
+  min-width: 1.2em;
+  text-align: left;
+  animation: waiting-dots 1.4s steps(1, end) infinite;
+}
+
+@keyframes waiting-dots {
+  0% {
+    content: '';
+  }
+  25% {
+    content: '.';
+  }
+  50% {
+    content: '..';
+  }
+  75%,
+  100% {
+    content: '...';
+  }
+}
+
+/* Уважаем «меньше движения»: статичное многоточие без анимации. */
+@media (prefers-reduced-motion: reduce) {
+  .waiting-dots::after {
+    content: '…';
+    animation: none;
+  }
+}
