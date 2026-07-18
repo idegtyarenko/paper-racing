@@ -10,8 +10,8 @@
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
-  background: #f4f1e8;
-  border: 1px solid #d8d2c0;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
   border-radius: 14px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22);
   opacity: 0;
@@ -43,7 +43,7 @@
 
 .install-prompt__title {
   font-size: 14px;
-  color: #3a3a3a;
+  color: var(--ink);
 }
 
 .install-prompt__body {
@@ -56,7 +56,7 @@
 .install-prompt__share {
   display: inline-flex;
   vertical-align: -4px;
-  color: #0a8a4f;
+  color: var(--accent);
 }
 
 .install-prompt__install {
@@ -65,8 +65,8 @@
   min-height: 40px;
   font-size: 14px;
   font-weight: 700;
-  color: #fff;
-  background: #0a8a4f;
+  color: var(--white);
+  background: var(--accent);
   border: none;
   border-radius: 999px;
   cursor: pointer;
@@ -74,7 +74,7 @@
 }
 
 .install-prompt__install:active {
-  background: #097843;
+  background: var(--accent-active);
 }
 
 .install-prompt__close {

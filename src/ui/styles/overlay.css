@@ -21,8 +21,8 @@
   position: relative;
   margin: auto;
   z-index: 1;
-  background: #f4f1e8;
-  border: 1px solid #d8d2c0;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
   border-radius: 12px;
   padding: 18px;
   width: min(360px, 92vw);

@@ -12,7 +12,7 @@
   position: relative; /* якорь для плавающей кнопки подтверждения хода */
   flex: 1;
   min-width: 0;
-  background: #fbfaf4;
+  background: var(--paper);
   /* Гасим системные жесты (зум/скролл) не только на canvas, но и в letterbox
      вокруг него и на оверлейных детях — иначе тач у края поля уводит в зум. */
   touch-action: none;

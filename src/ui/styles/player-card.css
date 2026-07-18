@@ -8,14 +8,14 @@
   border-radius: 8px;
   padding: 5px 8px;
   font-size: 12px;
-  background: #fff;
+  background: var(--white);
   white-space: nowrap;
   overflow: hidden;
 }
 
 /* Подсветка карточки игрока, чей сейчас ход. */
 .player-card--active {
-  border-color: #55524a;
+  border-color: var(--text-muted);
 }
 
 /* Игрок офлайн (закрыл вкладку) — приглушаем карточку. */

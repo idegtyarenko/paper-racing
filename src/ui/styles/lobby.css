@@ -6,8 +6,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  background: #fff;
-  border: 1px solid #d8d2c0;
+  background: var(--white);
+  border: 1px solid var(--border-soft);
   border-radius: 8px;
   padding: 8px 12px;
 }
@@ -22,7 +22,7 @@
   font-size: 22px;
   font-weight: 800;
   letter-spacing: 3px;
-  color: #0a8a4f;
+  color: var(--accent);
   background: none;
   border: none;
   cursor: pointer;
@@ -45,7 +45,7 @@
   gap: 8px;
   font-size: 15px;
   padding: 6px 8px;
-  background: #fff;
+  background: var(--white);
   border: 1px solid #e4dfce;
   border-radius: 6px;
 }
@@ -81,13 +81,13 @@
   width: 100%;
   padding: 10px 12px;
   font-size: 16px;
-  border: 1px solid #b7b0a0;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--white);
 }
 
 .field:focus {
-  outline: 2px solid #0a8a4f;
+  outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 
@@ -95,10 +95,10 @@
    при вводе). Фокус-обводка тоже краснеет, чтобы поле в фокусе читалось как
    ошибочное, а не зелёное. */
 .field--invalid {
-  border-color: #b3261e;
+  border-color: var(--danger);
 }
 .field--invalid:focus {
-  outline-color: #b3261e;
+  outline-color: var(--danger);
 }
 
 .field--code {
@@ -110,7 +110,7 @@
 }
 
 .dialog-error {
-  color: #b3261e;
+  color: var(--danger);
   font-size: 14px;
   font-weight: 600;
 }
@@ -127,7 +127,7 @@
   transform: translateX(-50%);
   z-index: 20;
   background: rgba(30, 30, 30, 0.92);
-  color: #fff;
+  color: var(--white);
   font-size: 14px;
   font-weight: 600;
   padding: 10px 18px;

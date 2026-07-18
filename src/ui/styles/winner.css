@@ -8,8 +8,8 @@
   text-align: center;
   padding: 20px 14px;
   border-radius: 12px;
-  background: #fff3cd;
-  border: 2px solid #e0a800;
+  background: var(--warn-bg);
+  border: 2px solid var(--warn);
 }
 
 .winner__trophy {

@@ -13,7 +13,7 @@
   max-width: 44%;
   padding: 6px 8px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--surface-glass);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
   pointer-events: none; /* полоса информативная — клики уходят на карту под ней */
 }
@@ -47,7 +47,7 @@
   min-width: 20px;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
-  color: #55524a;
+  color: var(--text-muted);
 }
 
 .standings__dot {
@@ -60,7 +60,7 @@
 .standings__name {
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #33322e;
+  color: var(--ink-strong);
 }
 
 /* На узких телефонах имя съедает место у карты — прячем, оставляя позицию+цвет. */

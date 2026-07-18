@@ -45,8 +45,8 @@
   font-weight: 700;
   line-height: 1;
   color: #8a8575;
-  background: #fff;
-  border: 1px solid #b7b0a0;
+  background: var(--white);
+  border: 1px solid var(--border);
   border-radius: 50%;
   cursor: pointer;
   touch-action: manipulation;
@@ -65,14 +65,14 @@
 }
 
 .setting__help[aria-expanded='true'] {
-  color: #fff;
-  background: #0a8a4f;
-  border-color: #0a8a4f;
+  color: var(--white);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 @media (hover: hover) {
   .setting__help:hover:not([aria-expanded='true']) {
-    background: #f0ecdf;
+    background: var(--surface-hover);
   }
 }
 
@@ -91,7 +91,7 @@
 .setting__value {
   font-size: 16px;
   font-weight: 700;
-  color: #0a8a4f;
+  color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
 
@@ -113,28 +113,28 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  border: 1px solid #b7b0a0;
-  background: #fff;
+  border: 1px solid var(--border);
+  background: var(--white);
   border-radius: 6px;
   touch-action: manipulation;
 }
 
 @media (hover: hover) {
   .seg__btn:hover:not(:disabled):not(.seg__btn--active) {
-    background: #f0ecdf;
+    background: var(--surface-hover);
   }
 }
 
 .seg__btn--active {
-  color: #fff;
-  background: #0a8a4f;
-  border-color: #0a8a4f;
+  color: var(--white);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 /* Ползунок значения (строгость / ходы штрафа). */
 .slider {
   width: 100%;
-  accent-color: #0a8a4f;
+  accent-color: var(--accent);
   cursor: pointer;
   touch-action: manipulation;
 }

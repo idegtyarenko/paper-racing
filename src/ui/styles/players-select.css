@@ -91,19 +91,19 @@
   font-size: 18px;
   font-weight: 700;
   cursor: pointer;
-  border: 1px solid #b7b0a0;
-  background: #fff;
+  border: 1px solid var(--border);
+  background: var(--white);
   border-radius: 6px;
   touch-action: manipulation;
 }
 
 @media (hover: hover) {
   .count-btn:hover:not(:disabled) {
-    background: #f0ecdf;
+    background: var(--surface-hover);
   }
 }
 .count-btn:active:not(:disabled) {
-  background: #e6e0cf;
+  background: var(--surface-active);
 }
 .count-btn:disabled {
   opacity: 0.35;

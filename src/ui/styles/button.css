@@ -5,8 +5,8 @@
   font-size: 14px;
   cursor: pointer;
   text-align: left;
-  border: 1px solid #b7b0a0;
-  background: #fff;
+  border: 1px solid var(--border);
+  background: var(--white);
   border-radius: 6px;
   touch-action: manipulation;
 }
@@ -16,11 +16,11 @@
    со второго нажатия), поэтому наведение туда не пускаем. */
 @media (hover: hover) {
   .button:hover:not(:disabled) {
-    background: #f0ecdf;
+    background: var(--surface-hover);
   }
 }
 .button:active:not(:disabled) {
-  background: #e6e0cf;
+  background: var(--surface-active);
 }
 .button:disabled {
   opacity: 0.45;
@@ -41,17 +41,17 @@
 /* Опасное действие (подтверждение сдачи) — красная заливка. */
 .button--danger {
   font-weight: 700;
-  color: #fff;
-  background: #b3261e;
-  border-color: #8f1a14;
+  color: var(--white);
+  background: var(--danger);
+  border-color: var(--danger-strong);
 }
 @media (hover: hover) {
   .button--danger:hover:not(:disabled) {
-    background: #9f211a;
+    background: var(--danger-hover);
   }
 }
 .button--danger:active:not(:disabled) {
-  background: #8f1a14;
+  background: var(--danger-strong);
 }
 
 /* Плавающая кнопка подтверждения хода: у нижнего края поля, поверх canvas. */
@@ -65,8 +65,8 @@
   min-height: 48px;
   font-size: 17px;
   font-weight: 700;
-  color: #fff;
-  background: #0a8a4f;
+  color: var(--white);
+  background: var(--accent);
   border: none;
   border-radius: 999px;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
@@ -82,13 +82,13 @@
 }
 
 .confirm-move:active {
-  background: #097843;
+  background: var(--accent-active);
 }
 /* Режим «только таймер»: цель ещё не выбрана — кнопка показывает отсчёт, но не
    кликается и пропускает клики/тапы к полю (иначе накрыла бы кандидата под собой). */
 .confirm-move--timer {
   pointer-events: none;
-  background: rgba(10, 138, 79, 0.55);
+  background: var(--accent-translucent);
   cursor: default;
 }
 .confirm-move[hidden] {
@@ -116,12 +116,12 @@
   width: 40px;
   height: 40px;
   border-radius: 8px;
-  border: 1px solid #b7b0a0;
-  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--border);
+  background: var(--surface-glass);
   font-size: 20px;
   line-height: 1;
   font-weight: 700;
-  color: #3a3a3a;
+  color: var(--ink);
   cursor: pointer;
   display: grid;
   place-items: center;
@@ -130,10 +130,10 @@
 }
 
 .zoom-ctl__btn:hover {
-  background: #f0ecdf;
+  background: var(--surface-hover);
 }
 .zoom-ctl__btn:active {
-  background: #e6e0cf;
+  background: var(--surface-active);
 }
 
 /* Кнопки-действия в шапке панели («Правила», «Сдаться») — компактные пилюли. */
@@ -149,11 +149,11 @@
   padding: 6px 12px;
   min-height: 34px;
   border-radius: 999px;
-  border: 1px solid #b7b0a0;
-  background: #fff;
+  border: 1px solid var(--border);
+  background: var(--white);
   font-size: 13px;
   font-weight: 600;
-  color: #33322e;
+  color: var(--ink-strong);
   cursor: pointer;
   white-space: nowrap;
   touch-action: manipulation;
@@ -161,11 +161,11 @@
 
 @media (hover: hover) {
   .header-btn:hover {
-    background: #f0ecdf;
+    background: var(--surface-hover);
   }
 }
 .header-btn:active {
-  background: #e6e0cf;
+  background: var(--surface-active);
 }
 .header-btn[hidden] {
   display: none;

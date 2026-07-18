@@ -12,8 +12,8 @@
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.04em;
-  color: #3a3a3a;
-  background: rgba(255, 255, 255, 0.92);
+  color: var(--ink);
+  background: var(--surface-glass);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
   cursor: pointer;
   touch-action: manipulation;
@@ -21,10 +21,10 @@
 }
 
 .race-code:hover {
-  background: #f0ecdf;
+  background: var(--surface-hover);
 }
 .race-code:active {
-  background: #e6e0cf;
+  background: var(--surface-active);
 }
 .race-code[hidden] {
   display: none;
