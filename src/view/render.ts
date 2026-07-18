@@ -27,11 +27,32 @@ export interface AppView {
   cam: Camera;
 }
 
-const INK = '#3a3a3a';
-const PAPER = '#fbfaf4';
+// Палитра canvas-рендера. Единый источник для отрисовки поля (раньше часть цветов
+// была зашита литералами по месту в функциях draw*). INK/PAPER/ARROW_COLOR — зеркала
+// DOM-токенов --ink/--paper/--accent из base.css: canvas не читает CSS-переменные
+// (нужна строка на кадр), поэтому значения продублированы здесь. Это осознанный
+// компромисс (два источника, Option A) — при смене палитры в редизайне держать пару
+// в синхроне; тогда же стоит взвесить единый источник.
+const INK = '#3a3a3a'; // === --ink
+const PAPER = '#fbfaf4'; // === --paper
 const GRID_LIGHT = '#e2e8f2';
 const GRID_HEAVY = '#c9d6e8';
-const ARROW_COLOR = '#0a8a4f';
+const ARROW_COLOR = '#0a8a4f'; // === --accent
+/** Белый контур/нимб поверх болида и крестика — контраст над следом. */
+const WHITE = '#fff';
+/** Приглушённый серый: прыжок-сегмент следа и заблокированный кандидат. */
+const MUTED = '#999';
+/** Тёмно-тёплая линия финиша. */
+const FINISH_LINE = '#55524a';
+/** Осевая-подсказка в фазе тюнинга кромок (можно тянуть). */
+const CENTERLINE_HINT = '#b9c3d1';
+/** Крест аварийного кандидата (красный). */
+const CRASH = '#d32f2f';
+/** Клетки, тень и рамка клетчатого флага финиша. */
+const FLAG_DARK = '#222';
+const FLAG_LIGHT = '#f6f6f2';
+const FLAG_SHADOW = 'rgba(0,0,0,0.1)';
+const FLAG_BORDER = 'rgba(0,0,0,0.45)';
 /** Заливка внетрассовой территории — холодный серо-голубой в тон сетки, чтобы
  *  белое полотно трассы читалось контрастом без линии-границы. Полупрозрачная,
  *  чтобы сетка просвечивала сквозь заливку, а не пропадала под ней. */
@@ -142,7 +163,7 @@ function drawLoupe(
   );
   ctx.restore();
 
-  ctx.strokeStyle = '#55524a';
+  ctx.strokeStyle = FINISH_LINE;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.arc(cx, cy, R, 0, Math.PI * 2);
@@ -289,7 +310,7 @@ function drawFinishLine(ctx: CanvasRenderingContext2D, s: number, a: Vec, b: Vec
   // Лёгкая тень под флагом для объёма.
   ctx.save();
   ctx.translate(0.5, 0.7);
-  ctx.fillStyle = 'rgba(0,0,0,0.1)';
+  ctx.fillStyle = FLAG_SHADOW;
   for (let i = 0; i < cols; i++) {
     for (let r = 0; r < rows; r++) {
       if ((i + r) % 2 !== 0) continue;
@@ -305,7 +326,7 @@ function drawFinishLine(ctx: CanvasRenderingContext2D, s: number, a: Vec, b: Vec
   for (let i = 0; i < cols; i++) {
     for (let r = 0; r < rows; r++) {
       const dark = (i + r) % 2 === 0;
-      ctx.fillStyle = dark ? '#222' : '#f6f6f2';
+      ctx.fillStyle = dark ? FLAG_DARK : FLAG_LIGHT;
       const cx =
         ax + dir.x * (i + 0.5) * actualCell + n.x * (-bandHalf + (r + 0.5) * cell);
       const cy =
@@ -315,7 +336,7 @@ function drawFinishLine(ctx: CanvasRenderingContext2D, s: number, a: Vec, b: Vec
   }
 
   // Тонкая рамка по периметру полосы для аккуратного края.
-  ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+  ctx.strokeStyle = FLAG_BORDER;
   ctx.lineWidth = 1;
   ctx.beginPath();
   const bx = ax + dir.x * usableLen;
@@ -390,7 +411,7 @@ function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): 
   // В фазе тюнинга — слабая осевая как подсказка, что кромки можно тянуть.
   if (ed.phase === 'adjust' && ed.center) {
     ctx.save();
-    ctx.strokeStyle = '#b9c3d1';
+    ctx.strokeStyle = CENTERLINE_HINT;
     ctx.lineWidth = 1;
     ctx.setLineDash([s * 0.25, s * 0.25]);
     strokePoly(ctx, s, ed.center, true);
@@ -556,7 +577,7 @@ function drawTrail(ctx: CanvasRenderingContext2D, s: number, p: Player): void {
     const seg = trail[i];
     ctx.save();
     if (seg.jump) {
-      ctx.strokeStyle = '#999';
+      ctx.strokeStyle = MUTED;
       ctx.lineWidth = 1.5;
       ctx.setLineDash([4, 4]);
     } else {
@@ -603,7 +624,7 @@ function drawCars(ctx: CanvasRenderingContext2D, s: number, game: GameState): vo
     ctx.arc(p.pos.x * s, p.pos.y * s, Math.max(4, s * 0.28), 0, Math.PI * 2);
     ctx.fillStyle = p.color;
     ctx.fill();
-    ctx.strokeStyle = '#fff';
+    ctx.strokeStyle = WHITE;
     ctx.lineWidth = 1.5;
     ctx.stroke();
   }
@@ -645,12 +666,12 @@ function drawCandidates(
     const y = c.target.y * s;
     const r = Math.max(3, s * (c.inertial ? 0.2 : 0.14));
     if (c.blocked) {
-      ctx.strokeStyle = '#999';
+      ctx.strokeStyle = MUTED;
       ctx.lineWidth = 1.5;
       crossPath(ctx, x, y, r);
       ctx.stroke();
     } else if (c.crash) {
-      ctx.strokeStyle = '#d32f2f';
+      ctx.strokeStyle = CRASH;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -717,7 +738,7 @@ function drawCrashMark(
   const y = at.y * s;
   ctx.lineCap = 'round';
   // Белый нимб под крестиком — контраст над следом того же цвета.
-  ctx.strokeStyle = '#fff';
+  ctx.strokeStyle = WHITE;
   ctx.lineWidth = 3;
   crossPath(ctx, x, y, r);
   ctx.stroke();
