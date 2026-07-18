@@ -139,7 +139,8 @@ export function parseGameRow(raw: unknown): GameRow | null {
   if (raw.state !== null && !isSerializedState(raw.state)) return null;
   if (!Array.isArray(raw.lobby)) return null;
   if (typeof raw.host_id !== 'string') return null;
-  if (raw.status !== 'lobby' && raw.status !== 'race' && raw.status !== 'over') return null;
+  if (raw.status !== 'lobby' && raw.status !== 'race' && raw.status !== 'over')
+    return null;
   return raw as unknown as GameRow;
 }
 
