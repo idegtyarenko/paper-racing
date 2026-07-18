@@ -3,21 +3,16 @@
 // Контроллер не владеет состоянием приложения (game/mode/raceTrack/editor) —
 // читает и мутирует его через переданный на init OnlineDeps, а перерисовку и
 // пересчёт делает его же колбэками. Ровно один контроллер на приложение.
+//
+// Два обособленных подсистемных куска вынесены в соседние модули (был god-модуль):
+//   • turn-watch.ts — слежение за ходом, countdown, ручной/авто-пропуск, прунинг лобби;
+//   • host-bots.ts — конфиг ботов в лобби и расчёт+коммит их ходов хостом.
+// Контроллер раздаёт им общее состояние (deps) и confirm-first/commitOnline через init.
 
-import { Track } from '../model/track';
-import {
-  GameState,
-  Candidate,
-  newGame,
-  shuffledIndices,
-  cloneState,
-  seatColor,
-  isFinished,
-} from '../model/game';
-import { coastMove, applyMove, retireSeat } from '../model/turns';
-import { Difficulty, chooseMove } from '../model/ai';
+import { GameState, Candidate, cloneState, isFinished } from '../model/game';
+import { applyMove, retireSeat } from '../model/turns';
 import { editorFromTrack } from '../model/editor';
-import { renderLobby, setLobbyStarting } from '../ui/lobby';
+import { setLobbyStarting } from '../ui/lobby';
 import {
   openNameDialog,
   openJoinDialog,
@@ -29,16 +24,12 @@ import {
 import { closeOverlay } from '../ui/dom';
 import { openConfirm } from '../ui/confirm';
 import { AppState } from '../app-state';
-import { NetTurn, setMoveSendState } from '../ui/panel';
-import {
-  TURN_TIMEOUT_MS,
-  LOBBY_PRUNE_MS,
-  SKIP_RETRY_MS,
-  AI_MOVE_DELAY_MS,
-} from '../config';
+import { setMoveSendState } from '../ui/panel';
 import { strings } from '../strings';
 import * as session from './online';
 import { OnlineHandlers } from './online';
+import * as hostBots from './host-bots';
+import * as turnWatch from './turn-watch';
 
 /**
  * Мост к главному модулю: контроллер не держит состояние сам. Данные читает и
@@ -67,6 +58,15 @@ let deps: OnlineDeps;
 
 export function initOnline(d: OnlineDeps): void {
   deps = d;
+  // Раздать под-модулям общее состояние и confirm-first/commitOnline. host-bots ещё
+  // получает clearTurnWatch (чтобы сбросить слежение перед перерисовкой после хода бота).
+  hostBots.initHostBots({
+    deps: d,
+    confirmFirst,
+    commitOnline,
+    clearTurnWatch: turnWatch.clearTurnWatch,
+  });
+  turnWatch.initTurnWatch({ deps: d, confirmFirst, commitOnline });
   // Закрытие/уход со страницы: сразу снимаем присутствие (чтобы остальные быстрее
   // увидели офлайн и включили пропуск), а при реальном выгрузе из лобби — освобождаем
   // место. В гонке место оставляем: его двигает авто-пропуск. persisted → bfcache
@@ -79,47 +79,6 @@ export function initOnline(d: OnlineDeps): void {
       forgetSession(); // место освобождено — возвращаться некуда
     }
   });
-}
-
-// ── Наблюдатель за ходом: таймаут 30 с + пропуск (инерция) ────────────────────────
-// Присутствующего, но не ходящего игрока через 30 с может пропустить любой другой
-// (ручная кнопка). Отсутствующего (закрыл вкладку) пропускаем автоматически: первый
-// ход — с 30-секундной форой от момента ухода (шанс на реконнект), дальше — сразу.
-// Авто-пропуск делает только «назначенный» присутствующий клиент (минимальный seat),
-// чтобы не слать дубликаты; результат детерминирован, так что гонок записи нет.
-
-let skipTimer: number | null = null;
-let lobbyPruneTimer: number | null = null;
-/** Таймер отложенного хода бота (host-only) — гасится вместе со слежением за ходом. */
-let botTimer: number | null = null;
-/** Отсчёт остатка времени на ход: момент начала хода (локальные часы) + тикер обновления
- *  метки. Локальный per-client отсчёт (без общего timestamp в стейте) — небольшой разброс
- *  между клиентами допустим для «мягкого» таймера. */
-let turnStartAt: number | null = null;
-let tickTimer: number | null = null;
-/** Показывать ли кнопку ручного пропуска (истинно только для присутствующего игрока). */
-let skipVisible = false;
-
-// ── Боты в онлайне (host-local fill) ──────────────────────────────────────────────
-// Хост держит число ботов и их сложность локально; при старте они материализуются в
-// замыкающие свободные места (startOnline) и едут гостям в стейте (Player.bot). Гости
-// ботов не ведут — ходы бота считает и коммитит только хост (см. scheduleBotMove).
-// Живые игроки приоритетнее: боты не занимают серверных мест лобби, поэтому вошедший
-// игрок никогда не блокируется ботом, а lobbyBots пере-клампится по свободным местам.
-let lobbyBots = 0;
-let lobbyBotDifficulty: Difficulty = 'medium';
-/** Идёт ли запись хода бота (host-only) — защита от дублей, как skipSending. */
-let botSending = false;
-
-/** Свободные места лобби под ботов: вместимость трассы минус реальные игроки. */
-function freeSeats(): number {
-  const cap = deps.state.raceTrack?.startPoints.length ?? 0;
-  return Math.max(0, cap - session.getRoster().length);
-}
-
-/** Место занято ботом (в идущей гонке)? Бот-ность живёт в стейте (Player.bot). */
-function isBotSeat(game: GameState, seat: number): boolean {
-  return !!game.players[seat]?.bot;
 }
 
 // ── Защита от дублей и confirm-first отправка ─────────────────────────────────────
@@ -140,8 +99,6 @@ async function guarded(fn: () => Promise<void>): Promise<void> {
 /** Идёт ли отправка хода и какой кандидат ждёт (для повтора после ошибки). */
 let sending = false;
 let pendingCand: Candidate | null = null;
-/** Идёт ли запись пропуска (авто/ручного) — защита от дублей. */
-let skipSending = false;
 
 /** Результат confirm-first: применили копию у себя (`applied`) или за время записи
  *  прилетел авторитетный чужой стейт и локальное применение пропущено (`superseded`). */
@@ -155,6 +112,7 @@ type PushResult = 'applied' | 'superseded';
  * ошибки у каждого вызывающего своя (флаги, тост, повтор). Перерисовку (commitOnline)
  * и сброс флагов делает вызывающий по результату — так сохраняется точный порядок
  * (сброс send-state до перерисовки; clearTurnWatch до перерисовки у пропуска/бота).
+ * Раздаётся в turn-watch/host-bots через init (applySkip/runBotMove тоже им пользуются).
  */
 async function confirmFirst(
   base: GameState,
@@ -166,6 +124,21 @@ async function confirmFirst(
   if (deps.state.game !== base) return 'superseded'; // эхо/чужой ход уже применился
   deps.setGame(next);
   return 'applied';
+}
+
+/**
+ * Онлайн-аналог локального commit(): пересчёт кандидатов → панель → канвас →
+ * перевзвод слежения за ходом (armTurnWatch). Звать после того, как setGame сделал
+ * свой/входящий стейт текущим. Отличается от main.commit тем, что вместо
+ * scheduleAiMove завершается armTurnWatch (онлайн-специфика: таймер хода, авто-пропуск,
+ * ход бота у хоста). onGameState не использует — там особый порядок (armTurnWatch до
+ * updateUI, чтобы skipVisible сбросился под новый ход). Раздаётся в turn-watch/host-bots.
+ */
+function commitOnline(): void {
+  deps.refreshCands();
+  deps.updateUI();
+  deps.redraw();
+  turnWatch.armTurnWatch();
 }
 
 /**
@@ -232,254 +205,6 @@ export async function sendRetire(): Promise<void> {
   }
 }
 
-function clearTurnWatch(): void {
-  if (skipTimer !== null) {
-    clearTimeout(skipTimer);
-    skipTimer = null;
-  }
-  if (botTimer !== null) {
-    clearTimeout(botTimer);
-    botTimer = null;
-  }
-  if (tickTimer !== null) {
-    clearInterval(tickTimer);
-    tickTimer = null;
-  }
-  turnStartAt = null;
-  deps.setTurnCountdown(null, false); // снять таймер — иначе завис бы «· 0:00»
-  skipVisible = false;
-}
-
-/** Снять все таймеры слежения (выход из сессии/закрытие игры). */
-function clearWatches(): void {
-  clearTurnWatch();
-  if (lobbyPruneTimer !== null) {
-    clearTimeout(lobbyPruneTimer);
-    lobbyPruneTimer = null;
-  }
-}
-
-/**
- * Убрать из лобби места, чьи вкладки офлайн дольше LOBBY_PRUNE_MS (фора на реколнект).
- * Прунит только назначенный присутствующий клиент. Если есть места, чья фора ещё не
- * вышла, перепланируем проверку на ближайший дедлайн (без нового presence-события).
- */
-function pruneAbsentLobby(): void {
-  if (lobbyPruneTimer !== null) {
-    clearTimeout(lobbyPruneTimer);
-    lobbyPruneTimer = null;
-  }
-  if (session.designatedSkipper() !== session.mySeat()) return;
-  let soonest = Infinity;
-  session.getRoster().forEach((_, seat) => {
-    const left = session.leftAtOf(seat);
-    if (left === null) return;
-    const waited = Date.now() - left;
-    if (waited >= LOBBY_PRUNE_MS) session.prune(seat).catch(() => {});
-    else soonest = Math.min(soonest, LOBBY_PRUNE_MS - waited);
-  });
-  if (soonest !== Infinity) {
-    lobbyPruneTimer = window.setTimeout(() => {
-      if (deps.state.mode === 'lobby') pruneAbsentLobby();
-    }, soonest);
-  }
-}
-
-/**
- * Активен ли на этом стейте локальный игрок: ещё в гонке — не сдался и не
- * финишировал. Только такие игроки вправе пропускать чужие ходы.
- */
-function iAmActive(game: GameState): boolean {
-  const me = game.players[session.mySeat()];
-  return !!me && !isFinished(me) && !me.retired;
-}
-
-/** Пересчитать слежение за текущим ходом. Зовётся на каждый стейт и presence-событие. */
-function armTurnWatch(): void {
-  clearTurnWatch();
-  const game = deps.state.game;
-  // mode-гейт (как у scheduleAiMove): presence-событие в лобби зовёт armTurnWatch, но
-  // прошлая гонка могла остаться в S.game с phase 'race' (создание нового лобби её не
-  // чистит) — без проверки режима в лобби всплывала бы кнопка-таймер чужого/своего хода.
-  if (!session.active() || !game || game.phase !== 'race' || deps.state.mode !== 'race')
-    return;
-  const cur = game.current;
-
-  // Ход бота считает и коммитит только хост; гости просто ждут его pushMove как
-  // обычный чужой ход. Бот-место никогда не «present» (иначе его авто-пропустил бы
-  // designatedSkipper) и не тикает таймером — боты по времени не лимитируются.
-  if (isBotSeat(game, cur)) {
-    if (session.isHost()) scheduleBotMove(cur);
-    return;
-  }
-
-  // Лимит на ход — из правил заезда (задаёт хост в настройках); старые стейты без
-  // поля подстрахованы дефолтом.
-  const limit = game.rules.turnLimitMs ?? TURN_TIMEOUT_MS;
-
-  // Локальный отсчёт остатка времени — для меня (метка на кнопке) и для соперников
-  // (суффикс в статусе). Стартуем до early-return «мой ход», чтобы был виден и мне.
-  turnStartAt = Date.now();
-  const tick = (): void => {
-    const g = deps.state.game;
-    if (!session.active() || !g || g.phase !== 'race' || turnStartAt === null) return;
-    const msLeft = Math.max(0, limit - (Date.now() - turnStartAt));
-    deps.setTurnCountdown(msLeft, g.current === session.mySeat());
-  };
-  tick();
-  tickTimer = window.setInterval(tick, 500);
-
-  if (cur === session.mySeat()) return; // мой ход — за собой не слежу (пропуск не нужен)
-
-  if (session.isPresent(cur)) {
-    // Онлайн, но задумался — по истечении лимита открываем ручной пропуск остальным.
-    // Пропускать чужой ход может лишь активный игрок (не сдавшийся и не
-    // финишировавший) — выбывшие в гонке уже не участвуют.
-    if (!iAmActive(game)) return;
-    skipTimer = window.setTimeout(() => {
-      skipVisible = true;
-      deps.updateUI();
-    }, limit);
-    return;
-  }
-  // Отсутствует: авто-пропуск выполняет назначенный присутствующий клиент.
-  if (session.designatedSkipper() !== session.mySeat()) return;
-  const left = session.leftAtOf(cur);
-  const grace = left === null ? limit : Math.max(0, limit - (Date.now() - left));
-  skipTimer = window.setTimeout(() => autoSkip(cur), grace);
-}
-
-/**
- * Онлайн-аналог локального commit(): пересчёт кандидатов → панель → канвас →
- * перевзвод слежения за ходом (armTurnWatch). Звать после того, как setGame сделал
- * свой/входящий стейт текущим. Отличается от main.commit тем, что вместо
- * scheduleAiMove завершается armTurnWatch (онлайн-специфика: таймер хода, авто-пропуск,
- * ход бота у хоста). onGameState не использует — там особый порядок (armTurnWatch до
- * updateUI, чтобы skipVisible сбросился под новый ход).
- */
-function commitOnline(): void {
-  deps.refreshCands();
-  deps.updateUI();
-  deps.redraw();
-  armTurnWatch();
-}
-
-/** Авто-пропуск отсутствующего игрока (если он всё ещё офлайн и ходит сейчас). */
-function autoSkip(seat: number): void {
-  const game = deps.state.game;
-  if (!game || game.phase !== 'race' || game.current !== seat) return;
-  if (session.isPresent(seat)) return; // вернулся — ждём его самого
-  if (session.designatedSkipper() !== session.mySeat()) return;
-  applySkip(game);
-}
-
-/**
- * Применить пропуск (confirm-first): болид едет по инерции в копии, пишем на сервер и
- * лишь при успехе делаем её текущим стейтом. При ошибке локально ничего не меняем.
- * Авто-пропуск — тихо перепланируем повтор через SKIP_RETRY_MS (autoSkip сам
- * перепроверит условия); ручной — оставляем кнопку на месте, чтобы можно было нажать снова.
- */
-async function applySkip(game: GameState): Promise<void> {
-  if (skipSending) return;
-  skipSending = true;
-  try {
-    const r = await confirmFirst(game, (next) => coastMove(next));
-    if (r === 'applied') {
-      clearTurnWatch(); // сбросить skipVisible/countdown до перерисовки панели
-      commitOnline();
-    }
-  } catch {
-    showToast(strings.online.error);
-    // Авто-пропуск: тихий повтор — autoSkip перепроверит (тот же ход, игрок офлайн, я
-    // назначенный). Ручной пропуск: skipVisible остаётся true, кнопка доступна снова.
-    if (!session.isPresent(game.current)) {
-      skipTimer = window.setTimeout(() => autoSkip(game.current), SKIP_RETRY_MS);
-    }
-  } finally {
-    skipSending = false;
-  }
-}
-
-/**
- * Запланировать ход бота (host-only): пауза AI_MOVE_DELAY_MS, чтобы человек успел
- * следить за ходом бота, как в локальной игре. Один таймер за раз (clearTurnWatch
- * гасит его на каждом ре-планировании слежения).
- */
-function scheduleBotMove(seat: number): void {
-  if (botTimer !== null) return;
-  botTimer = window.setTimeout(() => {
-    botTimer = null;
-    runBotMove(seat);
-  }, AI_MOVE_DELAY_MS);
-}
-
-/**
- * Посчитать и закоммитить ход бота (host-only, confirm-first): применяем ход бота к
- * копии стейта, пишем на сервер и лишь при успехе делаем её текущей — гости получат
- * ход как обычный чужой (echo-guard, как в applySkip). Нет хода/нет nav → пас по
- * инерции. Ошибка — тихий повтор через SKIP_RETRY_MS. botSending защищает от
- * параллельных записей, пока запущенная ждёт сервер.
- */
-async function runBotMove(seat: number): Promise<void> {
-  if (botSending) return;
-  const game = deps.state.game;
-  if (
-    !game ||
-    game.phase !== 'race' ||
-    game.current !== seat ||
-    !isBotSeat(game, seat) ||
-    !session.isHost()
-  )
-    return;
-  botSending = true;
-  const nav = deps.state.raceNav;
-  try {
-    const r = await confirmFirst(game, (next) => {
-      // Нет хода/нет nav → пас по инерции. cand считаем на копии внутри mutate.
-      const cand = nav ? chooseMove(next, nav, game.players[seat].bot!) : null;
-      if (cand) applyMove(next, cand);
-      else coastMove(next);
-    });
-    if (r === 'applied') {
-      clearTurnWatch(); // сбросить skipVisible/countdown до перерисовки панели
-      commitOnline();
-    }
-  } catch {
-    showToast(strings.online.error);
-    // Тихий повтор: ход всё ещё за ботом и мы всё ещё хост — runBotMove перепроверит.
-    botTimer = window.setTimeout(() => {
-      botTimer = null;
-      runBotMove(seat);
-    }, SKIP_RETRY_MS);
-  } finally {
-    botSending = false;
-  }
-}
-
-/** Онлайн-контекст текущего хода для панели: чей ход, мой ли, можно ли пропустить,
- *  кто сейчас офлайн. Null — если не в онлайн-игре. */
-export function netTurn(game: GameState | null): NetTurn | null {
-  if (!session.active() || !game) return null;
-  return {
-    yourTurn: session.mySeat() === game.current,
-    canSkip: skipVisible,
-    currentName: game.players[game.current]?.name ?? '',
-    // Бот-места всегда «в сети» (их ведёт хост) — не помечаем их офлайном.
-    present: game.players.map((p, i) => !!p.bot || session.isPresent(i)),
-    code: session.getCode() ?? '',
-    isHost: session.isHost(),
-  };
-}
-
-/** Кнопка «Пропустить ход» (доступна, когда истёк таймаут присутствующего игрока). */
-export function skip(): void {
-  const game = deps.state.game;
-  if (!game || game.phase !== 'race' || !skipVisible) return;
-  if (game.current === session.mySeat()) return;
-  if (!iAmActive(game)) return; // выбывший игрок чужой ход не пропускает
-  applySkip(game);
-}
-
 function savedName(): string {
   try {
     return localStorage.getItem('pr-player-name') ?? '';
@@ -533,57 +258,11 @@ function joinErrorText(e: unknown): string {
   return strings.online.error;
 }
 
-/** Перерисовать панель лобби по текущему ростеру сессии. */
-function renderLobbyPanel(): void {
-  const roster = session.getRoster();
-  const mine = session.mySeat();
-  const maxBots = freeSeats();
-  // Живые игроки приоритетнее ботов: если вошёл новый игрок, свободных мест стало
-  // меньше — ужимаем число ботов под них (при выходе игрока максимум снова вырастет,
-  // но текущее число не восстанавливаем — только верхнюю границу).
-  if (lobbyBots > maxBots) lobbyBots = maxBots;
-  renderLobby({
-    code: session.getCode() ?? '',
-    players: roster.map((r, i) => ({
-      name: r.name,
-      color: seatColor(i),
-      you: i === mine,
-      offline: !session.isPresent(i),
-    })),
-    canStart: session.canStart(),
-    isHost: session.isHost(),
-    botCount: lobbyBots,
-    maxBots,
-    botDifficulty: lobbyBotDifficulty,
-  });
-}
-
-/** Хост: досадить ещё одного бота на свободное место лобби (в пределах вместимости). */
-export function addBot(): void {
-  if (!session.isHost() || lobbyBots >= freeSeats()) return;
-  lobbyBots++;
-  renderLobbyPanel();
-}
-
-/** Хост: убрать одного бота. */
-export function removeBot(): void {
-  if (!session.isHost() || lobbyBots <= 0) return;
-  lobbyBots--;
-  renderLobbyPanel();
-}
-
-/** Хост: сменить сложность досаживаемых ботов. */
-export function setBotDifficulty(d: Difficulty): void {
-  if (!session.isHost()) return;
-  lobbyBotDifficulty = d;
-  renderLobbyPanel();
-}
-
 const handlers: OnlineHandlers = {
   onLobby: () => {
     // Мы в живом лобби — запомним код для возврата после дисконнекта (идемпотентно).
     rememberSession(session.getCode()!);
-    if (deps.state.mode === 'lobby') renderLobbyPanel();
+    if (deps.state.mode === 'lobby') hostBots.renderLobbyPanel();
   },
   onGameState: (g) => {
     // Входящий авторитетный стейт перекрывает наш незавершённый/провалившийся ход:
@@ -613,12 +292,12 @@ const handlers: OnlineHandlers = {
     // armTurnWatch до updateUI: он сбрасывает skipVisible под новый ход, иначе в
     // рендер утёк бы «висящий» флаг пропуска с прошлого хода (кнопка «долго не ходит»
     // на своём же ходу).
-    armTurnWatch();
+    turnWatch.armTurnWatch();
     deps.updateUI();
     deps.redraw();
   },
   onClosed: () => {
-    clearWatches();
+    turnWatch.clearWatches();
     forgetSession(); // игра удалена/закрыта хостом — возвращаться некуда
     pendingCand = null;
     setMoveSendState('idle');
@@ -634,10 +313,10 @@ const handlers: OnlineHandlers = {
   onPresence: () => {
     // Присутствие влияет на «ждать/пропускать» и на метки офлайна в панели/лобби;
     // в лобби ещё и вычищаем брошенные места.
-    armTurnWatch();
+    turnWatch.armTurnWatch();
     if (deps.state.mode === 'lobby') {
-      pruneAbsentLobby();
-      renderLobbyPanel();
+      turnWatch.pruneAbsentLobby();
+      hostBots.renderLobbyPanel();
     }
     deps.updateUI();
   },
@@ -648,12 +327,12 @@ function hostOnline(name: string): Promise<void> {
   return guarded(async () => {
     const raceTrack = deps.state.raceTrack;
     if (!raceTrack) return;
-    lobbyBots = 0; // свежее лобби — без досаженных ботов
+    hostBots.resetBots(); // свежее лобби — без досаженных ботов
     try {
       await session.host(raceTrack, name, handlers);
       deps.state.mode = 'lobby';
       deps.updateUI();
-      renderLobbyPanel();
+      hostBots.renderLobbyPanel();
       deps.redraw();
     } catch {
       showToast(strings.online.error);
@@ -685,7 +364,7 @@ function joinOnline(code: string, name: string, inJoinDialog: boolean): Promise<
       deps.fitToContent(); // вписать трассу хоста по центру
       deps.redraw();
       deps.updateUI();
-      if (deps.state.mode === 'lobby') renderLobbyPanel();
+      if (deps.state.mode === 'lobby') hostBots.renderLobbyPanel();
     } catch (e) {
       if (inJoinDialog) {
         showJoinError(joinErrorText(e));
@@ -703,37 +382,6 @@ function joinOnline(code: string, name: string, inJoinDialog: boolean): Promise<
 }
 
 /**
- * Собрать стартовый стейт онлайн-гонки из текущего ростера и host-local конфигурации
- * ботов. Общий для старта из лобби (startOnline) и рематча (rematchOnline) — состав
- * тот же (те же люди + те же боты), меняется лишь случайная раздача стартовых клеток.
- * Стартовые клетки раздаём случайной перестановкой среди всех участников. Это делает
- * только хост, результат уезжает в сериализованном стейте (гости players не
- * пересобирают), поэтому одинаковый сид у клиентов не нужен.
- */
-function buildStartState(raceTrack: Track): GameState {
-  const roster = session.getRoster();
-  const humans = roster.length;
-  const bots = Math.min(lobbyBots, freeSeats());
-  const g = newGame(
-    raceTrack,
-    humans + bots,
-    deps.state.rules,
-    shuffledIndices(humans + bots),
-  );
-  roster.forEach((r, i) => {
-    if (g.players[i]) g.players[i].name = r.name;
-  });
-  // Досадить ботов в замыкающие свободные места (после реальных игроков): их
-  // бот-ность едет в стейте (Player.bot), гости получат их обычным синком, а ходы
-  // считает только хост (scheduleBotMove).
-  for (let i = humans; i < g.players.length; i++) {
-    g.players[i].bot = lobbyBotDifficulty;
-    g.players[i].name = `${strings.aiSelect.botPrefix} ${g.players[i].name}`;
-  }
-  return g;
-}
-
-/**
  * Хост стартует онлайн-гонку (confirm-first): строит стейт, сначала пишет его на
  * сервер и только при успехе входит в гонку. При ошибке остаёмся в лобби — «Начать
  * игру» снова активна, гости ничего не увидели (записи не было).
@@ -742,7 +390,7 @@ function startOnline(): Promise<void> {
   return guarded(async () => {
     const raceTrack = deps.state.raceTrack;
     if (!raceTrack || !session.canStart()) return;
-    const g = buildStartState(raceTrack);
+    const g = hostBots.buildStartState(raceTrack);
     setLobbyStarting(true);
     try {
       await session.start(g);
@@ -780,7 +428,7 @@ function rematchOnline(): Promise<void> {
   return guarded(async () => {
     const raceTrack = deps.state.raceTrack;
     if (!raceTrack || !canRematch()) return;
-    const g = buildStartState(raceTrack);
+    const g = hostBots.buildStartState(raceTrack);
     try {
       await session.start(g);
       // Хост не покидал режим race на финише — эхо собственной записи придёт через
@@ -801,7 +449,7 @@ function rematchOnline(): Promise<void> {
 /** Выйти из лобби: освободить место на сервере и вернуться (хост — к выбору режима). */
 function leaveLobby(): Promise<void> {
   return guarded(async () => {
-    clearWatches();
+    turnWatch.clearWatches();
     forgetSession(); // осознанный выход — возвращаться некуда
     pendingCand = null;
     setMoveSendState('idle');
@@ -935,3 +583,8 @@ export function share(): void {
 export function copy(): void {
   copyCode();
 }
+
+// Публичное API под-модулей, которым пользуется main.ts, — через контроллер-фасад:
+// ход-контекст/пропуск (turn-watch) и управление ботами в лобби (host-bots).
+export { skip, netTurn } from './turn-watch';
+export { addBot, removeBot, setBotDifficulty } from './host-bots';
