@@ -71,12 +71,9 @@
           </div>
         </header>
         <div class="status"></div>
-        <button
-          id="skipTurn"
-          class="button button--center"
-          data-i18n="buttons.skipTurn"
-          hidden
-        ></button>
+        <!-- Кнопка пропуска чужого хода (только онлайн): текст ставит панель
+             динамически — online.skipTurnBtn + имя застрявшего его цветом. -->
+        <button id="skipTurn" class="button button--center" hidden></button>
         <div id="editButtons" class="panel__group">
           <button
             id="nextBtn"

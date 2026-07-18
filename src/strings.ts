@@ -254,7 +254,6 @@ export const strings = {
     rulesTitle: 'Правила',
     toWheel: 'Всё понятно',
     newRaceDialogTitle: 'Новая гонка',
-    skipTurn: '⏭ Пропустить ход',
   },
 
   rules: {
