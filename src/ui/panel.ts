@@ -507,15 +507,33 @@ function renderAiSetup(): void {
   aiStartBtn.disabled = seatCapacity < MIN_PLAYERS;
 }
 
-export function updatePanel(
-  mode: PanelMode,
-  editor: EditorState,
-  game: GameState | null,
-  playersMax = 6,
-  net: NetTurn | null = null,
-  aiTurn = false,
-  canRetire = false,
-): void {
+/** Контекст перерисовки панели. Один объект вместо россыпи позиционных параметров:
+ *  на месте вызова читаемо, какой флаг что значит (было `updatePanel(m, e, g, 6, net,
+ *  true, true)`). Разбиение тела по экранам — за редизайном (см. INTERNAL_roadmap). */
+export interface PanelCtx {
+  mode: PanelMode;
+  editor: EditorState;
+  game: GameState | null;
+  /** Максимум мест (из числа стартовых точек трассы). По умолчанию 6. */
+  playersMax?: number;
+  /** Онлайн-контекст текущего хода. null — локальная игра. */
+  net?: NetTurn | null;
+  /** Сейчас ходит бот (локально) — подсказку «нажми на точку» не показываем. */
+  aiTurn?: boolean;
+  /** Показать «Сдаться» в шапке (локальный игрок ещё в гонке). */
+  canRetire?: boolean;
+}
+
+export function updatePanel(ctx: PanelCtx): void {
+  const {
+    mode,
+    editor,
+    game,
+    playersMax = 6,
+    net = null,
+    aiTurn = false,
+    canRetire = false,
+  } = ctx;
   seatCapacity = playersMax;
   editButtons.hidden = mode !== 'edit';
   modeButtons.hidden = mode !== 'mode';

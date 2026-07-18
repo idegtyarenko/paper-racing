@@ -159,15 +159,15 @@ function canRetire(): boolean {
 function updateUI(): void {
   const net = online.netTurn(S.game);
   const aiTurn = !!S.game && isBotSeat(S.game.current);
-  updatePanel(
-    S.mode,
-    S.editor,
-    S.game,
-    S.raceTrack?.startPoints.length ?? 6,
+  updatePanel({
+    mode: S.mode,
+    editor: S.editor,
+    game: S.game,
+    playersMax: S.raceTrack?.startPoints.length ?? 6,
     net,
     aiTurn,
-    canRetire(),
-  );
+    canRetire: canRetire(),
+  });
   renderTurnQueue(S.mode === 'race' ? S.game : null);
   renderStandings(S.mode === 'race' ? S.game : null, S.raceNav);
 }
