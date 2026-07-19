@@ -17,7 +17,7 @@ import {
   chaikinClosed,
   trimSeamOverlap,
 } from '../geometry';
-import { strings } from '../strings';
+import { strings } from '../i18n';
 import {
   WORLD_SIZE,
   WALL_CLEARANCE,

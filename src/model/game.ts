@@ -5,7 +5,7 @@
 import { Vec, dist, lerp, distPointToPolyline, segSegIntersection } from '../geometry';
 import { Track, key, unkey, sideOfFinish, onRoad } from './track';
 import type { Difficulty } from './ai/difficulty';
-import { strings } from '../strings';
+import { strings } from '../i18n';
 import {
   MIN_PLAYERS,
   WIN_CROSSINGS,

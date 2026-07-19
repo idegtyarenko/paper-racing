@@ -25,7 +25,7 @@ import { closeOverlay } from '../ui/dom';
 import { openConfirm } from '../ui/confirm';
 import { AppState } from '../app-state';
 import { setMoveSendState } from '../ui/panel';
-import { strings } from '../strings';
+import { strings } from '../i18n';
 import * as session from './online';
 import { OnlineHandlers } from './online';
 import * as hostBots from './host-bots';

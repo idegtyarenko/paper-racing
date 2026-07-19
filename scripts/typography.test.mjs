@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { typography, transform } from './typography.mjs';
+import { typography, transform, LOCALE_RULES } from './typography.mjs';
 
 const NBSP = '\\u00A0'; // литерал-эскейп, который вставляет инструмент
 
-describe('typography()', () => {
+describe('typography() — русский (по умолчанию)', () => {
   it('приклеивает короткие предлоги/союзы (1–2 буквы) к следующему слову', () => {
     expect(typography('я и ты')).toBe(`я${NBSP}и${NBSP}ты`);
     expect(typography('в дом')).toBe(`в${NBSP}дом`);
@@ -31,7 +31,26 @@ describe('typography()', () => {
   });
 });
 
-describe('transform() над исходником strings.ts', () => {
+describe('typography() — белорусский', () => {
+  it('склеивает белорусские короткие слова, включая «і» и «ў»', () => {
+    expect(typography('людзей і ботаў', LOCALE_RULES.be)).toBe(`людзей і${NBSP}ботаў`);
+    expect(typography('у гонцы', LOCALE_RULES.be)).toBe(`у${NBSP}гонцы`);
+    // «і» не ловится русским классом — проверяем, что расширение работает.
+    expect(typography('і потым', LOCALE_RULES.be)).toBe(`і${NBSP}потым`);
+  });
+});
+
+describe('typography() — английский', () => {
+  it('НЕ склеивает короткие предлоги, но держит «число+единица» и тире', () => {
+    expect(typography('a to b', LOCALE_RULES.en)).toBe('a to b'); // без склейки слов
+    expect(typography('30 sec', LOCALE_RULES.en)).toBe(`30${NBSP}sec`);
+    expect(typography('lost — reconnecting', LOCALE_RULES.en)).toBe(
+      `lost${NBSP}— reconnecting`,
+    );
+  });
+});
+
+describe('transform() над исходником локали', () => {
   it('сохраняет подстановки ${…} в шаблонных литералах', () => {
     const src = 'export const x = { online: { roster: (n) => `Игроки: ${n} из 6` } };';
     const { output } = transform(src);
@@ -39,20 +58,13 @@ describe('transform() над исходником strings.ts', () => {
     expect(output).toContain(`из${NBSP}6`); // «из 6» склеено в хвосте
   });
 
-  it('пропускает группу editor.step целиком (её парсит регулярка panel.ts)', () => {
+  it('обрабатывает шаговые тела мастера (префикс больше не парсится регуляркой)', () => {
     const src =
-      'export const strings = {' +
-      "  editor: { step: { finish: 'Трасса: шаг 3 из 4. Нажми, где будет старт — это же линия финиша.' } }," +
-      "  track: { notClosed: 'Трасса должна быть кольцевой — замкни ее.' }," +
-      '} as const;';
+      'export const x = {' +
+      "  editor: { step: { finish: 'Нажми, где будет старт — это же линия финиша.' } }," +
+      '};';
     const { output, changedKeys } = transform(src);
-    // editor.step.finish не изменён: тире и «шаг 3 из 4» остались с обычными пробелами.
-    expect(output).toContain('старт — это');
-    expect(output).not.toContain(`старт${NBSP}—`);
-    expect(output).not.toContain(`3${NBSP}из`);
-    // track.notClosed обработан: неразрывный пробел перед тире.
-    expect(output).toContain(`кольцевой${NBSP}—`);
-    expect(changedKeys).toContain('track.notClosed');
-    expect(changedKeys).not.toContain('editor.step.finish');
+    expect(output).toContain(`старт${NBSP}—`); // тело шага теперь тоже обрабатывается
+    expect(changedKeys).toContain('editor.step.finish');
   });
 });

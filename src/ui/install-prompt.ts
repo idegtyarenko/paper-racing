@@ -9,7 +9,7 @@
 // Не показываем, если игра уже открыта как установленное приложение
 // (display-mode: standalone) или пользователь недавно закрыл всплывашку.
 
-import { strings } from '../strings';
+import { strings } from '../i18n';
 
 const DISMISS_KEY = 'pr-install-dismissed';
 const DISMISS_MS = 14 * 864e5; // молчим 14 дней после «Закрыть»

@@ -4,12 +4,12 @@
 
 import { KMH_PER_CELL } from '../config';
 import { PanelMode } from '../app-state';
-import { EditorState, canStepBack } from '../model/editor';
+import { EditorState, EditorPhase, canStepBack } from '../model/editor';
 import { GameState, Player, MIN_PLAYERS } from '../model/game';
 import { Difficulty } from '../model/ai';
 import { msToClock } from './format';
 import { len } from '../geometry';
-import { strings } from '../strings';
+import { strings } from '../i18n';
 import { coarsePointer, bindTap, openSheet, closeOverlay, bindOverlayClose } from './dom';
 import { openConfirm } from './confirm';
 import { div, renderStepStatus, statusElement } from './status';
@@ -419,7 +419,18 @@ function renderPlayerCards(game: GameState, present?: boolean[]): void {
   });
 }
 
-/** Отрисовка сообщения редактора: заметный бейдж «Трасса: шаг N из 4» + инструкция. */
+// Номер шага мастера для бейджа «шаг N из 4» — по фазе. `ready` и ошибки бейджа не
+// имеют (сообщение рендерится как обычное тело). Локаль-независимо: бейдж собираем
+// из strings.editor.stepBadge, а не парсим текст (прежде тут была регулярка).
+const EDIT_STEP: Partial<Record<EditorPhase, number>> = {
+  center: 1,
+  adjust: 2,
+  finish: 3,
+  direction: 4,
+};
+const EDIT_STEP_TOTAL = 4;
+
+/** Отрисовка сообщения редактора: заметный бейдж «шаг N из 4» + инструкция. */
 function renderEditStatus(editor: EditorState): void {
   statusEl.className = 'status';
   if (editor.error) {
@@ -427,9 +438,9 @@ function renderEditStatus(editor: EditorState): void {
     statusEl.textContent = editor.message;
     return;
   }
-  const m = editor.message.match(/^(Трасса: шаг \d+ из \d+)\.\s*(.*)$/s);
-  if (m) {
-    renderStepStatus(m[1], m[2]);
+  const step = EDIT_STEP[editor.phase];
+  if (step !== undefined) {
+    renderStepStatus(strings.editor.stepBadge(step, EDIT_STEP_TOTAL), editor.message);
   } else {
     statusEl.classList.add('status--step');
     statusEl.replaceChildren(div('status__body', editor.message));

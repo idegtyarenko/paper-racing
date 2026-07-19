@@ -15,7 +15,7 @@ import {
   DRIVE_MAX,
   DRIVE_STEP,
 } from '../config';
-import { strings } from '../strings';
+import { strings } from '../i18n';
 import { bindTap, openSheet } from './dom';
 
 const sheet = document.getElementById('settingsSheet')!;

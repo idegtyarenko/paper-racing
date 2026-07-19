@@ -1,46 +1,68 @@
 // Сборочный инструмент типографики: расставляет неразрывные пробелы (U+00A0) в
-// интерфейсных строках `src/strings.ts`, чтобы в вёрстке не оставалось висячих
-// коротких предлогов/союзов, висячих тире и разрывов «число — единица».
+// строковых литералах файлов локалей `src/i18n/{ru,be,en}.ts`, чтобы в вёрстке не
+// оставалось висячих коротких предлогов/союзов, висячих тире и разрывов «число —
+// единица».
 //
-// Не рантайм: правки запекаются прямо в исходник строкой-эскейпом ` `
+// Правила — per-locale (см. LOCALE_RULES): русский и белорусский склеивают короткие
+// слова (белорусский класс букв расширен на `і`/`ў`), английский коротких предлогов
+// не склеивает (только «число+единица» и неразрыв перед тире).
+//
+// Не рантайм: правки запекаются прямо в исходник строкой-эскейпом ` `
 // (видна в diff — можно отревьюить), поэтому приложение ничего не считает на лету.
 // Правит ТОЛЬКО текст строковых литералов (через AST TypeScript) — код,
-// комментарии и подстановки `${…}` в шаблонных литералах не трогает. Группа
-// `editor.step.*` пропускается целиком: её префикс «Трасса: шаг N из N.» парсит
-// регулярка в `src/ui/panel.ts`, и nbsp внутри неё сломал бы разбор.
+// комментарии и подстановки `${…}` в шаблонных литералах не трогает.
 //
-// Запуск:  node scripts/typography.mjs           — записать изменения в файл
+// Запуск:  node scripts/typography.mjs           — записать изменения в файлы локалей
 //          node scripts/typography.mjs --check    — только проверить (exit 1, если
 //                                                    строки требуют обработки)
-// Функция `typography()` и `transform()` экспортируются для юнит-тестов.
+// Функции `typography()`, `transform()` и `LOCALE_RULES` экспортируются для тестов.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import ts from 'typescript';
 
-// Вставляем именно литерал-эскейп из 6 символов « », а не сам байт U+00A0 —
+// Вставляем именно литерал-эскейп из 6 символов « », а не сам байт U+00A0 —
 // так неразрывный пробел виден в diff и его можно отревьюить.
 const NBSP = '\\u00A0';
 
 /**
- * Чистая идемпотентная типографика для текста ОДНОГО строкового литерала.
- * Каждое правило ищет обычный пробел (U+0020); после подстановки ` `
+ * Правила типографики по локали:
+ *  - wordClass — класс букв для правил «короткое слово» и «число+единица». Белорусский
+ *    добавляет `і` (U+0456), `ў` (U+045E) и их заглавные — иначе `і` (частый союз «и»)
+ *    и слова с `ў` не ловятся русским классом `[а-яё]`.
+ *  - shortWords — склеивать ли предлоги/союзы 1–2 буквы со следующим словом. В
+ *    английском такой традиции нет — только «число+единица» и неразрыв перед тире.
+ */
+export const LOCALE_RULES = {
+  ru: { wordClass: 'а-яёА-ЯЁ', shortWords: true },
+  be: { wordClass: 'а-яёіўА-ЯЁІЎ', shortWords: true },
+  en: { wordClass: 'a-zA-Z', shortWords: false },
+};
+
+/**
+ * Чистая идемпотентная типографика для текста ОДНОГО строкового литерала под правила
+ * локали. Каждое правило ищет обычный пробел (U+0020); после подстановки ` `
  * повторный прогон уже ничего не находит.
  */
-export function typography(text) {
-  return (
-    text
-      // 1. Короткие слова (1–2 буквы: предлоги/союзы) приклеиваем к следующему
-      //    слову. Lookbehind — чтобы это было начало слова (не хвост длинного) и
-      //    чтобы соседние короткие слова оба склеились («я и ты»).
-      .replace(/(?<![^\s(«„"—])([а-яёА-ЯЁ]{1,2}) (?=\S)/gu, `$1${NBSP}`)
-      // 2. Тире не должно начинать строку — неразрывный пробел ПЕРЕД тире (после
-      //    тире пробел обычный, там перенос допустим).
-      .replace(/ —/g, `${NBSP}—`)
-      // 3. Число и следующее за ним слово/единицу не разрываем («30 сек»).
-      .replace(/(\d) (?=[а-яёА-ЯЁ])/gu, `$1${NBSP}`)
-  );
+export function typography(text, rules = LOCALE_RULES.ru) {
+  const { wordClass, shortWords } = rules;
+  let out = text;
+  // 1. Короткие слова (1–2 буквы: предлоги/союзы) приклеиваем к следующему слову.
+  //    Lookbehind — чтобы это было начало слова (не хвост длинного) и чтобы соседние
+  //    короткие слова оба склеились («я и ты»). Только для локалей со shortWords.
+  if (shortWords) {
+    out = out.replace(
+      new RegExp(`(?<![^\\s(«„"—])([${wordClass}]{1,2}) (?=\\S)`, 'gu'),
+      `$1${NBSP}`,
+    );
+  }
+  // 2. Тире не должно начинать строку — неразрывный пробел ПЕРЕД тире (после тире
+  //    пробел обычный, там перенос допустим). Универсально для всех локалей.
+  out = out.replace(/ —/g, `${NBSP}—`);
+  // 3. Число и следующее за ним слово/единицу не разрываем («30 сек» / «30 sec»).
+  out = out.replace(new RegExp(`(\\d) (?=[${wordClass}])`, 'gu'), `$1${NBSP}`);
+  return out;
 }
 
 const LITERAL_KINDS = new Set([
@@ -50,28 +72,6 @@ const LITERAL_KINDS = new Set([
   ts.SyntaxKind.TemplateMiddle,
   ts.SyntaxKind.TemplateTail,
 ]);
-
-// Диапазон исходника у объекта `editor.step` — литералы внутри пропускаем.
-function findStepRange(sf) {
-  let range = [Infinity, -Infinity];
-  function walk(node) {
-    if (
-      ts.isPropertyAssignment(node) &&
-      node.name.getText(sf) === 'editor' &&
-      ts.isObjectLiteralExpression(node.initializer)
-    ) {
-      for (const p of node.initializer.properties) {
-        if (ts.isPropertyAssignment(p) && p.name.getText(sf) === 'step') {
-          range = [p.initializer.getStart(sf), p.initializer.getEnd()];
-          return;
-        }
-      }
-    }
-    ts.forEachChild(node, walk);
-  }
-  walk(sf);
-  return range;
-}
 
 // Точечный путь до литерала (для отчёта --check): собираем имена property-присваиваний вверх по дереву.
 function keyPathOf(node, sf) {
@@ -96,23 +96,17 @@ function innerRange(node, sf) {
   return [start, end];
 }
 
-/** Обработать исходник strings.ts. Возвращает { output, changedKeys }. */
-export function transform(source) {
-  const sf = ts.createSourceFile('strings.ts', source, ts.ScriptTarget.Latest, true);
-  const [stepStart, stepEnd] = findStepRange(sf);
+/** Обработать исходник файла локали под её правила. Возвращает { output, changedKeys }. */
+export function transform(source, rules = LOCALE_RULES.ru) {
+  const sf = ts.createSourceFile('locale.ts', source, ts.ScriptTarget.Latest, true);
   const edits = [];
 
   function visit(node) {
     if (LITERAL_KINDS.has(node.kind)) {
-      const nodeStart = node.getStart(sf);
-      const nodeEnd = node.getEnd();
-      const insideStep = nodeStart >= stepStart && nodeEnd <= stepEnd;
-      if (!insideStep) {
-        const [start, end] = innerRange(node, sf);
-        const inner = source.slice(start, end);
-        const out = typography(inner);
-        if (out !== inner) edits.push({ start, end, out, key: keyPathOf(node, sf) });
-      }
+      const [start, end] = innerRange(node, sf);
+      const inner = source.slice(start, end);
+      const out = typography(inner, rules);
+      if (out !== inner) edits.push({ start, end, out, key: keyPathOf(node, sf) });
     }
     ts.forEachChild(node, visit);
   }
@@ -127,29 +121,40 @@ export function transform(source) {
   return { output, changedKeys };
 }
 
+/** Файлы локалей и их правила. */
+const LOCALE_FILES = [
+  ['ru', '../src/i18n/ru.ts'],
+  ['be', '../src/i18n/be.ts'],
+  ['en', '../src/i18n/en.ts'],
+];
+
 function main() {
   const check = process.argv.includes('--check');
-  const file = resolve(dirname(fileURLToPath(import.meta.url)), '../src/strings.ts');
-  const source = readFileSync(file, 'utf8');
-  const { output, changedKeys } = transform(source);
+  const dir = dirname(fileURLToPath(import.meta.url));
+  let anyChanged = false;
 
-  if (check) {
-    if (output !== source) {
+  for (const [code, rel] of LOCALE_FILES) {
+    const file = resolve(dir, rel);
+    const source = readFileSync(file, 'utf8');
+    const { output, changedKeys } = transform(source, LOCALE_RULES[code]);
+    if (output === source) continue;
+    anyChanged = true;
+    if (check) {
       console.error(
-        'typo:check — строки требуют неразрывных пробелов (запусти `npm run typo`):',
+        `typo:check — ${code}: строки требуют неразрывных пробелов (запусти \`npm run typo\`):`,
       );
       for (const k of changedKeys) console.error('  ' + k);
-      process.exit(1);
+    } else {
+      writeFileSync(file, output, 'utf8');
+      console.log(`typo — ${code}: обработано строк: ${changedKeys.length}`);
+      for (const k of changedKeys) console.log('  ' + k);
     }
-    console.log('typo:check — OK, все строки уже обработаны.');
-    return;
   }
 
-  if (output !== source) {
-    writeFileSync(file, output, 'utf8');
-    console.log(`typo — обработано строк: ${changedKeys.length}`);
-    for (const k of changedKeys) console.log('  ' + k);
-  } else {
+  if (check) {
+    if (anyChanged) process.exit(1);
+    console.log('typo:check — OK, все локали обработаны.');
+  } else if (!anyChanged) {
     console.log('typo — изменений нет.');
   }
 }

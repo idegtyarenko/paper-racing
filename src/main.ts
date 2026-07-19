@@ -18,7 +18,7 @@ import {
 import { candidatesForSeat, applyMove, coastMove, retireSeat } from './model/turns';
 import { Difficulty, chooseMove } from './model/ai';
 import { buildNavField } from './model/nav';
-import { strings } from './strings';
+import { strings, localeTag, dateLocale } from './i18n';
 import { AI_MOVE_DELAY_MS } from './config';
 import { render, AppView } from './view/render';
 import { Bounds, polylineBounds } from './view/camera';
@@ -545,13 +545,15 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') saveState();
 });
 
-// Заполнить статичные тексты разметки из strings до первого показа панели.
+// Заполнить статичные тексты разметки из strings до первого показа панели, и выставить
+// язык документа под активную локаль (в разметке дефолт lang="en").
+document.documentElement.lang = localeTag;
 localizeDom();
 
 // Метка сборки внизу шторки «Правила» — честный признак, какой код сейчас крутится
 // (строка вкомпилирована в бандл): коммит + время сборки. Время форматируем в
 // локальный час, чтобы «только что» совпадало с настенным временем.
-const buildLabel = new Date(__BUILD_TIME__).toLocaleString('ru-RU', {
+const buildLabel = new Date(__BUILD_TIME__).toLocaleString(dateLocale, {
   day: '2-digit',
   month: '2-digit',
   year: '2-digit',

@@ -2,7 +2,7 @@
 // и короткие всплывающие уведомления (тост). DOM-шторки живут в #overlay.
 
 import { bindTap, openSheet, closeOverlay } from './dom';
-import { strings } from '../strings';
+import { strings } from '../i18n';
 
 const nameDialog = document.getElementById('nameDialog')!;
 const nameInput = document.getElementById('nameInput') as HTMLInputElement;

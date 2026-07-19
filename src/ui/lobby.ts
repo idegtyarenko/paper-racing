@@ -3,7 +3,7 @@
 
 import { bindTap } from './dom';
 import { renderStepStatus } from './status';
-import { strings } from '../strings';
+import { strings } from '../i18n';
 import { Difficulty } from '../model/ai';
 
 const lobbyCodeBtn = document.getElementById('lobbyCode') as HTMLButtonElement;

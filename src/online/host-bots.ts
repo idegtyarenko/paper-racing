@@ -19,7 +19,7 @@ import { coastMove, applyMove } from '../model/turns';
 import { Difficulty, chooseMove } from '../model/ai';
 import { renderLobby } from '../ui/lobby';
 import { showToast } from '../ui/dialogs';
-import { strings } from '../strings';
+import { strings } from '../i18n';
 import { AI_MOVE_DELAY_MS, SKIP_RETRY_MS } from '../config';
 import * as session from './online';
 import type { OnlineDeps } from './online-controller';

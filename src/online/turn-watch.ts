@@ -15,7 +15,7 @@ import { GameState, isFinished } from '../model/game';
 import { coastMove } from '../model/turns';
 import { showToast } from '../ui/dialogs';
 import type { NetTurn } from '../ui/panel';
-import { strings } from '../strings';
+import { strings } from '../i18n';
 import { TURN_TIMEOUT_MS, LOBBY_PRUNE_MS, SKIP_RETRY_MS } from '../config';
 import * as session from './online';
 import { isBotSeat, scheduleBotMove, clearBotTimer } from './host-bots';

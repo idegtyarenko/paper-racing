@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Vec, Polyline } from '../geometry';
-import { strings } from '../strings';
+import { strings } from '../i18n';
 import {
   onRoad,
   sideOfFinish,

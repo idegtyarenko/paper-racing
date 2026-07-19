@@ -22,7 +22,7 @@ import {
   resampleClosed,
   smoothClosed,
 } from '../geometry';
-import { strings } from '../strings';
+import { strings } from '../i18n';
 import { WIDTH_MIN, WIDTH_MAX, WORLD_SIZE, GAP_MIN } from '../config';
 
 // Диапазон полной ширины трассы (клетки) — реэкспорт из config для внешних импортов.

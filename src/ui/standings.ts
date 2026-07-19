@@ -10,7 +10,7 @@
 import { GameState } from '../model/game';
 import { NavField } from '../model/nav';
 import { computeStandings } from '../model/standings';
-import { strings } from '../strings';
+import { strings } from '../i18n';
 
 let root: HTMLElement | null = null;
 

@@ -35,8 +35,11 @@ export default defineConfig({
       manifest: {
         name: 'Paper Racing',
         short_name: 'Paper Racing',
-        description: 'Гонки по клеточкам: черти трассу и обгоняй соперников.',
-        lang: 'ru',
+        // Манифест — один артефакт на сборку (рантаймом не варьируется), поэтому на
+        // языке по умолчанию (английский). Язык самого UI выбирается на старте.
+        description: 'A pen-and-paper racing game: draw a track and outrace your rivals.',
+        lang: 'en',
+        dir: 'ltr',
         display: 'standalone',
         orientation: 'any',
         start_url: '.',

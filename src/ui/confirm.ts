@@ -3,7 +3,7 @@
 // разметки в index.html для неё нет (не растим index.html, см. роадмап).
 
 import { bindTap, openSheet, closeOverlay } from './dom';
-import { strings } from '../strings';
+import { strings } from '../i18n';
 
 let sheet: HTMLElement | null = null;
 let titleEl: HTMLElement;

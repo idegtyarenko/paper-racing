@@ -10,6 +10,7 @@
 // проверяется `npm run build` + grep по dist. Пользователю не виден.
 
 import { AppState } from './app-state';
+import { setLocale as applyLocale, type LocaleCode } from './i18n';
 import { Track, finalizeTrack, clipFinishLine } from './model/track';
 import { Candidate, isFinished, WIN_CROSSINGS } from './model/game';
 import { Difficulty } from './model/ai';
@@ -96,6 +97,11 @@ export function installDevHelpers(deps: DevHelperDeps): void {
     hover: input.getHover()?.target ?? null,
   });
   (window as unknown as Record<string, unknown>).__pr = {
+    /** Тест-переключатель языка: пишет выбор в localStorage и перезагружает. Для
+     *  проверки локалей без UI (то же делает `?lang=en|ru|be` в URL). */
+    setLocale(code: LocaleCode) {
+      applyLocale(code);
+    },
     /** Готовая трасса + сразу локальная гонка: humans людей, bots ботов. */
     race(humans = 1, bots = 1, difficulty: Difficulty = 'medium') {
       S.raceTrack = devTrack();

@@ -23,7 +23,7 @@ import {
   pickEdge,
   applyEdgeDrag,
 } from './centerline';
-import { strings } from '../strings';
+import { strings } from '../i18n';
 import { MIN_CENTER_AREA } from '../config';
 
 export type EditorPhase = 'center' | 'adjust' | 'finish' | 'direction' | 'ready';
