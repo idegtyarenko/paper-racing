@@ -67,7 +67,7 @@ export const be: Strings = {
     prompt: 'Выберы колькасць і\u00A0складанасць ботаў\u00A0— і\u00A0паехалі!',
     easy: '🟢 Навічкі',
     medium: '🟡 Аматары',
-    hard: '🔴 Прафі',
+    hard: '🔴 Профі',
     botsLabel: 'Боты',
     difficultyLabel: 'Складанасць',
     start: '🏁 Паехалі!',
@@ -80,9 +80,9 @@ export const be: Strings = {
     helpLabel: 'Паказаць тлумачэнне',
     tabDrive: 'Паводзіны машыны',
     tabRules: 'Правілы',
-    driveModeRealistic: 'Рэалістычнае',
-    driveModeClassic: 'Класічнае',
-    driveModeCustom: 'Сваё',
+    driveModeRealistic: 'Рэалістычныя',
+    driveModeClassic: 'Класічныя',
+    driveModeCustom: 'Свае',
     driveExplainRealistic:
       'Машына тармозіць хутчэй, чым разганяецца, але не\u00A0дае рэзка ' +
       'затармазіць і\u00A0павярнуць адначасова. Атрымліваем больш рэалістычныя траекторыі.',
