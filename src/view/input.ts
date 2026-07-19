@@ -277,8 +277,9 @@ function beginPan(sx: number, sy: number, id: number): void {
   activeId = id;
   loupe = null;
   hover = null;
-  selected = null;
-  showConfirmMove(false);
+  // Выбранного кандидата и кнопку «Газу!» пан НЕ сбрасывает: превью рисуется в
+  // мировых координатах и едет с картой, а кнопку (фикс. оверлей) переякорим на
+  // отпускании (endGesture). Так пан по полю не заставляет выбирать ход заново.
   canvas.classList.add('grabbing');
 }
 
@@ -458,6 +459,9 @@ function endGesture(e: PointerEvent): void {
       break;
     }
     case 'pan':
+      // Пан сохраняет выбор: переякорим кнопку «Газу!» — после сдвига карты
+      // нижний кандидат мог заехать в зону кнопки (confirmAnchor это учтёт).
+      if (selected) showConfirmMove(true, confirmAnchor());
       break;
   }
   // Тач-тап без протяжки (кроме самого зума) — кандидат на первый тап двойного.
