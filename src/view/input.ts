@@ -122,6 +122,25 @@ type Gesture =
 let gesture: Gesture | null = null;
 let activeId: number | null = null;
 
+/**
+ * Полный сброс состояния ввода к чистому листу. Страховка от «фантомных» указателей:
+ * iOS Safari нередко ТЕРЯЕТ терминальный pointerup/pointercancel (перехват системным
+ * жестом, одновременный подъём двух пальцев, уход в фон) — тогда запись пальца остаётся
+ * в `activePointers` навсегда, и следующее одиночное касание ложно считается пинчем
+ * (`size === 2` с фантомом) → поле зумится, а выйти можно только перезапуском.
+ */
+function resetGestureState(): void {
+  activePointers.clear();
+  pinch = null;
+  gesture = null;
+  activeId = null;
+  loupe = null;
+  hover = null;
+  selected = null;
+  showConfirmMove(false);
+  canvas.classList.remove('grabbing');
+}
+
 // ── Двойной тап (тач) → зум камеры поля к точке ─────────────────────────────
 // Свой жест вместо нативного iOS-зума (тот хайджекит пан/лупу). Помним последний
 // «чистый» тап (без протяжки); следующий тап рядом и вовремя — двойной.
@@ -485,11 +504,18 @@ export function initInput(d: InputDeps): void {
 
   canvas.addEventListener('pointerdown', (e) => {
     e.preventDefault();
+    const touch = e.pointerType === 'touch';
+    // Первый палец новой серии касаний (`isPrimary`) при живом состоянии = остатки
+    // фантомного указателя от потерянного iOS pointerup/pointercancel. В здоровом
+    // состоянии `activePointers` тут пуст — чистим, иначе фантом сделает `size === 2`
+    // и одиночное касание ложно уйдёт в пинч (поле зумится до перезапуска).
+    if (touch && e.isPrimary && (activePointers.size > 0 || pinch || activeId !== null)) {
+      resetGestureState();
+    }
     // setPointerCapture кидает NotFoundError для уже неактивного указателя.
     try {
       canvas.setPointerCapture(e.pointerId);
     } catch {}
-    const touch = e.pointerType === 'touch';
     const scr = vp.toScreen(e);
     if (touch) activePointers.set(e.pointerId, scr);
 
@@ -592,13 +618,7 @@ export function initInput(d: InputDeps): void {
       pointerCancel(deps.state.editor);
       deps.updateUI();
     }
-    gesture = null;
-    activeId = null;
-    loupe = null;
-    hover = null;
-    selected = null;
-    showConfirmMove(false);
-    canvas.classList.remove('grabbing');
+    resetGestureState();
     deps.redraw();
   });
 
@@ -633,6 +653,14 @@ export function initInput(d: InputDeps): void {
     document.addEventListener(type, (e) => e.preventDefault(), { passive: false });
   }
   canvas.addEventListener('dblclick', (e) => e.preventDefault());
+
+  // Уход в фон/потеря фокуса может «проглотить» терминальный pointerup (iOS) — тогда
+  // остаётся фантомный указатель. Подстрахуемся полным сбросом жестов на скрытии
+  // вкладки и blur, чтобы вернуться к чистому состоянию, а не в залипший пинч-зум.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) resetGestureState();
+  });
+  window.addEventListener('blur', () => resetGestureState());
 
   document.getElementById('zoomIn')?.addEventListener('click', () => zoomByButton(1));
   document.getElementById('zoomOut')?.addEventListener('click', () => zoomByButton(-1));
