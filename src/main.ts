@@ -280,7 +280,7 @@ function refreshCands(): void {
   // наведение по реальной позиции мыши, иначе clearSelection выше погасил бы его.
   input.reaimHover();
   // Наметка дожила до своего хода — вооружаем «Газу!», чтобы подтвердить одним тапом.
-  if (myTurn() && S.pending) showConfirmMove(true);
+  if (myTurn() && S.pending) showConfirmMove(true, input.confirmAnchor());
 }
 
 /**

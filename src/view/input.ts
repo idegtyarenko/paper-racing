@@ -257,7 +257,7 @@ function updatePinch(): void {
  * цели попадёт в кнопку — чужой ход). Просто «ниже центра» не считается, чтобы
  * кнопка не прыгала туда-сюда попусту.
  */
-function confirmAnchor(): 'top' | 'bottom' {
+export function confirmAnchor(): 'top' | 'bottom' {
   const cands = deps.state.cands;
   const view = vp.camera();
   const { h } = vp.viewSize();
