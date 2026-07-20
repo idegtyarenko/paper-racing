@@ -123,17 +123,21 @@ export function applyMove(state: GameState, cand: Candidate): void {
 }
 
 /**
- * Индекс игрока для сквозного слота хода. Круг = n слотов; позиция в круге (seat) —
- * turn % n, номер круга (round) — floor(turn / n). Игроки ходят по кругу: стартовый
- * сдвигается на round — (round + seat) % n. n=3: круг 1 — 0,1,2; круг 2 — 1,2,0;
- * круг 3 — 2,0,1 (без преимущества первого хода). Это перестановка всех игроков в
- * каждом круге (никто не пропущен и не ходит дважды) и детерминирована: одинаковый
- * turn у всех клиентов даёт один индекс.
+ * Индекс игрока для сквозного слота хода. Круг = n слотов; позиция в круге (pos) —
+ * turn % n, номер круга (round) — floor(turn / n). Стартовая позиция сдвигается на
+ * round: rot = (round + pos) % n (без преимущества первого хода). `order` —
+ * перестановка «позиция решётки → seat» (startGridOrder): первый круг ходит по
+ * решётке спереди назад (order[0] — поул), дальше сдвиг как обычно; без order (или
+ * тождественный) — прежнее поведение rot. n=3, order тождественный: круг 1 — 0,1,2;
+ * круг 2 — 1,2,0; круг 3 — 2,0,1. Это перестановка всех игроков в каждом круге
+ * (никто не пропущен и не ходит дважды) и детерминирована: одинаковые turn/order у
+ * всех клиентов дают один индекс.
  */
-export function playerForTurn(turn: number, n: number): number {
+export function playerForTurn(turn: number, n: number, order?: number[]): number {
   const round = Math.floor(turn / n);
-  const seat = turn % n;
-  return (round + seat) % n;
+  const pos = turn % n;
+  const rot = (round + pos) % n;
+  return order ? order[rot] : rot;
 }
 
 /** Слот очереди ходов: чей ход и в каком круге он состоится. */
@@ -161,7 +165,7 @@ export function upcomingSlots(state: GameState, count: number): UpcomingSlot[] {
   let turn = state.turn;
   let slotsLeft = state.finalTurnsLeft; // null — раунд не идёт, слотов не ограничено
   while (out.length < count && (slotsLeft === null || slotsLeft > 0)) {
-    const seat = playerForTurn(turn, n);
+    const seat = playerForTurn(turn, n, state.startGridOrder);
     const p = state.players[seat];
     if (p.place !== null || p.retired) {
       // Выбывший (получил место / сдался) хода не делает — слот сгорает.
@@ -227,7 +231,7 @@ function afterAction(state: GameState): void {
   }
 
   state.turn += 1;
-  state.current = playerForTurn(state.turn, n);
+  state.current = playerForTurn(state.turn, n, state.startGridOrder);
   const next = state.players[state.current];
   if (next.skipTurns > 0) {
     next.skipTurns -= 1;

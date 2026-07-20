@@ -80,6 +80,10 @@ export function deserializeState(s: SerializedState, track: Track): GameState {
     // строках) + миграция легаси physics → drive.
     rules: normalizeRules(s.rules),
     turn: s.turn ?? 0,
+    // Порядок хода по решётке: старые снимки без поля — тождественная перестановка
+    // (прежнее поведение, ход по индексу seat).
+    startGridOrder:
+      s.startGridOrder ?? Array.from({ length: s.players.length }, (_, i) => i),
     track,
   };
 }

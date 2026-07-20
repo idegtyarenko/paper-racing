@@ -191,6 +191,17 @@ export interface GameState {
    * ждущие расстановки мест. Опустошается в resolveRound.
    */
   roundFinishers: number[];
+  /**
+   * Порядок хода по стартовой решётке: startGridOrder[p] — seat, стоящий на p-й
+   * позиции решётки спереди назад (p=0 — поул). Первый круг ходит именно в этом
+   * порядке (поул раньше второго ряда — как в реальной гонке), дальше стартовый
+   * сдвигается каждый круг как прежде (см. playerForTurn в turns.ts). Это
+   * ОБРАТНАЯ перестановка к startOrder из newGame (seat i стоит на решётке на
+   * позиции startOrder[i]); тождественная при старте без перемешивания. Едет в
+   * сериализованном стейте (детерминизм у всех клиентов); старые снимки без поля
+   * поднимаются как тождественная (см. deserializeState).
+   */
+  startGridOrder: number[];
 }
 
 /** Цвета и имена болидов по индексу игрока (до шести участников). */
@@ -257,16 +268,22 @@ export function newGame(
     place: null,
     retired: false,
   });
+  // Порядок хода по решётке — обратная перестановка к startOrder: seat i стоит на
+  // позиции eff[i], значит на позиции p (спереди назад) стоит seat eff.indexOf(p).
+  // Без перемешивания eff тождественна → startGridOrder тоже тождественна.
+  const eff = Array.from({ length: n }, (_, i) => startOrder?.[i] ?? i);
+  const startGridOrder = Array.from({ length: n }, (_, p) => eff.indexOf(p));
   return {
     track,
     players: Array.from({ length: n }, (_, i) => mk(i)),
     rules,
-    current: 0,
+    current: startGridOrder[0], // поул ходит первым (turn 0)
     turn: 0,
     phase: 'race',
     winner: null,
     finalTurnsLeft: null,
     roundFinishers: [],
+    startGridOrder,
   };
 }
 

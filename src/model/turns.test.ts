@@ -364,6 +364,26 @@ describe('честная очерёдность хода', () => {
     }
     expect(seen).toEqual([0, 1, 2, 1, 2, 0]);
   });
+
+  it('первый круг ходит по стартовой решётке (поул раньше второго ряда)', () => {
+    // startOrder — seat → позиция решётки: seat 0 на позиции 2 (сзади), seat 1 на
+    // поуле, seat 2 в середине. Ход первого круга должен идти спереди назад: 1,2,0.
+    const g = newGame(ringTrack(), 3, DEFAULT_RULES, [2, 0, 1]);
+    // Первым ходит стоящий на поуле (startPoints[0]), а не seat 0.
+    expect(g.current).toBe(1);
+    expect(g.players[g.current].pos).toEqual(g.track.startPoints[0]);
+    // Круг 1 — по решётке (1,2,0); круг 2 — прежний сдвиг относительно решётки.
+    expect(upcomingTurns(g, 6)).toEqual([1, 2, 0, 2, 0, 1]);
+  });
+
+  it('решётка сохраняет ротацию 0,1,1,0 для двоих (a,b,b,a)', () => {
+    // Поул у seat 1 (startOrder меняет местами двоих) → последовательность 1,0,0,1:
+    // та же структура «блокирующего преимущества», просто относительно решётки.
+    const g = newGame(ringTrack(), 2, DEFAULT_RULES, [1, 0]);
+    expect(g.current).toBe(1);
+    expect(g.players[g.current].pos).toEqual(g.track.startPoints[0]);
+    expect(upcomingTurns(g, 4)).toEqual([1, 0, 0, 1]);
+  });
 });
 
 describe('upcomingTurns — очередь ближайших ходов', () => {
