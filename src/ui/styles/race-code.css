@@ -1,11 +1,9 @@
-/* Чип с кодом игры над полем во время онлайн-гонки: капсула у верхнего-левого края
-   поля, поверх canvas (как turn-queue / zoom-ctl). В отличие от turn-queue кликабельна
-   — тап делится ссылкой на игру, чтобы подсказать выпавшему код. */
+/* Чип с кодом игры над полем во время онлайн-гонки: живёт в .board-hud-top рядом с
+   очередью ходов (переносится под неё, когда в строку не влезают). В отличие от
+   turn-queue кликабельна — тап делится ссылкой на игру, чтобы подсказать выпавшему код.
+   Контейнер .board-hud-top не ловит жесты, поэтому чип возвращает pointer-events себе. */
 .race-code {
-  position: absolute;
-  top: calc(10px + env(safe-area-inset-top));
-  left: calc(10px + env(safe-area-inset-left));
-  z-index: 5;
+  pointer-events: auto;
   padding: 7px 12px;
   border-radius: 999px;
   border: none;

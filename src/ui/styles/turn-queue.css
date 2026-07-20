@@ -1,16 +1,29 @@
+/* Контейнер верхнего HUD над полем: очередь ходов + (в онлайне) код гонки. Флекс с
+   переносом — когда обе капсулы в строку не влезают (узкий экран / длинный состав),
+   код гонки переносится на строку НИЖЕ очереди, а не налезает на неё. Сам контейнер
+   не перехватывает жесты по карте; кликабельные дети включают pointer-events сами. */
+.board-hud-top {
+  position: absolute;
+  /* Отступ от краёв + вырезы (бровь/челка) iPhone, иначе HUD прячется под ними. */
+  top: calc(10px + env(safe-area-inset-top));
+  left: calc(10px + env(safe-area-inset-left));
+  right: calc(10px + env(safe-area-inset-right));
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
 /* Полоса очереди ходов: капсула с точками игроков у верхнего края поля, поверх
    canvas (как zoom-ctl / confirm-move). Не перехватывает жесты по карте. */
 .turn-queue {
-  position: absolute;
-  /* Отступ от верха + вырез (бровь/челка) iPhone, иначе полоса прячется под ним. */
-  top: calc(10px + env(safe-area-inset-top));
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 5;
   display: flex;
   align-items: center;
   gap: 8px;
-  max-width: calc(100% - 24px);
+  max-width: 100%;
   padding: 7px 12px;
   border-radius: 999px;
   background: var(--surface-glass);
