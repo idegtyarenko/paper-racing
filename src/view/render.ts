@@ -4,6 +4,7 @@ import { Vec, Polyline, add, sub, scale, normalize, lerp } from '../geometry';
 import { Track } from '../model/track';
 import { EditorState, Arrow } from '../model/editor';
 import { GameState, Candidate, Drive, Player } from '../model/game';
+import { aeroFactor } from '../model/turns';
 import { MIN_LAUNCH } from '../config';
 import { Camera } from './camera';
 
@@ -483,8 +484,10 @@ function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): 
 /**
  * Заливка «эллипса сцепления» управляемости — зоны вокруг точки наката C = pos + vel,
  * внутри которой лежат точки-кандидаты. В системе координат скорости: перёд —
- * полуэллипс с полуосями (accel × maneuver), зад — (brake × maneuver); на старте
- * (vel = 0) — круг радиуса max(accel, MIN_LAUNCH). Рисуется бледной заливкой без
+ * полуэллипс с полуосями (accel × grip_eff), зад — (brake_eff × grip_eff); на старте
+ * (vel = 0) — круг радиуса max(accel, MIN_LAUNCH). Торможение и хват берутся с учётом
+ * прижима на текущей скорости (grip_eff/brake_eff = grip/brake · aeroFactor), чтобы
+ * заливка совпадала с фактически достижимыми узлами. Рисуется бледной заливкой без
  * обводки — обозначить границу с минимумом шума.
  */
 function drawDriveArea(
@@ -495,8 +498,11 @@ function drawDriveArea(
   drive: Drive,
   color: string,
 ): void {
-  const { accel, brake, maneuver } = drive;
+  const { accel, brake, grip, downforce } = drive;
   const speed = Math.hypot(vel.x, vel.y);
+  const aero = aeroFactor(downforce, speed);
+  const brakeEff = brake * aero;
+  const gripEff = grip * aero;
   ctx.save();
   ctx.fillStyle = color;
   ctx.globalAlpha = 0.1;
@@ -508,9 +514,9 @@ function drawDriveArea(
     const cy = (pos.y + vel.y) * s;
     const phi = Math.atan2(vel.y, vel.x); // продольная ось = направление движения
     // Две полудуги эллипса, стыкующиеся по поперечной оси (углы ±π/2): передняя с
-    // полуосью accel вдоль движения, задняя с полуосью brake; обе с maneuver вбок.
-    ctx.ellipse(cx, cy, accel * s, maneuver * s, phi, -Math.PI / 2, Math.PI / 2);
-    ctx.ellipse(cx, cy, brake * s, maneuver * s, phi, Math.PI / 2, (3 * Math.PI) / 2);
+    // полуосью accel вдоль движения, задняя с brake_eff; обе с grip_eff вбок.
+    ctx.ellipse(cx, cy, accel * s, gripEff * s, phi, -Math.PI / 2, Math.PI / 2);
+    ctx.ellipse(cx, cy, brakeEff * s, gripEff * s, phi, Math.PI / 2, (3 * Math.PI) / 2);
     ctx.closePath();
   }
   ctx.fill();
@@ -647,7 +653,7 @@ function drawCandidates(
   // Заливка зоны сцепления — под точками; изотропную управляемость (как классика)
   // не рисуем, там квадрат и так очевиден.
   const d = game.rules.drive;
-  if (!(d.accel === d.brake && d.brake === d.maneuver)) {
+  if (!(d.accel === d.brake && d.brake === d.grip && d.downforce === 0)) {
     drawDriveArea(ctx, s, p.pos, p.vel, d, p.color);
   }
   if (hover && !hover.blocked) {

@@ -369,8 +369,20 @@
               <button
                 type="button"
                 class="seg__btn"
-                data-mode="realistic"
-                data-i18n="settings.driveModeRealistic"
+                data-mode="sports"
+                data-i18n="settings.driveModeSports"
+              ></button>
+              <button
+                type="button"
+                class="seg__btn"
+                data-mode="gt"
+                data-i18n="settings.driveModeGt"
+              ></button>
+              <button
+                type="button"
+                class="seg__btn"
+                data-mode="f1"
+                data-i18n="settings.driveModeF1"
               ></button>
               <button
                 type="button"
@@ -398,10 +410,15 @@
               </div>
               <input id="brakeSlider" class="slider" type="range" />
               <div class="setting__head">
-                <span class="setting__label" data-i18n="settings.driveManeuver"></span>
-                <span id="maneuverValue" class="setting__value"></span>
+                <span class="setting__label" data-i18n="settings.driveGrip"></span>
+                <span id="gripValue" class="setting__value"></span>
               </div>
-              <input id="maneuverSlider" class="slider" type="range" />
+              <input id="gripSlider" class="slider" type="range" />
+              <div class="setting__head">
+                <span class="setting__label" data-i18n="settings.driveDownforce"></span>
+                <span id="downforceValue" class="setting__value"></span>
+              </div>
+              <input id="downforceSlider" class="slider" type="range" />
             </div>
             <canvas id="drivePreview" class="drive-preview"></canvas>
           </div>

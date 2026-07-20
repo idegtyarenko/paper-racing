@@ -116,19 +116,28 @@ export const en = {
     // Tabs of the settings sheet: car handling / race rules.
     tabDrive: 'Car handling',
     tabRules: 'Rules',
-    // Car handling (bolide movement model).
-    driveModeRealistic: 'Realistic',
+    // Car handling (bolide movement model): preset ladder + custom sliders.
+    driveModeSports: 'Sports',
+    driveModeGt: 'GT',
+    driveModeF1: 'F1',
     driveModeClassic: 'Classic',
     driveModeCustom: 'Custom',
-    driveExplainRealistic:
-      "The car brakes harder than it accelerates, and won't let you brake sharply and " +
-      'turn at the same time. Gives more realistic racing lines.',
+    driveExplainSports:
+      "The car brakes harder than it accelerates and won't let you brake sharply and " +
+      'turn at once\u00A0— realistic racing lines with forgiving grip.',
+    driveExplainGt:
+      'More grip and braking than a sports car, plus light downforce that tightens ' +
+      'fast corners.',
+    driveExplainF1:
+      'Strong downforce\u00A0— the faster you go, the more grip. Fast corners can be taken ' +
+      'almost flat, slow ones stay ordinary.',
     driveExplainClassic:
       'Each turn you can change your speed by one cell vertically and horizontally. ' +
       'The classic pen-and-paper game.',
     driveAccel: 'Acceleration',
     driveBrake: 'Braking',
-    driveManeuver: 'Cornering',
+    driveGrip: 'Grip',
+    driveDownforce: 'Downforce',
     penaltyLabel: 'Off-track penalty',
     penaltyHint:
       'Penalty turns for flying off the track. Punish by exit speed (the faster you ' +

@@ -4,7 +4,7 @@
 // Общий расчёт исхода/победителя/возврата из штрафа — в game.ts.
 
 import { Vec, pointOnSegment } from '../geometry';
-import { MIN_LAUNCH } from '../config';
+import { MIN_LAUNCH, DOWNFORCE_VREF } from '../config';
 import {
   GameState,
   Candidate,
@@ -26,25 +26,36 @@ import {
  * Вокруг точки наката C = pos + vel лежит «эллипс сцепления» в системе координат
  * скорости: целые узлы, у которых изменение скорости a = target − C влезает в эллипс с
  * полуосями drive (клетки/ход):
- *  - продольно вперёд (a·û ≥ 0) — полуось accel; назад (торможение) — полуось brake;
- *  - поперечно (вбок) — полуось maneuver;
- *  - условие эллипса (a_along/cap)² + (a_lat/maneuver)² ≤ 1 связывает разгон и доворот:
+ *  - продольно вперёд (a·û ≥ 0) — полуось accel; назад (торможение) — полуось brake_eff;
+ *  - поперечно (вбок) — полуось grip_eff;
+ *  - условие эллипса (a_along/cap)² + (a_lat/grip_eff)² ≤ 1 связывает разгон и доворот:
  *    разгоняешься в пол — на доворот не осталось, и наоборот (скруглённые углы).
  * Скорость учитывается сама: доворот на угол θ требует поперечного Δv ≈ |vel|·θ, значит
- * θ_max ≈ maneuver/|vel| — чем быстрее, тем меньше доворот за ход. Точка наката (a = 0)
- * всегда в наборе (0 ≤ 1), так что инерция/пропуск работают как в классике.
+ * θ_max ≈ grip_eff/|vel| — чем быстрее, тем меньше доворот за ход (минимальный радиус
+ * ∝ v²/grip_eff). Точка наката (a = 0) всегда в наборе (0 ≤ 1), так что инерция/пропуск
+ * работают как в классике.
+ *
+ * Аэродинамика: brake_eff = brake·aero, grip_eff = grip·aero, где aero = aeroFactor
+ * (downforce, speed) растёт с квадратом скорости. Разгон (accel) прижим не трогает.
+ * На старте (vel = 0) прижима нет и aero не участвует.
  *
  * На старте (vel = 0) направления нет: изотропный диск радиуса max(accel, MIN_LAUNCH).
  * Пол MIN_LAUNCH = √2 гарантирует диагональный старт (набор 3×3) при любом разгоне.
- * Все три полуоси равны → изотропный круг: grip в [√2, 2) даёт ровно квадрат 3×3
- * (классика).
+ * Все три полуоси равны и downforce = 0 → изотропный круг: grip в [√2, 2) даёт ровно
+ * квадрат 3×3 (классика).
  */
 export function reachableTargets(pos: Vec, vel: Vec, drive: Drive): Vec[] {
-  const { accel, brake, maneuver } = drive;
+  const { accel, brake, grip, downforce } = drive;
   const cx = pos.x + vel.x;
   const cy = pos.y + vel.y;
   const speed = Math.hypot(vel.x, vel.y);
-  const r = Math.ceil(Math.max(accel, brake, maneuver, MIN_LAUNCH)); // рамка перебора узлов
+  // Прижим растёт со скоростью и раздвигает торможение/хват (см. aeroFactor).
+  const aero = aeroFactor(downforce, speed);
+  const brakeEff = brake * aero;
+  const gripEff = grip * aero;
+  // Рамка перебора по ЭФФЕКТИВНЫМ полуосям: на скорости прижим может увести brake/grip
+  // выше их базовых значений, иначе достижимые узлы обрезались бы рамкой.
+  const r = Math.ceil(Math.max(accel, brakeEff, gripEff, MIN_LAUNCH));
   const EPS = 1e-9;
   const out: Vec[] = [];
   for (let ay = -r; ay <= r; ay++) {
@@ -57,15 +68,25 @@ export function reachableTargets(pos: Vec, vel: Vec, drive: Drive): Vec[] {
         const uy = vel.y / speed;
         const along = ax * ux + ay * uy; // продольная составляющая a (вдоль скорости)
         const lat = -ax * uy + ay * ux; // поперечная составляющая a (вбок)
-        const cap = along >= 0 ? accel : brake; // перёд — разгон, зад — тормоза
+        const cap = along >= 0 ? accel : brakeEff; // перёд — разгон, зад — тормоза
         const nl = cap === 0 ? (along === 0 ? 0 : Infinity) : along / cap;
-        const nt = maneuver === 0 ? (lat === 0 ? 0 : Infinity) : lat / maneuver;
+        const nt = gripEff === 0 ? (lat === 0 ? 0 : Infinity) : lat / gripEff;
         if (nl * nl + nt * nt > 1 + EPS) continue; // вне эллипса сцепления
       }
       out.push({ x: cx + ax, y: cy + ay });
     }
   }
   return out;
+}
+
+/**
+ * Аэродинамический прижим: коэффициент, на который растут боковой хват (grip) и
+ * торможение (brake) с квадратом скорости. aero = 1 + downforce·(speed/DOWNFORCE_VREF)².
+ * downforce = 0 → aero = 1 (чистая механика, хват постоянен). Общий для движка
+ * (reachableTargets) и рендера эллипса, чтобы наглядная и фактическая области совпадали.
+ */
+export function aeroFactor(downforce: number, speed: number): number {
+  return 1 + downforce * (speed / DOWNFORCE_VREF) ** 2;
 }
 
 /**

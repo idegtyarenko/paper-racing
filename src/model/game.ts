@@ -58,14 +58,17 @@ export interface Player {
 export { WIN_CROSSINGS };
 
 /**
- * Управляемость машины: три независимых полуоси «эллипса сцепления» (клетки/ход) —
- * разгон вперёд, торможение назад, маневр вбок. См. reachableTargets в turns.ts и
- * пресеты DRIVE_PRESETS в config.
+ * Управляемость машины: три механических полуоси «эллипса сцепления» (клетки/ход) —
+ * разгон вперёд (accel), торможение назад (brake), боковой хват (grip) — плюс
+ * аэродинамический прижим (downforce), который растёт с квадратом скорости и
+ * добавляется к grip/brake (см. aeroFactor и reachableTargets в turns.ts, пресеты
+ * DRIVE_PRESETS в config).
  */
 export interface Drive {
   accel: number;
   brake: number;
-  maneuver: number;
+  grip: number;
+  downforce: number;
 }
 
 /**
@@ -102,29 +105,41 @@ export const DEFAULT_RULES: Rules = {
   penalty: 'dynamic',
   staticTurns: CRASH_SKIP_TURNS,
   dynamicExponent: 1,
-  drive: { ...DRIVE_PRESETS.realistic },
+  drive: { ...DRIVE_PRESETS.sports },
   turnLimitMs: TURN_TIMEOUT_MS,
 };
 
 /**
  * Привести (частичные) правила из стейта/снимка к полным, с бэкфиллом дефолтами и
- * миграцией легаси-поля physics ('classic'|'realistic') в drive. Используется на всех
- * точках десериализации (онлайн-стейт, восстановление из persist), чтобы старые
- * строки без drive поднимались корректно. drive всегда клонируется — свежий объект,
- * не связанный с исходным снимком (настройки его мутируют).
+ * миграцией легаси в drive. Используется на всех точках десериализации (онлайн-стейт,
+ * восстановление из persist), чтобы старые снимки поднимались корректно. Мигрирует:
+ * легаси-поле physics ('classic'|'realistic') → drive; старое поле оси maneuver → grip;
+ * отсутствующий downforce → 0. drive собирается по полям (не клонируется целиком),
+ * иначе новые поля из старого снимка оказались бы undefined (→ NaN в эллипсе). Итог —
+ * свежий объект, не связанный с исходным снимком (настройки его мутируют).
  */
 export function normalizeRules(
   partial: (Partial<Rules> & { physics?: string }) | undefined,
 ): Rules {
   const { physics, ...rest } = partial ?? {};
-  const legacy =
+  // Легаси-строка physics: 'realistic' — прежний набор {1,2,2} (теперь без пресета,
+  // осядет как «Своё»); 'classic' — текущий пресет.
+  const legacy: Partial<Drive> =
     physics === 'realistic'
-      ? DRIVE_PRESETS.realistic
+      ? { accel: 1, brake: 2, grip: 2, downforce: 0 }
       : physics === 'classic'
-        ? DRIVE_PRESETS.classic
-        : null;
+        ? { ...DRIVE_PRESETS.classic }
+        : {};
   const merged = { ...DEFAULT_RULES, ...rest };
-  merged.drive = { ...(rest.drive ?? legacy ?? DEFAULT_RULES.drive) };
+  const d = DEFAULT_RULES.drive;
+  // Источник может быть частичным/легаси (старое поле maneuver, без downforce).
+  const src = (rest.drive ?? legacy) as Partial<Drive> & { maneuver?: number };
+  merged.drive = {
+    accel: src.accel ?? d.accel,
+    brake: src.brake ?? d.brake,
+    grip: src.grip ?? src.maneuver ?? d.grip,
+    downforce: src.downforce ?? d.downforce,
+  };
   return merged;
 }
 

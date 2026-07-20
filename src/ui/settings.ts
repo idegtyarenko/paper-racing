@@ -1,12 +1,12 @@
-// Лист-модалка настроек правил заезда: управляемость машины (пресеты Реалистичная/
-// Классическая или ручная «Своя» с тремя ползунками разгон/тормоза/маневр и живым
+// Лист-модалка настроек правил заезда: управляемость машины (пресеты Спорткар/GT/F1/
+// Классическая или ручная «Своё» с ползунками разгон/тормоза/хват/прижим и живым
 // предпросмотром облака ходов), тип штрафа за вылет, строгость динамической формулы,
 // размер статического штрафа и лимит времени на ход (только онлайн). Владеет своими
 // DOM-элементами; текущие правила держит вызывающий — сюда
 // они приходят копией, а изменения уезжают через onChange.
 
 import { Rules, Drive } from '../model/game';
-import { reachableTargets } from '../model/turns';
+import { reachableTargets, aeroFactor } from '../model/turns';
 import {
   CRASH_EXPONENT_STANDARD,
   CRASH_EXPONENT_STRICT,
@@ -14,6 +14,9 @@ import {
   DRIVE_MIN,
   DRIVE_MAX,
   DRIVE_STEP,
+  DOWNFORCE_MIN,
+  DOWNFORCE_MAX,
+  DOWNFORCE_STEP,
 } from '../config';
 import { strings } from '../i18n';
 import { bindTap, openSheet } from './dom';
@@ -27,10 +30,12 @@ const driveExplain = document.getElementById('driveExplain')!;
 const driveSliders = document.getElementById('driveSliders')!;
 const accelSlider = document.getElementById('accelSlider') as HTMLInputElement;
 const brakeSlider = document.getElementById('brakeSlider') as HTMLInputElement;
-const maneuverSlider = document.getElementById('maneuverSlider') as HTMLInputElement;
+const gripSlider = document.getElementById('gripSlider') as HTMLInputElement;
+const downforceSlider = document.getElementById('downforceSlider') as HTMLInputElement;
 const accelValue = document.getElementById('accelValue')!;
 const brakeValue = document.getElementById('brakeValue')!;
-const maneuverValue = document.getElementById('maneuverValue')!;
+const gripValue = document.getElementById('gripValue')!;
+const downforceValue = document.getElementById('downforceValue')!;
 const drivePreview = document.getElementById('drivePreview') as HTMLCanvasElement;
 const penaltyType = document.getElementById('penaltyType')!;
 const exponentRow = document.getElementById('exponentRow')!;
@@ -41,21 +46,27 @@ const staticTurnsValue = document.getElementById('staticTurnsValue')!;
 const turnLimitRow = document.getElementById('turnLimitRow')!;
 const turnLimitType = document.getElementById('turnLimitType')!;
 
-type DriveMode = 'realistic' | 'classic' | 'custom';
+type DrivePreset = keyof typeof DRIVE_PRESETS;
+type DriveMode = DrivePreset | 'custom';
 type SettingsTab = 'drive' | 'rules';
 
 /** Показатель степени, соответствующий выбору сегмента строгости. */
 const exponentOf = (kind: string): number =>
   kind === 'strict' ? CRASH_EXPONENT_STRICT : CRASH_EXPONENT_STANDARD;
 
-/** Совпадает ли drive с готовым пресетом (все три полуоси равны его значениям). */
+/** Совпадает ли drive с готовым пресетом (все четыре оси равны его значениям). */
 const isPreset = (d: Drive, p: Drive): boolean =>
-  d.accel === p.accel && d.brake === p.brake && d.maneuver === p.maneuver;
+  d.accel === p.accel &&
+  d.brake === p.brake &&
+  d.grip === p.grip &&
+  d.downforce === p.downforce;
 
-/** Режим управляемости по значениям drive: совпал с пресетом — его имя, иначе «Своя». */
+/** Режим управляемости по значениям drive: совпал с пресетом — его имя, иначе «Своё».
+ *  Перебор по DRIVE_PRESETS — новые пресеты подхватываются автоматически. */
 function driveModeOf(d: Drive): DriveMode {
-  if (isPreset(d, DRIVE_PRESETS.realistic)) return 'realistic';
-  if (isPreset(d, DRIVE_PRESETS.classic)) return 'classic';
+  for (const [name, p] of Object.entries(DRIVE_PRESETS)) {
+    if (isPreset(d, p)) return name as DrivePreset;
+  }
   return 'custom';
 }
 
@@ -63,7 +74,7 @@ function driveModeOf(d: Drive): DriveMode {
 // открытии. mode — какой сегмент управляемости показан (локально, в Rules не хранится:
 // в Rules едет только числовой drive). online — показывать ли строку лимита времени.
 let rules: Rules;
-let mode: DriveMode = 'realistic';
+let mode: DriveMode = 'sports';
 let onChange: ((r: Rules) => void) | null = null;
 let online = false;
 // Какая вкладка листа открыта («Управляемость»/«Правила»). Локально, в Rules не хранится.
@@ -88,18 +99,23 @@ function render(): void {
   const custom = mode === 'custom';
   driveSliders.hidden = !custom;
   driveExplain.hidden = custom;
-  if (!custom) {
-    driveExplain.textContent =
-      mode === 'realistic'
-        ? strings.settings.driveExplainRealistic
-        : strings.settings.driveExplainClassic;
+  if (mode !== 'custom') {
+    const explain: Record<DrivePreset, string> = {
+      sports: strings.settings.driveExplainSports,
+      gt: strings.settings.driveExplainGt,
+      f1: strings.settings.driveExplainF1,
+      classic: strings.settings.driveExplainClassic,
+    };
+    driveExplain.textContent = explain[mode];
   }
   accelSlider.value = String(rules.drive.accel);
   brakeSlider.value = String(rules.drive.brake);
-  maneuverSlider.value = String(rules.drive.maneuver);
+  gripSlider.value = String(rules.drive.grip);
+  downforceSlider.value = String(rules.drive.downforce);
   accelValue.textContent = String(rules.drive.accel);
   brakeValue.textContent = String(rules.drive.brake);
-  maneuverValue.textContent = String(rules.drive.maneuver);
+  gripValue.textContent = String(rules.drive.grip);
+  downforceValue.textContent = String(rules.drive.downforce);
   drawPreview();
 
   penaltyType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
@@ -128,8 +144,10 @@ function render(): void {
 /**
  * Живой предпросмотр облака доступных ходов для текущего drive. Берём
  * репрезентативное состояние — болид едет вправо со скоростью 3, чтобы анизотропия
- * (нос вперёд от разгона, ширина от маневра, глубина назад от тормозов) была видна, —
+ * (нос вперёд от разгона, ширина от хвата, глубина назад от тормозов) была видна, —
  * и рисуем те же цели, что даст reachableTargets в игре (без дублирования модели).
+ * При downforce > 0 к сплошному эффективному контуру (на скорости превью) добавляется
+ * пунктирный механический (без прижима) — видно, насколько аэро раздвигает эллипс.
  */
 function drawPreview(): void {
   const dpr = window.devicePixelRatio || 1;
@@ -180,25 +198,43 @@ function drawPreview(): void {
     }
   }
   // Контур эллипса сцепления вокруг точки наката — видно связь полуосей (разгон/
-  // тормоза/маневр) с формой облака. Две полудуги: перёд accel×maneuver, зад
-  // brake×maneuver (как в drawDriveArea на поле).
+  // тормоза/хват) с формой облака. Две полудуги: перёд accel×grip, зад brake×grip (как
+  // в drawDriveArea на поле). При прижиме хват/тормоза раздвигаются на скорости —
+  // сплошной контур считаем с aero (совпадает с точками), а механику (без прижима)
+  // добавляем пунктиром для сравнения.
   {
     const phi = Math.atan2(vel.y, vel.x);
     const ecx = X(coast.x);
     const ecy = Y(coast.y);
-    const man = rules.drive.maneuver * cell;
-    ctx.beginPath();
-    ctx.ellipse(ecx, ecy, rules.drive.accel * cell, man, phi, -Math.PI / 2, Math.PI / 2);
-    ctx.ellipse(
-      ecx,
-      ecy,
-      rules.drive.brake * cell,
-      man,
-      phi,
-      Math.PI / 2,
-      (3 * Math.PI) / 2,
-    );
-    ctx.closePath();
+    const { accel, brake, grip, downforce } = rules.drive;
+    const aero = aeroFactor(downforce, Math.hypot(vel.x, vel.y));
+    // Полуэллипс: перёд accel (прижим не трогает разгон), зад — back, вбок — side.
+    const traceEllipse = (back: number, side: number): void => {
+      ctx.beginPath();
+      ctx.ellipse(ecx, ecy, accel * cell, side * cell, phi, -Math.PI / 2, Math.PI / 2);
+      ctx.ellipse(
+        ecx,
+        ecy,
+        back * cell,
+        side * cell,
+        phi,
+        Math.PI / 2,
+        (3 * Math.PI) / 2,
+      );
+      ctx.closePath();
+    };
+    // Механический контур (без прижима) — пунктиром, только когда прижим есть (иначе
+    // совпал бы со сплошным).
+    if (downforce > 0) {
+      traceEllipse(brake, grip);
+      ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = 'rgba(10, 138, 79, 0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    // Эффективный контур на скорости превью (с прижимом) — сплошной, облегает точки.
+    traceEllipse(brake * aero, grip * aero);
     ctx.fillStyle = 'rgba(10, 138, 79, 0.08)';
     ctx.fill();
     ctx.strokeStyle = 'rgba(10, 138, 79, 0.5)';
@@ -256,11 +292,15 @@ export function openSettings(
 
 /** Навесить обработчики сегментов и ползунков (один раз при инициализации панели). */
 export function bindSettings(): void {
-  for (const el of [accelSlider, brakeSlider, maneuverSlider]) {
+  for (const el of [accelSlider, brakeSlider, gripSlider]) {
     el.min = String(DRIVE_MIN);
     el.max = String(DRIVE_MAX);
     el.step = String(DRIVE_STEP);
   }
+  // Прижим — своя шкала (безразмерный коэффициент 0..1.5), не как механические оси.
+  downforceSlider.min = String(DOWNFORCE_MIN);
+  downforceSlider.max = String(DOWNFORCE_MAX);
+  downforceSlider.step = String(DOWNFORCE_STEP);
   settingsTabs.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
     bindTap(btn, () => {
       activeTab = btn.dataset.tab as SettingsTab;
@@ -281,10 +321,10 @@ export function bindSettings(): void {
   driveMode.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
     bindTap(btn, () => {
       mode = btn.dataset.mode as DriveMode;
-      // Пресеты задают числа; «Своя» стартует от «Реалистичной» — ползунки
-      // открываются на её значениях, дальше правь как хочешь.
-      if (mode === 'classic') rules.drive = { ...DRIVE_PRESETS.classic };
-      else rules.drive = { ...DRIVE_PRESETS.realistic };
+      // Пресет задаёт числа; «Своё» оставляет текущий drive (ползунки открываются на
+      // его значениях, дальше правь как хочешь).
+      const preset = DRIVE_PRESETS[mode as DrivePreset];
+      if (preset) rules.drive = { ...preset };
       commit();
     });
   });
@@ -297,7 +337,8 @@ export function bindSettings(): void {
   };
   bindDrive(accelSlider, 'accel');
   bindDrive(brakeSlider, 'brake');
-  bindDrive(maneuverSlider, 'maneuver');
+  bindDrive(gripSlider, 'grip');
+  bindDrive(downforceSlider, 'downforce');
   penaltyType.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
     bindTap(btn, () => {
       rules.penalty = btn.dataset.penalty as Rules['penalty'];

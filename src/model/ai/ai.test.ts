@@ -518,7 +518,9 @@ describe('уровни сложности (единый A*)', () => {
   // Бот раскрывает узлы поиска тем же генератором целей, что и движок (turns.ts),
   // поэтому играет реалистичную физику (круг сцепления), а не только классику.
   it('бот проходит круг в реалистичной физике без аварий', () => {
-    const rules: Rules = { ...DEFAULT_RULES, drive: { ...DRIVE_PRESETS.realistic } };
+    // gt ≈ прежний realistic (grip 2, brake 2) + лёгкий прижим — заодно проверяем,
+    // что бот справляется с downforce (наследует reachableTargets).
+    const rules: Rules = { ...DEFAULT_RULES, drive: { ...DRIVE_PRESETS.gt } };
     const t = bigTrack();
     const n = buildNavField(t);
     const r = soloFinish(t, n, 'hard', rngConst(0.99), rules);
