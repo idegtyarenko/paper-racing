@@ -17,6 +17,7 @@ import {
   DOWNFORCE_MIN,
   DOWNFORCE_MAX,
   DOWNFORCE_STEP,
+  KMH_PER_CELL,
 } from '../config';
 import { strings } from '../i18n';
 import { bindTap, openSheet } from './dom';
@@ -141,18 +142,24 @@ function render(): void {
   staticTurnsValue.textContent = String(rules.staticTurns);
 }
 
+/** Скорости (клетки/ход) для предпросмотра облака: 0.5 / 1 / 1.5 × DOWNFORCE_VREF
+ *  (низкая ≈ чистая механика, средняя = референсная скорость прижима, высокая — прижим
+ *  в полную силу). В км/ч (× KMH_PER_CELL): 150 / 300 / 450. */
+const PREVIEW_SPEEDS = [3, 6, 9] as const;
+
 /**
- * Живой предпросмотр облака доступных ходов для текущего drive. Берём
- * репрезентативное состояние — болид едет вправо со скоростью 3, чтобы анизотропия
- * (нос вперёд от разгона, ширина от хвата, глубина назад от тормозов) была видна, —
- * и рисуем те же цели, что даст reachableTargets в игре (без дублирования модели).
- * При downforce > 0 к сплошному эффективному контуру (на скорости превью) добавляется
- * пунктирный механический (без прижима) — видно, насколько аэро раздвигает эллипс.
+ * Живой предпросмотр облака доступных ходов для текущего drive. Рисуем облако на
+ * нескольких скоростях (PREVIEW_SPEEDS), сведённых к общей точке наката: с ростом
+ * скорости аэродинамический прижим раздвигает боковой хват и торможение (aero растёт
+ * как квадрат скорости), и облако распухает — то, чего не видно на одной скорости.
+ * Точки тонированы по ярусу (насыщенные доступны с низкой скорости, бледные добавляет
+ * прижим), у контуров — подписи км/ч. downforce = 0 → форма от скорости не зависит,
+ * показываем одно облако. Цели берём из reachableTargets — без дублирования модели.
  */
 function drawPreview(): void {
   const dpr = window.devicePixelRatio || 1;
   const cssW = drivePreview.clientWidth || 240;
-  const cssH = drivePreview.clientHeight || 150;
+  const cssH = drivePreview.clientHeight || 190;
   drivePreview.width = Math.round(cssW * dpr);
   drivePreview.height = Math.round(cssH * dpr);
   const ctx = drivePreview.getContext('2d');
@@ -160,26 +167,54 @@ function drawPreview(): void {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, cssW, cssH);
 
-  const pos = { x: 0, y: 0 };
-  const vel = { x: 3, y: 0 };
-  const coast = { x: pos.x + vel.x, y: pos.y + vel.y };
-  const cells = reachableTargets(pos, vel, rules.drive);
+  const { accel, brake, grip, downforce } = rules.drive;
+  // downforce = 0 → aero ≡ 1 на любой скорости, облако не растёт: одна скорость (без подписей).
+  const showSpeeds = downforce > 0;
+  const speeds = showSpeeds ? [...PREVIEW_SPEEDS] : [PREVIEW_SPEEDS[0]];
 
-  // Рамка обзора: облако + болид + точка наката, с полем в 1 клетку.
-  let minX = pos.x;
-  let maxX = pos.x;
-  let minY = pos.y;
-  let maxY = pos.y;
-  for (const c of [...cells, coast]) {
-    minX = Math.min(minX, c.x);
-    maxX = Math.max(maxX, c.x);
-    minY = Math.min(minY, c.y);
-    maxY = Math.max(maxY, c.y);
+  // Слой на каждую скорость: смещения a = target − C (клетки относительно ОБЩЕЙ точки
+  // наката) + эффективные полуоси эллипса (перёд = accel, прижим его не трогает).
+  const layers = speeds.map((v) => {
+    const aero = aeroFactor(downforce, v);
+    const off = reachableTargets({ x: 0, y: 0 }, { x: v, y: 0 }, rules.drive).map(
+      (c) => ({
+        x: c.x - v,
+        y: c.y,
+      }),
+    );
+    return { v, aero, back: brake * aero, side: grip * aero, off };
+  });
+
+  // Универсум точек (объединение по всем скоростям) + ярус первого появления.
+  const tierOf = new Map<string, number>();
+  layers.forEach((l, i) => {
+    for (const o of l.off) {
+      const k = o.x + ',' + o.y;
+      if (!tierOf.has(k)) tierOf.set(k, i);
+    }
+  });
+  const points = [...tierOf].map(([k, tier]) => {
+    const [x, y] = k.split(',').map(Number);
+    return { x, y, tier };
+  });
+
+  // Рамка обзора: bbox облака и контуров (+поле; сверху больше — под верхнюю подпись).
+  const maxBack = Math.max(...layers.map((l) => l.back));
+  const maxSide = Math.max(...layers.map((l) => l.side));
+  let minX = -maxBack;
+  let maxX = accel;
+  let minY = -maxSide;
+  let maxY = maxSide;
+  for (const p of points) {
+    minX = Math.min(minX, p.x);
+    maxX = Math.max(maxX, p.x);
+    minY = Math.min(minY, p.y);
+    maxY = Math.max(maxY, p.y);
   }
-  minX -= 1;
-  maxX += 1;
-  minY -= 1;
-  maxY += 1;
+  minX -= 0.8;
+  maxX += 0.8;
+  minY -= showSpeeds ? 1.6 : 0.8;
+  maxY += 0.8;
   const cols = maxX - minX;
   const rows = maxY - minY;
   const cell = Math.min(cssW / (cols || 1), cssH / (rows || 1));
@@ -187,79 +222,94 @@ function drawPreview(): void {
   const oy = (cssH - rows * cell) / 2 - minY * cell;
   const X = (gx: number) => ox + gx * cell;
   const Y = (gy: number) => oy + gy * cell;
+  const cx = X(0);
+  const cy = Y(0); // общая точка наката (a = 0)
 
   // Бледная сетка узлов.
   ctx.fillStyle = '#cfc8b6';
-  for (let gy = minY; gy <= maxY; gy++) {
-    for (let gx = minX; gx <= maxX; gx++) {
+  for (let gy = Math.ceil(minY); gy <= Math.floor(maxY); gy++) {
+    for (let gx = Math.ceil(minX); gx <= Math.floor(maxX); gx++) {
       ctx.beginPath();
       ctx.arc(X(gx), Y(gy), 1, 0, Math.PI * 2);
       ctx.fill();
     }
   }
-  // Контур эллипса сцепления вокруг точки наката — видно связь полуосей (разгон/
-  // тормоза/хват) с формой облака. Две полудуги: перёд accel×grip, зад brake×grip (как
-  // в drawDriveArea на поле). При прижиме хват/тормоза раздвигаются на скорости —
-  // сплошной контур считаем с aero (совпадает с точками), а механику (без прижима)
-  // добавляем пунктиром для сравнения.
-  {
-    const phi = Math.atan2(vel.y, vel.x);
-    const ecx = X(coast.x);
-    const ecy = Y(coast.y);
-    const { accel, brake, grip, downforce } = rules.drive;
-    const aero = aeroFactor(downforce, Math.hypot(vel.x, vel.y));
-    // Полуэллипс: перёд accel (прижим не трогает разгон), зад — back, вбок — side.
-    const traceEllipse = (back: number, side: number): void => {
-      ctx.beginPath();
-      ctx.ellipse(ecx, ecy, accel * cell, side * cell, phi, -Math.PI / 2, Math.PI / 2);
-      ctx.ellipse(
-        ecx,
-        ecy,
-        back * cell,
-        side * cell,
-        phi,
-        Math.PI / 2,
-        (3 * Math.PI) / 2,
-      );
-      ctx.closePath();
-    };
-    // Механический контур (без прижима) — пунктиром, только когда прижим есть (иначе
-    // совпал бы со сплошным).
-    if (downforce > 0) {
-      traceEllipse(brake, grip);
-      ctx.setLineDash([4, 3]);
-      ctx.strokeStyle = 'rgba(10, 138, 79, 0.4)';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-    // Эффективный контур на скорости превью (с прижимом) — сплошной, облегает точки.
-    traceEllipse(brake * aero, grip * aero);
-    ctx.fillStyle = 'rgba(10, 138, 79, 0.08)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(10, 138, 79, 0.5)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-  }
-  // Стрелка инерции: болид → точка наката.
+
+  // Стрелка направления: слева в точку наката — эллипс асимметричен (перёд разгон, зад тормоз).
   ctx.strokeStyle = '#a49c86';
+  ctx.fillStyle = '#a49c86';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(X(pos.x), Y(pos.y));
-  ctx.lineTo(X(coast.x), Y(coast.y));
+  ctx.moveTo(X(minX + 0.4), cy);
+  ctx.lineTo(cx - 5, cy);
   ctx.stroke();
-  // Доступные цели хода.
-  ctx.fillStyle = '#0a8a4f';
-  for (const c of cells) {
+  ctx.beginPath();
+  ctx.moveTo(cx - 4, cy);
+  ctx.lineTo(cx - 11, cy - 4);
+  ctx.lineTo(cx - 11, cy + 4);
+  ctx.closePath();
+  ctx.fill();
+
+  // Контуры сцепления (от большой скорости к малой — меньший поверх). Полуэллипс:
+  // перёд accel, зад back, вбок side.
+  const traceEllipse = (back: number, side: number): void => {
     ctx.beginPath();
-    ctx.arc(X(c.x), Y(c.y), Math.max(2.5, cell * 0.16), 0, Math.PI * 2);
+    ctx.ellipse(cx, cy, accel * cell, side * cell, 0, -Math.PI / 2, Math.PI / 2);
+    ctx.ellipse(cx, cy, back * cell, side * cell, 0, Math.PI / 2, (3 * Math.PI) / 2);
+    ctx.closePath();
+  };
+  const strokeA = [0.6, 0.5, 0.42];
+  const strokeW = [1.8, 1.6, 1.4];
+  for (let i = layers.length - 1; i >= 0; i--) {
+    traceEllipse(layers[i].back, layers[i].side);
+    ctx.fillStyle = 'rgba(10, 138, 79, 0.05)';
+    ctx.fill();
+    ctx.strokeStyle = `rgba(10, 138, 79, ${strokeA[i]})`;
+    ctx.lineWidth = strokeW[i];
+    ctx.stroke();
+  }
+
+  // Точки-кандидаты, тонированные по ярусу (насыщенные доступны с низкой скорости,
+  // бледные добавил прижим на скорости).
+  const dotAlpha = [0.85, 0.5, 0.28];
+  const dotR = Math.max(2.2, cell * 0.14);
+  ctx.fillStyle = '#0a8a4f';
+  for (const p of points) {
+    if (p.x === 0 && p.y === 0) continue; // накат рисуем кольцом
+    ctx.globalAlpha = dotAlpha[p.tier] ?? 0.28;
+    ctx.beginPath();
+    ctx.arc(X(p.x), Y(p.y), dotR, 0, Math.PI * 2);
     ctx.fill();
   }
-  // Болид (текущая позиция).
-  ctx.fillStyle = '#4a4636';
+  ctx.globalAlpha = 1;
+
+  // Точка наката — кольцо.
+  ctx.strokeStyle = '#4a4636';
+  ctx.lineWidth = 1.8;
   ctx.beginPath();
-  ctx.arc(X(pos.x), Y(pos.y), 3, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.arc(cx, cy, dotR + 1, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Подписи км/ч у верхней вершины каждого контура (только когда прижим растит облако —
+  // иначе форма от скорости не зависит и подпись вводила бы в заблуждение). Раскладываем
+  // сверху вниз с гарантированным зазором, чтобы близкие контуры (напр. GT) не слиплись.
+  if (showSpeeds) {
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.font = '600 10px ui-monospace, "SF Mono", Menlo, monospace';
+    ctx.lineJoin = 'round';
+    let prevLy = -Infinity;
+    for (const l of [...layers].sort((a, b) => b.side - a.side)) {
+      const ly = Math.max(Y(-l.side) - 3, prevLy + 12);
+      prevLy = ly;
+      const label = `${l.v * KMH_PER_CELL} ${strings.race.speedUnit}`;
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#fbf9f1';
+      ctx.strokeText(label, cx, ly);
+      ctx.fillStyle = '#0a8a4f';
+      ctx.fillText(label, cx, ly);
+    }
+  }
 }
 
 /** Применить изменение правил: перерисовать и уведомить вызывающего. */
