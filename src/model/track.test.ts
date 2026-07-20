@@ -133,6 +133,48 @@ describe('finalizeTrack', () => {
     expect(new Set(t.startPoints.map((p) => p.x)).size).toBeLessThanOrEqual(2);
   });
 
+  it('далёкий сегмент за той же полуплоскостью не становится стартом', () => {
+    // Регресс: на змейке бесконечная прямая финиша рассекает и далёкие сегменты
+    // трассы, поэтому старая логика (behind = вся полуплоскость sideOfFinish<0)
+    // могла усадить болида посреди круга. Здесь — коридор-«скоба» (C, открытая
+    // влево): нижняя рука у линии + правая рука (вверх) + верхняя рука. Финиш —
+    // короткий вертикальный отрезок у левого конца нижней руки, гонка в +x.
+    // Полуплоскость x<3 захватывает и узкий старт снизу (y≈1..2), и ДАЛЁКУЮ верхнюю
+    // руку (y≈22..23): она за линией по x, но добраться до неё можно лишь в обход
+    // (правая рука — не «сзади»), т.е. в графе «только задних узлов» она оторвана.
+    const outer: Polyline = [
+      { x: 0, y: 0 },
+      { x: 32, y: 0 },
+      { x: 32, y: 24 },
+      { x: 0, y: 24 },
+    ];
+    const inner: Polyline = [
+      { x: -2, y: 3 },
+      { x: 27, y: 3 },
+      { x: 27, y: 21 },
+      { x: -2, y: 21 },
+    ];
+    const finish = { a: { x: 3, y: 0 }, b: { x: 3, y: 3 } };
+    const forward: Vec = { x: 1, y: 0 };
+    const res = finalizeTrack(outer, inner, finish, forward);
+    expect('track' in res).toBe(true);
+    if (!('track' in res)) return;
+    const t = res.track;
+    // Предпосылка ловушки: далёкая верхняя рука реально лежит за полуплоскостью
+    // (иначе тест ничего не охраняет).
+    const farBehindExists = [...t.inside]
+      .map((k) => {
+        const x = Math.floor(k / 4096) - 128;
+        const y = (k % 4096) - 128;
+        return { x, y };
+      })
+      .some((p) => p.y >= 21 && sideOfFinish({ finish, forward }, p) < -1e-9);
+    expect(farBehindExists).toBe(true);
+    // Все старты — у нижней линии, ни один не «телепортирован» в верхнюю руку.
+    expect(t.startPoints.length).toBeGreaterThanOrEqual(2);
+    for (const p of t.startPoints) expect(p.y).toBeLessThan(10);
+  });
+
   it('слишком тесное кольцо → ошибка', () => {
     const outer: Polyline = [
       { x: 0, y: 0 },

@@ -12,6 +12,7 @@ import {
   normalize,
   pointInPolygon,
   distPointToPolyline,
+  distPointToSegment,
   segmentPolylineIntersections,
   resampleClosed,
   chaikinClosed,
@@ -28,6 +29,8 @@ import {
   START_COL_STEP,
   START_ROW_MAX,
   START_SNAP_TOL,
+  START_REGION_DEPTH,
+  START_SEED_TOL,
 } from '../config';
 
 export interface FinishLine {
@@ -266,11 +269,51 @@ export function finalizeTrack(
     return { error: strings.track.tooNarrow };
   }
 
+  // Стартовые кандидаты — не вся полуплоскость «позади финиша» (на змейке она
+  // захватывает далёкие сегменты трассы, и запасное заполнение решётки могло усадить
+  // болид посреди круга), а связный коридор сразу за линией: BFS назад от узлов,
+  // касающихся линии сзади, только по «задним» узлам дороги, с ограничением глубины.
+  const isBehind = (p: Vec): boolean => sideOfFinish({ finish, forward }, p) < -1e-9;
   const behind: Vec[] = [];
+  const depth = new Map<number, number>();
+  const queue: Vec[] = [];
+  const NB8 = [
+    [-1, -1],
+    [-1, 0],
+    [-1, 1],
+    [0, -1],
+    [0, 1],
+    [1, -1],
+    [1, 0],
+    [1, 1],
+  ];
+  // Затравка: задние узлы дороги вплотную к ОТРЕЗКУ финиша (не к бесконечной прямой —
+  // она рассекает и другие сегменты змейки; привязка к отрезку не даёт зоне прорасти
+  // из далёкого пересечения).
   inside.forEach((k) => {
     const p = unkey(k);
-    if (sideOfFinish({ finish, forward }, p) < -1e-9) behind.push(p);
+    if (!isBehind(p)) return;
+    if (distPointToSegment(p, finish.a, finish.b) <= START_SEED_TOL) {
+      depth.set(k, 0);
+      queue.push(p);
+      behind.push(p);
+    }
   });
+  // Волна вглубь коридора по задним узлам дороги; узлы на самой границе глубины
+  // сохраняем, но дальше от них не растём.
+  for (let head = 0; head < queue.length; head++) {
+    const p = queue[head];
+    const d = depth.get(key(p.x, p.y))!;
+    if (d >= START_REGION_DEPTH) continue;
+    for (const [dx, dy] of NB8) {
+      const q = { x: p.x + dx, y: p.y + dy };
+      const qk = key(q.x, q.y);
+      if (depth.has(qk) || !inside.has(qk) || !isBehind(q)) continue;
+      depth.set(qk, d + 1);
+      queue.push(q);
+      behind.push(q);
+    }
+  }
   if (behind.length < 2) {
     return { error: strings.track.noStartRoom };
   }
