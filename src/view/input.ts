@@ -473,6 +473,7 @@ function endGesture(e: PointerEvent): void {
         if (cand) deps.setPending(cand);
       } else {
         selected = cand;
+        if (selected) deps.state.pending = null; // свежий выбор в свой ход гасит наметку
         showConfirmMove(!!selected, confirmAnchor());
       }
       break;
