@@ -45,37 +45,66 @@
   line-height: 1.45;
 }
 
-/* Ждём чужой онлайн-ход: анимированное многоточие («…» набегает по точке и зациклено),
-   чтобы неинтерактивная доска читалась как «ждём», а не «зависла» (m1). Резервируем
-   ширину трёх точек через min-width, чтобы соседний текст-таймер не дёргался на цикле. */
-.waiting-dots::after {
-  content: '';
+/* Ждём чужой онлайн-ход: анимированное многоточие (точки набегают по одной и зациклено),
+   чтобы неинтерактивная доска читалась как «ждём», а не «зависла» (m1). Три отдельные
+   точки-span'а (content не анимируется — мигаем opacity каждой со сдвигом фазы). Точки
+   всегда занимают место (inline-block), поэтому соседний текст-таймер не дёргается. */
+.waiting-dots {
   display: inline-block;
   min-width: 1.2em;
   text-align: left;
-  animation: waiting-dots 1.4s steps(1, end) infinite;
 }
 
-@keyframes waiting-dots {
+/* Общий 1.4s-таймлайн для всех точек (без delay), но разные пороги загорания — так все три
+   гаснут синхронно на старте цикла (сброс «…» → «»), а зажигаются по очереди: 1-я на 25%,
+   2-я на 50%, 3-я на 75%. Полностью повторяет старую кадры-раскладку '', '.', '..', '...'. */
+.waiting-dots__dot {
+  opacity: 0;
+  animation: 1.4s steps(1, end) infinite;
+}
+
+.waiting-dots__dot:nth-child(1) {
+  animation-name: waiting-dot-1;
+}
+.waiting-dots__dot:nth-child(2) {
+  animation-name: waiting-dot-2;
+}
+.waiting-dots__dot:nth-child(3) {
+  animation-name: waiting-dot-3;
+}
+
+@keyframes waiting-dot-1 {
   0% {
-    content: '';
+    opacity: 0;
   }
-  25% {
-    content: '.';
+  25%,
+  100% {
+    opacity: 1;
   }
-  50% {
-    content: '..';
+}
+@keyframes waiting-dot-2 {
+  0% {
+    opacity: 0;
+  }
+  50%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes waiting-dot-3 {
+  0% {
+    opacity: 0;
   }
   75%,
   100% {
-    content: '...';
+    opacity: 1;
   }
 }
 
-/* Уважаем «меньше движения»: статичное многоточие без анимации. */
+/* Уважаем «меньше движения»: статичное многоточие без анимации (все три точки видны). */
 @media (prefers-reduced-motion: reduce) {
-  .waiting-dots::after {
-    content: '…';
+  .waiting-dots__dot {
     animation: none;
+    opacity: 1;
   }
 }

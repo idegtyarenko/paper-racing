@@ -171,12 +171,19 @@ let raceWaiting = false;
 /**
  * Отрисовать статус ожидания чужого хода: базовый текст (с отрезанным хвостовым «…») +
  * анимированное многоточие + опциональный суффикс-таймер «· м:сс». Через DOM, а не
- * textContent, потому что многоточие анимируется CSS-псевдоэлементом; и update(), и
- * тикающий setTurnCountdown зовут этот же помощник, чтобы тик не стирал анимацию. */
+ * textContent, потому что многоточие анимируется CSS (три точки-span'а с фазовым opacity);
+ * и update(), и тикающий setTurnCountdown зовут этот же помощник, чтобы тик не стирал анимацию. */
 function applyWaitingStatus(base: string, msLeft: number | null): void {
   const stripped = base.replace(/…$/, '');
   const dots = document.createElement('span');
   dots.className = 'waiting-dots';
+  // Три отдельные точки: content не анимируется, поэтому мигаем opacity каждой (см. status.css).
+  for (let i = 0; i < 3; i++) {
+    const dot = document.createElement('span');
+    dot.className = 'waiting-dots__dot';
+    dot.textContent = '.';
+    dots.append(dot);
+  }
   const nodes: (Node | string)[] = [stripped, dots];
   if (msLeft !== null) nodes.push(` · ${msToClock(msLeft)}`);
   statusEl.replaceChildren(...nodes);
