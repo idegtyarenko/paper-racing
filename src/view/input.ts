@@ -302,9 +302,13 @@ function beginPan(sx: number, sy: number, id: number): void {
   canvas.classList.add('grabbing');
 }
 
-/** Только в гонке (racing/финал): двойной тап зумит поле, а не рисует. */
+/**
+ * Где двойной тап зумит поле (а не рисует/прицеливается): в гонке (racing/финал)
+ * и в редакторе трассы. В редакторе рисование — это протяжка (drag), а двойной тап
+ * ловится только на двух «чистых» тапах без протяжки, так что штрих не перехватывается.
+ */
 function doubleTapEnabled(): boolean {
-  return deps.state.mode === 'race';
+  return deps.state.mode === 'race' || deps.state.mode === 'edit';
 }
 
 /** Этот тач-даун — второй тап двойного тапа (рядом и вовремя с прошлым)? */
