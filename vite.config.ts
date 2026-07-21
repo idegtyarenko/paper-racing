@@ -27,7 +27,11 @@ export default defineConfig({
   },
   plugins: [
     VitePWA({
-      registerType: 'autoUpdate',
+      // prompt (а не autoUpdate): SW НЕ делает self.skipWaiting() на install —
+      // на iOS-standalone он всё равно не вытесняет активный воркер при открытом
+      // приложении (новая версия зависает в waiting, controllerchange не стреляет).
+      // Вместо этого сам клиент шлёт SKIP_WAITING в удобный момент (см. src/pwa.ts).
+      registerType: 'prompt',
       // Регистрируем SW сами в src/pwa.ts (registerSW из virtual:pwa-register),
       // чтобы не было двойной регистрации.
       injectRegister: false,
