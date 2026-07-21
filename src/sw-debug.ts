@@ -189,7 +189,11 @@ const CSS = `
 .swdbg__t {
   color: #6f9c88;
 }
-.swdbg[hidden] {
+/* Атрибут hidden сам по себе даёт лишь display:none из UA-стилей, который
+   перебивается авторским .swdbg__panel{display:flex} — поэтому гасим явно. */
+.swdbg[hidden],
+.swdbg__panel[hidden],
+.swdbg__badge[hidden] {
   display: none;
 }
 `;
@@ -336,9 +340,19 @@ class SwDebugImpl implements SwDebug {
     shareBtn.hidden = typeof navigator.share !== 'function';
     const copyBtn = mkBtn('copy', () => this.copyLog());
     const clearBtn = mkBtn('clear', () => this.clearLog());
-    const collapseBtn = mkBtn('▾', () => this.setCollapsed(true));
+    const collapseBtn = mkBtn('▾', () => this.setCollapsed(true)); // свернуть в бейдж
+    const offBtn = mkBtn('✕', () => this.disable()); // совсем выключить отладку
 
-    head.append(title, this.stateEl, spacer, shareBtn, copyBtn, clearBtn, collapseBtn);
+    head.append(
+      title,
+      this.stateEl,
+      spacer,
+      shareBtn,
+      copyBtn,
+      clearBtn,
+      collapseBtn,
+      offBtn,
+    );
 
     this.logEl = document.createElement('div');
     this.logEl.className = 'swdbg__log';
@@ -348,6 +362,19 @@ class SwDebugImpl implements SwDebug {
     document.body.appendChild(this.root);
 
     this.refreshState();
+  }
+
+  /** Совсем выключить отладку: снять сохранённый флаг и убрать оверлей из DOM
+   *  (без перезагрузки — при следующем запуске флага уже нет, оверлея не будет).
+   *  Слушатели цикла SW остаются висеть до перезагрузки, но молча (лог не рисуется). */
+  private disable(): void {
+    try {
+      localStorage.removeItem(FLAG_KEY);
+    } catch {
+      // localStorage недоступен — не критично
+    }
+    this.root.remove();
+    document.getElementById('swdbg-style')?.remove();
   }
 
   private setCollapsed(collapsed: boolean): void {
