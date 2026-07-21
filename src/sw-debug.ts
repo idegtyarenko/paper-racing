@@ -58,6 +58,23 @@ function resolveEnabled(): boolean {
   return flag;
 }
 
+/** Переключить сохранённый флаг отладки и вернуть новое состояние. Нужно для
+ *  активации ИЗНУТРИ приложения: у standalone-PWA на iOS отдельная банка
+ *  localStorage (флаг `?swdebug`, выставленный в Safari, туда не попадает), а
+ *  адресной строки нет — задать query-параметр негде. Вызывающий перезагружает
+ *  страницу, чтобы `initSwDebug()` увидел флаг и построил оверлей. */
+export function toggleSwDebug(): boolean {
+  let on = false;
+  try {
+    on = localStorage.getItem(FLAG_KEY) !== '1';
+    if (on) localStorage.setItem(FLAG_KEY, '1');
+    else localStorage.removeItem(FLAG_KEY);
+  } catch {
+    // localStorage недоступен — переключить нельзя
+  }
+  return on;
+}
+
 function pad(n: number, w = 2): string {
   return String(n).padStart(w, '0');
 }

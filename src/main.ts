@@ -41,6 +41,7 @@ import * as input from './view/input';
 import { initInstallPrompt } from './ui/install-prompt';
 import { showToast } from './ui/dialogs';
 import { initPwa } from './pwa';
+import { toggleSwDebug } from './sw-debug';
 import * as persist from './persist';
 
 const canvas = document.getElementById('board') as HTMLCanvasElement;
@@ -560,7 +561,24 @@ const buildLabel = new Date(__BUILD_TIME__).toLocaleString(dateLocale, {
   hour: '2-digit',
   minute: '2-digit',
 });
-document.getElementById('appVersion')!.textContent = `${__COMMIT__} · ${buildLabel}`;
+const appVersionEl = document.getElementById('appVersion')!;
+appVersionEl.textContent = `${__COMMIT__} · ${buildLabel}`;
+
+// Скрытая активация SW-отладки изнутри приложения: в standalone-PWA отдельная
+// банка localStorage (флаг `?swdebug` из Safari туда не попадает) и нет адресной
+// строки — включаем/выключаем оверлей 5 быстрыми тапами по метке сборки в «Правилах».
+let verTaps = 0;
+let verTapT = 0;
+appVersionEl.addEventListener('click', () => {
+  const now = performance.now();
+  verTaps = now - verTapT < 600 ? verTaps + 1 : 1;
+  verTapT = now;
+  if (verTaps < 5) return;
+  verTaps = 0;
+  const on = toggleSwDebug();
+  showToast(on ? 'SW debug ON' : 'SW debug OFF', 1500);
+  setTimeout(() => location.reload(), 400);
+});
 
 // Если коммит сменился с прошлого запуска — приложение обновилось: покажем тост.
 // Сравниваем вкомпилированный коммит с сохранённым, не завязываясь на механику SW.
