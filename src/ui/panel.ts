@@ -3,8 +3,8 @@
 // единая точка навешивания обработчиков, композирует их проводку.
 
 import { KMH_PER_CELL } from '../config';
-import { PanelMode } from '../app-state';
-import { EditorState, EditorPhase, canStepBack } from '../model/editor';
+import { Phase } from '../app-state';
+import { EditorState, EditorStep, canStepBack } from '../model/editor';
 import { GameState, Player, MIN_PLAYERS } from '../model/game';
 import { Difficulty } from '../model/ai';
 import { msToClock } from './format';
@@ -429,7 +429,7 @@ function renderPlayerCards(game: GameState, present?: boolean[]): void {
 // Номер шага мастера для бейджа «шаг N из 4» — по фазе. `ready` и ошибки бейджа не
 // имеют (сообщение рендерится как обычное тело). Локаль-независимо: бейдж собираем
 // из strings.editor.stepBadge, а не парсим текст (прежде тут была регулярка).
-const EDIT_STEP: Partial<Record<EditorPhase, number>> = {
+const EDIT_STEP: Partial<Record<EditorStep, number>> = {
   center: 1,
   adjust: 2,
   finish: 3,
@@ -445,7 +445,7 @@ function renderEditStatus(editor: EditorState): void {
     statusEl.textContent = editor.message;
     return;
   }
-  const step = EDIT_STEP[editor.phase];
+  const step = EDIT_STEP[editor.step];
   if (step !== undefined) {
     renderStepStatus(strings.editor.stepBadge(step, EDIT_STEP_TOTAL), editor.message);
   } else {
@@ -553,7 +553,7 @@ function renderAiSetup(): void {
  *  на месте вызова читаемо, какой флаг что значит (было `updatePanel(m, e, g, 6, net,
  *  true, true)`). Разбиение тела по экранам — за редизайном (см. INTERNAL_roadmap). */
 export interface PanelCtx {
-  mode: PanelMode;
+  phase: Phase;
   editor: EditorState;
   game: GameState | null;
   /** Максимум мест (из числа стартовых точек трассы). По умолчанию 6. */
@@ -568,7 +568,7 @@ export interface PanelCtx {
 
 export function updatePanel(ctx: PanelCtx): void {
   const {
-    mode,
+    phase,
     editor,
     game,
     playersMax = 6,
@@ -577,50 +577,50 @@ export function updatePanel(ctx: PanelCtx): void {
     canRetire = false,
   } = ctx;
   seatCapacity = playersMax;
-  editButtons.hidden = mode !== 'edit';
-  modeButtons.hidden = mode !== 'mode';
-  aiButtons.hidden = mode !== 'ai';
-  lobbyButtons.hidden = mode !== 'lobby';
-  playersButtons.hidden = mode !== 'players';
-  raceButtons.hidden = mode !== 'race';
+  editButtons.hidden = phase !== 'edit';
+  modeButtons.hidden = phase !== 'modeSelect';
+  aiButtons.hidden = phase !== 'ai';
+  lobbyButtons.hidden = phase !== 'lobby';
+  playersButtons.hidden = phase !== 'players';
+  raceButtons.hidden = phase !== 'race';
   skipBtn.hidden = true; // покажем ниже только в гонке, когда доступен пропуск
   retireBtn.hidden = !canRetire; // «Сдаться» в шапке — пока локальный игрок в гонке
 
   // Чип кода игры над полем: только в идущей онлайн-гонке (net != null), чтобы можно
   // было подсказать выпавшему код/ссылку. На экране победителя и в локальной — прячем.
-  const showCode = mode === 'race' && !!net && !!game && game.phase !== 'over';
+  const showCode = phase === 'race' && !!net && !!game && game.phase !== 'over';
   raceCodeBtn.hidden = !showCode;
   if (showCode) raceCodeBtn.textContent = `🔗 ${net!.code}`;
 
-  if (mode === 'edit') {
+  if (phase === 'edit') {
     renderEditStatus(editor);
     backBtn.disabled = !canStepBack(editor);
     // На шаге 2 «← Назад» стирает всю нарисованную трассу — называем действие честно.
     backBtn.textContent =
-      editor.phase === 'adjust' ? strings.buttons.redraw : strings.buttons.back;
-    nextBtn.hidden = editor.phase !== 'adjust';
+      editor.step === 'adjust' ? strings.buttons.redraw : strings.buttons.back;
+    nextBtn.hidden = editor.step !== 'adjust';
     // «Войти по коду» уместна только на первом шаге; дальше по мастеру она мешает.
-    joinByCodeBtn.hidden = !onlineEnabled || editor.phase !== 'center';
+    joinByCodeBtn.hidden = !onlineEnabled || editor.step !== 'center';
     return;
   }
 
-  if (mode === 'mode') {
+  if (phase === 'modeSelect') {
     renderStepStatus(strings.modeSelect.promptBadge, strings.modeSelect.prompt);
     return;
   }
 
-  if (mode === 'ai') {
+  if (phase === 'ai') {
     renderStepStatus(strings.aiSelect.promptBadge, strings.aiSelect.prompt);
     renderAiSetup();
     return;
   }
 
-  if (mode === 'lobby') {
+  if (phase === 'lobby') {
     // Содержимое лобби (код, ростер, статус) рисует renderLobby().
     return;
   }
 
-  if (mode === 'players') {
+  if (phase === 'players') {
     renderStepStatus(strings.players.promptBadge, strings.players.prompt);
     renderPlayersSetup();
     return;

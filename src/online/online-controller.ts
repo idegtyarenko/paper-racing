@@ -33,7 +33,7 @@ import * as turnWatch from './turn-watch';
 
 /**
  * Мост к главному модулю: контроллер не держит состояние сам. Данные читает и
- * мутирует по ссылке через `state` (`state.game`, `state.mode`, …); отдельные
+ * мутирует по ссылке через `state` (`state.game`, `state.phase`, …); отдельные
  * get/set-переходники на каждое поле больше не нужны. Остаются только колбэки-
  * поведение: `setGame` (у него побочные эффекты — гасит цикл ботов, пересобирает
  * nav) и перерисовка/сброс/таймер.
@@ -74,7 +74,7 @@ export function initOnline(d: OnlineDeps): void {
   window.addEventListener('pagehide', (e: PageTransitionEvent) => {
     if (!session.active()) return;
     session.untrack();
-    if (!e.persisted && deps.state.mode === 'lobby') {
+    if (!e.persisted && deps.state.phase === 'lobby') {
       session.leave();
       forgetSession(); // место освобождено — возвращаться некуда
     }
@@ -262,7 +262,7 @@ const handlers: OnlineHandlers = {
   onLobby: () => {
     // Мы в живом лобби — запомним код для возврата после дисконнекта (идемпотентно).
     rememberSession(session.getCode()!);
-    if (deps.state.mode === 'lobby') hostBots.renderLobbyPanel();
+    if (deps.state.phase === 'lobby') hostBots.renderLobbyPanel();
   },
   onGameState: (g) => {
     // Входящий авторитетный стейт перекрывает наш незавершённый/провалившийся ход:
@@ -280,8 +280,8 @@ const handlers: OnlineHandlers = {
     // отдельно, чтобы закрыть диалог/баннер победителя и заново вписать поле.
     const wasOver = deps.state.game?.phase === 'over';
     deps.setGame(g);
-    if (deps.state.mode !== 'race') {
-      deps.state.mode = 'race';
+    if (deps.state.phase !== 'race') {
+      deps.state.phase = 'race';
       closeOverlay();
       deps.fitToContent();
     } else if (wasOver && g.phase === 'race') {
@@ -314,7 +314,7 @@ const handlers: OnlineHandlers = {
     // Присутствие влияет на «ждать/пропускать» и на метки офлайна в панели/лобби;
     // в лобби ещё и вычищаем брошенные места.
     turnWatch.armTurnWatch();
-    if (deps.state.mode === 'lobby') {
+    if (deps.state.phase === 'lobby') {
       turnWatch.pruneAbsentLobby();
       hostBots.renderLobbyPanel();
     }
@@ -330,7 +330,7 @@ function hostOnline(name: string): Promise<void> {
     hostBots.resetBots(); // свежее лобби — без досаженных ботов
     try {
       await session.host(raceTrack, name, handlers);
-      deps.state.mode = 'lobby';
+      deps.state.phase = 'lobby';
       deps.updateUI();
       hostBots.renderLobbyPanel();
       deps.redraw();
@@ -360,11 +360,11 @@ function joinOnline(code: string, name: string, inJoinDialog: boolean): Promise<
       }
       // Реконнект в уже идущую гонку: onGameState уже перевёл в режим race —
       // не сбрасываем обратно в лобби. Иначе (игра ещё не начата) — в лобби.
-      if (deps.state.mode !== 'race') deps.state.mode = 'lobby';
+      if (deps.state.phase !== 'race') deps.state.phase = 'lobby';
       deps.fitToContent(); // вписать трассу хоста по центру
       deps.redraw();
       deps.updateUI();
-      if (deps.state.mode === 'lobby') hostBots.renderLobbyPanel();
+      if (deps.state.phase === 'lobby') hostBots.renderLobbyPanel();
     } catch (e) {
       if (inJoinDialog) {
         showJoinError(joinErrorText(e));
@@ -394,10 +394,10 @@ function startOnline(): Promise<void> {
     setLobbyStarting(true);
     try {
       await session.start(g);
-      if (deps.state.mode !== 'race') {
+      if (deps.state.phase !== 'race') {
         // Эхо собственной записи могло уже перевести в гонку — не дублируем.
         deps.setGame(g);
-        deps.state.mode = 'race';
+        deps.state.phase = 'race';
         deps.fitToContent();
         commitOnline();
       }
@@ -458,7 +458,7 @@ function leaveLobby(): Promise<void> {
     const wasHost = deps.state.raceTrack !== null;
     await session.leave();
     if (wasHost) {
-      deps.state.mode = 'mode';
+      deps.state.phase = 'modeSelect';
       deps.updateUI();
       deps.redraw();
     } else {

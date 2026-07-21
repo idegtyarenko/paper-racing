@@ -4,7 +4,7 @@
 // его по ссылке (`deps.state.game = …`). Служебные ручки (таймер хода бота) сюда не
 // кладём — здесь только данные. Сохранение (persist.ts) сериализует его подмножество.
 //
-// Здесь же живут кросс-слойные типы `PanelMode` и `LastLocalRace`: без этого
+// Здесь же живут кросс-слойные типы `Phase` и `LastLocalRace`: без этого
 // persist/view/online тянули бы `ui/panel` ради одного типа (лишнее ребро графа).
 
 import { EditorState, newEditor } from './model/editor';
@@ -15,7 +15,7 @@ import { Difficulty } from './model/ai';
 
 /** Экран/фаза приложения: рисование трассы, выбор режима/числа игроков/сложности
  *  ботов, лобби, гонка. */
-export type PanelMode = 'edit' | 'mode' | 'players' | 'ai' | 'lobby' | 'race';
+export type Phase = 'edit' | 'modeSelect' | 'players' | 'ai' | 'lobby' | 'race';
 
 /** Последний локальный состав — для «По той же трассе» одним тапом. Покрывает и
  *  хотсит (bots 0), и игру против компьютера (humans 1). */
@@ -24,7 +24,7 @@ export type LastLocalRace = { humans: number; bots: number; difficulty: Difficul
 /** Состояние приложения — единый источник правды для main/online/input. */
 export interface AppState {
   /** Текущий экран/фаза. */
-  mode: PanelMode;
+  phase: Phase;
   /** Состояние мастера рисования трассы. */
   editor: EditorState;
   /**
@@ -62,7 +62,7 @@ export interface AppState {
 /** Свежее состояние приложения: чистый редактор, правила по умолчанию. */
 export function newAppState(): AppState {
   return {
-    mode: 'edit',
+    phase: 'edit',
     editor: newEditor(),
     raceTrack: null,
     playersReturn: 'edit',

@@ -107,7 +107,7 @@ export function pruneAbsentLobby(): void {
   });
   if (soonest !== Infinity) {
     lobbyPruneTimer = window.setTimeout(() => {
-      if (deps.state.mode === 'lobby') pruneAbsentLobby();
+      if (deps.state.phase === 'lobby') pruneAbsentLobby();
     }, soonest);
   }
 }
@@ -128,7 +128,7 @@ export function armTurnWatch(): void {
   // mode-гейт (как у scheduleAiMove): presence-событие в лобби зовёт armTurnWatch, но
   // прошлая гонка могла остаться в S.game с phase 'race' (создание нового лобби её не
   // чистит) — без проверки режима в лобби всплывала бы кнопка-таймер чужого/своего хода.
-  if (!session.active() || !game || game.phase !== 'race' || deps.state.mode !== 'race')
+  if (!session.active() || !game || game.phase !== 'race' || deps.state.phase !== 'race')
     return;
   const cur = game.current;
 

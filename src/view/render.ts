@@ -410,7 +410,7 @@ function drawArrow(
 
 function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): void {
   // В фазе тюнинга — слабая осевая как подсказка, что кромки можно тянуть.
-  if (ed.phase === 'adjust' && ed.center) {
+  if (ed.step === 'adjust' && ed.center) {
     ctx.save();
     ctx.strokeStyle = CENTERLINE_HINT;
     ctx.lineWidth = 1;
@@ -422,14 +422,14 @@ function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): 
   // С фазы «adjust» кромки уже замкнуты — показываем ту же визуализацию, что и в
   // гонке: полупрозрачную заливку внетрассовой территории со светло-серой кромкой.
   // В фазе «center» (черчение осевой) заливки ещё нет — рисуем простой контур.
-  if (ed.phase !== 'center' && ed.outer && ed.inner) {
+  if (ed.step !== 'center' && ed.outer && ed.inner) {
     drawOffTrack(ctx, s, ed.outer, ed.inner);
   } else {
     drawTrackEdges(ctx, s, ed.outer, ed.inner);
   }
 
   // Активная перетаскиваемая точка кромки.
-  if (ed.phase === 'adjust' && ed.dragEdge && ed.dragIndex !== null) {
+  if (ed.step === 'adjust' && ed.dragEdge && ed.dragIndex !== null) {
     const edge = ed.dragEdge === 'outer' ? ed.outer : ed.inner;
     const pt = edge?.[ed.dragIndex];
     if (pt) {
@@ -453,7 +453,7 @@ function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): 
   if (ed.finish) drawFinishLine(ctx, s, ed.finish.a, ed.finish.b);
 
   // Точка касания в фазе старт/финиша — куда «пришпилена» перпендикулярная черта.
-  if (ed.phase === 'finish' && ed.dragStart) {
+  if (ed.step === 'finish' && ed.dragStart) {
     ctx.save();
     ctx.fillStyle = ARROW_COLOR;
     ctx.beginPath();
@@ -468,12 +468,12 @@ function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): 
     ctx.restore();
   }
 
-  if (ed.phase === 'direction' && ed.arrows) {
+  if (ed.step === 'direction' && ed.arrows) {
     for (const arrow of ed.arrows)
       drawArrow(ctx, s, arrow.from, arrow.tip, ARROW_COLOR, 2.5);
   }
 
-  if (ed.phase === 'ready' && ed.arrows && ed.forward) {
+  if (ed.step === 'ready' && ed.arrows && ed.forward) {
     const chosen = ed.arrows.find(
       (a: Arrow) => a.forward.x === ed.forward!.x && a.forward.y === ed.forward!.y,
     );

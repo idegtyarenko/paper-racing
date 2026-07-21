@@ -76,8 +76,8 @@ export function installDevHelpers(deps: DevHelperDeps): void {
   };
   // Дешёвый снимок ключевого состояния для ассертов без скриншотов.
   const snap = () => ({
-    mode: S.mode,
-    phase: S.game?.phase ?? null,
+    phase: S.phase,
+    gamePhase: S.game?.phase ?? null,
     current: S.game?.current ?? null,
     players:
       S.game?.players.map((p) => ({
@@ -148,7 +148,7 @@ export function installDevHelpers(deps: DevHelperDeps): void {
       S.raceTrack = devTrack();
       S.playersReturn = 'edit';
       cancelAiMove();
-      S.mode = 'mode';
+      S.phase = 'modeSelect';
       updateUI();
       redraw();
       return snap();

@@ -26,7 +26,7 @@ import {
 import { strings } from '../i18n';
 import { MIN_CENTER_AREA } from '../config';
 
-export type EditorPhase = 'center' | 'adjust' | 'finish' | 'direction' | 'ready';
+export type EditorStep = 'center' | 'adjust' | 'finish' | 'direction' | 'ready';
 
 export interface Arrow {
   from: Vec;
@@ -35,7 +35,7 @@ export interface Arrow {
 }
 
 export interface EditorState {
-  phase: EditorPhase;
+  step: EditorStep;
   /** Осевая линия трассы (замкнутая полилиния). */
   center: Polyline | null;
   /** Модель ширины: нормали и смещения кромок вдоль осевой. */
@@ -58,11 +58,11 @@ export interface EditorState {
   error: boolean;
 }
 
-const MSG: Record<EditorPhase, string> = strings.editor.step;
+const MSG: Record<EditorStep, string> = strings.editor.step;
 
 export function newEditor(): EditorState {
   return {
-    phase: 'center',
+    step: 'center',
     center: null,
     width: null,
     outer: null,
@@ -81,9 +81,9 @@ export function newEditor(): EditorState {
   };
 }
 
-function setPhase(st: EditorState, phase: EditorPhase): void {
-  st.phase = phase;
-  st.message = MSG[phase];
+function setStep(st: EditorState, step: EditorStep): void {
+  st.step = step;
+  st.message = MSG[step];
   st.error = false;
 }
 
@@ -93,23 +93,23 @@ function fail(st: EditorState, message: string): void {
 }
 
 export function pointerDown(st: EditorState, p: Vec, tol = 1.2): void {
-  if (st.phase === 'center') {
+  if (st.step === 'center') {
     st.drawing = true;
     st.stroke = [p];
-  } else if (st.phase === 'adjust' && st.width) {
+  } else if (st.step === 'adjust' && st.width) {
     const pick = pickEdge(st.width, p, tol);
     if (pick) {
       st.dragEdge = pick.edge;
       st.dragIndex = pick.index;
     }
-  } else if (st.phase === 'finish' && st.width) {
+  } else if (st.step === 'finish' && st.width) {
     st.dragStart = p;
     previewFinish(st, p);
-  } else if (st.phase === 'direction' && st.arrows) {
+  } else if (st.step === 'direction' && st.arrows) {
     for (const arrow of st.arrows) {
       if (distPointToSegment(p, arrow.from, arrow.tip) < tol) {
         st.forward = arrow.forward;
-        setPhase(st, 'ready');
+        setStep(st, 'ready');
         return;
       }
     }
@@ -121,7 +121,7 @@ export function pointerMove(st: EditorState, p: Vec): void {
     const last = st.stroke[st.stroke.length - 1];
     if (!last || dist(last, p) > 0.15) st.stroke.push(p);
   } else if (
-    st.phase === 'adjust' &&
+    st.step === 'adjust' &&
     st.width &&
     st.dragEdge !== null &&
     st.dragIndex !== null
@@ -131,7 +131,7 @@ export function pointerMove(st: EditorState, p: Vec): void {
       st.outer = e.outer;
       st.inner = e.inner;
     }
-  } else if (st.phase === 'finish' && st.dragStart && st.width) {
+  } else if (st.step === 'finish' && st.dragStart && st.width) {
     st.dragStart = p;
     previewFinish(st, p);
   }
@@ -147,7 +147,7 @@ export function pointerUp(st: EditorState): void {
       fail(st, res.error);
       return;
     }
-    if (st.phase === 'center') {
+    if (st.step === 'center') {
       if (selfIntersectsClosed(res.poly)) {
         fail(st, strings.editor.errors.selfCross);
         return;
@@ -165,12 +165,12 @@ export function pointerUp(st: EditorState): void {
       st.width = gen.model;
       st.outer = gen.outer;
       st.inner = gen.inner;
-      setPhase(st, 'adjust');
+      setStep(st, 'adjust');
     }
-  } else if (st.phase === 'adjust') {
+  } else if (st.step === 'adjust') {
     st.dragEdge = null;
     st.dragIndex = null;
-  } else if (st.phase === 'finish' && st.dragStart && st.width) {
+  } else if (st.step === 'finish' && st.dragStart && st.width) {
     const p = st.dragStart;
     st.dragStart = null;
     st.dragEnd = null;
@@ -187,7 +187,7 @@ export function pointerUp(st: EditorState): void {
     }
     st.finish = res.finish;
     computeArrows(st);
-    setPhase(st, 'direction');
+    setStep(st, 'direction');
   }
 }
 
@@ -234,14 +234,14 @@ export function pointerCancel(st: EditorState): void {
   st.dragEnd = null;
   st.dragEdge = null;
   st.dragIndex = null;
-  if (st.phase === 'finish') st.finish = null;
+  if (st.step === 'finish') st.finish = null;
   st.message = strings.editor.gestureCancelled;
   st.error = false;
 }
 
 /** Подтвердить кромки и перейти к рисованию старт/финиша. */
 export function confirmEdges(st: EditorState): void {
-  if (st.phase === 'adjust') setPhase(st, 'finish');
+  if (st.step === 'adjust') setStep(st, 'finish');
 }
 
 function computeArrows(st: EditorState): void {
@@ -269,7 +269,7 @@ export function resetCenter(st: EditorState): void {
   st.dragEnd = null;
   st.dragEdge = null;
   st.dragIndex = null;
-  setPhase(st, 'center');
+  setStep(st, 'center');
 }
 
 /** Вернуться к тюнингу кромок, сохранив осевую и сгенерированное полотно. */
@@ -282,7 +282,7 @@ export function resetAdjust(st: EditorState): void {
   st.dragEnd = null;
   st.dragEdge = null;
   st.dragIndex = null;
-  setPhase(st, 'adjust');
+  setStep(st, 'adjust');
 }
 
 export function resetFinish(st: EditorState): void {
@@ -292,12 +292,12 @@ export function resetFinish(st: EditorState): void {
   st.arrows = null;
   st.dragStart = null;
   st.dragEnd = null;
-  setPhase(st, 'finish');
+  setStep(st, 'finish');
 }
 
 /** Единый шаг назад по стейт-машине рисования. */
 export function stepBack(st: EditorState): void {
-  switch (st.phase) {
+  switch (st.step) {
     case 'adjust':
       resetCenter(st);
       break;
@@ -315,7 +315,7 @@ export function stepBack(st: EditorState): void {
         resetAdjust(st);
       } else {
         st.forward = null;
-        setPhase(st, 'direction');
+        setStep(st, 'direction');
       }
       break;
     // 'center' — это первый шаг, назад некуда.
@@ -324,7 +324,7 @@ export function stepBack(st: EditorState): void {
 
 /** Можно ли шагнуть назад из текущей фазы. */
 export function canStepBack(st: EditorState): boolean {
-  return st.phase !== 'center';
+  return st.step !== 'center';
 }
 
 /**
@@ -338,7 +338,7 @@ export function editorFromTrack(t: {
   forward: Vec;
 }): EditorState {
   const st = newEditor();
-  st.phase = 'ready';
+  st.step = 'ready';
   st.outer = t.outer;
   st.inner = t.inner;
   st.finish = t.finish;

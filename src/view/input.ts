@@ -28,7 +28,7 @@ import {
 
 /**
  * Мост к главному модулю: ввод не держит игровое состояние сам. Читает его по
- * ссылке через `state` (`state.mode`, `state.editor`, `state.game`, `state.cands`);
+ * ссылке через `state` (`state.phase`, `state.editor`, `state.game`, `state.cands`);
  * применяет ходы и намётки через колбэки.
  */
 export interface InputDeps {
@@ -81,7 +81,7 @@ export function getLoupe(): Vec | null {
 export function reaimHover(): void {
   if (lastMouseScreen === null) return;
   const game = deps.state.game;
-  if (deps.state.mode !== 'race' || !game || game.phase !== 'race') return;
+  if (deps.state.phase !== 'race' || !game || game.phase !== 'race') return;
   hover = findCandidate(screenToWorld(vp.camera(), lastMouseScreen));
 }
 
@@ -167,8 +167,8 @@ function loupeActive(): boolean {
 function drawLift(e: PointerEvent): number {
   const editor = deps.state.editor;
   return e.pointerType === 'touch' &&
-    deps.state.mode === 'edit' &&
-    (editor.phase === 'center' || editor.phase === 'adjust')
+    deps.state.phase === 'edit' &&
+    (editor.step === 'center' || editor.step === 'adjust')
     ? TOUCH_LIFT
     : 0;
 }
@@ -308,7 +308,7 @@ function beginPan(sx: number, sy: number, id: number): void {
  * ловится только на двух «чистых» тапах без протяжки, так что штрих не перехватывается.
  */
 function doubleTapEnabled(): boolean {
-  return deps.state.mode === 'race' || deps.state.mode === 'edit';
+  return deps.state.phase === 'race' || deps.state.phase === 'edit';
 }
 
 /** Этот тач-даун — второй тап двойного тапа (рядом и вовремя с прошлым)? */
@@ -348,8 +348,8 @@ function handleEditDown(e: PointerEvent, scr: Vec, touch: boolean): void {
   const editor = deps.state.editor;
   const w = vp.toWorld(e, drawLift(e));
   const tol = touch ? Math.max(1.2, TOUCH_TOL_PX / vp.scale()) : 1.2;
-  const phase = editor.phase;
-  switch (phase) {
+  const step = editor.step;
+  switch (step) {
     case 'center':
       pointerDown(editor, w, tol);
       gesture = { kind: 'draw' };
@@ -371,7 +371,7 @@ function handleEditDown(e: PointerEvent, scr: Vec, touch: boolean): void {
       break;
     case 'direction':
       pointerDown(editor, w, tol); // тап по стрелке синхронно переводит в ready
-      if (editor.phase === 'ready') {
+      if (editor.step === 'ready') {
         deps.goToMode('edit');
         return;
       }
@@ -454,11 +454,11 @@ function endGesture(e: PointerEvent): void {
     case 'edge':
     case 'finish': {
       const editor = deps.state.editor;
-      const prevPhase = editor.phase;
+      const prevStep = editor.step;
       pointerMove(editor, vp.toWorld(e, drawLift(e)));
       pointerUp(editor);
       // Осевая замкнута (center → adjust) — «автор закончил рисовать»: вписываем.
-      if (prevPhase === 'center' && editor.phase === 'adjust') vp.fitToContent();
+      if (prevStep === 'center' && editor.step === 'adjust') vp.fitToContent();
       deps.updateUI();
       break;
     }
@@ -553,7 +553,7 @@ export function initInput(d: InputDeps): void {
     }
 
     const game = deps.state.game;
-    if (deps.state.mode === 'edit') handleEditDown(e, scr, touch);
+    if (deps.state.phase === 'edit') handleEditDown(e, scr, touch);
     else if (game && game.phase === 'race') handleRaceDown(e, scr, touch);
     // Гонка окончена (game.phase !== 'race') — прицеливаться уже не по чему,
     // остаётся только пан по финальной карте.
@@ -581,7 +581,7 @@ export function initInput(d: InputDeps): void {
     }
     // Нет активного жеста: только hover мышью по кандидатам в гонке.
     const game = deps.state.game;
-    if (!touch && deps.state.mode === 'race' && game && game.phase === 'race') {
+    if (!touch && deps.state.phase === 'race' && game && game.phase === 'race') {
       const c = findCandidate(vp.toWorld(e));
       if (c !== hover) {
         hover = c;
@@ -681,7 +681,7 @@ export function initInput(d: InputDeps): void {
   document.getElementById('confirmMove')?.addEventListener('pointerdown', (e) => {
     if (e.pointerType !== 'touch' || pinch || activeId !== null) return;
     const game = deps.state.game;
-    if (!(deps.state.mode === 'race' && game && game.phase === 'race')) return;
+    if (!(deps.state.phase === 'race' && game && game.phase === 'race')) return;
     const scr = vp.toScreen(e);
     const near = nearestCandScreen(scr);
     if (!near || near.dist > AIM_ZONE_PX) return; // рядом нет цели — пусть коммитит

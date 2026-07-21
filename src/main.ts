@@ -5,7 +5,7 @@
 // на каждое поле больше нет.
 
 import './ui/styles/index.css';
-import { newAppState, PanelMode } from './app-state';
+import { newAppState, Phase } from './app-state';
 import { finalizeTrack } from './model/track';
 import { newEditor, stepBack, confirmEdges } from './model/editor';
 import {
@@ -62,7 +62,7 @@ function isBotSeat(i: number): boolean {
 /** Bbox содержимого для fit/clamp: трасса гонки или редактируемая трасса.
  *  Провайдер границ для вьюпорта — «что сейчас на экране» знает приложение. */
 function contentBounds(): Bounds | null {
-  if (S.mode === 'race' && S.game)
+  if (S.phase === 'race' && S.game)
     return polylineBounds(S.game.track.outer, S.game.track.inner);
   return polylineBounds(S.editor.outer, S.editor.inner, S.editor.center);
 }
@@ -75,7 +75,7 @@ function resize(): void {
 
 function redraw(): void {
   // Шаг выбора игроков рисуется как редактор: показываем готовую трассу-превью.
-  const viewMode = S.mode === 'race' ? 'race' : 'edit';
+  const viewMode = S.phase === 'race' ? 'race' : 'edit';
   const app: AppView = {
     mode: viewMode,
     editor: S.editor,
@@ -115,7 +115,7 @@ function soloHumanSeat(): number {
  * game.current, так что обычная игра идёт тем же путём.
  */
 function preselectSeat(): number {
-  if (S.mode !== 'race' || !S.game || S.game.phase !== 'race') return -1;
+  if (S.phase !== 'race' || !S.game || S.game.phase !== 'race') return -1;
   const seat = session.active() ? session.mySeat() : soloHumanSeat();
   if (seat < 0) return -1;
   const p = S.game.players[seat];
@@ -150,7 +150,7 @@ function localHumanSeat(): number {
 /** Доступна ли сейчас кнопка «Сдаться»: идёт гонка и локальный игрок ещё в ней
  *  (не финишировал и не сошёл). Сдаться можно в любой момент, не только в свой ход. */
 function canRetire(): boolean {
-  if (!S.game || S.mode !== 'race' || S.game.phase !== 'race') return false;
+  if (!S.game || S.phase !== 'race' || S.game.phase !== 'race') return false;
   const seat = localHumanSeat();
   return seat >= 0 && !isFinished(S.game.players[seat]) && !S.game.players[seat].retired;
 }
@@ -159,7 +159,7 @@ function updateUI(): void {
   const net = online.netTurn(S.game);
   const aiTurn = !!S.game && isBotSeat(S.game.current);
   updatePanel({
-    mode: S.mode,
+    phase: S.phase,
     editor: S.editor,
     game: S.game,
     playersMax: S.raceTrack?.startPoints.length ?? 6,
@@ -167,8 +167,8 @@ function updateUI(): void {
     aiTurn,
     canRetire: canRetire(),
   });
-  renderTurnQueue(S.mode === 'race' ? S.game : null);
-  renderStandings(S.mode === 'race' ? S.game : null, S.raceNav);
+  renderTurnQueue(S.phase === 'race' ? S.game : null);
+  renderStandings(S.phase === 'race' ? S.game : null, S.raceNav);
 }
 
 /** Может ли этот клиент ходить сейчас: в локальной игре — всегда (кроме хода
@@ -199,7 +199,7 @@ function scheduleAiMove(): void {
   // (mode !== 'race'), боты на паузе, даже если game ещё в phase 'race'. Без этой
   // проверки commit() из меню-переходов запускал бы ход бота под настройками.
   if (
-    S.mode !== 'race' ||
+    S.phase !== 'race' ||
     !S.game ||
     S.game.phase !== 'race' ||
     !isBotSeat(S.game.current)
@@ -328,16 +328,16 @@ function goToMode(from: 'edit' | 'race'): void {
   }
   S.playersReturn = from;
   cancelAiMove(); // гонка с ботами на паузе, пока открыты экраны настройки
-  S.mode = 'mode';
+  S.phase = 'modeSelect';
   commit();
 }
 
 /** Назад из шага настройки (режим/игроки): в редактор или к текущей гонке. */
 function backFromSetup(): void {
   if (S.playersReturn === 'race') {
-    S.mode = 'race'; // commit() ниже возобновит ходы ботов (mode-гейт в scheduleAiMove)
+    S.phase = 'race'; // commit() ниже возобновит ходы ботов (mode-гейт в scheduleAiMove)
   } else {
-    S.mode = 'edit';
+    S.phase = 'edit';
     stepBack(S.editor); // ready → direction
   }
   S.raceTrack = null;
@@ -365,7 +365,7 @@ function startRace(humans: number, bots: number, difficulty: Difficulty): void {
   }
   S.raceNav = buildNavField(S.raceTrack); // нужно ботам (chooseMove) и полосе мест
   S.lastLocalRace = { humans, bots, difficulty };
-  S.mode = 'race';
+  S.phase = 'race';
   commit({ fit: true }); // fit вписывает трассу в кадр; scheduleAiMove — если первым ходит бот
 }
 
@@ -383,7 +383,7 @@ function resetToEdit(): void {
   S.pending = null;
   input.clearSelection();
   S.editor = newEditor();
-  S.mode = 'edit';
+  S.phase = 'edit';
   // Пустое поле → resize() покажет дефолтный вид (границ содержимого нет).
   updateUI();
   resize();
@@ -462,7 +462,7 @@ bindButtons({
   isOnline: () => session.active(),
   onPlayersBack: () => {
     // С экрана числа игроков назад — к выбору режима (он теперь есть всегда).
-    S.mode = 'mode';
+    S.phase = 'modeSelect';
     commit();
   },
   onStartLocal: (humans, bots, difficulty) => startRace(humans, bots, difficulty),
@@ -476,16 +476,16 @@ bindButtons({
     }),
   onNewTrack: () => resetToEdit(),
   onModeLocal: () => {
-    S.mode = 'players';
+    S.phase = 'players';
     commit();
   },
   onModeOnline: () => online.promptCreate(),
   onModeAI: () => {
-    S.mode = 'ai';
+    S.phase = 'ai';
     commit();
   },
   onAiBack: () => {
-    S.mode = 'mode';
+    S.phase = 'modeSelect';
     commit();
   },
   onModeBack: () => backFromSetup(),
@@ -518,10 +518,10 @@ function saveState(): void {
 
 /** Восстановить локальное состояние из снимка. Возвращает восстановленный режим
  *  (или null, если снимка не было). */
-function restoreState(): PanelMode | null {
+function restoreState(): Phase | null {
   const snap = persist.load();
   if (!snap) return null;
-  S.mode = snap.mode;
+  S.phase = snap.phase;
   S.editor = snap.editor;
   S.raceTrack = snap.raceTrack;
   S.game = snap.game;
@@ -534,7 +534,7 @@ function restoreState(): PanelMode | null {
   // nav-поле не сериализуем — пересобираем из трассы (нужно ботам и полосе мест).
   // Бот-ность мест едет внутри game.players (Player.bot) — отдельно не восстанавливаем.
   if (S.game) S.raceNav = buildNavField(S.game.track);
-  return snap.mode;
+  return snap.phase;
 }
 
 // Мобильный swipe-to-reload, жест/кнопка «назад», закрытие или сворачивание вкладки:

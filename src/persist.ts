@@ -3,8 +3,8 @@
 // сбрасывала игру к первому экрану рисования трассы. Онлайн сюда не попадает —
 // его сессия живёт на сервере и восстанавливается своим путём.
 
-import { AppState, PanelMode, LastLocalRace } from './app-state';
-import { EditorState } from './model/editor';
+import { AppState, Phase, LastLocalRace } from './app-state';
+import { EditorState, EditorStep } from './model/editor';
 import { Track } from './model/track';
 import { GameState, Rules } from './model/game';
 import {
@@ -27,7 +27,7 @@ const VERSION = 3;
 /** Живой снимок локального состояния приложения (то, что держит main.ts). Бот-места
  *  едут внутри game.players (Player.bot) — отдельного поля под ботов нет. */
 export interface LocalSnapshot {
-  mode: PanelMode;
+  phase: Phase;
   editor: EditorState;
   raceTrack: Track | null;
   game: GameState | null;
@@ -39,7 +39,7 @@ export interface LocalSnapshot {
 /** JSON-форма снимка: трассы с Set `inside` разворачиваются в массивы. */
 interface Stored {
   v: number;
-  mode: PanelMode;
+  phase: Phase;
   editor: EditorState;
   raceTrack: SerializedTrack | null;
   game: { track: SerializedTrack; state: SerializedState } | null;
@@ -55,7 +55,7 @@ export function save(snap: AppState): void {
   try {
     const stored: Stored = {
       v: VERSION,
-      mode: snap.mode,
+      phase: snap.phase,
       editor: snap.editor,
       raceTrack: snap.raceTrack ? serializeTrack(snap.raceTrack) : null,
       game: snap.game
@@ -79,7 +79,9 @@ function isStored(v: unknown): v is Stored {
   if (typeof v !== 'object' || v === null) return false;
   const s = v as Record<string, unknown>;
   if (typeof s.v !== 'number') return false;
-  if (typeof s.mode !== 'string') return false;
+  // Поле экрана переименовано mode→phase в том же v3 — старые снимки читаем по
+  // legacy-ключу `mode`, чтобы не сбрасывать идущую гонку при обновлении.
+  if (typeof (s.phase ?? s.mode) !== 'string') return false;
   if (typeof s.editor !== 'object' || s.editor === null) return false;
   if (typeof s.rules !== 'object' || s.rules === null) return false;
   if (s.raceTrack !== null && !isSerializedTrack(s.raceTrack)) return false;
@@ -114,8 +116,11 @@ export function load(): LocalSnapshot | null {
     if (!isStored(parsed)) return null;
     const s = parsed;
     if (s.v !== VERSION) return null;
+    // Экран: новый ключ `phase`, с откатом на legacy `mode` из старых v3-снимков.
+    const phase = (s.phase ??
+      (parsed as unknown as Record<string, unknown>).mode) as Phase;
     // Онлайн-лобби локально не восстанавливается — снимок такого режима игнорируем.
-    if (s.mode === 'lobby') return null;
+    if (phase === 'lobby') return null;
     // Доигранную гонку не восстанавливаем: возвращаться на экран победителя незачем,
     // после перезагрузки честнее начать с чистого редактора (снимок игнорируем).
     if (s.game?.state.phase === 'over') return null;
@@ -125,7 +130,7 @@ export function load(): LocalSnapshot | null {
       ? deserializeState(s.game.state, deserializeTrack(s.game.track))
       : null;
     return {
-      mode: s.mode,
+      phase,
       editor,
       raceTrack,
       game,
@@ -144,8 +149,12 @@ export function load(): LocalSnapshot | null {
  * жеста), а pointerUp после перезагрузки уже не придёт.
  */
 function sanitizeEditor(e: EditorState): EditorState {
+  // Шаг мастера переименован phase→step — старые снимки читаем по legacy-ключу.
+  const rec = e as unknown as Record<string, unknown>;
+  const step = (rec.step ?? rec.phase) as EditorStep;
   return {
     ...e,
+    step,
     drawing: false,
     stroke: [],
     dragStart: null,
