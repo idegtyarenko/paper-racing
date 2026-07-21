@@ -24,7 +24,16 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm run build
+      # Гейт деплоя отдельными шагами — чтобы в логах CI было видно, ЧТО упало
+      # (тайпчек / тесты / сборка), а не один общий `npm run build`. Провал любого
+      # шага роняет job `build` → job `deploy` (needs: build) не запускается.
+      # `vite build` вместо `npm run build`, чтобы tsc/vitest не гонялись дважды.
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npx vite build
         env:
           # Онлайн-режим: значения из Settings → Secrets and variables → Actions.
           # Если секреты не заданы — сборка проходит, но онлайн-входы скрыты (только
