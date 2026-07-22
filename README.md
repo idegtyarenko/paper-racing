@@ -43,3 +43,9 @@ npm run format:check # check formatting without changes
 npm run typo        # insert non-breaking spaces in UI strings (src/strings.ts)
 npm run typo:check  # check non-breaking spaces without changes
 ```
+
+## Deployment
+
+`main` deploys to production (the link above) via GitHub Actions on every push (see `.github/workflows/deploy.yml`).
+
+A `staging` branch deploys alongside it, at `/paper-racing/staging/` — push there to preview work (e.g. a redesign) before merging to `main`. Every deploy rebuilds both branches into a single combined artifact, since GitHub Pages replaces the whole site each time; `main`'s build is cached by content hash so a staging-only push can't trigger a spurious PWA update prompt on production.

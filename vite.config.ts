@@ -14,7 +14,9 @@ const commit = (() => {
 })();
 
 export default defineConfig({
-  base: '/paper-racing/',
+  // Overridable so CI can build the staging copy under /paper-racing/staging/
+  // alongside the production copy at the root — see .github/workflows/deploy.yml.
+  base: process.env.BASE_PATH ?? '/paper-racing/',
   // Build label for the version indicator in the "Rules" popup.
   define: {
     __COMMIT__: JSON.stringify(commit),

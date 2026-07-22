@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
   workflow_dispatch:
 
 permissions:
@@ -19,20 +19,52 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main
+      # `staging` may not exist yet (or gets deleted) — don't fail the whole
+      # deploy over it, just skip the staging copy below.
+      - uses: actions/checkout@v4
+        id: checkout-staging
+        continue-on-error: true
+        with:
+          ref: staging
+          path: staging
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-      - run: npm ci
+          cache-dependency-path: |
+            main/package-lock.json
+            staging/package-lock.json
+      # `main`'s dist is cached by main's own commit SHA. A staging-only push
+      # must NOT rebuild main: __BUILD_TIME__ (Date.now()) is baked into the
+      # bundle, so a no-op rebuild still changes the SW precache manifest and
+      # would falsely prompt production users to update.
+      - name: Cache main build
+        id: cache-main
+        uses: actions/cache@v4
+        with:
+          path: main/dist
+          key: main-dist-${{ hashFiles('main/**') }}
       # Гейт деплоя отдельными шагами — чтобы в логах CI было видно, ЧТО упало
       # (тайпчек / тесты / сборка), а не один общий `npm run build`. Провал любого
       # шага роняет job `build` → job `deploy` (needs: build) не запускается.
-      # `vite build` вместо `npm run build`, чтобы tsc/vitest не гонялись дважды.
-      - name: Typecheck
+      - name: Install (main)
+        if: steps.cache-main.outputs.cache-hit != 'true'
+        working-directory: main
+        run: npm ci
+      - name: Typecheck (main)
+        if: steps.cache-main.outputs.cache-hit != 'true'
+        working-directory: main
         run: npm run typecheck
-      - name: Test
+      - name: Test (main)
+        if: steps.cache-main.outputs.cache-hit != 'true'
+        working-directory: main
         run: npm test
-      - name: Build
+      - name: Build (main)
+        if: steps.cache-main.outputs.cache-hit != 'true'
+        working-directory: main
         run: npx vite build
         env:
           # Онлайн-режим: значения из Settings → Secrets and variables → Actions.
@@ -40,9 +72,39 @@ jobs:
           # локальная игра).
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      - name: Install (staging)
+        if: steps.checkout-staging.outcome == 'success'
+        working-directory: staging
+        run: npm ci
+      - name: Typecheck (staging)
+        if: steps.checkout-staging.outcome == 'success'
+        working-directory: staging
+        run: npm run typecheck
+      - name: Test (staging)
+        if: steps.checkout-staging.outcome == 'success'
+        working-directory: staging
+        run: npm test
+      - name: Build (staging)
+        if: steps.checkout-staging.outcome == 'success'
+        working-directory: staging
+        run: npx vite build
+        env:
+          BASE_PATH: /paper-racing/staging/
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      - name: Combine into one site (production at root, staging at /staging/)
+        run: |
+          mkdir -p combined
+          cp -r main/dist/. combined/
+          if [ -d staging/dist ]; then
+            mkdir -p combined/staging
+            cp -r staging/dist/. combined/staging/
+          fi
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: combined
 
   deploy:
     needs: build
