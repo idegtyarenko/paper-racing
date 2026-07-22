@@ -87,6 +87,18 @@ describe('candidates', () => {
     // diagonal move is available
     expect(cs.some((c) => c.target.x === 11 && c.target.y === 5)).toBe(true);
   });
+
+  // The "stay put" move is a zero-length segment. A degenerate pointOnSegment
+  // used to report every opponent as lying on it, so standing still was blocked
+  // by any car anywhere on the track.
+  it('staying put (target = pos) is not blocked by a distant opponent', () => {
+    const g = classicGame();
+    place(g.players[0], [10, 4], [0, 0]);
+    place(g.players[1], [20, 9]); // nowhere near (10,4)
+    const stay = candidates(g).find((c) => c.target.x === 10 && c.target.y === 4)!;
+    expect(stay).toBeDefined();
+    expect(stay.blocked).toBe(false);
+  });
 });
 
 describe('candidatesForSeat — fan-out for a non-active seat (pre-selection)', () => {

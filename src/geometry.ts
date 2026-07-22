@@ -81,6 +81,10 @@ export function segSegIntersection(p1: Vec, p2: Vec, q1: Vec, q2: Vec): SegHit |
 export function pointOnSegment(p: Vec, a: Vec, b: Vec): boolean {
   const ab = sub(b, a);
   const ap = sub(p, a);
+  // A zero-length segment is a single point — only a itself lies on it. Without
+  // this guard cross, proj and dot(ab,ab) all collapse to 0 and the checks below
+  // pass for *any* p (the "stay put" move being blocked by every car on the track).
+  if (dot(ab, ab) <= EPS) return dot(ap, ap) <= EPS;
   if (Math.abs(cross(ab, ap)) > EPS) return false; // not collinear with line a→b
   const proj = dot(ap, ab);
   return proj >= -EPS && proj <= dot(ab, ab) + EPS;
