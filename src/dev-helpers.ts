@@ -12,6 +12,7 @@
 import { AppState } from './app-state';
 import { setLocale as applyLocale, type LocaleCode } from './i18n';
 import { Track, finalizeTrack, clipFinishLine } from './model/track';
+import { editorFromTrack } from './model/editor';
 import { Candidate, isFinished, WIN_CROSSINGS } from './model/game';
 import { Difficulty } from './model/ai';
 import { worldToScreen } from './view/camera';
@@ -139,6 +140,17 @@ export function installDevHelpers(deps: DevHelperDeps): void {
         S.game!.players[i].pos = { x: 16, y: 20 }; // верхняя прямая, не блокируют финиш
       }
       refreshCands();
+      updateUI();
+      redraw();
+      return snap();
+    },
+    /** Готовая трасса → редактор на финальном шаге `ready` (минуя рисование): та же
+     *  общая canvas-поверхность, что в гонке, плюс редакторский оверлей. Для
+     *  визуальной проверки полотна/кромок в режиме edit без прохождения мастера. */
+    toEdit() {
+      S.editor = editorFromTrack(devTrack());
+      S.phase = 'edit';
+      cancelAiMove();
       updateUI();
       redraw();
       return snap();

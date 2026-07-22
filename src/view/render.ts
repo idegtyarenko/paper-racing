@@ -28,40 +28,40 @@ export interface AppView {
   cam: Camera;
 }
 
-// Палитра canvas-рендера. Единый источник для отрисовки поля (раньше часть цветов
-// была зашита литералами по месту в функциях draw*). INK/PAPER/ARROW_COLOR — зеркала
-// DOM-токенов --ink/--paper/--accent из base.css: canvas не читает CSS-переменные
-// (нужна строка на кадр), поэтому значения продублированы здесь. Это осознанный
-// компромисс (два источника, Option A) — при смене палитры в редизайне держать пару
-// в синхроне; тогда же стоит взвесить единый источник.
-const INK = '#3a3a3a'; // === --ink
-const PAPER = '#fbfaf4'; // === --paper
-const GRID_LIGHT = '#e2e8f2';
-const GRID_HEAVY = '#c9d6e8';
-const ARROW_COLOR = '#0a8a4f'; // === --accent
-/** Белый контур/нимб поверх болида и крестика — контраст над следом. */
-const WHITE = '#fff';
-/** Приглушённый серый: прыжок-сегмент следа и заблокированный кандидат. */
-const MUTED = '#999';
-/** Тёмно-тёплая линия финиша. */
-const FINISH_LINE = '#55524a';
+// Палитра canvas-рендера — направление «blueprint»: тёмно-синее поле, голубая сетка,
+// полотно дороги подсвечено ПОВЕРХ фона (см. дизайн «Paper Racing — Canvas System»).
+// Раньше BG/EDGE/ACCENT зеркалили DOM-токены base.css (--paper/--ink/--accent). На
+// этой фазе редизайна меняется только canvas; DOM пока остаётся кремовым, поэтому
+// зеркала base.css СОЗНАТЕЛЬНО рассинхронены — их сведёт следующая фаза (DOM).
+/** Фон поля (тёмно-синий «блюпринт»); также заливка лупы и база подмешивания следа. */
+const BG = '#0d3252';
+/** Кромка трассы и чертёж в редакторе — сплошная голубая линия поверх фона. */
+const EDGE = '#7fd3ff';
+/** Сетка поверх голого фона — едва заметная холодная голубая (жирная — каждые 5). */
+const GRID_LIGHT = 'rgba(127, 211, 255, 0.08)';
+const GRID_HEAVY = 'rgba(127, 211, 255, 0.16)';
+/** Та же сетка, подсвеченная под полотном дороги (клип по кольцу трассы). */
+const GRID_ROAD_LIGHT = 'rgba(127, 211, 255, 0.22)';
+const GRID_ROAD_HEAVY = 'rgba(127, 211, 255, 0.36)';
+/** Лёгкая голубая заливка-подсветка полотна дороги. */
+const ROAD_WASH = 'rgba(127, 211, 255, 0.05)';
+/** Янтарный акцент: стрелка направления и ручки перетаскивания в редакторе. */
+const ACCENT = '#ffb454';
+/** Нимб под болидом и крестиком — цвет фона, читается контрастом над следом. */
+const HALO = '#0d3252';
+/** Приглушённый серо-голубой: прыжок-сегмент следа и заблокированный кандидат. */
+const MUTED = '#a7bdd0';
+/** Голубое кольцо лупы. */
+const LOUPE_RING = '#7fd3ff';
 /** Осевая-подсказка в фазе тюнинга кромок (можно тянуть). */
-const CENTERLINE_HINT = '#b9c3d1';
+const CENTERLINE_HINT = 'rgba(127, 211, 255, 0.5)';
 /** Крест аварийного кандидата (красный). */
-const CRASH = '#d32f2f';
-/** Клетки, тень и рамка клетчатого флага финиша. */
-const FLAG_DARK = '#222';
-const FLAG_LIGHT = '#f6f6f2';
+const CRASH = '#ff5d5d';
+/** Клетки, тень и рамка клетчатого флага финиша (тёмная клетка = цвет фона). */
+const FLAG_DARK = '#0d3252';
+const FLAG_LIGHT = '#bfe6ff';
 const FLAG_SHADOW = 'rgba(0,0,0,0.1)';
-const FLAG_BORDER = 'rgba(0,0,0,0.45)';
-/** Заливка внетрассовой территории — холодный серо-голубой в тон сетки, чтобы
- *  белое полотно трассы читалось контрастом без линии-границы. Полупрозрачная,
- *  чтобы сетка просвечивала сквозь заливку, а не пропадала под ней. */
-const OFF_TRACK = '#c2cfe0';
-const OFF_TRACK_ALPHA = 0.3;
-/** Тонкая светло-серая линия по кромкам трассы — подчёркивает край поверх заливки. */
-const TRACK_BORDER = '#9aa6b8';
-const TRACK_BORDER_WIDTH = 1.5;
+const FLAG_BORDER = 'rgba(127, 211, 255, 0.45)';
 
 // Насыщенность и толщина следа растут со скоростью хода (длиной сегмента): быстрые
 // прямые рисуются плотной жирной линией, медленное ковыряние в поворотах — бледной
@@ -98,13 +98,13 @@ export function render(ctx: CanvasRenderingContext2D, app: AppView): void {
   const h = ctx.canvas.height / dpr;
   const s = app.cam.scale;
 
-  ctx.fillStyle = PAPER;
+  ctx.fillStyle = BG;
   ctx.fillRect(0, 0, w, h);
 
   // Сцена рисуется под камерой (зум/пан); лупа — поверх, в экранных координатах.
   ctx.save();
   ctx.translate(app.cam.ox, app.cam.oy);
-  drawGrid(ctx, s, app.cam.ox, app.cam.oy, 0, 0, w, h);
+  drawGrid(ctx, s, app.cam.ox, app.cam.oy, 0, 0, w, h, GRID_LIGHT, GRID_HEAVY);
   if (app.mode === 'edit') {
     drawEditor(ctx, s, app.editor);
   } else if (app.game) {
@@ -144,7 +144,7 @@ function drawLoupe(
   ctx.beginPath();
   ctx.arc(cx, cy, R, 0, Math.PI * 2);
   ctx.clip();
-  ctx.fillStyle = PAPER;
+  ctx.fillStyle = BG;
   ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
   // Мировая точка под пальцем (с учётом камеры) — в центр лупы.
   const wx = (p.x - app.cam.ox) / app.cam.scale;
@@ -152,7 +152,7 @@ function drawLoupe(
   const ox2 = cx - wx * s2;
   const oy2 = cy - wy * s2;
   ctx.translate(ox2, oy2);
-  drawGrid(ctx, s2, ox2, oy2, cx - R, cy - R, cx + R, cy + R);
+  drawGrid(ctx, s2, ox2, oy2, cx - R, cy - R, cx + R, cy + R, GRID_LIGHT, GRID_HEAVY);
   drawRace(
     ctx,
     s2,
@@ -164,7 +164,7 @@ function drawLoupe(
   );
   ctx.restore();
 
-  ctx.strokeStyle = FINISH_LINE;
+  ctx.strokeStyle = LOUPE_RING;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.arc(cx, cy, R, 0, Math.PI * 2);
@@ -186,6 +186,8 @@ function drawGrid(
   vy0: number,
   vx1: number,
   vy1: number,
+  light: string,
+  heavy: string,
 ): void {
   const x0 = Math.floor((vx0 - ox) / s);
   const x1 = Math.ceil((vx1 - ox) / s);
@@ -197,14 +199,14 @@ function drawGrid(
   const right = x1 * s;
   ctx.lineWidth = 1;
   for (let x = x0; x <= x1; x++) {
-    ctx.strokeStyle = ((x % 5) + 5) % 5 === 0 ? GRID_HEAVY : GRID_LIGHT;
+    ctx.strokeStyle = ((x % 5) + 5) % 5 === 0 ? heavy : light;
     ctx.beginPath();
     ctx.moveTo(x * s, top);
     ctx.lineTo(x * s, bottom);
     ctx.stroke();
   }
   for (let y = y0; y <= y1; y++) {
-    ctx.strokeStyle = ((y % 5) + 5) % 5 === 0 ? GRID_HEAVY : GRID_LIGHT;
+    ctx.strokeStyle = ((y % 5) + 5) % 5 === 0 ? heavy : light;
     ctx.beginPath();
     ctx.moveTo(left, y * s);
     ctx.lineTo(right, y * s);
@@ -235,37 +237,71 @@ function addPolyPath(ctx: CanvasRenderingContext2D, s: number, poly: Polyline): 
 }
 
 /**
- * Заливка всей внетрассовой территории: полотно (кольцо между outer и inner)
- * остаётся бумажно-белым, а всё вокруг — снаружи внешней кромки и во «дворе»
- * внутри inner — заливается OFF_TRACK. Границу-линию трассы при этом не рисуем:
- * край читается контрастом заливки и белого полотна.
+ * Полотно трассы «blueprint»: дорога рисуется ПОВЕРХ фона, а не вычитается из него.
+ * Внетрассовая территория остаётся голым тёмным фоном (уже залит в render). Полотно —
+ * кольцо между outer и inner (без inner — вся внутренность outer): лёгкая голубая
+ * подсветка + сетка, усиленная под клипом кольца, + сплошная голубая кромка.
  */
-function drawOffTrack(
+function drawRoadSurface(
   ctx: CanvasRenderingContext2D,
   s: number,
   outer: Polyline | null,
   inner: Polyline | null,
 ): void {
   if (!outer) return;
-  const B = 1e6; // заведомо больше любого видимого окна в экранных координатах
-  ctx.save();
-  ctx.fillStyle = OFF_TRACK;
-  ctx.globalAlpha = OFF_TRACK_ALPHA;
-  // Снаружи внешней кромки: гигантский прямоугольник с «дыркой» по outer (even-odd).
-  ctx.beginPath();
-  ctx.rect(-B, -B, 2 * B, 2 * B);
-  addPolyPath(ctx, s, outer);
-  ctx.fill('evenodd');
-  // Внутренний двор трассы — той же заливкой.
-  if (inner) {
+  // Путь полотна: кольцо outer/inner (even-odd); без inner — вся внутренность outer.
+  const ringPath = (): void => {
     ctx.beginPath();
-    addPolyPath(ctx, s, inner);
-    ctx.fill();
+    addPolyPath(ctx, s, outer);
+    if (inner) addPolyPath(ctx, s, inner);
+  };
+
+  // 1) Лёгкая голубая подсветка полотна.
+  ctx.save();
+  ctx.fillStyle = ROAD_WASH;
+  ringPath();
+  ctx.fill('evenodd');
+  ctx.restore();
+
+  // 2) Усиленная сетка под полотном — клип по кольцу поверх бледной фоновой сетки.
+  //    ctx уже сдвинут на (cam.ox, cam.oy) в render; линии сетки стоят на worldNode*s
+  //    независимо от сдвига, поэтому здесь передаём ox/oy=0 и окно в этих же translated-
+  //    координатах (bbox внешней кромки, с запасом в клетку). Клип отсекает лишнее.
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of outer) {
+    const px = p.x * s;
+    const py = p.y * s;
+    if (px < minX) minX = px;
+    if (px > maxX) maxX = px;
+    if (py < minY) minY = py;
+    if (py > maxY) maxY = py;
   }
-  // Светло-серая линия по обеим кромкам — поверх заливки, при полной непрозрачности.
-  ctx.globalAlpha = 1;
-  ctx.strokeStyle = TRACK_BORDER;
-  ctx.lineWidth = TRACK_BORDER_WIDTH;
+  ctx.save();
+  ringPath();
+  ctx.clip('evenodd');
+  drawGrid(
+    ctx,
+    s,
+    0,
+    0,
+    minX - s,
+    minY - s,
+    maxX + s,
+    maxY + s,
+    GRID_ROAD_LIGHT,
+    GRID_ROAD_HEAVY,
+  );
+  ctx.restore();
+
+  // 3) Сплошная голубая кромка по обеим границам полотна.
+  ctx.save();
+  ctx.strokeStyle = EDGE;
+  ctx.lineWidth = 1.5;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
   ctx.beginPath();
   addPolyPath(ctx, s, outer);
   if (inner) addPolyPath(ctx, s, inner);
@@ -279,7 +315,7 @@ function drawTrackEdges(
   outer: Polyline | null,
   inner: Polyline | null,
 ): void {
-  ctx.strokeStyle = INK;
+  ctx.strokeStyle = EDGE;
   ctx.lineWidth = 2.5;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
@@ -423,7 +459,7 @@ function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): 
   // гонке: полупрозрачную заливку внетрассовой территории со светло-серой кромкой.
   // В фазе «center» (черчение осевой) заливки ещё нет — рисуем простой контур.
   if (ed.step !== 'center' && ed.outer && ed.inner) {
-    drawOffTrack(ctx, s, ed.outer, ed.inner);
+    drawRoadSurface(ctx, s, ed.outer, ed.inner);
   } else {
     drawTrackEdges(ctx, s, ed.outer, ed.inner);
   }
@@ -434,7 +470,7 @@ function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): 
     const pt = edge?.[ed.dragIndex];
     if (pt) {
       ctx.save();
-      ctx.fillStyle = ARROW_COLOR;
+      ctx.fillStyle = ACCENT;
       ctx.beginPath();
       ctx.arc(pt.x * s, pt.y * s, Math.max(4, s * 0.22), 0, Math.PI * 2);
       ctx.fill();
@@ -443,7 +479,7 @@ function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): 
   }
 
   if (ed.drawing && ed.stroke.length > 1) {
-    ctx.strokeStyle = INK;
+    ctx.strokeStyle = EDGE;
     ctx.lineWidth = 2.5;
     ctx.globalAlpha = 0.75;
     strokePoly(ctx, s, ed.stroke, false);
@@ -455,7 +491,7 @@ function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): 
   // Точка касания в фазе старт/финиша — куда «пришпилена» перпендикулярная черта.
   if (ed.step === 'finish' && ed.dragStart) {
     ctx.save();
-    ctx.fillStyle = ARROW_COLOR;
+    ctx.fillStyle = ACCENT;
     ctx.beginPath();
     ctx.arc(
       ed.dragStart.x * s,
@@ -469,15 +505,14 @@ function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): 
   }
 
   if (ed.step === 'direction' && ed.arrows) {
-    for (const arrow of ed.arrows)
-      drawArrow(ctx, s, arrow.from, arrow.tip, ARROW_COLOR, 2.5);
+    for (const arrow of ed.arrows) drawArrow(ctx, s, arrow.from, arrow.tip, ACCENT, 2.5);
   }
 
   if (ed.step === 'ready' && ed.arrows && ed.forward) {
     const chosen = ed.arrows.find(
       (a: Arrow) => a.forward.x === ed.forward!.x && a.forward.y === ed.forward!.y,
     );
-    if (chosen) drawArrow(ctx, s, chosen.from, chosen.tip, ARROW_COLOR, 2.5);
+    if (chosen) drawArrow(ctx, s, chosen.from, chosen.tip, ACCENT, 2.5);
   }
 }
 
@@ -538,9 +573,9 @@ function drawRace(
   drawCandidates(ctx, s, game, cands, hover, pending, candSeat);
 }
 
-/** Статичный декор трассы: заливка за бортом, финиш и стрелка направления. */
+/** Статичный декор трассы: полотно дороги, финиш и стрелка направления. */
 function drawTrackDecor(ctx: CanvasRenderingContext2D, s: number, track: Track): void {
-  drawOffTrack(ctx, s, track.outer, track.inner);
+  drawRoadSurface(ctx, s, track.outer, track.inner);
   drawFinishLine(ctx, s, track.finish.a, track.finish.b);
 
   // Стрелка направления гонки у финишной линии.
@@ -550,7 +585,7 @@ function drawTrackDecor(ctx: CanvasRenderingContext2D, s: number, track: Track):
     s,
     add(m, scale(track.forward, 0.8)),
     add(m, scale(track.forward, 2.0)),
-    ARROW_COLOR,
+    ACCENT,
     2,
   );
 }
@@ -573,7 +608,7 @@ function drawTrail(ctx: CanvasRenderingContext2D, s: number, p: Player): void {
     return Math.pow(Math.min(1, speed / TRAIL_SPEED_REF), 1.5);
   };
   const colorAt = (f: number): string =>
-    mixHex(PAPER, p.color, TRAIL_MIX_MIN + (1 - TRAIL_MIX_MIN) * f);
+    mixHex(BG, p.color, TRAIL_MIX_MIN + (1 - TRAIL_MIX_MIN) * f);
   const connected = (
     a: { to: Vec; jump?: boolean },
     b: { from: Vec; jump?: boolean },
@@ -630,7 +665,7 @@ function drawCars(ctx: CanvasRenderingContext2D, s: number, game: GameState): vo
     ctx.arc(p.pos.x * s, p.pos.y * s, Math.max(4, s * 0.28), 0, Math.PI * 2);
     ctx.fillStyle = p.color;
     ctx.fill();
-    ctx.strokeStyle = WHITE;
+    ctx.strokeStyle = HALO;
     ctx.lineWidth = 1.5;
     ctx.stroke();
   }
@@ -744,7 +779,7 @@ function drawCrashMark(
   const y = at.y * s;
   ctx.lineCap = 'round';
   // Белый нимб под крестиком — контраст над следом того же цвета.
-  ctx.strokeStyle = WHITE;
+  ctx.strokeStyle = HALO;
   ctx.lineWidth = 3;
   crossPath(ctx, x, y, r);
   ctx.stroke();
