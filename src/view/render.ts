@@ -70,10 +70,41 @@ const FLAG_BORDER = 'rgba(127, 211, 255, 0.45)';
 // штрихи накладывались бы вдвойне. TRAIL_SPEED_REF (клеток/ход) — скорость, при
 // которой след уже максимально насыщенный.
 const TRAIL_SPEED_REF = 6;
-/** Доля цвета болида в бумаге на самом медленном ходу (0 — почти бумага). */
-const TRAIL_MIX_MIN = 0.14;
-const TRAIL_WIDTH_MIN = 1.5;
-const TRAIL_WIDTH_MAX = 3;
+/** Доля цвета болида в фоне на самом медленном ходу (0 — почти фон). Подняли под
+ *  тёмное поле «blueprint»: подмес к navy на малой доле давал мутный след без
+ *  контраста; ~0.32 держит медленный след читаемым. */
+const TRAIL_MIX_MIN = 0.32;
+const TRAIL_WIDTH_MIN = 2;
+const TRAIL_WIDTH_MAX = 3.6;
+
+// Геометрия меток гонки. Радиусы масштабируются с `s` (px/клетку), толщины —
+// константны в px, как в дизайне. Значения приведены к дизайну «Canvas System»
+// (первично) и «Design Exploration» (для состояний, которых в CS нет); дизайн
+// рисует на сетке 26px, поэтому `размер_px / 26` = доля от `s`. Вынесено сюда,
+// чтобы подкручивать в одном месте.
+/** Кандидат хода: голубое пунктирное кольцо (обычный / инерционный). */
+const CAND_R = 0.27;
+const CAND_R_INERTIAL = 0.34;
+const CAND_R_MIN = 4;
+const CAND_DASH: [number, number] = [3, 4];
+const CAND_LW = 1.6;
+const CAND_ALPHA = 0.85;
+/** Наведённый/выбранный кандидат: сплошное кольцо + точка в центре. */
+const CAND_HOVER_LW = 2;
+const CAND_HOVER_DOT_R = 0.12;
+/** Заблокированный узел: серый крестик. */
+const BLOCK_R = 0.23;
+const BLOCK_R_MIN = 3.5;
+const BLOCK_LW = 1.8;
+/** Кандидат-авария (ход в стену): сплошное красное кольцо. */
+const CRASH_CAND_LW = 2;
+/** Отметка аварии на следе: нимб-фон + красный крест. */
+const CRASH_MARK_R = 0.27;
+const CRASH_MARK_R_MIN = 4;
+const CRASH_HALO_LW = 4.5;
+const CRASH_STROKE_LW = 2.2;
+/** Обводка болида (нимб-фон поверх следа). */
+const CAR_STROKE_LW = 2;
 
 /** Линейная интерполяция двух hex-цветов (#rrggbb) → непрозрачный rgb(). */
 function mixHex(a: string, b: string, t: number): string {
@@ -586,7 +617,7 @@ function drawTrackDecor(ctx: CanvasRenderingContext2D, s: number, track: Track):
     add(m, scale(track.forward, 0.8)),
     add(m, scale(track.forward, 2.0)),
     ACCENT,
-    2,
+    2.4,
   );
 }
 
@@ -666,7 +697,7 @@ function drawCars(ctx: CanvasRenderingContext2D, s: number, game: GameState): vo
     ctx.fillStyle = p.color;
     ctx.fill();
     ctx.strokeStyle = HALO;
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = CAR_STROKE_LW;
     ctx.stroke();
   }
 }
@@ -705,35 +736,46 @@ function drawCandidates(
   for (const c of cands) {
     const x = c.target.x * s;
     const y = c.target.y * s;
-    const r = Math.max(3, s * (c.inertial ? 0.2 : 0.14));
+    const r = Math.max(CAND_R_MIN, s * (c.inertial ? CAND_R_INERTIAL : CAND_R));
     if (c.blocked) {
+      // Занятый узел — серый крестик.
+      const br = Math.max(BLOCK_R_MIN, s * BLOCK_R);
       ctx.strokeStyle = MUTED;
-      ctx.lineWidth = 1.5;
-      crossPath(ctx, x, y, r);
+      ctx.lineWidth = BLOCK_LW;
+      crossPath(ctx, x, y, br);
       ctx.stroke();
     } else if (c.crash) {
+      // Ход в стену — сплошное красное кольцо (отличается от голубого «можно»).
       ctx.strokeStyle = CRASH;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = CRASH_CAND_LW;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.stroke();
-    } else {
-      // Кандидаты — полупрозрачные, чтобы отличаться от болида и выбранной
-      // точки; наведённый/выбранный кандидат рисуем непрозрачным.
+    } else if (c === hover) {
+      // Наведён/выбран: сплошное (без пунктира) кольцо + точка в центре, полная
+      // непрозрачность — фокус среди пунктирного веера.
       ctx.save();
-      ctx.globalAlpha = c === hover ? 1 : 0.4;
-      ctx.fillStyle = p.color;
+      ctx.strokeStyle = EDGE;
+      ctx.lineWidth = CAND_HOVER_LW;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = EDGE;
+      ctx.beginPath();
+      ctx.arc(x, y, Math.max(2, s * CAND_HOVER_DOT_R), 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
-    }
-    if (c === hover && !c.blocked) {
-      ctx.strokeStyle = p.color;
-      ctx.lineWidth = 1.5;
+    } else {
+      // Доступный ход — голубое пунктирное кольцо (яркий контраст на тёмном поле).
+      ctx.save();
+      ctx.strokeStyle = EDGE;
+      ctx.globalAlpha = CAND_ALPHA;
+      ctx.lineWidth = CAND_LW;
+      ctx.setLineDash(CAND_DASH);
       ctx.beginPath();
-      ctx.arc(x, y, r + 3, 0, Math.PI * 2);
+      ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.restore();
     }
   }
   // Наметка (предвыбор в чужую очередь): пунктирное кольцо + направляющая от болида —
@@ -741,7 +783,8 @@ function drawCandidates(
   if (pending) {
     const px = pending.target.x * s;
     const py = pending.target.y * s;
-    const pr = Math.max(3, s * (pending.inertial ? 0.2 : 0.14)) + 3;
+    const pr =
+      Math.max(CAND_R_MIN, s * (pending.inertial ? CAND_R_INERTIAL : CAND_R)) + 3;
     ctx.save();
     ctx.strokeStyle = p.color;
     ctx.lineWidth = 2;
@@ -774,17 +817,17 @@ function drawCrashMark(
   at: Vec,
   color: string,
 ): void {
-  const r = Math.max(2.5, s * 0.14);
+  const r = Math.max(CRASH_MARK_R_MIN, s * CRASH_MARK_R);
   const x = at.x * s;
   const y = at.y * s;
   ctx.lineCap = 'round';
-  // Белый нимб под крестиком — контраст над следом того же цвета.
+  // Нимб-фон под крестиком — контраст над следом того же цвета.
   ctx.strokeStyle = HALO;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = CRASH_HALO_LW;
   crossPath(ctx, x, y, r);
   ctx.stroke();
   ctx.strokeStyle = color;
-  ctx.lineWidth = 1.6;
+  ctx.lineWidth = CRASH_STROKE_LW;
   crossPath(ctx, x, y, r);
   ctx.stroke();
 }
