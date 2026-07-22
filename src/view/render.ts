@@ -38,11 +38,11 @@ const BG = '#0d3252';
 /** Кромка трассы и чертёж в редакторе — сплошная голубая линия поверх фона. */
 const EDGE = '#7fd3ff';
 /** Сетка поверх голого фона — едва заметная холодная голубая (жирная — каждые 5). */
-const GRID_LIGHT = 'rgba(127, 211, 255, 0.08)';
-const GRID_HEAVY = 'rgba(127, 211, 255, 0.16)';
+const GRID_LIGHT = 'rgba(127, 211, 255, 0.05)';
+const GRID_HEAVY = 'rgba(127, 211, 255, 0.10)';
 /** Та же сетка, подсвеченная под полотном дороги (клип по кольцу трассы). */
-const GRID_ROAD_LIGHT = 'rgba(127, 211, 255, 0.22)';
-const GRID_ROAD_HEAVY = 'rgba(127, 211, 255, 0.36)';
+const GRID_ROAD_LIGHT = 'rgba(127, 211, 255, 0.15)';
+const GRID_ROAD_HEAVY = 'rgba(127, 211, 255, 0.24)';
 /** Лёгкая голубая заливка-подсветка полотна дороги. */
 const ROAD_WASH = 'rgba(127, 211, 255, 0.05)';
 /** Янтарный акцент: стрелка направления и ручки перетаскивания в редакторе. */
@@ -63,17 +63,11 @@ const FLAG_LIGHT = '#bfe6ff';
 const FLAG_SHADOW = 'rgba(0,0,0,0.1)';
 const FLAG_BORDER = 'rgba(127, 211, 255, 0.45)';
 
-// Насыщенность и толщина следа растут со скоростью хода (длиной сегмента): быстрые
-// прямые рисуются плотной жирной линией, медленное ковыряние в поворотах — бледной
-// тонкой. Цвет — НЕПРОЗРАЧНЫЙ, подмешанный к бумаге (а не globalAlpha): так линия не
-// даёт тёмных точек на стыках сегментов и в пересечениях с сеткой, где полупрозрачные
-// штрихи накладывались бы вдвойне. TRAIL_SPEED_REF (клеток/ход) — скорость, при
-// которой след уже максимально насыщенный.
+// Толщина следа растёт со скоростью хода (длиной сегмента): быстрые прямые — жирная
+// линия, медленное ковыряние в поворотах — тонкая. Цвет всегда ЧИСТЫЙ (цвет болида,
+// непрозрачный): подмес к тёмному фону давал грязный тон, а globalAlpha — тёмные точки
+// на стыках сегментов. TRAIL_SPEED_REF (клеток/ход) — скорость максимальной толщины.
 const TRAIL_SPEED_REF = 6;
-/** Доля цвета болида в фоне на самом медленном ходу (0 — почти фон). Подняли под
- *  тёмное поле «blueprint»: подмес к navy на малой доле давал мутный след без
- *  контраста; ~0.32 держит медленный след читаемым. */
-const TRAIL_MIX_MIN = 0.32;
 const TRAIL_WIDTH_MIN = 2;
 const TRAIL_WIDTH_MAX = 3.6;
 
@@ -105,22 +99,6 @@ const CRASH_HALO_LW = 4.5;
 const CRASH_STROKE_LW = 2.2;
 /** Обводка болида (нимб-фон поверх следа). */
 const CAR_STROKE_LW = 2;
-
-/** Линейная интерполяция двух hex-цветов (#rrggbb) → непрозрачный rgb(). */
-function mixHex(a: string, b: string, t: number): string {
-  const pa = [
-    parseInt(a.slice(1, 3), 16),
-    parseInt(a.slice(3, 5), 16),
-    parseInt(a.slice(5, 7), 16),
-  ];
-  const pb = [
-    parseInt(b.slice(1, 3), 16),
-    parseInt(b.slice(3, 5), 16),
-    parseInt(b.slice(5, 7), 16),
-  ];
-  const c = pa.map((v, i) => Math.round(v + (pb[i] - v) * t));
-  return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
-}
 
 export function render(ctx: CanvasRenderingContext2D, app: AppView): void {
   const dpr = window.devicePixelRatio || 1;
@@ -631,19 +609,14 @@ function drawTrackDecor(ctx: CanvasRenderingContext2D, s: number, track: Track):
  */
 function drawTrail(ctx: CanvasRenderingContext2D, s: number, p: Player): void {
   const trail = p.trail;
-  // Фактор насыщенности 0..1 по скорости сегмента. Степень >1 растягивает
-  // разрыв между медленным и быстрым ходом — контраст резче.
+  // Скорость хода 0..1 по длине сегмента (степень >1 растягивает разрыв медленный↔
+  // быстрый). Кодирует ТОЛЬКО толщину следа: цвет — чистый цвет болида. Подмес к
+  // тёмному фону (как на светлой бумаге) давал грязный тон, поэтому сняли.
   const segFactor = (i: number): number => {
     const seg = trail[i];
     const speed = Math.hypot(seg.to.x - seg.from.x, seg.to.y - seg.from.y);
     return Math.pow(Math.min(1, speed / TRAIL_SPEED_REF), 1.5);
   };
-  const colorAt = (f: number): string =>
-    mixHex(BG, p.color, TRAIL_MIX_MIN + (1 - TRAIL_MIX_MIN) * f);
-  const connected = (
-    a: { to: Vec; jump?: boolean },
-    b: { from: Vec; jump?: boolean },
-  ): boolean => !a.jump && !b.jump && a.to.x === b.from.x && a.to.y === b.from.y;
 
   for (let i = 0; i < trail.length; i++) {
     const seg = trail[i];
@@ -653,25 +626,9 @@ function drawTrail(ctx: CanvasRenderingContext2D, s: number, p: Player): void {
       ctx.lineWidth = 1.5;
       ctx.setLineDash([4, 4]);
     } else {
-      const f = segFactor(i);
-      // Фактор в концах — усреднён с соседним сегментом, чтобы цвет перетекал
-      // через границу хода без скачка.
-      const fFrom =
-        i > 0 && connected(trail[i - 1], seg) ? (segFactor(i - 1) + f) / 2 : f;
-      const fTo =
-        i + 1 < trail.length && connected(seg, trail[i + 1])
-          ? (f + segFactor(i + 1)) / 2
-          : f;
-      const grad = ctx.createLinearGradient(
-        seg.from.x * s,
-        seg.from.y * s,
-        seg.to.x * s,
-        seg.to.y * s,
-      );
-      grad.addColorStop(0, colorAt(fFrom));
-      grad.addColorStop(1, colorAt(fTo));
-      ctx.strokeStyle = grad;
-      ctx.lineWidth = TRAIL_WIDTH_MIN + (TRAIL_WIDTH_MAX - TRAIL_WIDTH_MIN) * f;
+      ctx.strokeStyle = p.color;
+      ctx.lineWidth =
+        TRAIL_WIDTH_MIN + (TRAIL_WIDTH_MAX - TRAIL_WIDTH_MIN) * segFactor(i);
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
     }
