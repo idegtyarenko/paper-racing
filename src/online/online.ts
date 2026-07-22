@@ -1,6 +1,6 @@
-// Онлайн-сессия: тонкий слой поверх net.ts, хранящий состояние текущей игры
-// (код, ростер, роль хоста, трасса) и переводящий входящие строки из realtime в
-// высокоуровневые события для main.ts. Ровно одна активная сессия за раз.
+// Online session: a thin layer on top of net.ts that holds the current game's state
+// (code, roster, host flag, track) and translates incoming realtime rows into
+// high-level events for main.ts. Exactly one active session at a time.
 
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { Track } from '../model/track';
@@ -22,15 +22,15 @@ import {
 } from './net';
 
 export interface OnlineHandlers {
-  /** Ростер/статус лобби изменился (кто-то вошёл/вышел) — обновить экран лобби. */
+  /** Lobby roster/status changed (someone joined/left) — refresh the lobby screen. */
   onLobby: () => void;
-  /** Пришёл стейт гонки (старт или чужой ход) — заменить локальную игру и перерисовать. */
+  /** A race state arrived (start or someone's move) — replace the local game and redraw. */
   onGameState: (game: GameState) => void;
-  /** Игра удалена на сервере (TTL / хост вышел) — вернуться из онлайна. */
+  /** The game was deleted on the server (TTL / host left) — leave online mode. */
   onClosed: () => void;
-  /** Изменилось присутствие (кто-то онлайн/офлайн) — пересчитать таймер/пропуск/метки. */
+  /** Presence changed (someone went online/offline) — recompute the timer/skip/labels. */
   onPresence: () => void;
-  /** Состояние realtime-канала изменилось — показать/спрятать баннер соединения. */
+  /** The realtime channel's connection state changed — show/hide the connection banner. */
   onConnection: (connected: boolean) => void;
 }
 
@@ -40,19 +40,19 @@ let roster: RosterEntry[] = [];
 let hostFlag = false;
 let track: Track | null = null;
 let handlers: OnlineHandlers | null = null;
-/** clientId'ы, чьи вкладки сейчас онлайн (Realtime Presence). */
+/** clientIds whose tabs are currently online (Realtime Presence). */
 let present = new Set<string>();
-/** Когда clientId пропал из присутствия (мс) — метка 30-секундной форы на авто-пропуск. */
+/** When a clientId dropped out of presence (ms) — marks the start of the auto-skip grace period. */
 let leftAt = new Map<string, number>();
-/** Есть ли сейчас связь по realtime-каналу (для баннера «нет связи»). */
+/** Whether the realtime channel is currently connected (drives the "no connection" banner). */
 let connected = true;
 
-/** Идёт ли онлайн-сессия (создана или подключена игра). */
+/** Whether an online session is active (a game was created or joined). */
 export function active(): boolean {
   return code !== null;
 }
 
-/** Есть ли сейчас связь по realtime-каналу. */
+/** Whether the realtime channel is currently connected. */
 export function isConnected(): boolean {
   return connected;
 }
@@ -73,23 +73,23 @@ export function getTrack(): Track | null {
   return track;
 }
 
-/** Место (индекс) этого клиента в ростере; −1 — если не за столом. */
+/** This client's seat (index) in the roster; −1 if not seated. */
 export function mySeat(): number {
   return roster.findIndex((r) => r.clientId === clientId());
 }
 
-/** clientId места по индексу ростера (null — места нет). */
+/** clientId of the seat at this roster index (null if the seat is empty). */
 function seatClientId(seat: number): string | null {
   return roster[seat]?.clientId ?? null;
 }
 
-/** Онлайн ли вкладка игрока на этом месте прямо сейчас. */
+/** Whether the player's tab in this seat is online right now. */
 export function isPresent(seat: number): boolean {
   const id = seatClientId(seat);
   return id !== null && present.has(id);
 }
 
-/** Когда игрок этого места пропал из присутствия (мс), либо null — если он онлайн. */
+/** When the player in this seat dropped out of presence (ms), or null if they're online. */
 export function leftAtOf(seat: number): number | null {
   const id = seatClientId(seat);
   if (id === null || present.has(id)) return null;
@@ -97,16 +97,17 @@ export function leftAtOf(seat: number): number | null {
 }
 
 /**
- * Место присутствующего клиента, назначенного выполнять авто-пропуск/прунинг —
- * минимальный онлайн-seat. Так дублирующую запись делает только один клиент
- * (остальные пишут идентичный стейт, но лишний трафик ни к чему). −1 — никого нет.
+ * The present client's seat designated to perform auto-skip/pruning — the lowest
+ * online seat. This way only one client does the (otherwise duplicate) write
+ * (everyone else would write the same state, so there's no point in the extra
+ * traffic). −1 means no one is present.
  */
 export function designatedSkipper(): number {
   for (let s = 0; s < roster.length; s++) if (isPresent(s)) return s;
   return -1;
 }
 
-/** Обработать sync присутствия: обновить набор онлайн и метки ухода, дёрнуть handler. */
+/** Handle a presence sync: update the online set and leave-timestamps, then notify the handler. */
 function handlePresence(next: Set<string>): void {
   present.forEach((id) => {
     if (!next.has(id)) leftAt.set(id, Date.now());
@@ -117,14 +118,14 @@ function handlePresence(next: Set<string>): void {
 }
 
 /**
- * Обработать смену состояния realtime-канала. При (пере)подключении — ресинк:
- * тянем актуальную строку игры (закрывает пропущенные за время обрыва апдейты и
- * щель между начальным fetch и выходом подписки в онлайн). Удалённую за это время
- * игру fetchGame вернёт как null → applyRow(null) → штатный onClosed. Баннер
- * дёргаем только при реальной смене состояния.
+ * Handle a realtime channel status change. On (re)connect — resync: fetch the current
+ * game row (this covers updates missed during the outage and the gap between the
+ * initial fetch and the subscription going live). If the game was deleted in the
+ * meantime, fetchGame returns null → applyRow(null) → the normal onClosed path. The
+ * banner only fires on an actual state change.
  */
 function handleStatus(ok: boolean): void {
-  if (!code) return; // после close() события мёртвого канала инертны
+  if (!code) return; // after close(), events from the dead channel are no-ops
   if (ok)
     fetchGame(code)
       .then(applyRow)
@@ -135,12 +136,12 @@ function handleStatus(ok: boolean): void {
   }
 }
 
-/** Хост может стартовать, когда подключился хотя бы ещё один игрок. */
+/** The host can start once at least one other player has joined. */
 export function canStart(): boolean {
   return hostFlag && roster.length >= 2;
 }
 
-/** Обработать входящую строку игры (из realtime или начальную). */
+/** Handle an incoming game row (from realtime, or the initial fetch). */
 function applyRow(row: GameRow | null): void {
   if (!row) {
     close();
@@ -155,7 +156,7 @@ function applyRow(row: GameRow | null): void {
   }
 }
 
-/** Создать игру (хост). Возвращает код игры. */
+/** Create a game (as host). Returns the game code. */
 export async function host(t: Track, name: string, h: OnlineHandlers): Promise<string> {
   const row = await createGame(t, name);
   handlers = h;
@@ -169,9 +170,9 @@ export async function host(t: Track, name: string, h: OnlineHandlers): Promise<s
 }
 
 /**
- * Имя, под которым этот клиент уже записан в ростере игры с данным кодом
- * (то есть повторный вход в уже активную игру), либо null — если игры нет
- * или клиента в её ростере нет. Позволяет не переспрашивать имя при реконнекте.
+ * The name this client is already registered under in the roster of the game with
+ * this code (i.e. rejoining an already-active game), or null if the game doesn't
+ * exist or this client isn't in its roster. Lets us skip re-asking for a name on reconnect.
  */
 export async function memberName(joinCode: string): Promise<string | null> {
   try {
@@ -183,7 +184,7 @@ export async function memberName(joinCode: string): Promise<string | null> {
   }
 }
 
-/** Присоединиться к игре по коду (гость). */
+/** Join a game by code (as guest). */
 export async function join(
   joinCode: string,
   name: string,
@@ -199,28 +200,28 @@ export async function join(
   applyRow(row);
 }
 
-/** Стартовать гонку (хост): записать первый стейт. */
+/** Start the race (host): write the first state. */
 export async function start(game: GameState): Promise<void> {
   if (code) await pushState(code, game);
 }
 
-/** Отправить свой ход остальным. */
+/** Send our move to everyone else. */
 export async function pushMove(game: GameState): Promise<void> {
   if (code) await pushState(code, game);
 }
 
-/** Убрать из лобби брошенное место (по индексу) — прунинг присутствующим клиентом. */
+/** Remove an abandoned seat from the lobby (by index) — pruning done by a present client. */
 export async function prune(seat: number): Promise<void> {
   const id = seatClientId(seat);
   if (code && id) await pruneSeat(code, id);
 }
 
-/** Снять своё присутствие немедленно (при закрытии вкладки) — best-effort. */
+/** Drop our presence immediately (on tab close) — best-effort. */
 export function untrack(): void {
   channel?.untrack();
 }
 
-/** Выйти из сессии: освободить место на сервере и отписаться. */
+/** Leave the session: free the seat on the server and unsubscribe. */
 export async function leave(): Promise<void> {
   const c = code;
   close();
@@ -228,15 +229,15 @@ export async function leave(): Promise<void> {
     try {
       await leaveGame(c);
     } catch {
-      // Выход — best-effort: даже при ошибке сети локально уже вышли.
+      // Leaving is best-effort — even on a network error, we've already left locally.
     }
   }
 }
 
-/** Локально закрыть сессию (отписка + сброс состояния). */
+/** Close the session locally (unsubscribe + reset state). */
 function close(): void {
-  // Сначала зануляем code/handlers, потом отписываемся: прилетевший из-за
-  // removeChannel статус CLOSED пройдёт через handleStatus как no-op (нет code).
+  // Clear code/handlers first, then unsubscribe: the CLOSED status that arrives from
+  // removeChannel will pass through handleStatus as a no-op (no code set).
   const ch = channel;
   channel = null;
   code = null;

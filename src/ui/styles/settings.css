@@ -1,7 +1,7 @@
-/* Лист-модалка настроек правил заезда: строки «подпись + контрол», сегмент-
-   переключатели (тип штрафа, порядок ходов) и ползунки (строгость, ходы штрафа). */
+/* Race-rules settings sheet: "label + control" rows, segmented toggles
+   (penalty type, turn order), and sliders (strictness, penalty turns). */
 
-/* Одна строка настройки: подпись сверху, контрол под ней. */
+/* One setting row: label on top, control below it. */
 .setting {
   display: flex;
   flex-direction: column;
@@ -12,7 +12,7 @@
   display: none;
 }
 
-/* Шапка строки с ползунком: подпись слева, текущее значение справа. */
+/* Header of a slider row: label on the left, current value on the right. */
 .setting__head {
   display: flex;
   justify-content: space-between;
@@ -25,14 +25,14 @@
   color: #4a4636;
 }
 
-/* Подпись и кнопка-подсказка «?» рядом: держатся вместе слева. */
+/* Label and the "?" hint button side by side: kept together on the left. */
 .setting__labelrow {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-/* Круглая кнопка «?» — раскрывает пояснение к настройке под подписью. */
+/* Round "?" button — expands the setting's explanation below the label. */
 .setting__help {
   position: relative;
   flex: none;
@@ -52,8 +52,8 @@
   touch-action: manipulation;
 }
 
-/* Тач-цель ≥44px без раздувания вёрстки: невидимая накладка поверх кружка
-   (a11y). Кружок остаётся 22px, но по краям ловится палец. */
+/* A ≥44px touch target without bloating the layout: an invisible overlay on top
+   of the circle (a11y). The circle stays 22px, but a finger is caught at its edges. */
 .setting__help::before {
   content: '';
   position: absolute;
@@ -76,7 +76,7 @@
   }
 }
 
-/* Раскрытое пояснение к настройке. */
+/* Expanded explanation for the setting. */
 .setting__hint {
   margin: 0;
   font-size: 12px;
@@ -95,18 +95,18 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Сегмент-переключатель: ряд кнопок, из которых активна одна. */
+/* Segmented toggle: a row of buttons with one active at a time. */
 .seg {
   display: flex;
   gap: 6px;
 }
 
-/* Вертикальная раскладка сегмента — для длинных подписей (тип штрафа). */
+/* Vertical layout for a segment — for long labels (penalty type). */
 .seg--stack {
   flex-direction: column;
 }
 
-/* Сегмент как строка вкладок вверху листа: небольшой отступ до контента вкладки. */
+/* Segment used as a tab row at the top of the sheet: small gap before tab content. */
 .seg--tabs {
   margin-bottom: 4px;
 }
@@ -136,7 +136,7 @@
   border-color: var(--accent);
 }
 
-/* Ползунок значения (строгость / ходы штрафа). */
+/* Value slider (strictness / penalty turns). */
 .slider {
   width: 100%;
   accent-color: var(--accent);
@@ -144,7 +144,7 @@
   touch-action: manipulation;
 }
 
-/* Подписи краёв диапазона под ползунком (мин / макс). */
+/* Range-edge labels under the slider (min / max). */
 .slider__scale {
   display: flex;
   justify-content: space-between;
@@ -153,7 +153,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Три ползунка управляемости в режиме «Своя». */
+/* Three handling sliders in "Custom" mode. */
 #driveSliders {
   display: flex;
   flex-direction: column;
@@ -164,7 +164,7 @@
   display: none;
 }
 
-/* Живой предпросмотр облака доступных ходов под настройкой управляемости. */
+/* Live preview of the reachable-moves cloud under the handling setting. */
 .drive-preview {
   display: block;
   width: 100%;

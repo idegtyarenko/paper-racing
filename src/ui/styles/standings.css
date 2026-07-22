@@ -1,9 +1,10 @@
-/* Полоса текущих мест (Ф1-башня): вертикальный стек строк у левого верхнего
-   края поля, поверх canvas. Информативная — не перехватывает жесты по карте. */
+/* Current-standings strip (F1-style tower): a vertical stack of rows at the
+   top-left of the board, above the canvas. Informational — doesn't intercept
+   map gestures. */
 .standings {
   position: absolute;
-  /* Ниже полосы очереди ходов (turn-queue сидит на top:10px по центру), чтобы
-     башня мест у левого края не наезжала на неё на узком поле. */
+  /* Below the turn-queue strip (turn-queue sits at top:10px, centered), so the
+     standings tower at the left edge doesn't collide with it on a narrow board. */
   top: calc(52px + env(safe-area-inset-top));
   left: calc(10px + env(safe-area-inset-left));
   z-index: 5;
@@ -15,7 +16,7 @@
   border-radius: 12px;
   background: var(--surface-glass);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
-  pointer-events: none; /* полоса информативная — клики уходят на карту под ней */
+  pointer-events: none; /* the strip is informational — clicks pass through to the map underneath */
 }
 
 .standings[hidden] {
@@ -31,17 +32,17 @@
   white-space: nowrap;
 }
 
-/* Текущий ходящий — подсветка строки, чтобы сразу видеть, чьё место «живое». */
+/* Current player to move — row highlight so you can tell whose position is "live". */
 .standings__row--current {
   font-weight: 700;
 }
 
-/* Сошедшие с дистанции — приглушены. */
+/* Retired from the race — dimmed. */
 .standings__row--retired {
   opacity: 0.5;
 }
 
-/* Позиция / статус (номер, 🏁место, 🏳️) — фиксированная колонка для ровных строк. */
+/* Position / status (number, 🏁 finish, 🏳️) — a fixed column for even rows. */
 .standings__pos {
   flex: 0 0 auto;
   min-width: 20px;
@@ -63,7 +64,7 @@
   color: var(--ink-strong);
 }
 
-/* На узких телефонах имя съедает место у карты — прячем, оставляя позицию+цвет. */
+/* On narrow phones the name eats into the map's space — hide it, keeping position+color. */
 @media (max-width: 460px) {
   .standings__name {
     display: none;

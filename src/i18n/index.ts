@@ -1,8 +1,9 @@
-// Точка входа локалей: на импорте синхронно выбираем активную локаль и экспортируем
-// её как `strings`. Все потребители пишут `import { strings } from '.../i18n'` — как
-// раньше импортировали strings.ts, только теперь это выбранный язык. Смена языка =
-// перезагрузка (см. detect.ts), поэтому статический выбор на импорте безопасен и для
-// модельных хойстов (game.ts NAMES, editor.ts MSG), и для однократного localizeDom.
+// Locale entry point: on import, we synchronously pick the active locale and
+// export it as `strings`. All consumers write `import { strings } from
+// '.../i18n'` — same as they used to import strings.ts, except now it's the
+// chosen language. Changing language means a reload (see detect.ts), so
+// picking it statically at import time is safe both for model-level hoists
+// (game.ts NAMES, editor.ts MSG) and for the one-shot localizeDom.
 
 import { en, type Strings } from './en';
 import { ru } from './ru';
@@ -11,19 +12,20 @@ import { detectLocale, localeTagOf, setLocale, type LocaleCode } from './detect'
 
 const LOCALE_OBJECTS: Record<LocaleCode, Strings> = { en, ru, be };
 
-/** Активная локаль (выбрана один раз на старте). */
+/** The active locale (chosen once at startup). */
 export const locale: LocaleCode = detectLocale();
 
-/** Тексты выбранной локали. */
+/** Strings for the chosen locale. */
 export const strings: Strings = LOCALE_OBJECTS[locale];
 
-/** BCP-47 тег активной локали — для <html lang>. */
+/** BCP-47 tag for the active locale — for <html lang>. */
 export const localeTag: string = localeTagOf(locale);
 
 /**
- * Локаль для форматирования дат/чисел (toLocaleString). Для английского — `undefined`:
- * берём системную региональную настройку (у американца — M/D/Y, в других странах —
- * D/M/Y). Для ru/be — явный тег, чтобы дата совпадала с языком интерфейса.
+ * Locale used for formatting dates/numbers (toLocaleString). For English,
+ * `undefined`: we defer to the system's regional setting (M/D/Y for a US
+ * user, D/M/Y elsewhere). For ru/be, an explicit tag, so the date format
+ * matches the interface language.
  */
 export const dateLocale: string | undefined = locale === 'en' ? undefined : localeTag;
 

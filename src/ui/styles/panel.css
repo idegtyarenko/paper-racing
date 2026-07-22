@@ -1,4 +1,4 @@
-/* Боковая панель управления. */
+/* Side control panel. */
 .panel {
   width: 300px;
   padding: 16px;
@@ -9,15 +9,15 @@
   gap: 10px;
   overflow-y: auto;
   overflow-x: hidden;
-  /* Панель всегда фиксирована: разрешаем только вертикальную прокрутку, но не
-     пинч-зум (карта зумится своим жестом на canvas). */
+  /* The panel is always fixed: allow only vertical scrolling, not
+     pinch-zoom (the map zooms via its own gesture on the canvas). */
   touch-action: pan-y;
 }
 
-/* Шапка панели: заголовок и кнопки-действия («Сдаться»/«Правила»). На узкой
-   вертикальной панели (десктоп) кнопки уходят под заголовок — иначе двум пилюлям
-   не хватает места и длинный заголовок переносится. В портрете панель широкая
-   (полоса под полем) — там оставляем всё в одну строку (см. медиазапрос ниже). */
+/* Panel header: title and action buttons ("Retire"/"Rules"). In the narrow
+   vertical panel (desktop) the buttons drop below the title — otherwise the two
+   pills don't fit and a long title wraps. In portrait the panel is wide (a strip
+   below the board) — there we keep everything on one line (see media query below). */
 .panel__header {
   display: flex;
   flex-direction: column;
@@ -30,7 +30,7 @@
   letter-spacing: 0.5px;
 }
 
-/* Вертикальная группа элементов (кнопки редактора / гонки). */
+/* Vertical group of elements (editor/race buttons). */
 .panel__group {
   display: flex;
   flex-direction: column;
@@ -41,7 +41,7 @@
   display: none;
 }
 
-/* Телефон в портрете: панель компактной полосой под полем — поле доминирует. */
+/* Phone in portrait: panel as a compact strip below the board — the board dominates. */
 @media (max-width: 700px) {
   .panel {
     width: 100%;
@@ -57,16 +57,16 @@
     font-size: 17px;
   }
 
-  /* Широкая полоса-панель: заголовок и кнопки-действия обратно в одну строку. */
+  /* Wide strip panel: title and action buttons go back to one line. */
   .panel__header {
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
   }
 
-  /* Карточки игроков — в две колонки, чтобы экономить вертикаль. minmax(0,1fr)
-     разрешает колонкам сжиматься уже содержимого — иначе длинное имя распирало
-     бы сетку и давало горизонтальную прокрутку. */
+  /* Player cards — two columns, to save vertical space. minmax(0,1fr)
+     lets columns shrink below their content's width — otherwise a long name
+     would stretch the grid and cause horizontal scrolling. */
   #raceButtons {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -83,7 +83,7 @@
   }
 }
 
-/* Низкие ландшафтные экраны (телефон в альбомной ориентации). */
+/* Short landscape screens (phone in landscape orientation). */
 @media (max-height: 500px) and (min-width: 701px) {
   .panel {
     width: 230px;

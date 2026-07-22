@@ -1,6 +1,6 @@
-// Фаза рисования трассы: стейт-машина center → adjust → finish → direction → ready.
-// Пользователь проводит осевую линию, кромки откладываются автоматически, после
-// чего их можно подправить перетаскиванием.
+// Track drawing phase: a state machine center -> adjust -> finish -> direction -> ready.
+// The user draws a centerline, the edges are laid out automatically, and can
+// then be fine-tuned by dragging.
 
 import {
   Vec,
@@ -36,22 +36,22 @@ export interface Arrow {
 
 export interface EditorState {
   step: EditorStep;
-  /** Осевая линия трассы (замкнутая полилиния). */
+  /** Track centerline (closed polyline). */
   center: Polyline | null;
-  /** Модель ширины: нормали и смещения кромок вдоль осевой. */
+  /** Width model: normals and edge offsets along the centerline. */
   width: WidthModel | null;
   outer: Polyline | null;
   inner: Polyline | null;
   finish: FinishLine | null;
   forward: Vec | null;
   arrows: [Arrow, Arrow] | null;
-  /** Сырой freehand-штрих во время рисования осевой. */
+  /** Raw freehand stroke while drawing the centerline. */
   stroke: Vec[];
   drawing: boolean;
-  /** Протягивание финишной линии. */
+  /** Dragging out the finish line. */
   dragStart: Vec | null;
   dragEnd: Vec | null;
-  /** Тюнинг кромок: какую сторону и вершину тянем. */
+  /** Edge tuning: which side and vertex is being dragged. */
   dragEdge: 'outer' | 'inner' | null;
   dragIndex: number | null;
   message: string;
@@ -191,7 +191,7 @@ export function pointerUp(st: EditorState): void {
   }
 }
 
-/** Направление поперёк трассы в точке p — нормаль ближайшей вершины осевой. */
+/** Direction across the track at point p — the normal of the nearest centerline vertex. */
 function perpDirAt(width: WidthModel, p: Vec): Vec {
   let best = 0;
   let bestD = Infinity;
@@ -206,8 +206,9 @@ function perpDirAt(width: WidthModel, p: Vec): Vec {
 }
 
 /**
- * Финишная линия через точку p, перпендикулярная осевой: берём нормаль
- * ближайшей вершины осевой и обрезаем короткий отрезок вдоль неё по кромкам.
+ * Finish line through point p, perpendicular to the centerline: take the
+ * normal of the nearest centerline vertex and clip a short segment along it
+ * to the edges.
  */
 function clipPerpAt(
   width: WidthModel,
@@ -219,14 +220,14 @@ function clipPerpAt(
   return clipFinishLine(sub(p, d), add(p, d), outer, inner);
 }
 
-/** Обновить предпросмотр финишной линии по текущей точке касания. */
+/** Update the finish-line preview from the current pointer position. */
 function previewFinish(st: EditorState, p: Vec): void {
   const res = clipPerpAt(st.width!, p, st.outer!, st.inner!);
   st.finish = 'error' in res ? null : res.finish;
   st.error = false;
 }
 
-/** Прерывание жеста (pointercancel): сбросить незавершённый штрих/линию/драг и сообщить об этом. */
+/** Gesture interrupted (pointercancel): reset any unfinished stroke/line/drag and report it. */
 export function pointerCancel(st: EditorState): void {
   st.drawing = false;
   st.stroke = [];
@@ -239,7 +240,7 @@ export function pointerCancel(st: EditorState): void {
   st.error = false;
 }
 
-/** Подтвердить кромки и перейти к рисованию старт/финиша. */
+/** Confirm the edges and move on to drawing the start/finish. */
 export function confirmEdges(st: EditorState): void {
   if (st.step === 'adjust') setStep(st, 'finish');
 }
@@ -272,7 +273,7 @@ export function resetCenter(st: EditorState): void {
   setStep(st, 'center');
 }
 
-/** Вернуться к тюнингу кромок, сохранив осевую и сгенерированное полотно. */
+/** Return to edge tuning, keeping the centerline and the generated surface. */
 export function resetAdjust(st: EditorState): void {
   if (!st.width) return;
   st.finish = null;
@@ -295,7 +296,7 @@ export function resetFinish(st: EditorState): void {
   setStep(st, 'finish');
 }
 
-/** Единый шаг назад по стейт-машине рисования. */
+/** A single step back through the drawing state machine. */
 export function stepBack(st: EditorState): void {
   switch (st.step) {
     case 'adjust':
@@ -308,9 +309,9 @@ export function stepBack(st: EditorState): void {
       resetFinish(st);
       break;
     case 'ready':
-      // Провал финальной валидации (узко/нет места на старт) — не гонять по шагам
-      // direction→finish→adjust вручную, а сразу вернуть к тюнингу кромок, где
-      // ширину и правда можно поправить.
+      // Final validation failed (too narrow / no room for a start) — instead of
+      // stepping back manually through direction->finish->adjust, jump straight
+      // to edge tuning, where the width can actually be fixed.
       if (st.error) {
         resetAdjust(st);
       } else {
@@ -318,18 +319,19 @@ export function stepBack(st: EditorState): void {
         setStep(st, 'direction');
       }
       break;
-    // 'center' — это первый шаг, назад некуда.
+    // 'center' is the first step — there's nowhere to go back to.
   }
 }
 
-/** Можно ли шагнуть назад из текущей фазы. */
+/** Whether a step back is possible from the current phase. */
 export function canStepBack(st: EditorState): boolean {
   return st.step !== 'center';
 }
 
 /**
- * Готовый editor-«снимок» из уже построенной трассы — для превью в лобби у гостя,
- * который трассу не рисовал. Фаза `ready` рисует кромки и финиш без стрелок/тюнинга.
+ * A ready-made editor "snapshot" built from an already-finalized track — used
+ * to preview the track in the lobby for a guest who never drew it themselves.
+ * The `ready` phase renders the edges and finish without arrows/tuning.
  */
 export function editorFromTrack(t: {
   outer: Polyline;

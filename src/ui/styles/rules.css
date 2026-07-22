@@ -1,5 +1,5 @@
-/* Текст правил в шторке. Абзацы в rules.body разделены \n\n — pre-line превращает
-   их в отбивки (одиночные переносы схлопываются, как обычный текст). */
+/* Rules text in the sheet. Paragraphs in rules.body are separated by \n\n — pre-line
+   turns them into breaks (single line breaks collapse, as in normal text flow). */
 .rules__text {
   font-size: 13px;
   color: #6b675d;
@@ -7,7 +7,7 @@
   white-space: pre-line;
 }
 
-/* Метка версии сборки внизу шторки — незаметный признак, что PWA обновилась. */
+/* Build version label at the bottom of the sheet — a subtle sign the PWA has updated. */
 .rules__version {
   margin-top: 10px;
   text-align: center;

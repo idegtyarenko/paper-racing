@@ -1,42 +1,44 @@
-// Всплывашка «установить ярлык на рабочий стол/домой», показывается на мобильных.
+// "Add to home screen" install prompt, shown on mobile.
 //
-// Два сценария:
-//   • Android/Chromium — ловим событие `beforeinstallprompt`, гасим нативную
-//     мини-плашку и показываем свою кнопку, которая вызывает системный диалог.
-//   • iOS Safari — событие не поддерживается, поэтому показываем инструкцию
-//     «Поделиться → На экран „Домой“» с иконкой кнопки «Поделиться».
+// Two scenarios:
+//   • Android/Chromium — we catch the `beforeinstallprompt` event, suppress
+//     the native mini-banner, and show our own button that triggers the
+//     system install dialog.
+//   • iOS Safari — the event isn't supported, so we show instructions
+//     ("Share → Add to Home Screen") with the Share button's icon.
 //
-// Не показываем, если игра уже открыта как установленное приложение
-// (display-mode: standalone) или пользователь недавно закрыл всплывашку.
+// We don't show it if the game is already running as an installed app
+// (display-mode: standalone), or if the user recently dismissed the prompt.
 
 import { strings } from '../i18n';
 
 const DISMISS_KEY = 'pr-install-dismissed';
-const DISMISS_MS = 14 * 864e5; // молчим 14 дней после «Закрыть»
+const DISMISS_MS = 14 * 864e5; // stay quiet for 14 days after an explicit "Close"
 
-// «Мягкое» снятие: пользователь тапнул по доске (начал играть), не закрыв ×.
-// Раньше это вообще не запоминалось, и плашка выпрыгивала каждый запуск. Теперь
-// молчим по нарастающей — с каждым таком окно тишины растёт (1 → 3 → 7 → 14 дней),
-// чтобы не навязываться, но всё же напомнить установить, если игрок не закрыл её сам.
+// "Soft" dismissal: the user tapped the board (started playing) without
+// closing the × first. This used to go unrecorded entirely, so the banner
+// popped up on every launch. Now we back off progressively — each occurrence
+// grows the quiet window (1 → 3 → 7 → 14 days) — so we don't nag, but still
+// remind the player to install if they didn't dismiss it themselves.
 const SOFT_KEY = 'pr-install-soft';
 const SOFT_STEPS_MS = [1, 3, 7, 14].map((d) => d * 864e5);
 
-/** Нестандартное событие Chromium: даёт вызвать нативный диалог установки. */
+/** Non-standard Chromium event: lets us trigger the native install dialog. */
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 };
 
-/** Игра уже запущена как установленное приложение (без браузерной панели). */
+/** The game is already running as an installed app (no browser chrome). */
 function isStandalone(): boolean {
   return (
     window.matchMedia('(display-mode: standalone)').matches ||
-    // iOS помечает добавленную на «Домой» веб-иконку так:
+    // iOS flags a web icon added to the home screen like this:
     (navigator as unknown as { standalone?: boolean }).standalone === true
   );
 }
 
-/** Основной указатель — палец (телефон/планшет). Всплывашка только для них. */
+/** Primary input is touch (phone/tablet). The prompt is only for them. */
 function isMobile(): boolean {
   return window.matchMedia('(pointer: coarse)').matches;
 }
@@ -44,12 +46,12 @@ function isMobile(): boolean {
 function isIos(): boolean {
   return (
     /iphone|ipad|ipod/i.test(navigator.userAgent) ||
-    // iPadOS 13+ выдаёт себя за Mac, но у него мультитач.
+    // iPadOS 13+ identifies itself as a Mac, but has multitouch.
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
   );
 }
 
-/** Именно Safari на iOS: только в нём работает «Поделиться → На экран „Домой“». */
+/** Specifically Safari on iOS: only there does "Share → Add to Home Screen" work. */
 function isIosSafari(): boolean {
   const ua = navigator.userAgent;
   return isIos() && /safari/i.test(ua) && !/crios|fxios|edgios|opios/i.test(ua);
@@ -69,7 +71,7 @@ function markDismissed(): void {
   } catch {}
 }
 
-/** Сколько ещё молчать после «мягкого» снятия (по нарастающей). */
+/** How much longer to stay quiet after a "soft" dismissal (progressive backoff). */
 function softlySilenced(): boolean {
   try {
     const raw = localStorage.getItem(SOFT_KEY);
@@ -83,7 +85,7 @@ function softlySilenced(): boolean {
   }
 }
 
-/** Запомнить «мягкое» снятие и удлинить следующее окно тишины на шаг. */
+/** Record a "soft" dismissal and extend the next quiet window by one step. */
 function markSoftDismissed(): void {
   try {
     let n = 0;
@@ -96,7 +98,7 @@ function markSoftDismissed(): void {
   } catch {}
 }
 
-/** Иконка кнопки «Поделиться» iOS (квадрат со стрелкой вверх) — для инструкции. */
+/** iOS Share-button icon (square with an up arrow) — for the instructions. */
 function shareIcon(): HTMLElement {
   const span = document.createElement('span');
   span.className = 'install-prompt__share';
@@ -111,7 +113,7 @@ function shareIcon(): HTMLElement {
   return span;
 }
 
-/** Собрать DOM всплывашки. Для iOS кнопки установки нет — только инструкция. */
+/** Build the prompt's DOM. iOS has no install button — just instructions. */
 function build(
   kind: 'android' | 'ios',
   onInstall: () => void,
@@ -160,8 +162,8 @@ function build(
 }
 
 /**
- * Подключить всплывашку установки. Вызывать один раз при старте.
- * Ничего не делает на десктопе и в уже установленном приложении.
+ * Wire up the install prompt. Call once at startup.
+ * Does nothing on desktop or in an already-installed app.
  */
 export function initInstallPrompt(): void {
   if (!isMobile() || isStandalone() || recentlyDismissed() || softlySilenced()) return;
@@ -179,13 +181,13 @@ export function initInstallPrompt(): void {
     el = build(
       kind,
       async () => {
-        // Android: показать системный диалог установки.
+        // Android: show the system install dialog.
         if (!deferred) return;
         remove();
         deferred.prompt();
         await deferred.userChoice;
         deferred = null;
-        markDismissed(); // выбор сделан — больше не навязываемся
+        markDismissed(); // the choice was made — stop nagging
       },
       () => {
         remove();
@@ -195,8 +197,9 @@ export function initInstallPrompt(): void {
     document.body.append(el);
     requestAnimationFrame(() => el?.classList.add('install-prompt--in'));
 
-    // Пользователь начал играть — убираем всплывашку с дороги и «мягко» молчим по
-    // нарастающей, чтобы она не выпрыгивала каждый запуск, но напомнила позже.
+    // The user started playing — move the prompt out of the way and go
+    // "softly" quiet with progressive backoff, so it doesn't pop up every
+    // launch but still reminds them later.
     document.getElementById('board')?.addEventListener(
       'pointerdown',
       () => {
@@ -208,18 +211,18 @@ export function initInstallPrompt(): void {
   }
 
   window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault(); // не показывать нативную мини-плашку — покажем свою
+    e.preventDefault(); // don't show the native mini-banner — we'll show our own
     deferred = e as BeforeInstallPromptEvent;
     show('android');
   });
 
-  // iOS Safari не шлёт beforeinstallprompt — показываем инструкцию с задержкой,
-  // чтобы всплывашка не выпрыгивала одновременно с загрузкой поля.
+  // iOS Safari doesn't send beforeinstallprompt — show the instructions with a
+  // delay so the prompt doesn't pop up at the same time as the board is loading.
   if (isIosSafari()) {
     setTimeout(() => show('ios'), 1400);
   }
 
-  // Установили из нашей кнопки или из меню браузера — прячем и запоминаем.
+  // Installed via our button or the browser's menu — hide and remember it.
   window.addEventListener('appinstalled', () => {
     remove();
     markDismissed();

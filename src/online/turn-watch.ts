@@ -1,15 +1,16 @@
-// Наблюдатель за ходом: таймаут + пропуск (инерция) + countdown-метка, плюс прунинг
-// брошенных мест лобби. Вынесено из online-controller.ts (god-модуль).
+// Turn watcher: timeout + skip (coasting) + countdown display, plus pruning
+// abandoned lobby seats. Split out of online-controller.ts (which had become a god-module).
 //
-// Присутствующего, но не ходящего игрока через лимит хода может пропустить любой другой
-// (ручная кнопка). Отсутствующего (закрыл вкладку) пропускаем автоматически: первый
-// ход — с форой от момента ухода (шанс на реконнект), дальше — сразу. Авто-пропуск
-// делает только «назначенный» присутствующий клиент (минимальный seat), чтобы не слать
-// дубликаты; результат детерминирован, так что гонок записи нет.
+// A present but stalling player can be skipped by any other player once the turn
+// limit expires (manual button). An absent player (closed the tab) gets skipped
+// automatically: the first skip gets a grace period from the moment they left (a
+// chance to reconnect), after that it's immediate. Auto-skip is only performed by the
+// "designated" present client (lowest seat number), so we don't send duplicates; the
+// result is deterministic, so there's no write race.
 //
-// Не владеет состоянием приложения: читает/мутирует его через переданный на init
-// OnlineDeps, а confirm-first/перерисовку делает переданными колбэками. Ход бота отдаёт
-// в host-bots (бот-места не тикают таймером и не пропускаются по времени).
+// Doesn't own app state: reads/mutates it through the OnlineDeps passed to init, and
+// does confirm-first/redraws via the callbacks it's given. Bot moves are delegated to
+// host-bots (bot seats never tick a timer and are never skipped for being slow).
 
 import { GameState, isFinished } from '../model/game';
 import { coastMove } from '../model/turns';
@@ -21,8 +22,8 @@ import * as session from './online';
 import { isBotSeat, scheduleBotMove, clearBotTimer } from './host-bots';
 import type { OnlineDeps } from './online-controller';
 
-/** Результат confirm-first (см. контроллер): применили копию (`applied`) или за время
- *  записи прилетел авторитетный чужой стейт и локальное применение пропущено. */
+/** Result of confirm-first (see the controller): either we applied our copy
+ *  (`applied`), or an authoritative state arrived while writing and local application was skipped. */
 type PushResult = 'applied' | 'superseded';
 type ConfirmFirst = (
   base: GameState,
@@ -30,9 +31,9 @@ type ConfirmFirst = (
 ) => Promise<PushResult>;
 
 /**
- * Зависимости turn-watch: единое состояние приложения по ссылке (deps) + колбэки-
- * поведение. `confirmFirst` — общее confirm-first ядро; `commitOnline` — онлайн-
- * перерисовка (в контроллере, т.к. завершается перевзводом armTurnWatch отсюда же).
+ * turn-watch's dependencies: the shared app state by reference (deps) plus
+ * behavioral callbacks. `confirmFirst` is the shared confirm-first core; `commitOnline`
+ * is the online redraw (owned by the controller, since it finishes by re-arming armTurnWatch here).
  */
 export interface TurnWatchDeps {
   deps: OnlineDeps;
@@ -52,14 +53,14 @@ export function initTurnWatch(h: TurnWatchDeps): void {
 
 let skipTimer: number | null = null;
 let lobbyPruneTimer: number | null = null;
-/** Отсчёт остатка времени на ход: момент начала хода (локальные часы) + тикер обновления
- *  метки. Локальный per-client отсчёт (без общего timestamp в стейте) — небольшой разброс
- *  между клиентами допустим для «мягкого» таймера. */
+/** Turn time-remaining tracker: the moment the turn started (local clock) plus a
+ *  ticker that refreshes the display. This is a local, per-client count (no shared
+ *  timestamp in the state) — small drift between clients is fine for a "soft" timer. */
 let turnStartAt: number | null = null;
 let tickTimer: number | null = null;
-/** Показывать ли кнопку ручного пропуска (истинно только для присутствующего игрока). */
+/** Whether to show the manual skip button (true only for a player who's present). */
 let skipVisible = false;
-/** Идёт ли запись пропуска (авто/ручного) — защита от дублей. */
+/** Whether a skip (auto or manual) write is in flight — guards against duplicates. */
 let skipSending = false;
 
 export function clearTurnWatch(): void {
@@ -67,17 +68,17 @@ export function clearTurnWatch(): void {
     clearTimeout(skipTimer);
     skipTimer = null;
   }
-  clearBotTimer(); // ход бота гасится вместе со слежением (host-bots владеет таймером)
+  clearBotTimer(); // bot moves get cleared along with turn watching (host-bots owns that timer)
   if (tickTimer !== null) {
     clearInterval(tickTimer);
     tickTimer = null;
   }
   turnStartAt = null;
-  deps.setTurnCountdown(null, false); // снять таймер — иначе завис бы «· 0:00»
+  deps.setTurnCountdown(null, false); // clear the timer display — otherwise it'd freeze at "· 0:00"
   skipVisible = false;
 }
 
-/** Снять все таймеры слежения (выход из сессии/закрытие игры). */
+/** Clear all watch timers (leaving the session / game closed). */
 export function clearWatches(): void {
   clearTurnWatch();
   if (lobbyPruneTimer !== null) {
@@ -87,9 +88,10 @@ export function clearWatches(): void {
 }
 
 /**
- * Убрать из лобби места, чьи вкладки офлайн дольше LOBBY_PRUNE_MS (фора на реколнект).
- * Прунит только назначенный присутствующий клиент. Если есть места, чья фора ещё не
- * вышла, перепланируем проверку на ближайший дедлайн (без нового presence-события).
+ * Remove lobby seats whose tabs have been offline longer than LOBBY_PRUNE_MS (a grace
+ * period for reconnecting). Only the designated present client prunes. If any seat's
+ * grace period hasn't expired yet, reschedule the check for the nearest deadline
+ * (without waiting for a new presence event).
  */
 export function pruneAbsentLobby(): void {
   if (lobbyPruneTimer !== null) {
@@ -113,39 +115,40 @@ export function pruneAbsentLobby(): void {
 }
 
 /**
- * Активен ли на этом стейте локальный игрок: ещё в гонке — не сдался и не
- * финишировал. Только такие игроки вправе пропускать чужие ходы.
+ * Whether the local player is active in this state: still in the race — hasn't
+ * retired and hasn't finished. Only such players are allowed to skip other players' turns.
  */
 function iAmActive(game: GameState): boolean {
   const me = game.players[session.mySeat()];
   return !!me && !isFinished(me) && !me.retired;
 }
 
-/** Пересчитать слежение за текущим ходом. Зовётся на каждый стейт и presence-событие. */
+/** Recompute turn watching for the current turn. Called on every state change and presence event. */
 export function armTurnWatch(): void {
   clearTurnWatch();
   const game = deps.state.game;
-  // mode-гейт (как у scheduleAiMove): presence-событие в лобби зовёт armTurnWatch, но
-  // прошлая гонка могла остаться в S.game с phase 'race' (создание нового лобби её не
-  // чистит) — без проверки режима в лобби всплывала бы кнопка-таймер чужого/своего хода.
+  // Mode gate (same idea as scheduleAiMove): a presence event in the lobby calls
+  // armTurnWatch, but a previous race might still be sitting in state.game with phase
+  // 'race' (creating a new lobby doesn't clear it) — without this check we'd show a
+  // turn-timer button for someone else's/our own turn while in the lobby.
   if (!session.active() || !game || game.phase !== 'race' || deps.state.phase !== 'race')
     return;
   const cur = game.current;
 
-  // Ход бота считает и коммитит только хост; гости просто ждут его pushMove как
-  // обычный чужой ход. Бот-место никогда не «present» (иначе его авто-пропустил бы
-  // designatedSkipper) и не тикает таймером — боты по времени не лимитируются.
+  // Only the host computes and commits bot moves; guests just wait for its pushMove
+  // like any other player's move. A bot seat is never "present" (otherwise
+  // designatedSkipper would auto-skip it) and never ticks a timer — bots aren't time-limited.
   if (isBotSeat(game, cur)) {
     if (session.isHost()) scheduleBotMove(cur);
     return;
   }
 
-  // Лимит на ход — из правил заезда (задаёт хост в настройках); старые стейты без
-  // поля подстрахованы дефолтом.
+  // Turn limit comes from the race rules (set by the host in settings); old states
+  // without the field fall back to a default.
   const limit = game.rules.turnLimitMs ?? TURN_TIMEOUT_MS;
 
-  // Локальный отсчёт остатка времени — для меня (метка на кнопке) и для соперников
-  // (суффикс в статусе). Стартуем до early-return «мой ход», чтобы был виден и мне.
+  // Local countdown of time remaining — for me (label on the button) and for
+  // opponents (suffix in the status). Start it before the "my turn" early return, so it's visible to me too.
   turnStartAt = Date.now();
   const tick = (): void => {
     const g = deps.state.game;
@@ -156,12 +159,12 @@ export function armTurnWatch(): void {
   tick();
   tickTimer = window.setInterval(tick, 500);
 
-  if (cur === session.mySeat()) return; // мой ход — за собой не слежу (пропуск не нужен)
+  if (cur === session.mySeat()) return; // my turn — I don't watch myself (no skip needed)
 
   if (session.isPresent(cur)) {
-    // Онлайн, но задумался — по истечении лимита открываем ручной пропуск остальным.
-    // Пропускать чужой ход может лишь активный игрок (не сдавшийся и не
-    // финишировавший) — выбывшие в гонке уже не участвуют.
+    // Online but taking their time — once the limit expires, open manual skip to
+    // everyone else. Only an active player (not retired, not finished) may skip
+    // someone else's turn — players out of the race no longer participate.
     if (!iAmActive(game)) return;
     skipTimer = window.setTimeout(() => {
       skipVisible = true;
@@ -169,27 +172,28 @@ export function armTurnWatch(): void {
     }, limit);
     return;
   }
-  // Отсутствует: авто-пропуск выполняет назначенный присутствующий клиент.
+  // Absent: auto-skip is performed by the designated present client.
   if (session.designatedSkipper() !== session.mySeat()) return;
   const left = session.leftAtOf(cur);
   const grace = left === null ? limit : Math.max(0, limit - (Date.now() - left));
   skipTimer = window.setTimeout(() => autoSkip(cur), grace);
 }
 
-/** Авто-пропуск отсутствующего игрока (если он всё ещё офлайн и ходит сейчас). */
+/** Auto-skip an absent player (if they're still offline and it's still their turn). */
 function autoSkip(seat: number): void {
   const game = deps.state.game;
   if (!game || game.phase !== 'race' || game.current !== seat) return;
-  if (session.isPresent(seat)) return; // вернулся — ждём его самого
+  if (session.isPresent(seat)) return; // they're back — wait for them to move themselves
   if (session.designatedSkipper() !== session.mySeat()) return;
   applySkip(game);
 }
 
 /**
- * Применить пропуск (confirm-first): болид едет по инерции в копии, пишем на сервер и
- * лишь при успехе делаем её текущим стейтом. При ошибке локально ничего не меняем.
- * Авто-пропуск — тихо перепланируем повтор через SKIP_RETRY_MS (autoSkip сам
- * перепроверит условия); ручной — оставляем кнопку на месте, чтобы можно было нажать снова.
+ * Apply a skip (confirm-first): the car coasts in a copy of the state, we write it to
+ * the server, and only on success make it the current state. On error, nothing
+ * changes locally. Auto-skip: silently reschedule a retry after SKIP_RETRY_MS
+ * (autoSkip will re-check the conditions itself); manual skip: leave the button in
+ * place so it can be clicked again.
  */
 async function applySkip(game: GameState): Promise<void> {
   if (skipSending) return;
@@ -197,13 +201,13 @@ async function applySkip(game: GameState): Promise<void> {
   try {
     const r = await confirmFirst(game, (next) => coastMove(next));
     if (r === 'applied') {
-      clearTurnWatch(); // сбросить skipVisible/countdown до перерисовки панели
+      clearTurnWatch(); // reset skipVisible/countdown before the panel redraws
       commitOnline();
     }
   } catch {
     showToast(strings.online.error);
-    // Авто-пропуск: тихий повтор — autoSkip перепроверит (тот же ход, игрок офлайн, я
-    // назначенный). Ручной пропуск: skipVisible остаётся true, кнопка доступна снова.
+    // Auto-skip: retry silently — autoSkip will re-check (same turn, player still
+    // offline, I'm still designated). Manual skip: skipVisible stays true, button is available again.
     if (!session.isPresent(game.current)) {
       skipTimer = window.setTimeout(() => autoSkip(game.current), SKIP_RETRY_MS);
     }
@@ -212,26 +216,26 @@ async function applySkip(game: GameState): Promise<void> {
   }
 }
 
-/** Онлайн-контекст текущего хода для панели: чей ход, мой ли, можно ли пропустить,
- *  кто сейчас офлайн. Null — если не в онлайн-игре. */
+/** Online context for the current turn, for the panel: whose turn it is, whether it's
+ *  mine, whether it can be skipped, who's currently offline. Null if not in an online game. */
 export function netTurn(game: GameState | null): NetTurn | null {
   if (!session.active() || !game) return null;
   return {
     yourTurn: session.mySeat() === game.current,
     canSkip: skipVisible,
     currentName: game.players[game.current]?.name ?? '',
-    // Бот-места всегда «в сети» (их ведёт хост) — не помечаем их офлайном.
+    // Bot seats are always "online" (the host drives them) — never mark them offline.
     present: game.players.map((p, i) => !!p.bot || session.isPresent(i)),
     code: session.getCode() ?? '',
     isHost: session.isHost(),
   };
 }
 
-/** Кнопка «Пропустить ход» (доступна, когда истёк таймаут присутствующего игрока). */
+/** "Skip turn" button (available once a present player's timeout has expired). */
 export function skip(): void {
   const game = deps.state.game;
   if (!game || game.phase !== 'race' || !skipVisible) return;
   if (game.current === session.mySeat()) return;
-  if (!iAmActive(game)) return; // выбывший игрок чужой ход не пропускает
+  if (!iAmActive(game)) return; // a retired player can't skip someone else's turn
   applySkip(game);
 }

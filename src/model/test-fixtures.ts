@@ -1,17 +1,18 @@
-// Тестовые фикстуры для чистого ядра. Не входят в бандл (только *.test.ts их
-// импортируют). Строим реальную трассу через finalizeTrack, чтобы inside/
-// startPoints считались настоящей логикой, а не подделывались руками.
+// Test fixtures for the pure core. Not part of the bundle (only *.test.ts files
+// import them). Builds a real track through finalizeTrack so inside/startPoints
+// are computed by the actual logic instead of being hand-faked.
 
 import { Vec, Polyline } from '../geometry';
 import { Track, finalizeTrack } from './track';
 import { GameState, Rules, newGame } from './game';
 
 /**
- * Прямоугольное «кольцо» (пончик): дорога — рамка между внешним и внутренним
- * прямоугольниками. Нижняя прямая (y ≈ 1..7, x ≈ 1..39) — широкий коридор с
- * кучей узлов сетки, удобный для детерминированной геометрии ходов/аварий.
- * Финиш поперёк нижней прямой у x=6, гонка идёт в +x (forward = {1,0}), поэтому
- * sideOfFinish(p) = p.x − 6: старты (behind) — слева от линии.
+ * A rectangular "ring" (donut): the road is the band between an outer and an
+ * inner rectangle. The bottom straight (y ~ 1..7, x ~ 1..39) is a wide corridor
+ * with plenty of grid nodes, convenient for deterministic move/crash geometry.
+ * The finish crosses the bottom straight at x=6, and the race runs in +x
+ * (forward = {1,0}), so sideOfFinish(p) = p.x - 6: starting positions (behind)
+ * are to the left of the line.
  */
 export const OUTER: Polyline = [
   { x: 0, y: 0 },

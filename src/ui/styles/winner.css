@@ -1,4 +1,4 @@
-/* Баннер победителя после финиша. */
+/* Winner banner after the finish. */
 .winner {
   display: none;
 }
@@ -17,7 +17,7 @@
   line-height: 1;
 }
 
-/* Все сдались — победителя нет, кубок не показываем. */
+/* Everyone retired — no winner, don't show the trophy. */
 .winner--noresult .winner__trophy {
   display: none;
 }
@@ -28,7 +28,7 @@
   margin-top: 8px;
 }
 
-/* Подпись под именем победителя: гонка ещё идёт / завершена. */
+/* Caption under the winner's name: race still in progress / finished. */
 .winner__subtitle {
   display: block;
   margin-top: 6px;

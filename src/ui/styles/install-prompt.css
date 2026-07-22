@@ -1,10 +1,10 @@
-/* Всплывашка «установить на телефон»: карточка у нижнего края экрана. */
+/* "Install on your phone" popup: a card at the bottom edge of the screen. */
 .install-prompt {
   position: fixed;
   left: 50%;
   bottom: max(12px, env(safe-area-inset-bottom));
   transform: translate(-50%, calc(100% + 24px));
-  z-index: 9; /* ниже модального оверлея (10), поверх поля и панели */
+  z-index: 9; /* below the modal overlay (10), above the board and panel */
   width: min(440px, calc(100vw - 20px));
   display: flex;
   align-items: center;
@@ -20,7 +20,7 @@
     opacity 0.24s ease-out;
 }
 
-/* Класс добавляется на следующий кадр — карточка выезжает снизу. */
+/* The class is added on the next frame — the card slides in from the bottom. */
 .install-prompt--in {
   transform: translate(-50%, 0);
   opacity: 1;
@@ -52,7 +52,7 @@
   color: #6b6658;
 }
 
-/* Иконка «Поделиться» встроена в строку инструкции для iOS. */
+/* "Share" icon inlined into the instruction line for iOS. */
 .install-prompt__share {
   display: inline-flex;
   vertical-align: -4px;

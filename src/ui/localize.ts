@@ -1,15 +1,15 @@
-// Заполнение статичной разметки текстами из strings при старте. Так все тексты
-// (включая кнопки и заголовки из index.html) живут в одном месте — strings.ts.
+// Fills static markup with text from strings at startup. This keeps all text
+// (including buttons and headings from index.html) in one place — strings.ts.
 //
-// В разметке проставлены атрибуты:
-//   data-i18n="buttons.next"            → задаёт textContent
-//   data-i18n-title="buttons.rulesTitle"→ задаёт атрибут title
-//   data-i18n-aria-label="…"            → задаёт атрибут aria-label
-// Ключ — путь по вложенному объекту strings через точку.
+// The markup carries these attributes:
+//   data-i18n="buttons.next"            → sets textContent
+//   data-i18n-title="buttons.rulesTitle"→ sets the title attribute
+//   data-i18n-aria-label="…"            → sets the aria-label attribute
+// The key is a dot-separated path into the nested strings object.
 
 import { strings } from '../i18n';
 
-/** Резолв ключа вида "buttons.next" по вложенному объекту strings. */
+/** Resolve a key like "buttons.next" against the nested strings object. */
 function resolve(key: string): string | undefined {
   const value = key
     .split('.')
@@ -17,7 +17,7 @@ function resolve(key: string): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
-/** Пройтись по всем [data-i18n*] узлам и проставить тексты/атрибуты из strings. */
+/** Walk all [data-i18n*] nodes and set their text/attributes from strings. */
 export function localizeDom(root: ParentNode = document): void {
   root.querySelectorAll<HTMLElement>('[data-i18n]').forEach((el) => {
     const text = resolve(el.dataset.i18n!);

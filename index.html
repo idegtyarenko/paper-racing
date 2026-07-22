@@ -63,14 +63,14 @@
               data-i18n="buttons.rulesTitle"
               data-i18n-aria-label="buttons.rulesTitle"
               data-i18n-title="buttons.rulesTitle"
-              aria-label="Правила"
-              title="Правила"
+              aria-label="Rules"
+              title="Rules"
             ></button>
           </div>
         </header>
         <div class="status"></div>
-        <!-- Кнопка пропуска чужого хода (только онлайн): текст ставит панель
-             динамически — online.skipTurnBtn + имя застрявшего его цветом. -->
+        <!-- Skip-another-player's-turn button (online only): the panel sets its text
+             dynamically — online.skipTurnBtn + the stuck player's name, colored. -->
         <button id="skipTurn" class="button button--center" hidden></button>
         <div id="editButtons" class="panel__group">
           <button
@@ -80,14 +80,14 @@
             hidden
           ></button>
           <button id="backBtn" class="button button--center" data-i18n="buttons.back">
-            ← Назад
+            ← Back
           </button>
           <button
             id="joinByCode"
             class="button button--center"
             data-i18n="online.joinByCode"
           >
-            🌐 Войти по коду игры
+            🌐 Join by race code
           </button>
         </div>
         <div id="modeButtons" class="panel__group" hidden>

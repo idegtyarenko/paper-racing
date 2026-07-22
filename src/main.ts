@@ -1,8 +1,8 @@
-// Оркестрация: состояние приложения, переключение фаз редактор/гонка, сборка
-// зависимостей ввода/онлайна/кнопок. Сами жесты указателя живут в input.ts.
-// Всё игровое состояние собрано в одном объекте `S` (app-state.ts); онлайн и ввод
-// читают и мутируют его по ссылке через deps.state — отдельных get/set-переходников
-// на каждое поле больше нет.
+// Orchestration: app state, switching between editor/race phases, and wiring
+// up input/online/button dependencies. Actual pointer gestures live in
+// input.ts. All game state lives in one object `S` (app-state.ts); online and
+// input read and mutate it by reference through deps.state — there are no
+// separate get/set adapters per field anymore.
 
 import './ui/styles/index.css';
 import { newAppState, Phase } from './app-state';
@@ -48,34 +48,35 @@ const canvas = document.getElementById('board') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
 const wrap = document.querySelector('.app__board')!;
 
-/** Единое состояние приложения (см. app-state.ts). Онлайн/ввод получают его по
- *  ссылке и читают/пишут поля напрямую. */
+/** Single shared app state (see app-state.ts). Online/input get it by
+ *  reference and read/write its fields directly. */
 const S = newAppState();
-/** Таймер отложенного хода бота — не состояние, а служебная ручка: остаётся
- *  приватным в main.ts, в коробку S не кладём. Гасится при любом выходе из гонки. */
+/** Timer for the delayed bot move — not state, just a handle: stays private
+ *  to main.ts, we don't put it in S. Cleared on any exit from the race. */
 let aiTimer: number | null = null;
 
-/** Место за ботом (и какой сложности)? Бот-ность живёт в стейте (Player.bot). */
+/** Is this seat a bot (and at what difficulty)? Bot-ness lives in state (Player.bot). */
 function isBotSeat(i: number): boolean {
   return !!S.game?.players[i]?.bot;
 }
 
-/** Bbox содержимого для fit/clamp: трасса гонки или редактируемая трасса.
- *  Провайдер границ для вьюпорта — «что сейчас на экране» знает приложение. */
+/** Bbox of the content for fit/clamp: the race track or the track being
+ *  edited. The bounds provider for the viewport — the app knows "what's
+ *  currently on screen". */
 function contentBounds(): Bounds | null {
   if (S.phase === 'race' && S.game)
     return polylineBounds(S.game.track.outer, S.game.track.inner);
   return polylineBounds(S.editor.outer, S.editor.inner, S.editor.center);
 }
 
-/** Пересчитать вьюпорт под новый размер поля и перерисовать. */
+/** Recompute the viewport for the new field size and redraw. */
 function resize(): void {
   vp.resize();
   redraw();
 }
 
 function redraw(): void {
-  // Шаг выбора игроков рисуется как редактор: показываем готовую трассу-превью.
+  // The player-selection step is drawn like the editor: shows the finished track as a preview.
   const viewMode = S.phase === 'race' ? 'race' : 'edit';
   const app: AppView = {
     mode: viewMode,
@@ -93,27 +94,29 @@ function redraw(): void {
 }
 
 /**
- * Единственное человеческое место в локальной игре (все прочие — боты): это тот,
- * кому показываем веер кандидатов/наметку в ход бота. −1, если людей не ровно один
- * (hotseat: несколько людей — предвыбор не применяется). Онлайн сюда не смотрит.
+ * The one human seat in a local game (all others are bots): this is who we
+ * show the candidate fan/pre-pick to during a bot's turn. −1 if there isn't
+ * exactly one human (hotseat with multiple humans doesn't get pre-picking).
+ * Online doesn't look at this.
  */
 function soloHumanSeat(): number {
   if (!S.game) return -1;
   let seat = -1;
   for (let i = 0; i < S.game.players.length; i++) {
     if (S.game.players[i].bot) continue;
-    if (seat !== -1) return -1; // второй человек — это hotseat, не vs-боты
+    if (seat !== -1) return -1; // a second human means hotseat, not vs-bots
     seat = i;
   }
   return seat;
 }
 
 /**
- * Место, для которого показываем веер кандидатов и разрешаем наметку, — независимо
- * от того, чей сейчас ход: онлайн → своё место; локально vs-боты → единственный
- * человек. Требуем, чтобы место было активно (не в гравии, не финишировало, не
- * сдалось). −1 — предвыбор недоступен (в т.ч. hotseat). При своём ходе совпадает с
- * game.current, так что обычная игра идёт тем же путём.
+ * The seat we show the candidate fan for and allow pre-picking on —
+ * regardless of whose turn it currently is: online → our own seat; local
+ * vs-bots → the one human. Requires the seat to be active (not in gravel,
+ * not finished, not retired). −1 means pre-picking is unavailable (including
+ * hotseat). On our own turn this matches game.current, so normal play
+ * follows the same path.
  */
 function preselectSeat(): number {
   if (S.phase !== 'race' || !S.game || S.game.phase !== 'race') return -1;
@@ -125,10 +128,12 @@ function preselectSeat(): number {
 }
 
 /**
- * Место, чей веер кандидатов сейчас показываем/с которым взаимодействуем: в свой ход —
- * ходящий (`game.current`) в любом режиме (hotseat/vs-боты/онлайн); в чужой ход — место
- * предвыбора (`preselectSeat`, только онлайн/vs-боты). −1 — кандидатов нет (чужой ход в
- * hotseat, штраф, вне гонки). При своём ходе даёт тот же веер, что и раньше.
+ * The seat whose candidate fan we currently show/interact with: on our turn
+ * it's whoever's moving (`game.current`) in any mode (hotseat/vs-bots/
+ * online); on someone else's turn it's the pre-pick seat (`preselectSeat`,
+ * online/vs-bots only). −1 means there are no candidates (someone else's
+ * turn in hotseat, a penalty, or outside the race). On our own turn this
+ * gives the same fan as before.
  */
 function candOwner(): number {
   if (!S.game || S.game.phase !== 'race') return -1;
@@ -138,9 +143,10 @@ function candOwner(): number {
 }
 
 /**
- * Место локального игрока, который сдаётся кнопкой «Сдаться»: в онлайне — своё
- * место; локально — текущий ходящий, если это человек (на ходе бота сдаваться
- * некому — кнопка скрыта). −1, если гонки нет или сейчас ходит бот.
+ * The local player's seat for the "Retire" button: in online it's our own
+ * seat; locally it's the current mover if they're human (nobody to retire
+ * during a bot's turn — the button is hidden). −1 if there's no race or a
+ * bot is currently moving.
  */
 function localHumanSeat(): number {
   if (!S.game) return -1;
@@ -148,8 +154,9 @@ function localHumanSeat(): number {
   return isBotSeat(S.game.current) ? -1 : S.game.current;
 }
 
-/** Доступна ли сейчас кнопка «Сдаться»: идёт гонка и локальный игрок ещё в ней
- *  (не финишировал и не сошёл). Сдаться можно в любой момент, не только в свой ход. */
+/** Whether the "Retire" button is currently available: the race is running
+ *  and the local player is still in it (not finished, not retired). Retiring
+ *  is allowed at any time, not just on our turn. */
 function canRetire(): boolean {
   if (!S.game || S.phase !== 'race' || S.game.phase !== 'race') return false;
   const seat = localHumanSeat();
@@ -172,8 +179,8 @@ function updateUI(): void {
   renderStandings(S.phase === 'race' ? S.game : null, S.raceNav);
 }
 
-/** Может ли этот клиент ходить сейчас: в локальной игре — всегда (кроме хода
- *  бота), в онлайне — на своём месте. */
+/** Can this client move right now: in a local game, always (except during a
+ *  bot's turn); in online, only on our own seat. */
 function myTurn(): boolean {
   if (S.game && isBotSeat(S.game.current)) return false;
   if (!session.active()) return true;
@@ -188,17 +195,20 @@ function cancelAiMove(): void {
 }
 
 /**
- * Цикл ходов ботов в ЛОКАЛЬНОЙ игре: если сейчас очередь бота, походить им после
- * короткой паузы (человек успевает следить) и продолжить, пока очередь не вернётся
- * к человеку или гонка не кончится. В онлайне не работает — там ходы ботов считает
- * и коммитит хост через online-controller (иначе локальный applyMove разошёлся бы
- * с сервером). Пауза сбрасывается при выходе из гонки (cancelAiMove).
+ * Bot-move loop for a LOCAL game: if it's currently a bot's turn, make its
+ * move after a short pause (giving the human time to follow along), and keep
+ * going until the turn returns to a human or the race ends. Doesn't run in
+ * online games — there, bot moves are computed and committed by the host
+ * through online-controller (otherwise the local applyMove would diverge
+ * from the server). The pause is cleared on any exit from the race
+ * (cancelAiMove).
  */
 function scheduleAiMove(): void {
   if (aiTimer !== null || session.active()) return;
-  // mode-гейт: бот ходит только в открытой гонке. Пока открыт экран настройки
-  // (mode !== 'race'), боты на паузе, даже если game ещё в phase 'race'. Без этой
-  // проверки commit() из меню-переходов запускал бы ход бота под настройками.
+  // Mode gate: bots only move during an actually open race. While the setup
+  // screen is open (mode !== 'race'), bots are paused even if game is still
+  // in phase 'race'. Without this check, commit() from menu transitions
+  // would trigger a bot move behind the setup screen.
   if (
     S.phase !== 'race' ||
     !S.game ||
@@ -212,18 +222,19 @@ function scheduleAiMove(): void {
       return;
     const cand = chooseMove(S.game, S.raceNav, S.game.players[S.game.current].bot!);
     if (cand) applyMove(S.game, cand);
-    else coastMove(S.game); // все кандидаты заняты соперниками — пас по инерции
+    else coastMove(S.game); // all candidates are taken by opponents — coast instead
     commit();
   }, AI_MOVE_DELAY_MS);
 }
 
 /**
- * Единая точка «состояние изменилось — привести экран в порядок»: пересчёт
- * кандидатов → панель → канвас → (если локальная гонка с ботами) следующий ход
- * бота. Звать после любой мутации локального состояния вместо ручной связки
- * refreshCands/updateUI/redraw/scheduleAiMove — так шаг нельзя забыть или
- * переставить. `fit` дополнительно вписывает содержимое в кадр (старт гонки).
- * Онлайн ведёт свою перерисовку через commitOnline (там нужен armTurnWatch).
+ * Single point for "state changed — bring the screen up to date":
+ * recompute candidates → panel → canvas → (for a local game with bots) the
+ * next bot move. Call this after any local state mutation instead of the
+ * manual refreshCands/updateUI/redraw/scheduleAiMove sequence — that way a
+ * step can't be forgotten or reordered. `fit` additionally fits the content
+ * into frame (used when starting a race). Online drives its own redraw
+ * through commitOnline (which needs armTurnWatch).
  */
 function commit(opts: { fit?: boolean } = {}): void {
   if (opts.fit) vp.fitToContent();
@@ -234,26 +245,27 @@ function commit(opts: { fit?: boolean } = {}): void {
 }
 
 /**
- * Применить выбранный ход: локально мутируем стейт, а в онлайне ещё и отправляем
- * его остальным. Не даём ходить не в свой ход / не в фазе гонки.
+ * Apply the chosen move: mutate local state, and in online games also send
+ * it to the other players. Refuses to move outside our turn or outside the race phase.
  */
 function commitMove(cand: Candidate): void {
   if (!S.game || S.game.phase !== 'race' || !myTurn()) return;
-  S.pending = null; // ход сделан — наметка отыграна
+  S.pending = null; // move made — the pending pick is spent
   if (session.active()) {
-    // Онлайн: confirm-first — локальный стейт двинется только после успешной записи
-    // (см. online.sendMove), чтобы при обрыве ход не потерялся и его можно было повторить.
+    // Online: confirm-first — local state only advances after a successful
+    // write (see online.sendMove), so a dropped connection doesn't lose the
+    // move and it can be retried.
     online.sendMove(cand);
     return;
   }
   applyMove(S.game, cand);
-  commit(); // в гонке с ботами после хода человека очередь едет к ботам
+  commit(); // in a game with bots, after the human's move the turn moves on to them
 }
 
 /**
- * Сдаться: локальный игрок выбывает из гонки. Доступно в любой момент (не только
- * в свой ход). В онлайне — confirm-first отправка; локально — мутируем стейт и
- * перерисовываем. Кнопку показываем/прячем по canRetire().
+ * Retire: the local player drops out of the race. Available at any time
+ * (not just on our turn). In online, a confirm-first send; locally, mutate
+ * state and redraw. The button is shown/hidden based on canRetire().
  */
 function retire(): void {
   if (!canRetire()) return;
@@ -262,7 +274,7 @@ function retire(): void {
     return;
   }
   retireSeat(S.game!, localHumanSeat());
-  commit(); // после выбытия человека очередь может уйти к ботам
+  commit(); // after a human retires, the turn may move on to bots
 }
 
 function refreshCands(): void {
@@ -273,22 +285,24 @@ function refreshCands(): void {
     S.pending = null;
     return;
   }
-  // В свой ход seat === game.current (обычная игра); в чужой ход (онлайн/vs-боты) —
-  // своё место, чтобы наметить ход заранее.
+  // On our turn seat === game.current (normal play); on someone else's turn
+  // (online/vs-bots) it's our own seat, so we can pre-pick a move ahead of time.
   S.cands = candidatesForSeat(S.game!, seat);
   revalidatePending();
-  // Курсор мог стоять на точке, пока прилетел чужой ход (предвыбор) — восстанавливаем
-  // наведение по реальной позиции мыши, иначе clearSelection выше погасил бы его.
+  // The cursor may have been resting on a point while an opponent's move came
+  // in (pre-pick mode) — restore hover from the actual mouse position, since
+  // clearSelection above would have cleared it.
   input.reaimHover();
-  // Наметка дожила до своего хода — вооружаем «Газу!», чтобы подтвердить одним тапом.
+  // A pending pick survived until our turn — arm the "Go!" button so it can be confirmed with one tap.
   if (myTurn() && S.pending) showConfirmMove(true, input.confirmAnchor());
 }
 
 /**
- * Проверить наметку против свежего состояния: если намеченная точка стала занята
- * соперником (встал в неё или на путь — blocked) либо аварийной, наметку сбрасываем
- * с тостом; иначе обновляем ссылку на актуальный кандидат. Зовётся из refreshCands —
- * единой воронки входящих состояний (onGameState в онлайне, цикл ботов локально).
+ * Check the pending pick against fresh state: if the picked point has become
+ * occupied by an opponent (they landed on it or on its path — blocked) or is
+ * now a crash, clear the pick with a toast; otherwise update the reference to
+ * the current candidate object. Called from refreshCands — the single funnel
+ * for incoming state (onGameState in online, the local bot loop).
  */
 function revalidatePending(): void {
   if (!S.pending || !S.cands) return;
@@ -303,10 +317,11 @@ function revalidatePending(): void {
 }
 
 /**
- * Перейти к шагу выбора режима игры. Из редактора («edit») сначала финализируем
- * нарисованную трассу; если не удалось — показываем ошибку и остаёмся в редакторе.
- * Из гонки («race», «та же трасса») берём готовую трассу текущей гонки. Экран
- * выбора режима показывается всегда, даже без онлайна — там же выбор «С компьютером».
+ * Move to the mode-selection step. From the editor ("edit"), finalize the
+ * drawn track first; if that fails, show the error and stay in the editor.
+ * From a race ("race", "same track"), reuse the current race's finished
+ * track. The mode-selection screen is always shown, even without online —
+ * it's also where "vs Computer" is chosen.
  */
 function goToMode(from: 'edit' | 'race'): void {
   if (from === 'edit') {
@@ -328,15 +343,15 @@ function goToMode(from: 'edit' | 'race'): void {
     S.raceTrack = S.game.track;
   }
   S.playersReturn = from;
-  cancelAiMove(); // гонка с ботами на паузе, пока открыты экраны настройки
+  cancelAiMove(); // a game with bots is paused while setup screens are open
   S.phase = 'modeSelect';
   commit();
 }
 
-/** Назад из шага настройки (режим/игроки): в редактор или к текущей гонке. */
+/** Go back from the setup step (mode/players): to the editor or back to the current race. */
 function backFromSetup(): void {
   if (S.playersReturn === 'race') {
-    S.phase = 'race'; // commit() ниже возобновит ходы ботов (mode-гейт в scheduleAiMove)
+    S.phase = 'race'; // commit() below resumes bot moves (mode gate in scheduleAiMove)
   } else {
     S.phase = 'edit';
     stepBack(S.editor); // ready → direction
@@ -346,14 +361,15 @@ function backFromSetup(): void {
 }
 
 /**
- * Стартовать локальную гонку на подготовленной трассе: сначала `humans` мест за
- * людьми, следом `bots` мест за ботами заданной сложности. Боты садятся в
- * замыкающие места (seat), но стартовые клетки раздаются случайной перестановкой
- * среди всех участников — так что поул может достаться и боту (место старта больше
- * не привязано к тому, кто раньше «зашёл»). Общее число участников зажимается по
- * стартовой решётке в newGame; `difficulty` не важен при bots = 0. Бот раскрывает
- * ходы тем же генератором целей, что и движок, поэтому играет физику самого заезда
- * — отдельной «классики для бота» нет.
+ * Start a local race on the prepared track: `humans` seats first, then
+ * `bots` seats at the given difficulty. Bots sit in the trailing seats
+ * (seat index), but starting cells are handed out by a random permutation
+ * across all participants — so pole position can go to a bot too (starting
+ * position is no longer tied to who "joined" earlier). The total participant
+ * count is clamped by the starting grid inside newGame; `difficulty` doesn't
+ * matter when bots = 0. The bot picks moves using the same target generator
+ * as the engine, so it plays the actual race physics — there's no separate
+ * "classic mode for bots".
  */
 function startRace(humans: number, bots: number, difficulty: Difficulty): void {
   if (!S.raceTrack) return;
@@ -364,17 +380,18 @@ function startRace(humans: number, bots: number, difficulty: Difficulty): void {
     S.game.players[i].bot = difficulty;
     S.game.players[i].name = `${strings.aiSelect.botPrefix} ${S.game.players[i].name}`;
   }
-  S.raceNav = buildNavField(S.raceTrack); // нужно ботам (chooseMove) и полосе мест
+  S.raceNav = buildNavField(S.raceTrack); // needed by bots (chooseMove) and the standings strip
   S.lastLocalRace = { humans, bots, difficulty };
   S.phase = 'race';
-  commit({ fit: true }); // fit вписывает трассу в кадр; scheduleAiMove — если первым ходит бот
+  commit({ fit: true }); // fit puts the track in frame; scheduleAiMove kicks in if a bot moves first
 }
 
-/** Сбросить всё к чистому редактору (новая трасса / выход из онлайна). */
+/** Reset everything back to a clean editor (new track / leaving an online session). */
 function resetToEdit(): void {
-  // Если ещё в онлайн-сессии (например, финишировал, а другой игрок ещё гоняет,
-  // и жмёшь «Новый заезд» → «Начертить новую») — выходим из неё, иначе прилетевший
-  // ход соперника через onGameState реанимировал бы гонку и выдернул из редактора.
+  // If we're still in an online session (e.g. we finished but another player
+  // is still racing, and we hit "New race" → "Draw a new one") — leave it,
+  // otherwise an incoming opponent move via onGameState would revive the
+  // race and yank us out of the editor.
   if (session.active()) session.leave();
   cancelAiMove();
   S.game = null;
@@ -385,23 +402,25 @@ function resetToEdit(): void {
   input.clearSelection();
   S.editor = newEditor();
   S.phase = 'edit';
-  // Пустое поле → resize() покажет дефолтный вид (границ содержимого нет).
+  // Empty field → resize() shows the default view (no content bounds to fit).
   updateUI();
   resize();
 }
 
-// Онлайн-флоу (host/join/start/leave/share) вынесен в online-controller.ts;
-// он читает и мутирует состояние приложения S по ссылке, а перерисовку/сброс делает
-// колбэками. setGame — колбэк (а не запись в S.game): у него побочные эффекты.
+// The online flow (host/join/start/leave/share) lives in online-controller.ts;
+// it reads and mutates app state S by reference, and does redraws/resets
+// through callbacks. setGame is a callback (not a direct S.game write)
+// because it has side effects.
 online.initOnline({
   state: S,
   setGame: (g) => {
-    // Онлайн-гонка заменяет локальную: гасим локальный цикл ботов (в онлайне их ведёт
-    // хост через online-controller). Бот-ность самих мест едет в стейте g (Player.bot).
+    // An online race replaces the local one: stop the local bot loop (in
+    // online games, the host drives bots through online-controller). Bot-ness
+    // of the seats themselves lives in state g (Player.bot).
     cancelAiMove();
     S.game = g;
-    S.raceNav = g ? buildNavField(g.track) : null; // ботам (chooseMove) и полосе мест
-    S.lastLocalRace = null; // онлайн-гонка — не локальный рематч, сбрасываем «ту же трассу»
+    S.raceNav = g ? buildNavField(g.track) : null; // needed by bots (chooseMove) and the standings strip
+    S.lastLocalRace = null; // an online race isn't a local rematch — clear "same track"
   },
   fitToContent: () => vp.fitToContent(),
   refreshCands,
@@ -411,17 +430,18 @@ online.initOnline({
   resetToEdit,
 });
 
-// Жесты указателя и зум вынесены в input.ts; он читает состояние приложения S по
-// ссылке и применяет ходы через эти колбэки, а подсветку (hover/selected/loupe) держит сам.
+// Pointer gestures and zoom live in input.ts; it reads app state S by
+// reference and applies moves through these callbacks, while keeping
+// highlighting (hover/selected/loupe) to itself.
 input.initInput({
   canvas,
   state: S,
   commitMove,
-  // Предвыбор: сейчас не мой ход, но своё место может намечать (онлайн/vs-боты).
+  // Pre-pick mode: not our turn right now, but our seat can still queue a move (online/vs-bots).
   isPreselect: () => !myTurn() && candOwner() >= 0,
   setPending: (cand) => {
     S.pending = cand;
-    showConfirmMove(false); // не мой ход — кнопку не показываем, наметка видна на поле
+    showConfirmMove(false); // not our turn — don't show the button, the pending pick is visible on the field
     redraw();
   },
   goToMode,
@@ -441,13 +461,13 @@ bindButtons({
   onConfirmMove: () => {
     const sel = input.getSelected();
     if (sel) commitMove(sel);
-    // Свой ход с дожившей наметкой: «Газу!» коммитит её без повторного тапа.
+    // Our turn with a pending pick that survived: "Go!" commits it without a second tap.
     else if (S.pending && myTurn()) commitMove(S.pending);
-    else online.retryMove(); // десктоп: выделение не хранится — повторяем последний ход
+    else online.retryMove(); // desktop: no stored selection — retry the last move instead
   },
-  // «Рематч» одним тапом: тот же состав на той же трассе, без мастера. В онлайне
-  // (хост) переигрываем ту же комнату; локально — повтор сохранённого состава.
-  // Кнопка видна только при canRematch, но защищаемся и здесь.
+  // One-tap "Rematch": same lineup on the same track, no wizard. In online
+  // (as host) we replay the same room; locally we repeat the saved lineup.
+  // The button is only shown when canRematch, but we guard here too.
   onChooseSameTrack: () => {
     if (session.active()) {
       online.rematch();
@@ -457,12 +477,12 @@ bindButtons({
     S.raceTrack = S.game.track;
     startRace(S.lastLocalRace.humans, S.lastLocalRace.bots, S.lastLocalRace.difficulty);
   },
-  // «Та же трасса, другой режим»: сохранить трассу, заново выбрать режим/игроков.
+  // "Same track, different mode": keep the track, re-pick the mode/players.
   onSameTrackNewMode: () => goToMode('race'),
   canRematch: () => (!!S.game && !!S.lastLocalRace) || online.canRematch(),
   isOnline: () => session.active(),
   onPlayersBack: () => {
-    // С экрана числа игроков назад — к выбору режима (он теперь есть всегда).
+    // From the player-count screen, "back" goes to mode selection (it's always present now).
     S.phase = 'modeSelect';
     commit();
   },
@@ -504,10 +524,11 @@ bindButtons({
 });
 
 /**
- * Сохранить локальное состояние игры, чтобы перезагрузка/жест «назад»/сворачивание
- * вкладки не сбрасывали игру к первому экрану. Онлайн-сессию не сохраняем (она
- * живёт на сервере) — вместо этого стираем прошлый локальный снимок. persist сам
- * берёт из S лишь персистентное подмножество (cands/pending/raceNav не пишутся).
+ * Save local game state so reloading/the back gesture/backgrounding the tab
+ * doesn't reset the game to the first screen. We don't save the online
+ * session (it lives on the server) — instead we clear any previous local
+ * snapshot. persist itself only takes the persistent subset of S
+ * (cands/pending/raceNav are not written).
  */
 function saveState(): void {
   if (session.active()) {
@@ -517,8 +538,7 @@ function saveState(): void {
   persist.save(S);
 }
 
-/** Восстановить локальное состояние из снимка. Возвращает восстановленный режим
- *  (или null, если снимка не было). */
+/** Restore local state from a snapshot. Returns the restored phase (or null if there was no snapshot). */
 function restoreState(): Phase | null {
   const snap = persist.load();
   if (!snap) return null;
@@ -526,34 +546,38 @@ function restoreState(): Phase | null {
   S.editor = snap.editor;
   S.raceTrack = snap.raceTrack;
   S.game = snap.game;
-  // Бэкфилл дефолтами: снимок мог быть записан старой версией без новых полей
-  // правил (напр. turnLimitMs) — иначе они окажутся undefined. Так же чинит
-  // серверные стейты net.ts при десериализации.
+  // Backfill defaults: the snapshot may have been written by an older
+  // version without newer rules fields (e.g. turnLimitMs) — otherwise
+  // they'd come out undefined. This is the same fix net.ts applies to
+  // server state on deserialization.
   S.rules = normalizeRules(snap.rules);
   S.playersReturn = snap.playersReturn;
   S.lastLocalRace = snap.lastLocalRace;
-  // nav-поле не сериализуем — пересобираем из трассы (нужно ботам и полосе мест).
-  // Бот-ность мест едет внутри game.players (Player.bot) — отдельно не восстанавливаем.
+  // The nav field isn't serialized — rebuild it from the track (needed by
+  // bots and the standings strip). Bot-ness of seats travels inside
+  // game.players (Player.bot) — not restored separately.
   if (S.game) S.raceNav = buildNavField(S.game.track);
   return snap.phase;
 }
 
-// Мобильный swipe-to-reload, жест/кнопка «назад», закрытие или сворачивание вкладки:
-// pagehide ловит выгрузку и уход в bfcache, visibilitychange — сворачивание (на
-// телефоне самое надёжное, вкладку могут выгрузить из фона без pagehide).
+// Mobile swipe-to-reload, the back gesture/button, closing or backgrounding
+// the tab: pagehide catches unload and entering bfcache, visibilitychange
+// catches backgrounding (the most reliable on phones, where a tab can be
+// unloaded from the background without pagehide).
 window.addEventListener('pagehide', saveState);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') saveState();
 });
 
-// Заполнить статичные тексты разметки из strings до первого показа панели, и выставить
-// язык документа под активную локаль (в разметке дефолт lang="en").
+// Fill in static markup text from strings before the panel is first shown,
+// and set the document language to the active locale (markup defaults to lang="en").
 document.documentElement.lang = localeTag;
 localizeDom();
 
-// Метка сборки внизу шторки «Правила» — честный признак, какой код сейчас крутится
-// (строка вкомпилирована в бандл): коммит + время сборки. Время форматируем в
-// локальный час, чтобы «только что» совпадало с настенным временем.
+// Build label at the bottom of the "Rules" sheet — an honest indicator of
+// which code is actually running (the string is compiled into the bundle):
+// commit + build time. Time is formatted in the local hour so "just now"
+// matches the wall clock.
 const buildLabel = new Date(__BUILD_TIME__).toLocaleString(dateLocale, {
   day: '2-digit',
   month: '2-digit',
@@ -564,9 +588,10 @@ const buildLabel = new Date(__BUILD_TIME__).toLocaleString(dateLocale, {
 const appVersionEl = document.getElementById('appVersion')!;
 appVersionEl.textContent = `${__COMMIT__} · ${buildLabel}`;
 
-// Скрытая активация SW-отладки изнутри приложения: в standalone-PWA отдельная
-// банка localStorage (флаг `?swdebug` из Safari туда не попадает) и нет адресной
-// строки — включаем/выключаем оверлей 5 быстрыми тапами по метке сборки в «Правилах».
+// Hidden activation of SW debug from inside the app: a standalone PWA has
+// its own localStorage bucket (the `?swdebug` flag from Safari doesn't carry
+// over) and no address bar — toggle the overlay with 5 quick taps on the
+// build label in "Rules".
 let verTaps = 0;
 let verTapT = 0;
 appVersionEl.addEventListener('click', () => {
@@ -580,8 +605,8 @@ appVersionEl.addEventListener('click', () => {
   setTimeout(() => location.reload(), 400);
 });
 
-// Если коммит сменился с прошлого запуска — приложение обновилось: покажем тост.
-// Сравниваем вкомпилированный коммит с сохранённым, не завязываясь на механику SW.
+// If the commit changed since the last run, the app was updated: show a toast.
+// We compare the compiled-in commit to the saved one, without relying on SW mechanics.
 try {
   const BUILD_KEY = 'pr-build';
   const seen = localStorage.getItem(BUILD_KEY);
@@ -590,53 +615,54 @@ try {
   }
   localStorage.setItem(BUILD_KEY, __COMMIT__);
 } catch {
-  // приватный режим/недоступный localStorage — молча пропускаем
+  // private browsing / localStorage unavailable — fail silently
 }
 
-// Онлайн-входы показываем только если бэкенд настроен (иначе — только локальная игра).
+// Only show online entry points if the backend is configured (otherwise, local play only).
 setOnlineEnabled(onlineAvailable());
 
-// Камера: связать вьюпорт с canvas/обёрткой и провайдером границ содержимого.
+// Camera: wire the viewport to the canvas/wrapper and the content bounds provider.
 vp.initViewport(canvas, wrap, contentBounds);
 
-// ResizeObserver вместо window.resize: обёртка меняет размер и при смене
-// раскладки (портрет/ландшафт на мобильных), а не только окна.
+// ResizeObserver instead of window.resize: the wrapper also changes size on
+// layout changes (portrait/landscape on mobile), not just the window.
 new ResizeObserver(resize).observe(wrap);
 
-// Открыта ссылка-приглашение (?join=CODE) — подключиться к игре (при повторном
-// входе имя уже известно, иначе спросим). Иначе — восстановить локальную игру,
-// сохранённую перед прошлой выгрузкой страницы.
+// An invite link is open (?join=CODE) — join that game (if we've been here
+// before, the name is already known, otherwise we'll ask). Otherwise, restore
+// the local game saved before the last page unload.
 const joinParam = new URLSearchParams(location.search).get('join');
 const joining = !!joinParam && onlineAvailable();
 if (!joining && restoreState() === 'race') {
-  refreshCands(); // вернуть кандидатов хода для восстановленной гонки
-  scheduleAiMove(); // возобновить ходы ботов, если это была гонка с ними
+  refreshCands(); // bring back move candidates for the restored race
+  scheduleAiMove(); // resume bot moves if this was a game with bots
 }
 
 updateUI();
-resize(); // resize() сам вписывает восстановленную трассу/гонку в кадр (fit-to-content)
+resize(); // resize() itself fits the restored track/race into frame (fit-to-content)
 
 if (joining) {
   online.promptJoinByLink(joinParam!.toUpperCase());
 } else if (onlineAvailable() && online.hasSavedSession()) {
-  // Перезаход после дисконнекта: предложить вернуться в последнюю онлайн-игру.
+  // Reconnecting after a disconnect: offer to return to the last online game.
   online.promptResume();
 }
 
-// Предложить установить игру ярлыком на телефон (Android/Chromium и iOS Safari).
+// Offer to install the game as a home-screen shortcut (Android/Chromium and iOS Safari).
 initInstallPrompt();
 
-// Зарегистрировать service worker: обновление PWA применяется клиентом в
-// безопасный момент (не посреди заезда) — см. src/pwa.ts. Предикат «можно ли
-// перезагрузиться»: false только во время активного заезда.
+// Register the service worker: PWA updates are applied by the client at a
+// safe moment (not mid-race) — see src/pwa.ts. The "can we reload" predicate
+// is false only during an active race.
 initPwa(() => !(S.phase === 'race' && S.game != null && S.game.phase === 'race'));
 
-// ─── Dev-only тест-хелперы (`window.__pr`) ─────────────────────────────────────
-// Ручные хелперы для браузерной валидации живут в отдельном dev-only модуле
-// `dev-helpers.ts` и подключаются динамическим импортом только под
-// `import.meta.env.DEV`. В ПРОД-БАНДЛ НЕ ПОПАДАЮТ: Vite заменяет `import.meta.env.DEV`
-// на `false`, ветка с импортом удаляется как мёртвый код, и чанк dev-helpers не
-// создаётся — проверяется `npm run build` + grep по dist. Пользователю не видны.
+// ─── Dev-only test helpers (`window.__pr`) ─────────────────────────────────
+// Manual helpers for browser-based validation live in a separate dev-only
+// module `dev-helpers.ts` and are wired in via dynamic import only under
+// `import.meta.env.DEV`. THEY DO NOT END UP IN THE PROD BUNDLE: Vite replaces
+// `import.meta.env.DEV` with `false`, the import branch is eliminated as dead
+// code, and the dev-helpers chunk is never created — verified via
+// `npm run build` + grep over dist. None of this is visible to end users.
 if (import.meta.env.DEV) {
   void import('./dev-helpers').then(({ installDevHelpers }) =>
     installDevHelpers({

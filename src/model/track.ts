@@ -1,4 +1,4 @@
-// Модель трассы: обработка нарисованных штрихов, валидация, финализация.
+// Track model: processing drawn strokes, validation, finalization.
 
 import {
   Vec,
@@ -38,11 +38,11 @@ export interface Track {
   outer: Polyline;
   inner: Polyline;
   finish: FinishLine;
-  /** Единичная нормаль финишной линии в направлении гонки. */
+  /** Unit normal of the finish line, pointing in the direction of the race. */
   forward: Vec;
-  /** Узлы сетки, лежащие на дороге (ключи — см. key()). */
+  /** Grid nodes that lie on the road (keys — see key()). */
   inside: Set<number>;
-  /** Стартовые узлы, строго позади финишной линии (ближайшие к ней — первыми). */
+  /** Starting nodes, strictly behind the finish line (closest to it come first). */
   startPoints: Vec[];
 }
 
@@ -58,7 +58,7 @@ export const unkey = (k: number): Vec => ({
 
 export type StrokeResult = { poly: Polyline } | { error: string };
 
-/** Замыкание, ресемплинг и сглаживание сырого freehand-штриха. */
+/** Closing, resampling, and smoothing a raw freehand stroke. */
 export function processStroke(raw: Vec[]): StrokeResult {
   if (raw.length < 8) {
     return { error: strings.track.strokeShort };
@@ -80,7 +80,7 @@ export function processStroke(raw: Vec[]): StrokeResult {
   if (dist(raw[0], raw[raw.length - 1]) > 0.25 * diag) {
     return { error: strings.track.notClosed };
   }
-  const maxTrim = Math.max(2, 0.12 * diag); // порог «мелкого» нахлёста концов
+  const maxTrim = Math.max(2, 0.12 * diag); // threshold for a "minor" overlap of the endpoints
   const closed = trimSeamOverlap(raw, maxTrim);
   let poly = resampleClosed(closed, 0.5);
   poly = chaikinClosed(poly, 2);
@@ -88,7 +88,7 @@ export function processStroke(raw: Vec[]): StrokeResult {
   return { poly };
 }
 
-/** Точка (не обязательно узел) лежит на дороге между краями. */
+/** Whether a point (not necessarily a grid node) lies on the road between the edges. */
 export function onRoad(p: Vec, outer: Polyline, inner: Polyline): boolean {
   return pointInPolygon(p, outer) && !pointInPolygon(p, inner);
 }
@@ -102,11 +102,11 @@ function isRoadLatticePoint(p: Vec, outer: Polyline, inner: Polyline): boolean {
 }
 
 /**
- * Строит финишную линию по протяжке пользователя: линия продлевается в обе
- * стороны, из пересечений с краями берётся участок дороги, содержащий
- * середину протяжки. Концы выносятся на 0.25 клетки за стенки, чтобы закрыть
- * численные щели. Протяжку не обязательно вести точно от стенки до стенки —
- * достаточно задать направление поперёк дороги.
+ * Builds the finish line from the user's drag: the line is extended in both
+ * directions, and among its intersections with the edges we take the road
+ * segment containing the midpoint of the drag. The endpoints are pushed 0.25
+ * cells past the walls to close numerical gaps. The drag doesn't need to run
+ * exactly from wall to wall — it just needs to indicate a direction across the road.
  */
 export type ClipFinishResult = { finish: FinishLine } | { error: 'no-cross' | 'narrow' };
 
@@ -131,10 +131,10 @@ export function clipFinishLine(
     if (hits[i].t <= tMid && tMid <= hits[i + 1].t) {
       const p1 = hits[i].point;
       const p2 = hits[i + 1].point;
-      // Середина отрезка между соседними пересечениями вне дороги —
-      // линия проходит по «пробелу» (мимо дороги), а не поперёк неё.
+      // Midpoint of the segment between adjacent intersections falls off the
+      // road — the line runs through a "gap" (missing the road), not across it.
       if (!onRoad(lerp(p1, p2, 0.5), outer, inner)) return { error: 'no-cross' };
-      // Дорога пересечена правильно, но слишком узка в этом месте.
+      // The road is crossed correctly, but is too narrow at this spot.
       if (dist(p1, p2) < 1) return { error: 'narrow' };
       return { finish: { a: sub(p1, scale(d, 0.25)), b: add(p2, scale(d, 0.25)) } };
     }
@@ -142,35 +142,38 @@ export function clipFinishLine(
   return { error: 'no-cross' };
 }
 
-/** Знаковое расстояние точки до финишной линии вдоль направления гонки. */
+/** Signed distance from a point to the finish line, along the direction of the race. */
 export function sideOfFinish(track: Pick<Track, 'finish' | 'forward'>, p: Vec): number {
   return dot(sub(p, track.finish.a), track.forward);
 }
 
-/** Стартовый кандидат: узел позади финиша плюс его коридорная глубина (шаги BFS
- *  назад от линии, считаются в finalizeTrack). */
+/** Starting candidate: a node behind the finish plus its corridor depth (BFS
+ *  steps back from the line, computed in finalizeTrack). */
 export interface StartCandidate {
   p: Vec;
   corridor: number;
 }
 
 /**
- * Стартовая решётка: из узлов позади финиша выбирает до MAX_START_POINTS точек,
- * рядами вдоль коридора от линии назад. «Ряд» — один слой коридорной глубины (шаги
- * BFS от линии): на прямой это колонка узлов позади линии, на повороте — дуга,
- * повторяющая изгиб дороги. Ряд наполняется от центра трассы к бокам до START_ROW_MAX
- * болидов; не влезли — уходят в следующий (более глубокий) слой. Смысл — минимум
- * глубины при центральном старте: никто не стоит сбоку у стенки (боковой старт то
- * выгоден, то нет — этот шум убираем), а лишняя глубина появляется, лишь когда
- * болидов больше, чем помещается в центральную полосу.
+ * Starting grid: from the nodes behind the finish, picks up to MAX_START_POINTS
+ * points, laid out in rows along the corridor going back from the line. A "row"
+ * is one layer of corridor depth (BFS steps from the line): on a straight this
+ * is a column of nodes behind the line, on a turn it's an arc following the
+ * curve of the road. Each row fills from the center of the track outward up to
+ * START_ROW_MAX cars; anything that doesn't fit spills into the next (deeper)
+ * layer. The goal is minimum depth for a centered start: nobody stands off to
+ * the side against a wall (a side start is sometimes an advantage, sometimes
+ * not — we're eliminating that noise), and extra depth only appears once there
+ * are more cars than fit across the central band.
  *
- * Кандидаты берутся строго по возрастанию коридорной глубины, поэтому далёкий узел
- * на дальнем витке (большая глубина) не может быть выбран, пока есть ближние: старт
- * всегда плотный пучок вплотную за линией, даже когда дорога уходит в излом сразу за
- * финишем. Поперечное центрирование — по оси финишной линии latUnit (на малых
- * глубинах, где реально стоят болиды, она надёжна). Возвращает точки по возрастанию
- * глубины (первый — поул); при меньшем числе игроков newGame берёт передние слоты
- * (первый ряд на линии), так что 2–3 болида стартуют без глубины вовсе.
+ * Candidates are consumed strictly in order of increasing corridor depth, so a
+ * distant node on a far-off part of the track (large depth) can never get
+ * picked while closer ones remain: the grid is always a tight cluster right
+ * behind the line, even where the road bends sharply just past the finish.
+ * Lateral centering uses the finish line's own axis, latUnit (reliable at the
+ * shallow depths where cars actually end up). Returns points in order of
+ * increasing depth (the first is pole); with fewer players, newGame just takes
+ * the front slots (the first row on the line), so 2-3 cars start with no depth at all.
  */
 export function layoutStartGrid(
   finish: FinishLine,
@@ -178,13 +181,13 @@ export function layoutStartGrid(
   behind: StartCandidate[],
 ): Vec[] {
   const M = lerp(finish.a, finish.b, 0.5);
-  const latUnit = normalize(sub(finish.b, finish.a)); // поперечная ось (вдоль линии)
+  const latUnit = normalize(sub(finish.b, finish.a)); // lateral axis (along the line)
   const cand = behind.map((c) => ({
     p: c.p,
     corridor: c.corridor,
     lat: dot(sub(c.p, M), latUnit),
   }));
-  // Поул-первым, центр-первым: сначала ближе к линии по коридору, затем ближе к центру.
+  // Pole first, center first: closest along the corridor to the line first, then closest to center.
   cand.sort(
     (a, b) =>
       a.corridor - b.corridor ||
@@ -195,8 +198,8 @@ export function layoutStartGrid(
 
   const picked = new Set<(typeof cand)[number]>();
   const perRow = new Map<number, number>();
-  // Проход 1: до START_ROW_MAX центральных узлов на слой коридора, мелкие слои раньше;
-  // переполненный ряд «перетекает» в следующий (более глубокий) слой.
+  // Pass 1: up to START_ROW_MAX central nodes per corridor layer, shallower
+  // layers first; an overfull row "spills over" into the next (deeper) layer.
   for (const c of cand) {
     if (picked.size >= MAX_START_POINTS) break;
     const n = perRow.get(c.corridor) ?? 0;
@@ -204,8 +207,9 @@ export function layoutStartGrid(
     perRow.set(c.corridor, n + 1);
     picked.add(c);
   }
-  // Проход 2 (страховка; только вырожденные однослойные полоски, где глубины не хватает
-  // на MAX_START_POINTS рядами ≤ START_ROW_MAX): добираем оставшиеся в том же порядке.
+  // Pass 2 (a fallback; only for degenerate single-layer strips where there isn't
+  // enough depth to fit MAX_START_POINTS in rows of <= START_ROW_MAX): fill in the
+  // rest in the same order.
   if (picked.size < MAX_START_POINTS) {
     for (const c of cand) {
       if (picked.size >= MAX_START_POINTS) break;
@@ -213,8 +217,9 @@ export function layoutStartGrid(
     }
   }
 
-  // Порядок «спереди назад»: поул (index 0) — ближайший к линии по коридору, центр ряда
-  // первым. При меньшем числе игроков newGame возьмёт передние n, перестановка — случайно.
+  // Front-to-back order: pole (index 0) is closest to the line along the
+  // corridor, with row centers first. With fewer players, newGame just takes the
+  // first n; the permutation itself is arbitrary.
   return [...picked]
     .sort(
       (a, b) =>
@@ -259,10 +264,12 @@ export function finalizeTrack(
     return { error: strings.track.tooNarrow };
   }
 
-  // Стартовые кандидаты — не вся полуплоскость «позади финиша» (на змейке она
-  // захватывает далёкие сегменты трассы, и запасное заполнение решётки могло усадить
-  // болид посреди круга), а связный коридор сразу за линией: BFS назад от узлов,
-  // касающихся линии сзади, только по «задним» узлам дороги, с ограничением глубины.
+  // Starting candidates aren't the whole "behind the finish" half-plane (on an
+  // S-curve that catches distant segments of the track too, and the grid's
+  // fallback fill could then seat a car in the middle of the lap) — instead it's
+  // the connected corridor right behind the line: BFS going back from nodes
+  // touching the line from behind, restricted to "backward" road nodes, with a
+  // depth cap.
   const isBehind = (p: Vec): boolean => sideOfFinish({ finish, forward }, p) < -1e-9;
   const behind: StartCandidate[] = [];
   const depth = new Map<number, number>();
@@ -277,9 +284,10 @@ export function finalizeTrack(
     [1, 0],
     [1, 1],
   ];
-  // Затравка: задние узлы дороги вплотную к ОТРЕЗКУ финиша (не к бесконечной прямой —
-  // она рассекает и другие сегменты змейки; привязка к отрезку не даёт зоне прорасти
-  // из далёкого пересечения).
+  // Seed: backward road nodes right up against the finish SEGMENT (not the
+  // infinite line — that would also cut through other segments of an S-curve;
+  // anchoring to the segment keeps the region from sprouting out of a distant
+  // intersection).
   inside.forEach((k) => {
     const p = unkey(k);
     if (!isBehind(p)) return;
@@ -289,8 +297,8 @@ export function finalizeTrack(
       behind.push({ p, corridor: 0 });
     }
   });
-  // Волна вглубь коридора по задним узлам дороги; узлы на самой границе глубины
-  // сохраняем, но дальше от них не растём.
+  // Wavefront going deeper into the corridor over backward road nodes; nodes
+  // right at the depth boundary are kept, but the region doesn't grow past them.
   for (let head = 0; head < queue.length; head++) {
     const p = queue[head];
     const d = depth.get(key(p.x, p.y))!;

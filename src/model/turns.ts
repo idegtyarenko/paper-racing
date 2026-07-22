@@ -1,7 +1,7 @@
-// Очерёдность ходов: игроки ходят по кругу (стартовый сдвигается каждый круг).
-// Генерация кандидатов с блокировкой занятых клеток, применение хода одного
-// болида, смена очереди и отбытие штрафа, пропуск по инерции (для онлайна).
-// Общий расчёт исхода/победителя/возврата из штрафа — в game.ts.
+// Turn ordering: players move in a round-robin (the starting player shifts every
+// lap). Candidate generation with blocking of occupied cells, applying one car's
+// move, advancing the turn and serving out penalties, and coasting by inertia
+// (for online play). Shared outcome/winner/penalty-return logic lives in game.ts.
 
 import { Vec, pointOnSegment } from '../geometry';
 import { MIN_LAUNCH, DOWNFORCE_VREF } from '../config';
@@ -18,60 +18,66 @@ import {
 } from './game';
 
 /**
- * Достижимые цели хода из состояния (pos, vel) по управляемости drive — единая
- * параметризованная модель для всех режимов (классика — изотропный пресет). Её зовут
- * и движок (candidates), и планировщик бота (ai/planner), поэтому бот раскрывает ровно
- * те же ходы, что доступны игроку.
+ * Reachable move targets from state (pos, vel) under handling `drive` — a single
+ * parameterized model shared by every mode (classic is just its isotropic preset).
+ * Called both by the engine (candidates) and the bot planner (ai/planner), so the
+ * bot always sees exactly the same moves available to a human player.
  *
- * Вокруг точки наката C = pos + vel лежит «эллипс сцепления» в системе координат
- * скорости: целые узлы, у которых изменение скорости a = target − C влезает в эллипс с
- * полуосями drive (клетки/ход):
- *  - продольно вперёд (a·û ≥ 0) — полуось accel; назад (торможение) — полуось brake_eff;
- *  - поперечно (вбок) — полуось grip_eff;
- *  - условие эллипса (a_along/cap)² + (a_lat/grip_eff)² ≤ 1 связывает разгон и доворот:
- *    разгоняешься в пол — на доворот не осталось, и наоборот (скруглённые углы).
- * Скорость учитывается сама: доворот на угол θ требует поперечного Δv ≈ |vel|·θ, значит
- * θ_max ≈ grip_eff/|vel| — чем быстрее, тем меньше доворот за ход (минимальный радиус
- * ∝ v²/grip_eff). Точка наката (a = 0) всегда в наборе (0 ≤ 1), так что инерция/пропуск
- * работают как в классике.
+ * Around the coast point C = pos + vel sits a "traction ellipse" in the velocity
+ * frame: integer grid nodes whose velocity change a = target - C fits inside an
+ * ellipse with semi-axes given by drive (cells per move):
+ *  - forward along the direction of travel (a.u >= 0) uses the accel semi-axis;
+ *    backward (braking) uses brake_eff;
+ *  - lateral (sideways) uses grip_eff;
+ *  - the ellipse condition (a_along/cap)^2 + (a_lat/grip_eff)^2 <= 1 couples
+ *    acceleration and steering: floor the throttle and there's no steering left,
+ *    and vice versa (rounded corners).
+ * Speed factors in automatically: turning by angle theta needs lateral
+ * delta-v ~= |vel|*theta, so theta_max ~= grip_eff/|vel| — the faster you go, the
+ * less you can turn per move (minimum radius scales as v^2/grip_eff). The coast
+ * point itself (a = 0) is always in the set (0 <= 1), so inertia/coasting works
+ * exactly as it does in classic mode.
  *
- * Аэродинамика: brake_eff = brake·aero, grip_eff = grip·aero, где aero = aeroFactor
- * (downforce, speed) растёт с квадратом скорости. Разгон (accel) прижим не трогает.
- * На старте (vel = 0) прижима нет и aero не участвует.
+ * Aerodynamics: brake_eff = brake*aero, grip_eff = grip*aero, where
+ * aero = aeroFactor(downforce, speed) grows with the square of speed. Downforce
+ * never touches acceleration (accel). At the start (vel = 0) there's no downforce
+ * and aero doesn't come into play.
  *
- * На старте (vel = 0) направления нет: изотропный диск радиуса max(accel, MIN_LAUNCH).
- * Пол MIN_LAUNCH = √2 гарантирует диагональный старт (набор 3×3) при любом разгоне.
- * Все три полуоси равны и downforce = 0 → изотропный круг: grip в [√2, 2) даёт ровно
- * квадрат 3×3 (классика).
+ * At the start (vel = 0) there's no direction yet: an isotropic disk of radius
+ * max(accel, MIN_LAUNCH). The floor MIN_LAUNCH = sqrt(2) guarantees a diagonal
+ * launch (the 3x3 set) regardless of accel. When all three semi-axes are equal
+ * and downforce = 0, you get an isotropic circle: grip in [sqrt(2), 2) yields
+ * exactly the 3x3 square (classic mode).
  */
 export function reachableTargets(pos: Vec, vel: Vec, drive: Drive): Vec[] {
   const { accel, brake, grip, downforce } = drive;
   const cx = pos.x + vel.x;
   const cy = pos.y + vel.y;
   const speed = Math.hypot(vel.x, vel.y);
-  // Прижим растёт со скоростью и раздвигает торможение/хват (см. aeroFactor).
+  // Downforce grows with speed and widens braking/grip (see aeroFactor).
   const aero = aeroFactor(downforce, speed);
   const brakeEff = brake * aero;
   const gripEff = grip * aero;
-  // Рамка перебора по ЭФФЕКТИВНЫМ полуосям: на скорости прижим может увести brake/grip
-  // выше их базовых значений, иначе достижимые узлы обрезались бы рамкой.
+  // The search bounding box uses the EFFECTIVE semi-axes: at speed, downforce can
+  // push brake/grip above their base values, so bounding by the raw values would
+  // clip off otherwise-reachable nodes.
   const r = Math.ceil(Math.max(accel, brakeEff, gripEff, MIN_LAUNCH));
   const EPS = 1e-9;
   const out: Vec[] = [];
   for (let ay = -r; ay <= r; ay++) {
     for (let ax = -r; ax <= r; ax++) {
       if (speed === 0) {
-        const rad = Math.max(accel, MIN_LAUNCH); // старт: диагональ доступна всем
+        const rad = Math.max(accel, MIN_LAUNCH); // at the start, the diagonal is available to everyone
         if (ax * ax + ay * ay > rad * rad + EPS) continue;
       } else {
         const ux = vel.x / speed;
         const uy = vel.y / speed;
-        const along = ax * ux + ay * uy; // продольная составляющая a (вдоль скорости)
-        const lat = -ax * uy + ay * ux; // поперечная составляющая a (вбок)
-        const cap = along >= 0 ? accel : brakeEff; // перёд — разгон, зад — тормоза
+        const along = ax * ux + ay * uy; // longitudinal component of a (along velocity)
+        const lat = -ax * uy + ay * ux; // lateral component of a (sideways)
+        const cap = along >= 0 ? accel : brakeEff; // forward uses accel, backward uses braking
         const nl = cap === 0 ? (along === 0 ? 0 : Infinity) : along / cap;
         const nt = gripEff === 0 ? (lat === 0 ? 0 : Infinity) : lat / gripEff;
-        if (nl * nl + nt * nt > 1 + EPS) continue; // вне эллипса сцепления
+        if (nl * nl + nt * nt > 1 + EPS) continue; // outside the traction ellipse
       }
       out.push({ x: cx + ax, y: cy + ay });
     }
@@ -80,30 +86,33 @@ export function reachableTargets(pos: Vec, vel: Vec, drive: Drive): Vec[] {
 }
 
 /**
- * Аэродинамический прижим: коэффициент, на который растут боковой хват (grip) и
- * торможение (brake) с квадратом скорости. aero = 1 + downforce·(speed/DOWNFORCE_VREF)².
- * downforce = 0 → aero = 1 (чистая механика, хват постоянен). Общий для движка
- * (reachableTargets) и рендера эллипса, чтобы наглядная и фактическая области совпадали.
+ * Aerodynamic downforce: the factor by which lateral grip and braking grow with
+ * the square of speed. aero = 1 + downforce*(speed/DOWNFORCE_VREF)^2.
+ * downforce = 0 -> aero = 1 (pure mechanical grip, constant). Shared between the
+ * engine (reachableTargets) and the ellipse rendering, so the visualized region
+ * and the actual reachable region always match.
  */
 export function aeroFactor(downforce: number, speed: number): number {
   return 1 + downforce * (speed / DOWNFORCE_VREF) ** 2;
 }
 
 /**
- * Ходы-кандидаты произвольного места `seat` от его текущих pos/vel. Вынесено из
- * candidates(), чтобы считать веер не только для ходящего игрока: онлайн/vs-боты
- * показывают его для своего места ещё до наступления хода (предвыбор — «наметка»).
+ * Candidate moves for an arbitrary seat, from its current pos/vel. Factored out
+ * of candidates() so the move fan can be computed for a seat other than the one
+ * currently moving: online play / vs-bot lets a player preview their fan before
+ * their turn actually comes up (a "plan-ahead" preview).
  */
 export function candidatesForSeat(state: GameState, seat: number): Candidate[] {
   const p = state.players[seat];
   const occupied = otherPositions(state, seat);
-  const cx = p.pos.x + p.vel.x; // точка наката C (чистая инерция, a = 0)
+  const cx = p.pos.x + p.vel.x; // coast point C (pure inertia, a = 0)
   const cy = p.pos.y + p.vel.y;
   const targets = reachableTargets(p.pos, p.vel, state.rules.drive);
   return targets.map((target) => ({
     target,
-    // Ход запрещён, если соперник стоит в конечной точке или отрезок хода проходит
-    // через клетку, где соперник стоит сейчас (проехать «сквозь» нельзя).
+    // A move is blocked if an opponent occupies the target cell, or if the move
+    // segment passes through a cell an opponent currently occupies (no driving
+    // "through" another car).
     blocked: occupied.some((o) => pointOnSegment(o, p.pos, target)),
     crash: computeOutcome(state.track, state.rules, p.pos, target).crash,
     inertial: target.x === cx && target.y === cy,
@@ -123,15 +132,16 @@ export function applyMove(state: GameState, cand: Candidate): void {
 }
 
 /**
- * Индекс игрока для сквозного слота хода. Круг = n слотов; позиция в круге (pos) —
- * turn % n, номер круга (round) — floor(turn / n). Стартовая позиция сдвигается на
- * round: rot = (round + pos) % n (без преимущества первого хода). `order` —
- * перестановка «позиция решётки → seat» (startGridOrder): первый круг ходит по
- * решётке спереди назад (order[0] — поул), дальше сдвиг как обычно; без order (или
- * тождественный) — прежнее поведение rot. n=3, order тождественный: круг 1 — 0,1,2;
- * круг 2 — 1,2,0; круг 3 — 2,0,1. Это перестановка всех игроков в каждом круге
- * (никто не пропущен и не ходит дважды) и детерминирована: одинаковые turn/order у
- * всех клиентов дают один индекс.
+ * Player index for a running turn slot. A lap is n slots; position within the lap
+ * (pos) is turn % n, lap number (round) is floor(turn / n). The starting position
+ * shifts by round: rot = (round + pos) % n (so nobody keeps a first-move
+ * advantage). `order` is the "grid position -> seat" permutation (startGridOrder):
+ * the first lap runs in grid order front to back (order[0] is pole), and after
+ * that the usual shift applies; without order (or with the identity permutation)
+ * this reduces to the plain rot behavior. For n=3 with identity order: lap 1 is
+ * 0,1,2; lap 2 is 1,2,0; lap 3 is 2,0,1. This is a permutation of all players on
+ * every lap (nobody skipped, nobody moves twice) and is deterministic: the same
+ * turn/order inputs give the same index on every client.
  */
 export function playerForTurn(turn: number, n: number, order?: number[]): number {
   const round = Math.floor(turn / n);
@@ -140,37 +150,38 @@ export function playerForTurn(turn: number, n: number, order?: number[]): number
   return order ? order[rot] : rot;
 }
 
-/** Слот очереди ходов: чей ход и в каком круге он состоится. */
+/** A slot in the turn queue: who moves and in which lap it happens. */
 export interface UpcomingSlot {
-  /** Индекс игрока (seat), который ходит в этом слоте. */
+  /** Player index (seat) that moves in this slot. */
   seat: number;
-  /** Номер круга слота (floor(turn / n)) — для группировки очереди по кругам в UI. */
+  /** Lap number of the slot (floor(turn / n)) — used to group the queue by lap in the UI. */
   round: number;
 }
 
 /**
- * Очередь ближайших ходов со слотами (seat + номер круга), начиная с текущего
- * (первый элемент — state.current). count — сколько ходов вернуть. Учитывает
- * штрафные пропуски (болид в гравии не появляется в очереди, пока не отбудет штраф)
- * и доигровку решающего круга (finalTurnsLeft ограничивает число оставшихся слотов) —
- * ровно как afterAction. Прогноз детерминирован и верен в предположении, что новых
- * аварий не случится: каждый слот продвигает turn на 1, слот игрока в боксах
- * «сгорает» на отбытие штрафа и хода не даёт. Прошлые ходы не восстанавливаются
- * (журнала ходов нет) — очередь смотрит только вперёд.
+ * Queue of upcoming turns with slots (seat + lap number), starting from the
+ * current one (the first element is state.current). count is how many turns to
+ * return. Accounts for penalty skips (a car sitting in the gravel doesn't show up
+ * in the queue until its penalty is served) and for the decisive lap's remaining
+ * turns (finalTurnsLeft caps how many slots are left) — exactly as afterAction
+ * does. The forecast is deterministic and correct under the assumption that no
+ * new crashes happen: every slot advances turn by 1, and a car serving a penalty
+ * "burns" its slot without taking a turn. Past turns aren't reconstructed (there's
+ * no turn log) — the queue only looks forward.
  */
 export function upcomingSlots(state: GameState, count: number): UpcomingSlot[] {
   const n = state.players.length;
   const skips = state.players.map((p) => p.skipTurns);
   const out: UpcomingSlot[] = [];
   let turn = state.turn;
-  let slotsLeft = state.finalTurnsLeft; // null — раунд не идёт, слотов не ограничено
+  let slotsLeft = state.finalTurnsLeft; // null means no round is in progress, no slot limit
   while (out.length < count && (slotsLeft === null || slotsLeft > 0)) {
     const seat = playerForTurn(turn, n, state.startGridOrder);
     const p = state.players[seat];
     if (p.place !== null || p.retired) {
-      // Выбывший (получил место / сдался) хода не делает — слот сгорает.
+      // Out of the race (has a place / retired) — doesn't take a turn, slot burns.
     } else if (skips[seat] > 0) {
-      skips[seat] -= 1; // слот сгорает на отбытие штрафа
+      skips[seat] -= 1; // slot burns while serving the penalty
     } else {
       out.push({ seat, round: Math.floor(turn / n) });
     }
@@ -180,32 +191,32 @@ export function upcomingSlots(state: GameState, count: number): UpcomingSlot[] {
   return out;
 }
 
-/** Индексы игроков ближайших ходов (без номеров кругов) — см. upcomingSlots. */
+/** Player indices for upcoming turns (without lap numbers) — see upcomingSlots. */
 export function upcomingTurns(state: GameState, count: number): number[] {
   return upcomingSlots(state, count).map((s) => s.seat);
 }
 
 /**
- * Смена хода и учёт финиша. Игроки ходят по кругу; очерёдность внутри круга
- * задаёт playerForTurn (стартовый сдвигается каждый круг). Как только кто-то
- * пересекает финиш, открывается «раунд»: остальные болиды этого же круга (после
- * текущего seat) доигрывают свои ходы — те, кто ходил раньше, свой шанс в этом
- * круге уже использовали. По исчерпании раунда resolveRound раздаёт места
- * финишировавшим в нём по глубине заезда за линию. В отличие от прежней логики
- * гонка на этом не заканчивается: следующие круги играют оставшиеся болиды, пока
- * все не финишируют или не сдадутся (тогда resolveRound/retireCurrent выставит
- * phase='over'). Выбывшие болиды (place присвоен или сдался) в очереди
- * пропускаются автоматически — их слот сгорает без хода, как и штрафной пропуск
- * после аварии.
+ * Advance the turn and account for finishing. Players move round-robin; the
+ * order within a lap is set by playerForTurn (the starting player shifts each
+ * lap). As soon as someone crosses the finish, a "round" opens: the rest of the
+ * cars on that same lap (those after the current seat) get to finish out their
+ * turns — cars that already moved earlier in the lap already had their chance.
+ * Once the round runs out, resolveRound assigns places to that round's finishers
+ * by overshoot depth. Unlike the old logic, the race doesn't end here — remaining
+ * cars keep racing over subsequent laps until everyone has finished or retired
+ * (at which point resolveRound/retireCurrent sets phase='over'). Cars that are
+ * out of the race (place assigned or retired) are skipped automatically in the
+ * queue — their slot burns without a turn, same as a post-crash penalty skip.
  */
 function afterAction(state: GameState): void {
   if (state.phase !== 'race') return;
   const n = state.players.length;
-  const seat = state.turn % n; // позиция ходящего в текущем круге
+  const seat = state.turn % n; // position of the mover within the current lap
   const cur = state.players[state.current];
 
-  // Болид только что пересёк финиш нужное число раз и ещё не в этом раунде —
-  // засчитываем его в текущий раунд.
+  // The car just crossed the finish the required number of times and isn't in
+  // this round yet — count it toward the current round.
   const finished =
     cur.crossings >= WIN_CROSSINGS &&
     cur.place === null &&
@@ -213,16 +224,18 @@ function afterAction(state: GameState): void {
   if (finished) state.roundFinishers.push(state.current);
 
   if (state.finalTurnsLeft !== null) {
-    // Раунд уже шёл до этого хода: он укоротил число оставшихся в нём слотов
-    // (сам ход финишировавшего, открывшего раунд, слотом не считается — он в
-    // ветке else ниже, где finalTurnsLeft = число болидов ПОСЛЕ него в круге).
+    // A round was already in progress before this move: it shortens the number
+    // of slots left in it (the finishing move that opened the round itself
+    // doesn't count as a slot — that's handled in the else branch below, where
+    // finalTurnsLeft = number of cars AFTER it in the lap).
     state.finalTurnsLeft -= 1;
     if (state.finalTurnsLeft <= 0) {
-      resolveRound(state); // раздаёт места, может выставить phase='over'
+      resolveRound(state); // assigns places, may set phase='over'
       if (state.phase !== 'race') return;
     }
   } else if (finished) {
-    // Первый финиш раунда: болиды этого круга после текущего seat доигрывают.
+    // First finish of the round: cars later in this lap than the current seat
+    // get to finish their turns.
     state.finalTurnsLeft = n - 1 - seat;
     if (state.finalTurnsLeft <= 0) {
       resolveRound(state);
@@ -235,22 +248,22 @@ function afterAction(state: GameState): void {
   const next = state.players[state.current];
   if (next.skipTurns > 0) {
     next.skipTurns -= 1;
-    // Штраф отбыт — только теперь возвращаем болид на трассу.
+    // Penalty served — only now do we return the car to the track.
     if (next.skipTurns === 0) returnFromPenalty(state, state.current);
     afterAction(state);
   } else if (next.place !== null || next.retired) {
-    // Выбывший из гонки хода не делает — слот сгорает, ход идёт дальше.
+    // Out of the race — doesn't take a turn, slot burns, turn advances further.
     afterAction(state);
   }
 }
 
 /**
- * Сдача игрока: болид seat выбывает из гонки (места не занимает, ходов не
- * делает). Сдаться можно в любой момент, не обязательно в свой ход. Если после
- * сдачи активных болидов не осталось — гонка окончена. Если сдался тот, чей
- * сейчас ход, — ход передаётся дальше (afterAction учитывает бухгалтерию
- * раунда); если сдался не ходящий сейчас — очередь не трогаем, его слот
- * пропустится сам, когда до него дойдёт (afterAction/upcomingTurns).
+ * Player retirement: car `seat` drops out of the race (doesn't get a place,
+ * doesn't take turns). A player can retire at any point, not just on their own
+ * turn. If no active cars remain after this, the race is over. If the retiring
+ * player is the current mover, the turn advances (afterAction handles the round
+ * bookkeeping); if someone else retires, the queue is left alone — their slot
+ * will simply be skipped when it comes up (afterAction/upcomingTurns).
  */
 export function retireSeat(state: GameState, seat: number): void {
   if (state.phase !== 'race') return;
@@ -265,18 +278,19 @@ export function retireSeat(state: GameState, seat: number): void {
 }
 
 /**
- * Пропуск хода отсутствующего/задумавшегося игрока: болид продолжает ехать прямо
- * с той же скоростью (чистая инерция, ускорение 0,0). Если инерционная клетка
- * занята соперником — болид остаётся на месте с нулевой скоростью, а ход просто
- * уходит дальше. Аварии/пересечение финиша/боксы обрабатываются штатно через
- * applyMove. Детерминирована: два клиента, применившие coastMove к одному стейту,
- * получат идентичный результат (безопасно при last-write-wins в онлайне).
+ * Skip the turn of an absent/stalling player: the car keeps traveling straight
+ * at the same speed (pure inertia, zero acceleration). If the inertial cell is
+ * occupied by another car, the car just stays put at zero speed and the turn
+ * simply moves on. Crashes/finish crossings/penalties are all handled normally
+ * through applyMove. Deterministic: two clients applying coastMove to the same
+ * state get an identical result (safe under last-write-wins in online play).
  */
 export function coastMove(state: GameState): void {
   if (state.phase !== 'race') return;
   const p = state.players[state.current];
-  // Болид стоит (старт / после аварии) — ехать по инерции некуда: просто пас,
-  // без вырожденного следа нулевой длины на каждый пропуск.
+  // The car is stationary (at the start / after a crash) — there's nowhere for
+  // inertia to carry it, so just pass, without pushing a degenerate zero-length
+  // trail segment on every skip.
   if (p.vel.x === 0 && p.vel.y === 0) {
     afterAction(state);
     return;

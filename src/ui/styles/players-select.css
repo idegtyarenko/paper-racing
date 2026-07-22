@@ -1,10 +1,10 @@
-/* Ряд выбора числа (люди/боты/сложность): ряд крупных кнопок. */
+/* Number-picker row (humans/bots/difficulty): a row of large buttons. */
 .players-select {
   display: flex;
   gap: 6px;
 }
 
-/* Строка настройки состава: подпись над рядом кнопок. */
+/* Roster setup row: a label above a row of buttons. */
 .setup-row {
   display: flex;
   flex-direction: column;
@@ -16,14 +16,14 @@
   color: #6b6455;
 }
 
-/* display:flex ниже перебивает атрибут [hidden] (одинаковая специфичность, но
-   правило позже) — возвращаем скрытие через более специфичный селектор. */
+/* display:flex below overrides the [hidden] attribute (same specificity, but the
+   rule comes later) — restore hiding via a more specific selector. */
 .setup-row[hidden],
 .lobby__bots[hidden] {
   display: none;
 }
 
-/* Выбранная кнопка в ряду (число людей/ботов или сложность). */
+/* Selected button in the row (number of humans/bots, or difficulty). */
 .count-btn--selected {
   border-color: #2e7d32;
   background: #e3f0dd;
@@ -35,10 +35,10 @@
   }
 }
 
-/* Досаживание ботов в лобби (только хост): подпись, ряд-степпер и ряд сложности.
-   На узкой боковой панели (десктоп) степпер и сложность идут отдельными строками,
-   чтобы 5 кнопок не переполняли ширину; на широкой нижней панели телефона — в одну
-   строку (см. медиазапрос ниже). */
+/* Adding bots in the lobby (host only): a label, a stepper row, and a difficulty
+   row. In the narrow side panel (desktop) the stepper and difficulty go on separate
+   lines, so the 5 buttons don't overflow the width; in the phone's wide bottom
+   panel they go on one line (see media query below). */
 .lobby__bots {
   display: flex;
   flex-direction: column;
@@ -49,7 +49,7 @@
   align-items: center;
   gap: 6px;
 }
-/* − и + делят ширину ряда поровну (как кнопки в рядах ниже), число — между ними. */
+/* − and + split the row width evenly (like the buttons in the rows below), the number sits between them. */
 .lobby__bots-controls .count-btn {
   flex: 1;
 }
@@ -61,8 +61,8 @@
   font-weight: 700;
 }
 
-/* Телефон: панель во всю ширину — степпер и сложность помещаются в одну строку.
-   Подпись остаётся сверху (basis 100% → переносится на свою строку). */
+/* Phone: full-width panel — the stepper and difficulty fit on one line.
+   The label stays on top (basis 100% → wraps to its own line). */
 @media (max-width: 700px) {
   .lobby__bots {
     flex-flow: row wrap;
@@ -74,7 +74,7 @@
   .lobby__bots-controls {
     flex: 0 0 auto;
   }
-  /* В одной строке − и + компактные, не растягиваются на всю ширину. */
+  /* On one line, − and + are compact and don't stretch to full width. */
   .lobby__bots-controls .count-btn {
     flex: 0 0 auto;
     min-width: 40px;
@@ -84,7 +84,7 @@
   }
 }
 
-/* Квадратная кнопка-цифра выбора числа игроков. */
+/* Square number button for picking the player count. */
 .count-btn {
   flex: 1;
   min-height: 52px;

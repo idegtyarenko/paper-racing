@@ -21,19 +21,19 @@ const cand = (x: number, y: number): Candidate => ({
   inertial: false,
 });
 
-/** Ставит игрока в известную точку дороги с заданной скоростью. */
+/** Places a player at a known point on the track with a given velocity. */
 function place(p: Player, pos: [number, number], vel: [number, number] = [0, 0]): void {
   p.pos = { x: pos[0], y: pos[1] };
   p.vel = { x: vel[0], y: vel[1] };
 }
 
 describe('candidates', () => {
-  // Классическая управляемость (изотропный квадрат 3×3) — явно, т.к. дефолт
-  // теперь реалистичный (эллипс сцепления).
+  // Classic handling (isotropic 3×3 square) — set explicitly, since the default
+  // is now the realistic model (traction ellipse).
   const classicGame = () =>
     newGame(ringTrack(), 2, { ...DEFAULT_RULES, drive: { ...DRIVE_PRESETS.classic } });
 
-  it('9 кандидатов, ровно один инерционный с target = pos + vel', () => {
+  it('returns 9 candidates, exactly one inertial with target = pos + vel', () => {
     const g = classicGame();
     place(g.players[0], [10, 4], [2, 1]);
     const cs = candidates(g);
@@ -43,9 +43,9 @@ describe('candidates', () => {
     expect(inertial[0].target).toEqual({ x: 12, y: 5 });
   });
 
-  it('crash отмечен, когда ход выходит за стенку глубже допуска', () => {
+  it('flags crash when a move goes past the wall beyond tolerance', () => {
     const g = classicGame();
-    place(g.players[0], [10, 2], [0, -2]); // база (10,0), нижняя строка целей уходит за y=0
+    place(g.players[0], [10, 2], [0, -2]); // base (10,0), the bottom row of targets goes past y=0
     const cs = candidates(g);
     const belowWall = cs.filter((c) => c.target.y === -1);
     expect(belowWall).toHaveLength(3);
@@ -53,24 +53,24 @@ describe('candidates', () => {
     expect(cs.filter((c) => c.target.y === 1).every((c) => !c.crash)).toBe(true);
   });
 
-  it('blocked, когда соперник стоит в целевой точке', () => {
+  it('is blocked when an opponent occupies the target cell', () => {
     const g = classicGame();
     place(g.players[0], [10, 4], [2, 0]);
-    place(g.players[1], [13, 4]); // цель (13,4) при ускорении (1,0)
+    place(g.players[1], [13, 4]); // target (13,4) under acceleration (1,0)
     const c = candidates(g).find((c) => c.target.x === 13 && c.target.y === 4)!;
     expect(c.blocked).toBe(true);
   });
 
-  it('blocked, когда соперник стоит на пути хода (проезд «сквозь» запрещён)', () => {
+  it('is blocked when an opponent sits on the move path (driving "through" is not allowed)', () => {
     const g = classicGame();
     place(g.players[0], [10, 4], [2, 0]);
-    place(g.players[1], [11, 4]); // на отрезке (10,4)→(12,4)
+    place(g.players[1], [11, 4]); // on the segment (10,4)→(12,4)
     const inertial = candidates(g).find((c) => c.inertial)!;
     expect(inertial.target).toEqual({ x: 12, y: 4 });
     expect(inertial.blocked).toBe(true);
   });
 
-  it('соперник, отбывающий штраф (skipTurns>0), не блокирует', () => {
+  it('an opponent serving a penalty (skipTurns>0) does not block', () => {
     const g = classicGame();
     place(g.players[0], [10, 4], [2, 0]);
     place(g.players[1], [11, 4]);
@@ -79,57 +79,57 @@ describe('candidates', () => {
     expect(inertial.blocked).toBe(false);
   });
 
-  it('на старте (vel = 0) классика даёт квадрат 3×3 с диагоналями', () => {
+  it('at start (vel = 0) classic mode gives a 3×3 square with diagonals', () => {
     const g = classicGame();
     place(g.players[0], [10, 4], [0, 0]);
     const cs = candidates(g);
     expect(cs).toHaveLength(9);
-    // диагональ доступна
+    // diagonal move is available
     expect(cs.some((c) => c.target.x === 11 && c.target.y === 5)).toBe(true);
   });
 });
 
-describe('candidatesForSeat — веер не-ходящего места (предвыбор)', () => {
+describe('candidatesForSeat — fan-out for a non-active seat (pre-selection)', () => {
   const classicGame = () =>
     newGame(ringTrack(), 2, { ...DEFAULT_RULES, drive: { ...DRIVE_PRESETS.classic } });
 
-  it('считает от pos/vel указанного места, а не текущего', () => {
+  it("computes from the given seat's pos/vel, not the current one", () => {
     const g = classicGame();
-    place(g.players[0], [10, 4], [0, 0]); // current, но нас интересует место 1
+    place(g.players[0], [10, 4], [0, 0]); // current, but we care about seat 1
     place(g.players[1], [20, 6], [2, 1]);
     const cs = candidatesForSeat(g, 1);
     expect(cs).toHaveLength(9);
     const inertial = cs.filter((c) => c.inertial);
     expect(inertial).toHaveLength(1);
-    expect(inertial[0].target).toEqual({ x: 22, y: 7 }); // pos + vel места 1
+    expect(inertial[0].target).toEqual({ x: 22, y: 7 }); // pos + vel of seat 1
   });
 
-  it('blocked учитывает чужие позиции (текущего игрока на пути)', () => {
+  it("accounts for other seats' positions when checking blocked (current player on the path)", () => {
     const g = classicGame();
     place(g.players[1], [10, 4], [2, 0]);
-    place(g.players[0], [11, 4]); // соперник (текущий) на отрезке (10,4)→(12,4)
+    place(g.players[0], [11, 4]); // opponent (current player) on the segment (10,4)→(12,4)
     const inertial = candidatesForSeat(g, 1).find((c) => c.inertial)!;
     expect(inertial.target).toEqual({ x: 12, y: 4 });
     expect(inertial.blocked).toBe(true);
   });
 
-  it('candidates(state) эквивалентен candidatesForSeat(state, current)', () => {
+  it('candidates(state) is equivalent to candidatesForSeat(state, current)', () => {
     const g = classicGame();
     place(g.players[0], [10, 4], [1, -1]);
     expect(candidatesForSeat(g, g.current)).toEqual(candidates(g));
   });
 });
 
-describe('candidates — реалистичная физика (эллипс сцепления)', () => {
-  const D = DRIVE_PRESETS.sports; // downforce 0 → aero = 1, эллипс чисто механический
-  /** Игра с реалистичной управляемостью. */
+describe('candidates — realistic physics (traction ellipse)', () => {
+  const D = DRIVE_PRESETS.sports; // downforce 0 → aero = 1, purely mechanical ellipse
+  /** Game with realistic handling. */
   const realGame = () => newGame(ringTrack(), 2, { ...DEFAULT_RULES, drive: { ...D } });
-  /** Ускорение кандидата a = target − (pos + vel). */
+  /** Candidate acceleration a = target − (pos + vel). */
   const accelOf = (c: Candidate, p: Player) => ({
     x: c.target.x - p.pos.x - p.vel.x,
     y: c.target.y - p.pos.y - p.vel.y,
   });
-  /** Внутри ли ускорение a эллипса сцепления при скорости vel. */
+  /** Whether acceleration a lies inside the traction ellipse at velocity vel. */
   function inEllipse(
     a: { x: number; y: number },
     vel: { x: number; y: number },
@@ -142,7 +142,7 @@ describe('candidates — реалистичная физика (эллипс с�
     const cap = along >= 0 ? D.accel : D.brake;
     return (along / cap) ** 2 + (lat / D.grip) ** 2 <= 1 + 1e-9;
   }
-  /** Максимальный доворот (угол между старой и новой скоростью) среди кандидатов. */
+  /** Largest turn (angle between old and new velocity) among the candidates. */
   function maxTurn(g: ReturnType<typeof realGame>): number {
     const p = g.players[0];
     let max = 0;
@@ -156,7 +156,7 @@ describe('candidates — реалистичная физика (эллипс с�
     return max;
   }
 
-  it('цели целочисленны и внутри эллипса сцепления, ровно один инерционный', () => {
+  it('targets are integer-valued and inside the traction ellipse, exactly one inertial', () => {
     const g = realGame();
     place(g.players[0], [10, 4], [3, 0]);
     const p = g.players[0];
@@ -170,14 +170,14 @@ describe('candidates — реалистичная физика (эллипс с�
     }
   });
 
-  it('инерционный кандидат = точка наката pos + vel (a = 0)', () => {
+  it('the inertial candidate is the coast point pos + vel (a = 0)', () => {
     const g = realGame();
     place(g.players[0], [10, 4], [2, 1]);
     const inertial = candidates(g).find((c) => c.inertial)!;
     expect(inertial.target).toEqual({ x: 12, y: 5 });
   });
 
-  it('на старте (vel = 0) доступен диагональный ход — набор 3×3', () => {
+  it('at start (vel = 0) a diagonal move is available — the full 3×3 set', () => {
     const g = realGame();
     place(g.players[0], [10, 4], [0, 0]);
     const targets = candidates(g)
@@ -189,18 +189,18 @@ describe('candidates — реалистичная физика (эллипс с�
     expect(targets).toEqual(expected.sort());
   });
 
-  it('тормозит быстрее, чем разгоняется: назад дотягивается дальше вперёд', () => {
-    expect(D.accel).toBeLessThan(D.brake); // предпосылка асимметрии
+  it('brakes faster than it accelerates: reaches further backward than forward', () => {
+    expect(D.accel).toBeLessThan(D.brake); // premise of the asymmetry
     const g = realGame();
-    place(g.players[0], [10, 4], [3, 0]); // едет вправо, продольная ось = x
+    place(g.players[0], [10, 4], [3, 0]); // moving right, longitudinal axis = x
     const p = g.players[0];
-    const speeds = candidates(g).map((c) => c.target.x - p.pos.x); // новая скорость по ходу
+    const speeds = candidates(g).map((c) => c.target.x - p.pos.x); // new speed along direction of travel
     const base = p.vel.x;
-    expect(Math.max(...speeds) - base).toBe(D.accel); // вперёд — ровно потолок разгона
-    expect(base - Math.min(...speeds)).toBe(D.brake); // назад — ровно тормоза
+    expect(Math.max(...speeds) - base).toBe(D.accel); // forward — exactly the acceleration cap
+    expect(base - Math.min(...speeds)).toBe(D.brake); // backward — exactly the braking cap
   });
 
-  it('чем выше скорость, тем меньше максимальный доворот за ход', () => {
+  it('the higher the speed, the smaller the maximum turn per move', () => {
     const slow = realGame();
     place(slow.players[0], [10, 4], [2, 0]);
     const fast = realGame();
@@ -209,29 +209,29 @@ describe('candidates — реалистичная физика (эллипс с�
   });
 });
 
-describe('reachableTargets — аэродинамический прижим (downforce)', () => {
+describe('reachableTargets — aerodynamic downforce', () => {
   const pos = { x: 0, y: 0 };
   const noAero = { accel: 1, brake: 2, grip: 2, downforce: 0 };
   const withAero = { ...noAero, downforce: 1 };
   const keys = (vel: { x: number; y: number }, d: typeof noAero) =>
     reachableTargets(pos, vel, d).map((t) => `${t.x},${t.y}`);
 
-  it('на скорости прижим только расширяет область: старые узлы остаются, есть новые', () => {
-    const vel = { x: 4, y: 0 }; // референсная скорость: aero = 1 + 1·(4/4)² = 2
+  it('at speed, downforce only expands the reachable area: old nodes remain, new ones appear', () => {
+    const vel = { x: 4, y: 0 }; // reference speed: aero = 1 + 1·(4/4)² = 2
     const base = new Set(keys(vel, noAero));
     const boosted = new Set(keys(vel, withAero));
-    for (const k of base) expect(boosted.has(k)).toBe(true); // прижим только добавляет хват
-    expect(boosted.size).toBeGreaterThan(base.size); // строго шире
+    for (const k of base) expect(boosted.has(k)).toBe(true); // downforce only adds grip
+    expect(boosted.size).toBeGreaterThan(base.size); // strictly wider
   });
 
-  it('на нулевой скорости прижим ничего не меняет (aero = 1)', () => {
+  it('at zero speed, downforce changes nothing (aero = 1)', () => {
     const vel = { x: 0, y: 0 };
     expect(keys(vel, withAero).sort()).toEqual(keys(vel, noAero).sort());
   });
 });
 
-describe('applyMove — обычный ход', () => {
-  it('обновляет pos, vel и добавляет след; передаёт ход', () => {
+describe('applyMove — regular move', () => {
+  it('updates pos, vel, appends to the trail, and passes the turn', () => {
     const g = newGame(ringTrack(), 2);
     place(g.players[0], [10, 4], [1, 0]);
     applyMove(g, cand(11, 4));
@@ -243,16 +243,16 @@ describe('applyMove — обычный ход', () => {
     expect(g.current).toBe(1);
   });
 
-  it('blocked-кандидат — no-op', () => {
+  it('is a no-op for a blocked candidate', () => {
     const g = newGame(ringTrack(), 2);
     place(g.players[0], [10, 4]);
     const before = JSON.stringify(g.players[0]);
     applyMove(g, { ...cand(11, 4), blocked: true });
     expect(JSON.stringify(g.players[0])).toBe(before);
-    expect(g.current).toBe(0); // ход не ушёл
+    expect(g.current).toBe(0); // turn did not pass
   });
 
-  it('в фазе over — no-op', () => {
+  it('is a no-op in the over phase', () => {
     const g = newGame(ringTrack(), 2);
     g.phase = 'over';
     place(g.players[0], [10, 4]);
@@ -261,14 +261,14 @@ describe('applyMove — обычный ход', () => {
   });
 });
 
-describe('applyMove — авария', () => {
-  it('болид остаётся в гравии, скорость обнуляется, назначается штраф, но НЕ телепортируется на трассу', () => {
+describe('applyMove — crash', () => {
+  it('car stays in the gravel, speed resets to zero, a penalty is assigned, but it is NOT teleported back onto the track', () => {
     const g = newGame(ringTrack(), 2);
     place(g.players[0], [10, 1]);
-    applyMove(g, cand(10, -2)); // сквозь нижнюю стенку y=0; длина хода 3
+    applyMove(g, cand(10, -2)); // through the bottom wall y=0; move length 3
     const p = g.players[0];
     expect(p.pos.x).toBeCloseTo(10);
-    expect(p.pos.y).toBeLessThan(0); // застрял на кромке допуска, не на inside
+    expect(p.pos.y).toBeLessThan(0); // stuck at the edge of the tolerance band, not inside
     expect(p.pos.y).toBeGreaterThan(-1);
     expect(p.vel).toEqual({ x: 0, y: 0 });
     expect(p.crashes).toHaveLength(1);
@@ -277,15 +277,15 @@ describe('applyMove — авария', () => {
   });
 });
 
-describe('applyMove — пересечение финиша', () => {
-  it('ход через линию вперёд засчитывает +1', () => {
+describe('applyMove — crossing the finish line', () => {
+  it('a forward crossing of the line counts +1', () => {
     const g = newGame(ringTrack(), 2);
-    place(g.players[0], [5, 4]); // позади (x<6)
-    applyMove(g, cand(7, 4)); // за линию (x>6)
+    place(g.players[0], [5, 4]); // behind the line (x<6)
+    applyMove(g, cand(7, 4)); // past the line (x>6)
     expect(g.players[0].crossings).toBe(1);
   });
 
-  it('ход назад через линию засчитывает −1', () => {
+  it('a backward crossing of the line counts −1', () => {
     const g = newGame(ringTrack(), 2);
     place(g.players[0], [7, 4]);
     g.players[0].crossings = 1;
@@ -293,7 +293,7 @@ describe('applyMove — пересечение финиша', () => {
     expect(g.players[0].crossings).toBe(0);
   });
 
-  it('ход, не пересекающий линию, счётчик не меняет', () => {
+  it('a move that does not cross the line leaves the counter unchanged', () => {
     const g = newGame(ringTrack(), 2);
     place(g.players[0], [7, 4]);
     applyMove(g, cand(9, 4));
@@ -301,43 +301,43 @@ describe('applyMove — пересечение финиша', () => {
   });
 });
 
-describe('порядок ходов и отбытие штрафа', () => {
-  it('вылетевший болид возвращается на трассу ТОЛЬКО когда штраф отбыт до нуля', () => {
+describe('turn order and serving a penalty', () => {
+  it('a crashed car returns to the track ONLY once its penalty reaches zero', () => {
     const g = newGame(ringTrack(), 2);
     place(g.players[0], [10, 1]);
-    applyMove(g, cand(10, -2)); // p0 в гравии, skip=3, ход у соперника
+    applyMove(g, cand(10, -2)); // p0 in the gravel, skip=3, opponent to move
     const crashed = g.players[0];
     const gravel = { ...crashed.pos };
     expect(crashed.skipTurns).toBe(3);
     expect(g.current).toBe(1);
 
-    // Гоняем ходы: пока штраф не отбыт, ход всегда у не-вылетевшего игрока
-    // (пропуски p0 сгорают автоматически внутри afterAction). Инвариант: пока
-    // skip>0, вылетевший остаётся в гравии; на нуле — возвращается на трассу.
+    // Play out turns: while the penalty is unpaid, it's always the other player's
+    // turn (p0's skips burn down automatically inside afterAction). Invariant: while
+    // skip>0, the crashed car stays in the gravel; at zero, it returns to the track.
     let guard = 0;
     while (crashed.skipTurns > 0 && guard++ < 20) {
-      expect(g.current).not.toBe(0); // p0 отбывает — ходит соперник
+      expect(g.current).not.toBe(0); // p0 is serving its penalty — opponent moves
       place(g.players[g.current], [20, 4], [0, 0]);
       applyMove(g, cand(20, 4));
       if (crashed.skipTurns > 0) expect(crashed.pos).toEqual(gravel);
     }
     expect(crashed.skipTurns).toBe(0);
-    // после отбытия — на узле дороги (inside), с пунктирным «телепортом».
+    // once served — back on a track node (inside), with a dashed "teleport" jump.
     expect(g.track.inside.has(key(crashed.pos.x, crashed.pos.y))).toBe(true);
     expect(crashed.trail.some((s) => s.jump)).toBe(true);
   });
 });
 
-describe('честная очерёдность хода', () => {
-  it('стартовый игрок сдвигается каждый круг: А,Б,В → Б,В,А → В,А,Б', () => {
+describe('fair turn rotation', () => {
+  it('the starting player shifts each lap: A,B,C → B,C,A → C,A,B', () => {
     const order = (turn: number) => playerForTurn(turn, 3);
-    expect([0, 1, 2].map(order)).toEqual([0, 1, 2]); // круг 1
-    expect([3, 4, 5].map(order)).toEqual([1, 2, 0]); // круг 2
-    expect([6, 7, 8].map(order)).toEqual([2, 0, 1]); // круг 3
-    expect([9, 10, 11].map(order)).toEqual([0, 1, 2]); // цикл замкнулся
+    expect([0, 1, 2].map(order)).toEqual([0, 1, 2]); // lap 1
+    expect([3, 4, 5].map(order)).toEqual([1, 2, 0]); // lap 2
+    expect([6, 7, 8].map(order)).toEqual([2, 0, 1]); // lap 3
+    expect([9, 10, 11].map(order)).toEqual([0, 1, 2]); // cycle wraps back around
   });
 
-  it('каждый круг — перестановка всех игроков (никто не пропущен и не сходит дважды)', () => {
+  it('every lap is a permutation of all players (no one skipped or moved twice)', () => {
     for (let n = 2; n <= 6; n++) {
       for (let round = 0; round < 4; round++) {
         const seats = Array.from({ length: n }, (_, s) =>
@@ -350,35 +350,35 @@ describe('честная очерёдность хода', () => {
     }
   });
 
-  it('реальные ходы в игре идут по ротации (3 игрока, два круга)', () => {
+  it('actual in-game moves follow the rotation (3 players, two laps)', () => {
     const g = newGame(ringTrack(), 3);
-    // Разводим болиды по разным клеткам нижнего коридора (y∈1..7), чтобы ходы
-    // не блокировали друг друга.
+    // Spread the cars across different cells of the bottom corridor (y∈1..7) so
+    // their moves don't block each other.
     g.players.forEach((p, i) => place(p, [20, 2 + i * 2], [0, 0]));
     const seen: number[] = [];
     for (let k = 0; k < 6; k++) {
       seen.push(g.current);
       const cur = g.players[g.current];
-      place(cur, [10 + k, 3], [0, 0]); // уникальная свободная клетка на этот ход
+      place(cur, [10 + k, 3], [0, 0]); // a unique free cell for this move
       applyMove(g, cand(10 + k, 3));
     }
     expect(seen).toEqual([0, 1, 2, 1, 2, 0]);
   });
 
-  it('первый круг ходит по стартовой решётке (поул раньше второго ряда)', () => {
-    // startOrder — seat → позиция решётки: seat 0 на позиции 2 (сзади), seat 1 на
-    // поуле, seat 2 в середине. Ход первого круга должен идти спереди назад: 1,2,0.
+  it('the first lap follows the starting grid (pole moves before the second row)', () => {
+    // startOrder — seat → grid position: seat 0 is in position 2 (back), seat 1 is on
+    // pole, seat 2 is in the middle. The first lap should move front to back: 1,2,0.
     const g = newGame(ringTrack(), 3, DEFAULT_RULES, [2, 0, 1]);
-    // Первым ходит стоящий на поуле (startPoints[0]), а не seat 0.
+    // The pole sitter (startPoints[0]) moves first, not seat 0.
     expect(g.current).toBe(1);
     expect(g.players[g.current].pos).toEqual(g.track.startPoints[0]);
-    // Круг 1 — по решётке (1,2,0); круг 2 — прежний сдвиг относительно решётки.
+    // Lap 1 follows the grid (1,2,0); lap 2 keeps the usual offset relative to the grid.
     expect(upcomingTurns(g, 6)).toEqual([1, 2, 0, 2, 0, 1]);
   });
 
-  it('решётка сохраняет ротацию 0,1,1,0 для двоих (a,b,b,a)', () => {
-    // Поул у seat 1 (startOrder меняет местами двоих) → последовательность 1,0,0,1:
-    // та же структура «блокирующего преимущества», просто относительно решётки.
+  it('the grid preserves the 0,1,1,0 rotation for two players (a,b,b,a)', () => {
+    // Pole goes to seat 1 (startOrder swaps the two) → sequence 1,0,0,1:
+    // the same "blocking advantage" structure, just relative to the grid.
     const g = newGame(ringTrack(), 2, DEFAULT_RULES, [1, 0]);
     expect(g.current).toBe(1);
     expect(g.players[g.current].pos).toEqual(g.track.startPoints[0]);
@@ -386,45 +386,45 @@ describe('честная очерёдность хода', () => {
   });
 });
 
-describe('upcomingTurns — очередь ближайших ходов', () => {
-  it('первый элемент — текущий игрок; порядок следует ротации', () => {
+describe('upcomingTurns — queue of upcoming moves', () => {
+  it('the first element is the current player; order follows the rotation', () => {
     const g = newGame(ringTrack(), 3);
-    expect(upcomingTurns(g, 6)).toEqual([0, 1, 2, 1, 2, 0]); // как реальные ходы
+    expect(upcomingTurns(g, 6)).toEqual([0, 1, 2, 1, 2, 0]); // matches actual moves
   });
 
-  it('смотрит вперёд от текущего слота (turn != 0)', () => {
+  it('looks ahead from the current slot (turn != 0)', () => {
     const g = newGame(ringTrack(), 3);
     g.turn = 4;
-    g.current = playerForTurn(4, 3); // держим инвариант current == playerForTurn(turn)
-    expect(upcomingTurns(g, 4)).toEqual([2, 0, 2, 0]); // слоты 4,5,6,7 = 2,0,2,0
+    g.current = playerForTurn(4, 3); // keep the invariant current == playerForTurn(turn)
+    expect(upcomingTurns(g, 4)).toEqual([2, 0, 2, 0]); // slots 4,5,6,7 = 2,0,2,0
   });
 
-  it('игрок в боксах (skipTurns) не появляется, пока не отбудет штраф', () => {
+  it('a player in the pits (skipTurns) does not appear until the penalty is served', () => {
     const g = newGame(ringTrack(), 3);
-    g.players[1].skipTurns = 2; // Синий отбывает два хода
-    // Слоты rotate: 0,1,2,0(круг2 сдвиг:1,2,0)… Синий (1) в слотах 1 и 3 сгорают.
+    g.players[1].skipTurns = 2; // Blue is serving a two-move penalty
+    // Slots rotate: 0,1,2,0(lap2 offset:1,2,0)… Blue (1) burns off slots 1 and 3.
     const q = upcomingTurns(g, 5);
     expect(q[0]).toBe(0);
-    expect(q).not.toContain(1); // за первые пять реальных ходов Синий ещё в гравии/только вышел
-    // после отбытия штрафа Синий возвращается в очередь
+    expect(q).not.toContain(1); // across the first five real moves Blue is still in the gravel/just returned
+    // once the penalty is served, Blue reappears in the queue
     expect(upcomingTurns(g, 8)).toContain(1);
   });
 
-  it('решающий круг: очередь не длиннее оставшихся слотов (finalTurnsLeft)', () => {
+  it('final lap: the queue is never longer than the slots remaining (finalTurnsLeft)', () => {
     const g = newGame(ringTrack(), 3);
     g.finalTurnsLeft = 2;
     expect(upcomingTurns(g, 9)).toHaveLength(2);
   });
 
-  it('решающий круг: слот игрока в боксах тратит остаток и укорачивает очередь', () => {
+  it("final lap: a pitted player's slot consumes the remainder and shortens the queue", () => {
     const g = newGame(ringTrack(), 3);
     g.finalTurnsLeft = 2;
-    g.players[1].skipTurns = 1; // Синий (слот 1) отбывает штраф — его слот сгорает
-    // Слоты 0,1: слот0 → Красный ходит (остаётся 1), слот1 → Синий пропуск (остаётся 0).
+    g.players[1].skipTurns = 1; // Blue (slot 1) is serving a penalty — its slot burns off
+    // Slots 0,1: slot0 → Red moves (1 left), slot1 → Blue skips (0 left).
     expect(upcomingTurns(g, 9)).toEqual([0]);
   });
 
-  it('детерминирован: не мутирует стейт', () => {
+  it('is deterministic: does not mutate state', () => {
     const g = newGame(ringTrack(), 3);
     g.players[1].skipTurns = 2;
     const before = JSON.stringify(g);
@@ -433,115 +433,115 @@ describe('upcomingTurns — очередь ближайших ходов', () =>
   });
 });
 
-describe('многораундовый финиш, места и сдача', () => {
-  it('первый финишировавший получает место 1 и звание победителя, но гонка продолжается', () => {
+describe('multi-round finish, placements, and retiring', () => {
+  it('the first to finish gets place 1 and is named winner, but the race continues', () => {
     const g = newGame(ringTrack(), 2);
     place(g.players[0], [5, 4]);
-    g.players[0].crossings = WIN_CROSSINGS - 1; // финиширует этим ходом
+    g.players[0].crossings = WIN_CROSSINGS - 1; // finishes on this move
     applyMove(g, cand(7, 4)); // crossings → WIN, overshoot = 1
     expect(g.players[0].crossings).toBe(WIN_CROSSINGS);
-    expect(g.finalTurnsLeft).toBe(1); // раунд открыт: остался ход второго
+    expect(g.finalTurnsLeft).toBe(1); // round is open: the second player still has a move
     expect(g.phase).toBe('race');
 
     place(g.players[1], [10, 4]);
-    applyMove(g, cand(13, 4)); // p1 не финишировал — раунд разрешается
+    applyMove(g, cand(13, 4)); // p1 didn't finish — the round resolves
     expect(g.players[0].place).toBe(1);
     expect(g.winner).toBe(0);
     expect(g.players[1].place).toBeNull();
-    expect(g.phase).toBe('race'); // гонка идёт, пока p1 не финиширует/сдастся
+    expect(g.phase).toBe('race'); // race continues until p1 finishes or retires
   });
 
-  it('места в одном раунде — по глубине заезда, а не по очереди хода', () => {
+  it('placements within a round go by overshoot depth, not move order', () => {
     const g = newGame(ringTrack(), 2);
     place(g.players[0], [5, 4]);
     g.players[0].crossings = WIN_CROSSINGS - 1;
-    applyMove(g, cand(7, 4)); // p0 ходит первым, overshoot 1
+    applyMove(g, cand(7, 4)); // p0 moves first, overshoot 1
     place(g.players[1], [5, 4]);
     g.players[1].crossings = WIN_CROSSINGS - 1;
-    applyMove(g, cand(9, 4)); // p1 заехал глубже, overshoot 3
+    applyMove(g, cand(9, 4)); // p1 overshoots deeper, overshoot 3
     expect(g.phase).toBe('over');
-    expect(g.players[1].place).toBe(1); // глубже за линию → выше место
+    expect(g.players[1].place).toBe(1); // deeper past the line → better place
     expect(g.players[0].place).toBe(2);
     expect(g.winner).toBe(1);
   });
 
-  it('равный заезд в раунде делит место (1224): два вторых → следующий четвёртый', () => {
+  it('a tied overshoot within a round splits the place (1224): two seconds → next is fourth', () => {
     const g = newGame(ringTrack(), 4);
     [0, 1, 2, 3].forEach((i) => {
       place(g.players[i], [5, 4]);
       g.players[i].crossings = WIN_CROSSINGS - 1;
     });
-    applyMove(g, cand(11, 4)); // p0 overshoot 5 → место 1
+    applyMove(g, cand(11, 4)); // p0 overshoot 5 → place 1
     applyMove(g, cand(9, 4)); // p1 overshoot 3
-    applyMove(g, cand(9, 4)); // p2 overshoot 3 (равно p1)
+    applyMove(g, cand(9, 4)); // p2 overshoot 3 (ties p1)
     applyMove(g, cand(7, 4)); // p3 overshoot 1
     expect(g.phase).toBe('over');
     expect(g.players.map((p) => p.place)).toEqual([1, 2, 2, 4]);
     expect(g.winner).toBe(0);
   });
 
-  it('делёж 1-го места в раунде → winner draw', () => {
+  it('a tie for 1st place within a round → winner draw', () => {
     const g = newGame(ringTrack(), 2);
     [0, 1].forEach((i) => {
       place(g.players[i], [5, 4]);
       g.players[i].crossings = WIN_CROSSINGS - 1;
     });
     applyMove(g, cand(7, 4)); // p0 overshoot 1
-    applyMove(g, cand(7, 4)); // p1 overshoot 1 — равны
+    applyMove(g, cand(7, 4)); // p1 overshoot 1 — tied
     expect(g.phase).toBe('over');
     expect(g.players[0].place).toBe(1);
     expect(g.players[1].place).toBe(1);
     expect(g.winner).toBe('draw');
   });
 
-  it('сдача: игрок выбывает, ход уходит дальше, в очереди не появляется', () => {
+  it('retiring: the player drops out, the turn passes on, and it no longer appears in the queue', () => {
     const g = newGame(ringTrack(), 3);
     expect(g.current).toBe(0);
     retireSeat(g, g.current);
     expect(g.players[0].retired).toBe(true);
     expect(g.players[0].place).toBeNull();
     expect(g.phase).toBe('race');
-    expect(g.current).not.toBe(0); // ход перешёл дальше
+    expect(g.current).not.toBe(0); // turn moved on
     expect(upcomingTurns(g, 6)).not.toContain(0);
   });
 
-  it('сдача не своего болида (в любой момент) не двигает очередь, но убирает его', () => {
+  it('retiring a car that is not currently moving (at any point) does not shift the turn, but removes it', () => {
     const g = newGame(ringTrack(), 3);
     expect(g.current).toBe(0);
-    retireSeat(g, 2); // сдаётся не ходящий сейчас игрок
+    retireSeat(g, 2); // a non-active player retires
     expect(g.players[2].retired).toBe(true);
-    expect(g.current).toBe(0); // ход остался у текущего
+    expect(g.current).toBe(0); // turn stays with the current player
     expect(g.phase).toBe('race');
     expect(upcomingTurns(g, 6)).not.toContain(2);
   });
 
-  it('все сдались → гонка окончена без победителя', () => {
+  it('everyone retiring → race ends with no winner', () => {
     const g = newGame(ringTrack(), 2);
     retireSeat(g, g.current); // p0
-    retireSeat(g, g.current); // p1 — активных не осталось
+    retireSeat(g, g.current); // p1 — no active players left
     expect(g.phase).toBe('over');
     expect(g.winner).toBeNull();
   });
 
-  it('после чужого финиша оставшийся может сдаться — гонка завершается, победитель сохранён', () => {
+  it('after another player finishes, the remaining one can retire — race ends, winner is preserved', () => {
     const g = newGame(ringTrack(), 2);
     place(g.players[0], [5, 4]);
     g.players[0].crossings = WIN_CROSSINGS - 1;
-    applyMove(g, cand(7, 4)); // p0 финиширует, раунд открыт
+    applyMove(g, cand(7, 4)); // p0 finishes, round is open
     place(g.players[1], [10, 4]);
-    applyMove(g, cand(13, 4)); // p1 без финиша → p0 место 1, winner 0, гонка идёт
+    applyMove(g, cand(13, 4)); // p1 without finishing → p0 place 1, winner 0, race continues
     expect(g.winner).toBe(0);
     expect(g.phase).toBe('race');
-    expect(g.current).toBe(1); // p0 выбыл — ход у p1
-    retireSeat(g, g.current); // p1 сдаётся — активных не осталось
+    expect(g.current).toBe(1); // p0 is out — p1's turn
+    retireSeat(g, g.current); // p1 retires — no active players left
     expect(g.phase).toBe('over');
     expect(g.players[1].retired).toBe(true);
-    expect(g.winner).toBe(0); // победитель не переопределяется
+    expect(g.winner).toBe(0); // winner is not overwritten
   });
 });
 
 describe('coastMove', () => {
-  it('стоящий болид (vel 0) просто пасует, без вырожденного следа', () => {
+  it('a stationary car (vel 0) simply passes, with no degenerate trail entry', () => {
     const g = newGame(ringTrack(), 2);
     place(g.players[0], [10, 4], [0, 0]);
     coastMove(g);
@@ -549,24 +549,24 @@ describe('coastMove', () => {
     expect(g.current).toBe(1);
   });
 
-  it('едущий болид продолжает по инерции (pos += vel)', () => {
+  it('a moving car coasts on by inertia (pos += vel)', () => {
     const g = newGame(ringTrack(), 2);
     place(g.players[0], [10, 4], [2, 0]);
     coastMove(g);
     expect(g.players[0].pos).toEqual({ x: 12, y: 4 });
   });
 
-  it('инерционная клетка занята → скорость обнуляется, ход уходит', () => {
+  it('when the inertial cell is occupied, speed resets to zero and the turn passes', () => {
     const g = newGame(ringTrack(), 2);
     place(g.players[0], [10, 4], [2, 0]);
-    place(g.players[1], [12, 4]); // инерционная цель занята
+    place(g.players[1], [12, 4]); // inertial target is occupied
     coastMove(g);
-    expect(g.players[0].pos).toEqual({ x: 10, y: 4 }); // остался на месте
+    expect(g.players[0].pos).toEqual({ x: 10, y: 4 }); // stayed in place
     expect(g.players[0].vel).toEqual({ x: 0, y: 0 });
     expect(g.current).toBe(1);
   });
 
-  it('детерминирован: две копии одного стейта дают идентичный результат', () => {
+  it('is deterministic: two copies of the same state give identical results', () => {
     const base = newGame(ringTrack(), 2);
     place(base.players[0], [10, 4], [1, 1]);
     const a = cloneState(base);

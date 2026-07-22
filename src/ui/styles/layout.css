@@ -1,4 +1,4 @@
-/* Корневая раскладка: холст слева, панель справа. */
+/* Root layout: canvas on the left, panel on the right. */
 .app {
   display: flex;
   height: 100%;
@@ -9,23 +9,24 @@
 }
 
 .app__board {
-  position: relative; /* якорь для плавающей кнопки подтверждения хода */
+  position: relative; /* anchor for the floating move-confirm button */
   flex: 1;
   min-width: 0;
   background: var(--paper);
-  /* Гасим системные жесты (зум/скролл) не только на canvas, но и в letterbox
-     вокруг него и на оверлейных детях — иначе тач у края поля уводит в зум. */
+  /* Suppress system gestures (zoom/scroll) not just on the canvas but also in the
+     letterbox around it and on overlay children — otherwise a touch near the board
+     edge triggers a browser zoom. */
   touch-action: none;
 }
 
-/* Узкие экраны (телефон в портрете): поле сверху, панель под ним. */
+/* Narrow screens (phone in portrait): board on top, panel below it. */
 @media (max-width: 700px) {
   .app {
     flex-direction: column;
   }
 
   .app__board {
-    /* Поле забирает всё свободное место; число клеток адаптивно (см. main.ts). */
+    /* The board takes all available space; the cell count is adaptive (see main.ts). */
     flex: 1;
     width: 100%;
     min-height: 0;

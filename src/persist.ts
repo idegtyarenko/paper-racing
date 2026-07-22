@@ -1,7 +1,7 @@
-// Сохранение локального стейта игры в localStorage, чтобы перезагрузка страницы
-// (swipe-to-reload, кнопка/жест «назад», сворачивание вкладки на телефоне) не
-// сбрасывала игру к первому экрану рисования трассы. Онлайн сюда не попадает —
-// его сессия живёт на сервере и восстанавливается своим путём.
+// Saves local game state to localStorage so that a page reload (swipe-to-
+// reload, a "back" button/gesture, backgrounding the tab on a phone) doesn't
+// reset the game to the initial track-drawing screen. Online play doesn't go
+// through this — its session lives on the server and is restored its own way.
 
 import { AppState, Phase, LastLocalRace } from './app-state';
 import { EditorState, EditorStep } from './model/editor';
@@ -19,13 +19,14 @@ import {
 } from './online/net';
 
 const KEY = 'pr-local-state';
-// v3: бот-ность мест переехала в стейт (Player.bot) — отдельного поля `ai` больше
-// нет, а lastLocalRace хранит состав (люди+боты+сложность). Старые снимки (v2 с
-// сайд-каналом ai / прежним lastLocalRace) несовместимы — их отбрасываем.
+// v3: which seats are bots moved into the state itself (Player.bot) — there's
+// no separate `ai` field anymore, and lastLocalRace holds the lineup
+// (humans+bots+difficulty). Older snapshots (v2, with a side-channel `ai` /
+// the old lastLocalRace shape) are incompatible — we discard them.
 const VERSION = 3;
 
-/** Живой снимок локального состояния приложения (то, что держит main.ts). Бот-места
- *  едут внутри game.players (Player.bot) — отдельного поля под ботов нет. */
+/** A live snapshot of local app state (what main.ts holds). Bot seats travel
+ *  inside game.players (Player.bot) — there's no separate field for bots. */
 export interface LocalSnapshot {
   phase: Phase;
   editor: EditorState;
@@ -36,7 +37,8 @@ export interface LocalSnapshot {
   lastLocalRace: LastLocalRace | null;
 }
 
-/** JSON-форма снимка: трассы с Set `inside` разворачиваются в массивы. */
+/** The JSON shape of a snapshot: tracks with a `inside` Set are flattened
+ *  into arrays. */
 interface Stored {
   v: number;
   phase: Phase;
@@ -48,9 +50,9 @@ interface Stored {
   lastLocalRace: LastLocalRace | null;
 }
 
-/** Записать снимок. Принимает всё состояние приложения, но сохраняет лишь
- *  персистентное подмножество (cands/pending/raceNav — производные, не пишем).
- *  Ошибку записи (квота/приватный режим) молча глотаем. */
+/** Write a snapshot. Takes the whole app state but only persists the
+ *  persistent subset (cands/pending/raceNav are derived and not written).
+ *  Write errors (quota exceeded / private browsing) are silently swallowed. */
 export function save(snap: AppState): void {
   try {
     const stored: Stored = {
@@ -67,20 +69,23 @@ export function save(snap: AppState): void {
     };
     localStorage.setItem(KEY, JSON.stringify(stored));
   } catch {
-    // localStorage недоступен или переполнен — просто не сохраняем.
+    // localStorage unavailable or full — just skip saving.
   }
 }
 
-/** Проверка формы прочитанного из localStorage снимка: раньше `JSON.parse(raw) as
- *  Stored` верил на слово. Убеждаемся в каркасе (версия/режим/редактор/правила + форма
- *  трасс и стейта) прежде, чем идти в deserialize — иначе битая/чужая строка втекала
- *  бы в стейт «белым экраном». Форма, не миграция; нормализацию делает deserialize. */
+/** Shape-check a snapshot read from localStorage: it used to be that
+ *  `JSON.parse(raw) as Stored` just took the cast on faith. We verify the
+ *  skeleton (version/phase/editor/rules plus the shape of tracks and state)
+ *  before handing off to deserialize — otherwise a corrupted or foreign
+ *  string would flow into state and produce a white screen. This is a shape
+ *  check, not a migration; normalization is deserialize's job. */
 function isStored(v: unknown): v is Stored {
   if (typeof v !== 'object' || v === null) return false;
   const s = v as Record<string, unknown>;
   if (typeof s.v !== 'number') return false;
-  // Поле экрана переименовано mode→phase в том же v3 — старые снимки читаем по
-  // legacy-ключу `mode`, чтобы не сбрасывать идущую гонку при обновлении.
+  // The screen field was renamed mode→phase within v3 itself — we read older
+  // snapshots via the legacy `mode` key so an in-progress race doesn't get
+  // reset on update.
   if (typeof (s.phase ?? s.mode) !== 'string') return false;
   if (typeof s.editor !== 'object' || s.editor === null) return false;
   if (typeof s.rules !== 'object' || s.rules === null) return false;
@@ -93,16 +98,16 @@ function isStored(v: unknown): v is Stored {
   return true;
 }
 
-/** Стереть сохранённый снимок (выход в онлайн / повреждённые данные). */
+/** Erase the saved snapshot (going into online play / corrupted data). */
 export function clear(): void {
   try {
     localStorage.removeItem(KEY);
   } catch {
-    // недоступен — ничего страшного.
+    // unavailable — no big deal.
   }
 }
 
-/** Прочитать и восстановить снимок; null — если его нет или он несовместим. */
+/** Read and restore a snapshot; null if there isn't one or it's incompatible. */
 export function load(): LocalSnapshot | null {
   let raw: string | null;
   try {
@@ -116,13 +121,15 @@ export function load(): LocalSnapshot | null {
     if (!isStored(parsed)) return null;
     const s = parsed;
     if (s.v !== VERSION) return null;
-    // Экран: новый ключ `phase`, с откатом на legacy `mode` из старых v3-снимков.
+    // Screen: the new `phase` key, falling back to the legacy `mode` from
+    // older v3 snapshots.
     const phase = (s.phase ??
       (parsed as unknown as Record<string, unknown>).mode) as Phase;
-    // Онлайн-лобби локально не восстанавливается — снимок такого режима игнорируем.
+    // An online lobby isn't restored locally — ignore a snapshot in that mode.
     if (phase === 'lobby') return null;
-    // Доигранную гонку не восстанавливаем: возвращаться на экран победителя незачем,
-    // после перезагрузки честнее начать с чистого редактора (снимок игнорируем).
+    // Don't restore a finished race: there's no point returning to the
+    // winner screen, and after a reload it's more honest to start from a
+    // clean editor (so we ignore the snapshot).
     if (s.game?.state.phase === 'over') return null;
     const editor = sanitizeEditor(s.editor);
     const raceTrack = s.raceTrack ? deserializeTrack(s.raceTrack) : null;
@@ -144,12 +151,13 @@ export function load(): LocalSnapshot | null {
 }
 
 /**
- * Сбросить незавершённый жест редактора: снимок мог быть сделан прямо во время
- * рисования штриха или перетаскивания кромки (сворачивание вкладки посреди
- * жеста), а pointerUp после перезагрузки уже не придёт.
+ * Reset an in-progress editor gesture: the snapshot might have been taken
+ * mid-stroke or mid-edge-drag (the tab was backgrounded in the middle of a
+ * gesture), and pointerUp will never arrive after a reload.
  */
 function sanitizeEditor(e: EditorState): EditorState {
-  // Шаг мастера переименован phase→step — старые снимки читаем по legacy-ключу.
+  // The wizard step was renamed phase→step — we read older snapshots via the
+  // legacy key.
   const rec = e as unknown as Record<string, unknown>;
   const step = (rec.step ?? rec.phase) as EditorStep;
   return {

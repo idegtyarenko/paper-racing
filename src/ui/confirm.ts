@@ -1,6 +1,6 @@
-// Универсальный диалог подтверждения действия (например, сдачи). Владеет своим
-// DOM: строит шторку .sheet и монтирует её в #overlay при первом вызове —
-// разметки в index.html для неё нет (не растим index.html, см. роадмап).
+// Generic confirmation dialog (e.g. for retiring from a race). Owns its own
+// DOM: builds a .sheet and mounts it into #overlay on first call — there's no
+// markup for it in index.html (we keep index.html lean, see roadmap).
 
 import { bindTap, openSheet, closeOverlay } from './dom';
 import { strings } from '../i18n';
@@ -10,7 +10,7 @@ let titleEl: HTMLElement;
 let yesBtn: HTMLButtonElement;
 let onYes: () => void = () => {};
 
-/** Собрать шторку подтверждения и смонтировать её в оверлей (однократно). */
+/** Build the confirmation sheet and mount it into the overlay (once). */
 function build(): HTMLElement {
   const overlay = document.getElementById('overlay')!;
   const s = document.createElement('div');
@@ -39,9 +39,10 @@ function build(): HTMLElement {
   return s;
 }
 
-/** Открыть диалог: заголовок, подпись подтверждающей кнопки и колбэк на «да».
- *  По умолчанию кнопка «да» опасная (красная) — для деструктивных действий вроде
- *  сдачи; для позитивных (например «Вернуться в игру») передать danger:false. */
+/** Open the dialog: title, confirm-button label, and the "yes" callback.
+ *  The confirm button defaults to the dangerous (red) style, for destructive
+ *  actions like retiring; pass danger:false for positive actions (e.g.
+ *  "Back to the race"). */
 export function openConfirm(
   title: string,
   confirmLabel: string,

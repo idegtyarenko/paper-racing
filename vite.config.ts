@@ -3,8 +3,8 @@ import { execSync } from 'node:child_process';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-// Короткий SHA текущего коммита — метка сборки. Работает и локально, и в CI
-// (checkout даёт HEAD); фолбэк на GITHUB_SHA/'dev' для окружений без git.
+// Short SHA of the current commit — used as the build label. Works both locally
+// and in CI (checkout gives HEAD); falls back to GITHUB_SHA/'dev' where git isn't available.
 const commit = (() => {
   try {
     return execSync('git rev-parse --short HEAD').toString().trim();
@@ -15,32 +15,32 @@ const commit = (() => {
 
 export default defineConfig({
   base: '/paper-racing/',
-  // Метка сборки для индикатора версии в попапе «Правила».
+  // Build label for the version indicator in the "Rules" popup.
   define: {
     __COMMIT__: JSON.stringify(commit),
     __BUILD_TIME__: JSON.stringify(Date.now()),
   },
-  // Юнит-тесты покрывают только чистое детерминированное ядро (model, geometry).
+  // Unit tests cover only the pure, deterministic core (model, geometry).
   test: {
     include: ['src/**/*.test.ts', 'scripts/**/*.test.mjs'],
     environment: 'node',
   },
   plugins: [
     VitePWA({
-      // prompt (а не autoUpdate): SW НЕ делает self.skipWaiting() на install —
-      // на iOS-standalone он всё равно не вытесняет активный воркер при открытом
-      // приложении (новая версия зависает в waiting, controllerchange не стреляет).
-      // Вместо этого сам клиент шлёт SKIP_WAITING в удобный момент (см. src/pwa.ts).
+      // prompt (not autoUpdate): the SW does NOT call self.skipWaiting() on install —
+      // on iOS standalone it still won't replace the active worker while the app is
+      // open (the new version gets stuck in waiting, controllerchange never fires).
+      // Instead the client itself sends SKIP_WAITING at a convenient moment (see src/pwa.ts).
       registerType: 'prompt',
-      // Регистрируем SW сами в src/pwa.ts (registerSW из virtual:pwa-register),
-      // чтобы не было двойной регистрации.
+      // We register the SW ourselves in src/pwa.ts (registerSW from virtual:pwa-register),
+      // to avoid a double registration.
       injectRegister: false,
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Paper Racing',
         short_name: 'Paper Racing',
-        // Манифест — один артефакт на сборку (рантаймом не варьируется), поэтому на
-        // языке по умолчанию (английский). Язык самого UI выбирается на старте.
+        // The manifest is one artifact per build (it doesn't vary at runtime), so it
+        // stays in the default language (English). The UI's own language is chosen at startup.
         description: 'A pen-and-paper racing game: draw a track and outrace your rivals.',
         lang: 'en',
         dir: 'ltr',
@@ -59,7 +59,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        // Не перехватывать будущие same-origin API-роуты (мультиплеер).
+        // Don't intercept future same-origin API routes (multiplayer).
         navigateFallbackDenylist: [/^\/api/],
       },
     }),

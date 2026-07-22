@@ -1,4 +1,4 @@
-/* Агрегатор стилей: порядок от базовых к компонентам. */
+/* Style aggregator: ordered from base styles to components. */
 @import './base.css';
 @import './layout.css';
 @import './panel.css';

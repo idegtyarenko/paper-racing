@@ -1,8 +1,9 @@
-// Вьюпорт: мутабельное состояние камеры и политика кадрирования поверх чистого
-// camera.ts. Знает, КАК вписать/ограничить/подвинуть камеру по заданным границам
-// содержимого; ЧТО сейчас на экране (границы) сообщает вызывающий через
-// boundsProvider. DOM здесь только canvas/обёртка (размер + rect), рендера нет.
-// Ровно один вьюпорт на приложение (модуль-синглтон).
+// Viewport: mutable camera state and framing policy layered on top of the
+// pure camera.ts. Knows HOW to fit/clamp/move the camera given content
+// bounds; WHAT is currently on screen (the bounds) is supplied by the caller
+// via boundsProvider. The only DOM it touches is the canvas/wrapper (size +
+// rect) — no rendering happens here. Exactly one viewport per app instance
+// (module-level singleton).
 
 import { Vec } from '../geometry';
 import { WORLD_SIZE, SCALE_DEFAULT, FIT_MARGIN } from '../config';
@@ -17,13 +18,13 @@ import {
 
 let canvas: HTMLCanvasElement;
 let wrap: Element;
-/** Границы текущего содержимого в мировых координатах (или null — пустое поле). */
+/** Bounds of the current content in world coordinates (or null for an empty field). */
 let boundsProvider: () => Bounds | null = () => null;
 
-/** Камера: единый переход мир↔экран. Инициализируется в resize() до первого кадра. */
+/** Camera: the single world↔screen transform. Initialized in resize() before the first frame. */
 let cam: Camera = { scale: SCALE_DEFAULT, ox: 0, oy: 0 };
-/** Пользователь вручную зумил/панорамировал: при ресайзе сохраняем его вид,
- *  а не пере-вписываем трассу. Сбрасывается при каждом авто-вписывании. */
+/** User manually zoomed/panned: on resize we preserve their view instead of
+ *  re-fitting the track. Reset on every auto-fit. */
 let userAdjustedView = false;
 
 export function initViewport(
@@ -36,12 +37,12 @@ export function initViewport(
   boundsProvider = bounds;
 }
 
-/** Текущая камера (для redraw()/render и worldToScreen). */
+/** Current camera (for redraw()/render and worldToScreen). */
 export function camera(): Camera {
   return cam;
 }
 
-/** Размер клетки на экране, css-px (для touchTol()/loupeActive()). */
+/** On-screen cell size, css px (for touchTol()/loupeActive()). */
 export function scale(): number {
   return cam.scale;
 }
@@ -51,7 +52,7 @@ export function viewSize(): { w: number; h: number } {
   return { w: r.width, h: r.height };
 }
 
-/** Стартовый вид пустого поля: центр мира в центре вьюпорта. */
+/** Starting view for an empty field: the world's center in the viewport's center. */
 function defaultCamera(w: number, h: number): Camera {
   const c = WORLD_SIZE / 2;
   return {
@@ -61,7 +62,7 @@ function defaultCamera(w: number, h: number): Camera {
   };
 }
 
-/** Вписать содержимое по центру (или дефолтный вид, если содержимого нет). */
+/** Fit the content centered (or the default view, if there's no content). */
 export function fitToContent(): void {
   const { w, h } = viewSize();
   const bb = boundsProvider();
@@ -69,7 +70,7 @@ export function fitToContent(): void {
   userAdjustedView = false;
 }
 
-/** Ограничить пан, чтобы трасса не уезжала полностью из вида. */
+/** Clamp panning so the track never fully drifts out of view. */
 export function clamp(): void {
   const bb = boundsProvider();
   if (!bb) return;
@@ -85,15 +86,15 @@ export function toScreen(e: PointerEvent): Vec {
 export function toWorld(e: PointerEvent, liftPx = 0): Vec {
   const p = toScreen(e);
   const w = screenToWorld(cam, { x: p.x, y: p.y - liftPx });
-  // Клампим в границы (квадратного) мира — он key-безопасен и достаточно велик,
-  // чтобы при масштабе по умолчанию ощущаться бесконечным при рисовании.
+  // Clamp to the bounds of the (square) world — it's safely large enough
+  // that at the default scale it feels infinite while drawing.
   return {
     x: Math.max(0, Math.min(WORLD_SIZE, w.x)),
     y: Math.max(0, Math.min(WORLD_SIZE, w.y)),
   };
 }
 
-/** Пересчитать размер canvas и кадр под текущий размер вьюпорта (без redraw). */
+/** Recompute the canvas size and framing for the current viewport size (no redraw). */
 export function resize(): void {
   const r = wrap.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
@@ -101,23 +102,23 @@ export function resize(): void {
   canvas.height = Math.max(1, Math.round(r.height * dpr));
   canvas.style.width = `${r.width}px`;
   canvas.style.height = `${r.height}px`;
-  // Кадр берём из содержимого: пустое поле — дефолтный вид; трасса — вписываем
-  // по центру. Если пользователь сам зумил/панорамировал — сохраняем его масштаб,
-  // лишь переклампив смещение под новый размер.
+  // Framing follows the content: an empty field gets the default view; a
+  // track gets fit centered. If the user has manually zoomed/panned, we keep
+  // their scale and just re-clamp the offset for the new size.
   const bb = boundsProvider();
   if (!bb) cam = defaultCamera(r.width, r.height);
   else if (userAdjustedView) cam = clampToBounds(cam, bb, r.width, r.height);
   else cam = fitBounds(bb, r.width, r.height, FIT_MARGIN);
 }
 
-/** Зум относительно экранной точки: пометить вид как пользовательский + клампить. */
+/** Zoom relative to a screen point: mark the view as user-adjusted + clamp it. */
 export function zoomAt(factor: number, sx: number, sy: number): void {
   cam = camZoomAt(cam, factor, sx, sy);
   userAdjustedView = true;
   clamp();
 }
 
-/** Применить пользовательскую камеру (пинч/пан): set + adjusted + clamp. */
+/** Apply a user-driven camera (pinch/pan): set + mark adjusted + clamp. */
 export function applyUserCamera(next: Camera): void {
   cam = next;
   userAdjustedView = true;

@@ -1,4 +1,4 @@
-/* Сообщения панели: обычный текст, «Шаг N из 4», ошибка. */
+/* Panel messages: plain text, "Step N of 4", error. */
 .status {
   font-size: 14px;
   line-height: 1.4;
@@ -8,7 +8,7 @@
   display: none;
 }
 
-/* Заметная подсказка «Шаг N из 4» в режиме рисования. */
+/* Prominent "Step N of 4" hint in drawing mode. */
 .status--step {
   background: var(--warn-bg);
   border: 1px solid var(--warn-border);
@@ -45,19 +45,21 @@
   line-height: 1.45;
 }
 
-/* Ждём чужой онлайн-ход: анимированное многоточие (точки набегают по одной и зациклено),
-   чтобы неинтерактивная доска читалась как «ждём», а не «зависла» (m1). Три отдельные
-   точки-span'а (content не анимируется — мигаем opacity каждой со сдвигом фазы). Точки
-   всегда занимают место (inline-block), поэтому соседний текст-таймер не дёргается. */
+/* Waiting for another player's online move: an animated ellipsis (dots light up
+   one by one, looping) so the non-interactive board reads as "waiting", not "frozen"
+   (m1). Three separate dot spans (content doesn't animate — we fade each dot's
+   opacity with a phase offset). The dots always take up space (inline-block), so
+   the adjacent timer text doesn't jump around. */
 .waiting-dots {
   display: inline-block;
   min-width: 1.2em;
   text-align: left;
 }
 
-/* Общий 1.4s-таймлайн для всех точек (без delay), но разные пороги загорания — так все три
-   гаснут синхронно на старте цикла (сброс «…» → «»), а зажигаются по очереди: 1-я на 25%,
-   2-я на 50%, 3-я на 75%. Полностью повторяет старую кадры-раскладку '', '.', '..', '...'. */
+/* A shared 1.4s timeline for all dots (no delay), but different lighting thresholds —
+   so all three go dark in sync at the start of the cycle (reset "…" → ""), then light
+   up in sequence: 1st at 25%, 2nd at 50%, 3rd at 75%. Exactly replicates the old
+   frame sequence '', '.', '..', '...'. */
 .waiting-dots__dot {
   opacity: 0;
   animation: 1.4s steps(1, end) infinite;
@@ -101,7 +103,7 @@
   }
 }
 
-/* Уважаем «меньше движения»: статичное многоточие без анимации (все три точки видны). */
+/* Respect "reduce motion": a static ellipsis with no animation (all three dots visible). */
 @media (prefers-reduced-motion: reduce) {
   .waiting-dots__dot {
     animation: none;

@@ -16,7 +16,7 @@ import {
   chaikinClosed,
 } from './geometry';
 
-// CCW-квадрат 4×4 (стандартная ориентация, y вверх): signedArea > 0.
+// CCW 4×4 square (standard orientation, y up): signedArea > 0.
 const SQUARE: Polyline = [
   { x: 0, y: 0 },
   { x: 4, y: 0 },
@@ -25,7 +25,7 @@ const SQUARE: Polyline = [
 ];
 
 describe('segSegIntersection', () => {
-  it('находит точку чистого пересечения и параметр t вдоль первого отрезка', () => {
+  it('finds the clean intersection point and parameter t along the first segment', () => {
     const hit = segSegIntersection(
       { x: 0, y: 0 },
       { x: 4, y: 0 },
@@ -38,13 +38,13 @@ describe('segSegIntersection', () => {
     expect(hit!.point.y).toBeCloseTo(0);
   });
 
-  it('параллельные непересекающиеся (не на одной прямой) → null', () => {
+  it('parallel, non-intersecting (not collinear) → null', () => {
     expect(
       segSegIntersection({ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 0, y: 1 }, { x: 4, y: 1 }),
     ).toBeNull();
   });
 
-  it('коллинеарное перекрытие → начало общей части', () => {
+  it('collinear overlap → start of the shared portion', () => {
     const hit = segSegIntersection(
       { x: 0, y: 0 },
       { x: 4, y: 0 },
@@ -55,7 +55,7 @@ describe('segSegIntersection', () => {
     expect(hit!.point.x).toBeCloseTo(2);
   });
 
-  it('касание концами считается пересечением', () => {
+  it('touching at endpoints counts as an intersection', () => {
     const hit = segSegIntersection(
       { x: 0, y: 0 },
       { x: 4, y: 0 },
@@ -66,7 +66,7 @@ describe('segSegIntersection', () => {
     expect(hit!.t).toBeCloseTo(1);
   });
 
-  it('вырожденный первый отрезок → null', () => {
+  it('a degenerate first segment → null', () => {
     expect(
       segSegIntersection({ x: 1, y: 1 }, { x: 1, y: 1 }, { x: 0, y: 0 }, { x: 2, y: 2 }),
     ).toBeNull();
@@ -76,16 +76,16 @@ describe('segSegIntersection', () => {
 describe('pointOnSegment', () => {
   const a = { x: 0, y: 0 };
   const b = { x: 4, y: 0 };
-  it('внутренняя точка и концы — на отрезке', () => {
+  it('an interior point and the endpoints are on the segment', () => {
     expect(pointOnSegment({ x: 2, y: 0 }, a, b)).toBe(true);
     expect(pointOnSegment(a, a, b)).toBe(true);
     expect(pointOnSegment(b, a, b)).toBe(true);
   });
-  it('коллинеарная, но за пределами — не на отрезке', () => {
+  it('collinear but out of range is not on the segment', () => {
     expect(pointOnSegment({ x: 5, y: 0 }, a, b)).toBe(false);
     expect(pointOnSegment({ x: -1, y: 0 }, a, b)).toBe(false);
   });
-  it('вне прямой — не на отрезке', () => {
+  it('off the line is not on the segment', () => {
     expect(pointOnSegment({ x: 2, y: 1 }, a, b)).toBe(false);
   });
 });
@@ -93,20 +93,20 @@ describe('pointOnSegment', () => {
 describe('closestPointOnSegment / distPointToSegment', () => {
   const a = { x: 0, y: 0 };
   const b = { x: 4, y: 0 };
-  it('перпендикуляр в середину', () => {
+  it('drops a perpendicular to the midpoint', () => {
     const c = closestPointOnSegment({ x: 2, y: 5 }, a, b);
     expect(c.x).toBeCloseTo(2);
     expect(c.y).toBeCloseTo(0);
     expect(distPointToSegment({ x: 2, y: 5 }, a, b)).toBeCloseTo(5);
   });
-  it('зажимает на концах', () => {
+  it('clamps to the endpoints', () => {
     expect(closestPointOnSegment({ x: -3, y: 1 }, a, b)).toEqual({ x: 0, y: 0 });
     expect(closestPointOnSegment({ x: 9, y: 1 }, a, b)).toEqual({ x: 4, y: 0 });
   });
 });
 
 describe('pointInPolygon', () => {
-  it('внутри / снаружи квадрата', () => {
+  it('inside / outside the square', () => {
     expect(pointInPolygon({ x: 2, y: 2 }, SQUARE)).toBe(true);
     expect(pointInPolygon({ x: 5, y: 5 }, SQUARE)).toBe(false);
     expect(pointInPolygon({ x: -1, y: 2 }, SQUARE)).toBe(false);
@@ -114,28 +114,28 @@ describe('pointInPolygon', () => {
 });
 
 describe('distPointToPolyline', () => {
-  it('расстояние до ближайшего ребра', () => {
+  it('distance to the nearest edge', () => {
     expect(distPointToPolyline({ x: 2, y: 2 }, SQUARE)).toBeCloseTo(2);
     expect(distPointToPolyline({ x: 2, y: 6 }, SQUARE)).toBeCloseTo(2);
   });
 });
 
 describe('signedArea / polygonArea', () => {
-  it('знак кодирует направление обхода (CCW > 0)', () => {
+  it('the sign encodes winding direction (CCW > 0)', () => {
     expect(signedArea(SQUARE)).toBeGreaterThan(0);
     expect(signedArea([...SQUARE].reverse())).toBeLessThan(0);
   });
-  it('polygonArea — модуль знаковой площади', () => {
+  it('polygonArea is the absolute value of the signed area', () => {
     expect(polygonArea(SQUARE)).toBeCloseTo(16);
     expect(polygonArea([...SQUARE].reverse())).toBeCloseTo(16);
   });
 });
 
 describe('selfIntersectsClosed', () => {
-  it('простой квадрат не самопересекается', () => {
+  it('a simple square does not self-intersect', () => {
     expect(selfIntersectsClosed(SQUARE)).toBe(false);
   });
-  it('«восьмёрка» самопересекается', () => {
+  it('a "bowtie" self-intersects', () => {
     const bowtie: Polyline = [
       { x: 0, y: 0 },
       { x: 4, y: 4 },
@@ -147,7 +147,7 @@ describe('selfIntersectsClosed', () => {
 });
 
 describe('closedNormals', () => {
-  it('единичной длины во всех вершинах', () => {
+  it('has unit length at every vertex', () => {
     for (const nrm of closedNormals(SQUARE)) {
       expect(len(nrm)).toBeCloseTo(1);
     }
@@ -155,12 +155,12 @@ describe('closedNormals', () => {
 });
 
 describe('resampleClosed / chaikinClosed', () => {
-  it('resampleClosed выдаёт ~ периметр/шаг вершин, все конечные', () => {
-    const out = resampleClosed(SQUARE, 0.5); // периметр 16 / 0.5 = 32
+  it('resampleClosed produces ~ perimeter/step vertices, all finite', () => {
+    const out = resampleClosed(SQUARE, 0.5); // perimeter 16 / 0.5 = 32
     expect(out.length).toBe(32);
     expect(out.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))).toBe(true);
   });
-  it('chaikinClosed удваивает число вершин за итерацию', () => {
+  it('chaikinClosed doubles the vertex count per iteration', () => {
     expect(chaikinClosed(SQUARE, 1).length).toBe(8);
     expect(chaikinClosed(SQUARE, 2).length).toBe(16);
   });

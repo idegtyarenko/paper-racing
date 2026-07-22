@@ -1,44 +1,48 @@
-// Регистрация service worker в режиме `prompt` (см. vite.config.ts). SW НЕ
-// вызывает self.skipWaiting() сам: на iOS-standalone это всё равно не вытесняет
-// активный воркер при открытом приложении — новая версия зависает в `waiting`,
-// `controllerchange` не стреляет, авто-перезагрузки нет (подтверждено on-device
-// логом). Поэтому применяем обновление КЛИЕНТОМ: когда новая версия установлена
-// и ждёт (`onNeedRefresh`), в БЕЗОПАСНЫЙ момент (не посреди заезда) шлём ей
-// SKIP_WAITING через `updateSW()` — воркер активируется, `controlling` → одна
-// перезагрузка на свежую сборку.
+// Registers the service worker in `prompt` mode (see vite.config.ts). The SW
+// does NOT call self.skipWaiting() on its own: on iOS standalone that still
+// doesn't displace the active worker while the app is open — the new version
+// just sits in `waiting`, `controllerchange` never fires, and there's no
+// auto-reload (confirmed via an on-device log). So instead we apply the
+// update from the CLIENT side: once a new version is installed and waiting
+// (`onNeedRefresh`), at a SAFE moment (not mid-race) we send it SKIP_WAITING
+// via `updateSW()` — the worker activates, `controlling` fires, and we get
+// one reload onto the fresh build.
 //
-// Проверку на новую версию делаем при каждом возврате приложения на передний
-// план (visibilitychange) — периодический таймер намеренно не ставим, чтобы не
-// дёрнуть перезагрузку в неподходящий момент. Там же пытаемся применить ранее
-// отложенное обновление (`applyIfIdle`).
+// We check for a new version every time the app returns to the foreground
+// (visibilitychange) — deliberately not on a periodic timer, to avoid
+// triggering a reload at an inconvenient moment. The same handler also tries
+// to apply any previously deferred update (`applyIfIdle`).
 //
-// Диагностика жизненного цикла SW (для отладки авто-обновления на iOS) включается
-// флагом `?swdebug` — см. `sw-debug.ts`.
+// SW lifecycle diagnostics (for debugging iOS auto-update) are enabled via
+// the `?swdebug` flag — see `sw-debug.ts`.
 
 import { registerSW } from 'virtual:pwa-register';
 import { initSwDebug } from './sw-debug';
 
 /**
- * @param isSafeToReload — можно ли сейчас перезагрузить страницу (false, если идёт
- *   активный заезд: перезагрузка посреди хода недопустима). Обновление копится и
- *   применяется при ближайшем безопасном возврате на передний план.
+ * @param isSafeToReload — whether it's safe to reload the page right now
+ *   (false while a race is active: reloading mid-move isn't acceptable). The
+ *   update accumulates and gets applied on the next safe return to the
+ *   foreground.
  */
 export function initPwa(isSafeToReload: () => boolean): void {
   const dbg = initSwDebug();
-  // Новая версия установлена и ждёт активации — применить, как только станет
-  // безопасно. Не гасим после applyIfIdle: если iOS всё же не подхватит с первого
-  // раза, следующий visibilitychange повторит попытку (и залогирует её).
+  // A new version is installed and waiting to activate — apply it as soon as
+  // it's safe. We don't clear this after applyIfIdle: if iOS still doesn't
+  // pick it up on the first try, the next visibilitychange will retry (and
+  // log the attempt).
   let pendingRefresh = false;
 
-  // updateSW() (prompt-режим) шлёт SKIP_WAITING ждущему воркеру; на `controlling`
-  // workbox сам перезагружает страницу на новую версию.
+  // updateSW() (prompt mode) sends SKIP_WAITING to the waiting worker; once
+  // `controlling` fires, workbox itself reloads the page onto the new version.
   const updateSW = registerSW({
     immediate: true,
     onRegisteredSW(swUrl, registration) {
       dbg.log(`onRegisteredSW sw=${swUrl} reg=${registration ? 'yes' : 'no'}`);
       if (registration) dbg.attachRegistration(registration);
-      // При возврате на передний план — проверить новую версию и применить
-      // отложенное (заменяет намеренно отсутствующий периодический таймер).
+      // On returning to the foreground, check for a new version and apply
+      // any deferred update (this replaces the deliberately absent periodic
+      // timer).
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState !== 'visible') return;
         dbg.log('visible → registration.update()');
@@ -59,7 +63,8 @@ export function initPwa(isSafeToReload: () => boolean): void {
     onRegisterError(err) {
       dbg.log(`onRegisterError: ${String(err)}`);
     },
-    // Новая версия установлена и ждёт — запомнить и попробовать применить сразу.
+    // A new version is installed and waiting — remember it and try to apply
+    // it right away.
     onNeedRefresh() {
       dbg.log('onNeedRefresh (waiting)');
       pendingRefresh = true;
@@ -67,8 +72,8 @@ export function initPwa(isSafeToReload: () => boolean): void {
     },
   });
 
-  // Применить ждущее обновление, если сейчас не идёт заезд. Иначе — отложить до
-  // следующего безопасного момента (pendingRefresh остаётся взведённым).
+  // Apply the waiting update if no race is currently active. Otherwise defer
+  // it until the next safe moment (pendingRefresh stays armed).
   function applyIfIdle(): void {
     if (!pendingRefresh) return;
     if (!isSafeToReload()) {

@@ -1,14 +1,16 @@
-// Планировщик A* хода hard-бота: поиск по состояниям (pos, vel), минимизирующий
-// ЧИСЛО ХОДОВ до следующего пересечения финиша вперёд. Чистая логика без DOM.
+// A* move planner for the hard bot: searches over (pos, vel) states, minimizing the
+// NUMBER OF MOVES to the next forward finish-line crossing. Pure logic, no DOM.
 //
-// Так рождаются гоночная траектория (широкий заход → апекс → выход) и торможение
-// перед поворотом, а стоек/езды назад не возникает (каждый ход стоит +1). Проверку
-// аварии в поиске делает дешёвый растр зазора (clearance.ts), а не густой
-// computeOutcome — это и даёт глубокий поиск в пределах паузы AI_MOVE_DELAY_MS.
+// This is what produces a realistic racing line (wide entry → apex → exit) and
+// braking before a corner, with no idling or reversing (every move costs +1). Crash
+// checking during the search uses the cheap clearance raster (clearance.ts) instead
+// of the heavier computeOutcome — that's what makes a deep search feasible within the
+// AI_MOVE_DELAY_MS pause.
 //
-// Соперники учитываются только на первом слое (blocked-ходы отсеяны в candidates()):
-// нельзя встать на чужую клетку или проехать сквозь неё — к более глубоким слоям они
-// всё равно сдвинутся, а A* при занятой оптимальной клетке строит план в объезд.
+// Opponents are only considered at the first ply (blocked moves are filtered out in
+// candidates()): you can't land on or drive through an opponent's cell. Deeper plies
+// ignore them since opponents will have moved on by then, and if A*'s optimal cell is
+// occupied it just plans around it.
 
 import { Vec, dist, segSegIntersection } from '../../geometry';
 import { Track, sideOfFinish } from '../track';
@@ -19,8 +21,8 @@ import { Clearance, buildClearance, segClear } from './clearance';
 import { PlanParams } from './difficulty';
 import { Ranking, OVERSPEED_PENALTY, EPS_MARGIN } from './scoring';
 
-/** Растр зазора кэшируем на трассу: строится раз на гонку при первом ходе hard-бота
- *  (маскируется паузой перед ходом), дальше переиспользуется всеми болидами. */
+/** Clearance raster is cached per track: built once per race on the hard bot's first
+ *  move (hidden behind the pre-move pause), then reused by every car. */
 const clearanceCache = new WeakMap<Track, Clearance>();
 function clearanceFor(track: Track): Clearance {
   let c = clearanceCache.get(track);
@@ -31,8 +33,9 @@ function clearanceFor(track: Track): Clearance {
   return c;
 }
 
-/** Направление пересечения финиша ходом from→to: +1 вперёд, −1 назад, 0 нет.
- *  Та же семантика, что crossDir в nav.ts (точка ровно на линии — сторона «впереди»). */
+/** Direction of the finish-line crossing for move from→to: +1 forward, −1 backward,
+ *  0 none. Same semantics as crossDir in nav.ts (a point exactly on the line counts
+ *  as being on the "ahead" side). */
 function crossDelta(track: Track, from: Vec, to: Vec): number {
   if (!segSegIntersection(from, to, track.finish.a, track.finish.b)) return 0;
   const sf = sideOfFinish(track, from);
@@ -42,14 +45,14 @@ function crossDelta(track: Track, from: Vec, to: Vec): number {
   return 0;
 }
 
-// ── Мин-куча узлов A* по f с детерминированным тай-брейком по порядку вставки ──
+// ── Min-heap of A* nodes ordered by f, with a deterministic insertion-order tiebreak ──
 interface Node {
   pos: Vec;
   vel: Vec;
-  g: number; // ходов от старта
-  f: number; // g + эвристика (у цели h=0, f=g)
-  first: number; // индекс корневого хода, из которого выросла ветка
-  goal: boolean; // узел — пересечение финиша вперёд (завершённый план длины g)
+  g: number; // moves from the start
+  f: number; // g + heuristic (h=0 at the goal, so f=g there)
+  first: number; // index of the root move this branch grew from
+  goal: boolean; // node is a forward finish crossing (a completed plan of length g)
 }
 class Heap {
   private a: Node[] = [];
@@ -104,7 +107,7 @@ class Heap {
   }
 }
 
-/** Ранжирование корней планировщиком A* (все уровни). */
+/** Ranks the root moves via the A* planner (used by all difficulty levels). */
 export function scoreByPlan(
   state: GameState,
   nav: NavField,
@@ -119,14 +122,15 @@ export function scoreByPlan(
   const me = state.players[state.current];
   const cl = clearanceFor(track);
 
-  // Точный исход первого хода для каждого кандидата: корни исполняются реально,
-  // поэтому вету аварии/пересечения им доверяем движку (≤9 вызовов, дёшево), а не
-  // растру — растр (шаг грубее) годится лишь для внутренних узлов поиска, которые
-  // не исполняются. Так первый ход бота гарантированно безаварийный.
+  // Exact outcome of the first move for each candidate: root moves are actually
+  // executed, so we trust the real engine for their crash/crossing check (≤9 calls,
+  // cheap) rather than the raster — the raster's coarser resolution is fine for
+  // interior search nodes that never get executed. This guarantees the bot's actual
+  // move is never a crash.
   const rootOutcome = open.map((c) => computeOutcome(track, rules, me.pos, c.target));
 
-  // Победный ход вне конкуренции — берём с максимальным заездом за линию (тай-брейк
-  // решающего круга), при равенстве предпочитая безаварийный.
+  // A winning move beats everything else — pick the one that carries furthest past
+  // the line (tiebreak for the final lap), preferring a crash-free one on ties.
   let win: Candidate | null = null;
   let winKey = -Infinity;
   open.forEach((c, i) => {
@@ -141,11 +145,12 @@ export function scoreByPlan(
   });
   if (win) return { best: win, terminal: true, scored: [] };
 
-  // Инвариант безопасности на растре: из состояния (pos,vel) можно затормозить до
-  // остановки, ни разу не вылетев (за cap ходов; на срезе — оптимистично «успею»).
-  // A* минимизирует ходы и без этого разгоняется в тупик у далёкого поворота, когда
-  // бюджета не хватает дотянуть план до финиша и включается жадный fallback. Дёшево
-  // (растр), поэтому проверяем на каждом корне.
+  // Raster-based safety invariant: from state (pos, vel) the car can brake to a full
+  // stop without ever crashing (within cap moves; at the recursion limit we
+  // optimistically assume it'll manage). Without this check, A* — which only
+  // minimizes move count — would happily accelerate into a dead end at a distant
+  // corner whenever the budget runs out before reaching the finish and the greedy
+  // fallback kicks in. It's cheap (raster-based), so we check it on every root move.
   const stopMemo = new Map<string, boolean>();
   const canStop = (pos: Vec, vel: Vec, cap: number): boolean => {
     if (vel.x === 0 && vel.y === 0) return true;
@@ -153,7 +158,7 @@ export function scoreByPlan(
     const key = `${pos.x},${pos.y},${vel.x},${vel.y},${cap}`;
     const hit = stopMemo.get(key);
     if (hit !== undefined) return hit;
-    // Пробуем сильнее тормозить первыми — быстрее находим цепочку до нуля.
+    // Try the hardest-braking options first — finds a chain down to zero faster.
     const opts = reachableTargets(pos, vel, drive).sort(
       (A, B) =>
         Math.hypot(A.x - pos.x, A.y - pos.y) - Math.hypot(B.x - pos.x, B.y - pos.y),
@@ -170,16 +175,18 @@ export function scoreByPlan(
     return ok;
   };
 
-  // Корни — ходы без аварии (движок) и без пересечения финиша назад. Предпочитаем
-  // те, из которых гарантированно можно затормозить (инвариант безопасности); если
-  // безопасных нет — берём любые не-аварийные (не крашиться лучше, чем краш).
+  // Root candidates are moves that don't crash (per the engine) and don't cross the
+  // finish backward. Prefer ones from which we can guarantee braking to a stop (the
+  // safety invariant); if none are safe, fall back to any non-crashing move (not
+  // crashing beats crashing).
   const noCrash: number[] = [];
   open.forEach((c, i) => {
     if (!rootOutcome[i].crash && rootOutcome[i].crossingDelta !== -1) noCrash.push(i);
   });
-  // enforceStop: предпочитаем корни, из которых гарантированно тормозим (medium/hard
-  // едут чисто). easy (enforceStop=false) идёт по краю — берём любые не-аварийные, и
-  // иногда не успевает затормозить → авария (намеренная «живость» слабого уровня).
+  // enforceStop: prefer roots that are guaranteed to be able to stop (medium/hard
+  // drive clean). easy (enforceStop=false) drives on the edge — it accepts any
+  // non-crashing move and occasionally fails to brake in time → crash (intentional
+  // "liveliness" for the weak difficulty level).
   const safe = enforceStop
     ? noCrash.filter((i) => {
         const o = rootOutcome[i];
@@ -187,7 +194,7 @@ export function scoreByPlan(
       })
     : noCrash;
   const rootIdx = safe.length > 0 ? safe : noCrash;
-  // Все ходы — авария: выбираем наименьший штраф простоя.
+  // Every move crashes: pick the one with the smallest idle penalty.
   if (rootIdx.length === 0) {
     let best = open[0];
     let bestSkip = Infinity;
@@ -216,13 +223,14 @@ export function scoreByPlan(
   };
 
   const heap = new Heap();
-  const closed = new Map<string, number>(); // состояние (pos,vel) → лучший g
+  const closed = new Map<string, number>(); // (pos, vel) state → best g so far
   const sk = (p: Vec, v: Vec) => `${p.x},${p.y},${v.x},${v.y}`;
   const push = (pos: Vec, vel: Vec, g: number, first: number, goal: boolean) => {
     heap.push({ pos, vel, g, f: goal ? g : g + h(pos), first, goal });
   };
 
-  // Посев фронтира корнями. Корень, сразу пересекающий финиш, — цель длины 1.
+  // Seed the frontier with the root moves. A root that immediately crosses the
+  // finish is a goal of length 1.
   for (const i of rootIdx) {
     const target = open[i].target;
     const g = 1 + overspeed(me.pos, target);
@@ -235,7 +243,7 @@ export function scoreByPlan(
     }
   }
 
-  // Стоимость плана по корням: min длина завершённого плана, начавшегося с корня.
+  // Plan cost per root: the min length of a completed plan starting from that root.
   const rootPlan = new Map<number, number>();
   let bestPlan = Infinity;
   let fallbackFirst = rootIdx[0];
@@ -244,8 +252,9 @@ export function scoreByPlan(
   while (heap.size > 0 && exp < plan.budget) {
     const cur = heap.pop()!;
     if (cur.goal) {
-      // Цель снята с кучи по возрастанию f=g — оптимально. Собираем корни с планом
-      // в полосе EPS от лучшего (для расталкивания), дальше — можно прекращать.
+      // Goals are popped in increasing order of f=g, so this is optimal. We collect
+      // roots whose plan falls within EPS of the best one (for jostling among near-
+      // ties), then can stop once we're past that margin.
       if (cur.g < bestPlan) bestPlan = cur.g;
       const prev = rootPlan.get(cur.first);
       if (prev === undefined || cur.g < prev) rootPlan.set(cur.first, cur.g);
@@ -260,7 +269,7 @@ export function scoreByPlan(
     exp++;
     for (const target of reachableTargets(cur.pos, cur.vel, drive)) {
       const cd = crossDelta(track, cur.pos, target);
-      if (cd === -1) continue; // назад через финиш не едем
+      if (cd === -1) continue; // never drive backward through the finish
       const g = cur.g + 1 + overspeed(cur.pos, target);
       if (cd === 1) {
         push(target, { x: 0, y: 0 }, g, cur.first, true);
@@ -276,9 +285,9 @@ export function scoreByPlan(
     }
   }
 
-  // Оптимальный корень: с минимальной точной длиной плана (при равенстве — меньший
-  // индекс, детерминизм). Если ни один план не достиг финиша в бюджете — фронтир-
-  // fallback (ветка с минимальным f).
+  // The optimal root is the one with the minimal exact plan length (ties broken by
+  // lower index, for determinism). If no plan reached the finish within budget, fall
+  // back to the frontier branch with the smallest f.
   let bestFirst = fallbackFirst;
   if (rootPlan.size > 0) {
     let bestLen = Infinity;
@@ -290,10 +299,12 @@ export function scoreByPlan(
     });
   }
 
-  // Пул для расталкивания: корню с точным планом — его длина; корню без плана
-  // (ветки слились в closed или не дотянули) — оценка снизу 1 + navAt/vref в тех же
-  // «ходах», чтобы годные ходы вперёд тоже попадали в пул (иначе A* решителен, пул
-  // беден, и боты бунчатся). Аварийные/назад — большой штраф, вне пула.
+  // Pool used for jostling among near-ties: a root with an exact plan gets its
+  // length; a root without one (its branches merged into `closed` or never reached
+  // the finish) gets a lower-bound estimate of 1 + navAt/vref in the same "moves"
+  // unit, so that reasonable forward moves still make it into the pool (otherwise
+  // A* is too decisive, the pool stays thin, and bots end up bunching together).
+  // Crashing/backward moves get a large penalty and are excluded from the pool.
   const rootSet = new Set(rootIdx);
   const scored = open.map((c, i) => {
     if (!rootSet.has(i)) return { c, score: 1e5 };

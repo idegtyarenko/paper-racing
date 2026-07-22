@@ -1,19 +1,21 @@
-// Выбор локали на СТАРТЕ (не рантайм-своп): приоритет ?lang → сохранённый выбор →
-// язык браузера → английский по умолчанию. Ручная смена (setLocale) пишет выбор в
-// localStorage и перезагружает страницу — так модель (которая хойстит strings на
-// уровень модуля) и статическая разметка гарантированно берут одну локаль.
+// Locale selection happens at STARTUP (not a runtime swap): priority is
+// ?lang → saved choice → browser language → English as the default. A manual
+// switch (setLocale) writes the choice to localStorage and reloads the page —
+// that way the model (which hoists `strings` to module scope) and the static
+// markup are guaranteed to use a single, consistent locale.
 //
-// Все обращения к браузерным глобалам защищены: в node (юнит-тесты) их нет, и тогда
-// детект отдаёт 'en' — тот же объект, что импортируют модель и тесты.
+// Every access to browser globals is guarded: in node (unit tests) they don't
+// exist, and detection falls back to 'en' — the same object the model and
+// tests import.
 
 export type LocaleCode = 'en' | 'ru' | 'be';
 
 export const LOCALES: readonly LocaleCode[] = ['en', 'ru', 'be'];
 
-/** localStorage-ключ выбранной локали (конвенция проекта — префикс `pr-`). */
+/** localStorage key for the chosen locale (project convention: `pr-` prefix). */
 const LOCALE_KEY = 'pr-locale';
 
-/** BCP-47 тег для Intl/toLocaleString и атрибута <html lang>. */
+/** BCP-47 tag for Intl/toLocaleString and the <html lang> attribute. */
 const LOCALE_TAGS: Record<LocaleCode, string> = {
   en: 'en',
   ru: 'ru-RU',
@@ -40,11 +42,11 @@ function safeSet(key: string, value: string): void {
   try {
     localStorage.setItem(key, value);
   } catch {
-    // приватный режим / недоступный localStorage — молча пропускаем
+    // private browsing / localStorage unavailable — fail silently
   }
 }
 
-/** ?lang=en|ru|be из URL (тест-override, работает и в проде). */
+/** ?lang=en|ru|be from the URL (a test override that also works in prod). */
 function localeFromQuery(): LocaleCode | null {
   if (typeof location === 'undefined') return null;
   try {
@@ -55,7 +57,8 @@ function localeFromQuery(): LocaleCode | null {
   }
 }
 
-/** Первый из navigator.languages, чей основной субтег — ru/be/en (иначе null → en). */
+/** The first of navigator.languages whose primary subtag is ru/be/en
+ *  (otherwise null → en). */
 function localeFromBrowser(): LocaleCode | null {
   if (typeof navigator === 'undefined') return null;
   const langs = navigator.languages ?? [navigator.language];
@@ -67,8 +70,9 @@ function localeFromBrowser(): LocaleCode | null {
 }
 
 /**
- * Активная локаль на старте. Валидный ?lang также сохраняется в localStorage, чтобы
- * держаться выбранного языка по сессии (и работать как ручной override по ссылке).
+ * The active locale at startup. A valid ?lang is also saved to localStorage,
+ * so the chosen language sticks across the session (and works as a manual
+ * override via a shared link).
  */
 export function detectLocale(): LocaleCode {
   const fromQuery = localeFromQuery();
@@ -81,7 +85,7 @@ export function detectLocale(): LocaleCode {
   return localeFromBrowser() ?? 'en';
 }
 
-/** Ручная смена языка: сохранить выбор и перезагрузить (dev-хелпер / будущий UI). */
+/** Manual language switch: save the choice and reload (dev helper / future UI). */
 export function setLocale(code: LocaleCode): void {
   if (!isLocale(code)) return;
   safeSet(LOCALE_KEY, code);

@@ -1,213 +1,245 @@
-// Числовые «ручки» настройки игры в одном месте — правила гонки, размеры мира,
-// пороги валидации нарисованной трассы и параметры тач-взаимодействия. У каждой
-// константы — пояснение, что она делает и как влияет на игру.
+// Numeric "knobs" for game tuning, all in one place — race rules, world size,
+// track-drawing validation thresholds, and touch-interaction parameters. Every
+// constant has a comment explaining what it does and how it affects gameplay.
 //
-// Здесь только gameplay/interaction-настройки. Цвета и разовые визуальные
-// величины остаются в render.ts; чисто алгоритмические параметры сглаживания и
-// эпсилоны — в centerline.ts / geometry.ts.
+// This file holds only gameplay/interaction settings. Colors and one-off visual
+// values live in render.ts; purely algorithmic smoothing parameters and epsilons
+// live in centerline.ts / geometry.ts.
 
-// ── Игроки ──────────────────────────────────────────────
-/** Минимум участников гонки. */
+// ── Players ──────────────────────────────────────────────
+/** Minimum number of racers. */
 export const MIN_PLAYERS = 2;
 
-// ── Правила гонки ───────────────────────────────────────
+// ── Race rules ───────────────────────────────────────────
 /**
- * Сколько раз надо пересечь финишную линию для победы: 1-й раз засчитывается
- * сразу после старта (болиды стоят из-за линии), 2-й — когда замкнут полный круг.
+ * How many times a car must cross the finish line to win: the 1st crossing is
+ * counted right after the start (cars line up behind the line), the 2nd is a
+ * full lap completed.
  */
 export const WIN_CROSSINGS = 2;
-/** Сколько ходов болид стоит «в боксах» на ремонте после вылета за бортик.
- *  Используется как значение по умолчанию для статического штрафа (см. Rules). */
+/** How many turns a car sits "in the pits" for repairs after going off track.
+ *  Used as the default value for the static penalty (see Rules). */
 export const CRASH_SKIP_TURNS = 3;
 
-// ── Динамический штраф за аварию ────────────────────────
-// Штраф «по скорости»: чем быстрее болид вылетел с трассы, тем дольше выбирается
-// из гравия. Число ходов = степенная функция скорости хода (длины вектора
-// перемещения): penalty = round(speed ^ строгость), зажатая в [1, MAX].
-// При стандартной строгости (1) кривая линейна: скорость 1→1 ход, 2→2, 3→3, 4→4
-// (перед вылетом игрок обычно тормозит, так что типичная скорость вылета невелика).
-// Больше строгости — круче наказание за быстрый вылет.
-/** Потолок динамического штрафа в ходах — чтобы сильный вылет не выбивал из гонки насовсем. */
+// ── Dynamic crash penalty ────────────────────────────────
+// A speed-based penalty: the faster a car goes off track, the longer it takes
+// to get back out of the gravel. Turn count = a power function of the move's
+// speed (the length of the displacement vector): penalty = round(speed ^
+// severity), clamped to [1, MAX]. At the standard severity (1) the curve is
+// linear: speed 1→1 turn, 2→2, 3→3, 4→4 (players usually brake before going
+// off, so typical crash speed is fairly low). Higher severity makes the
+// penalty ramp up faster for high-speed crashes.
+/** Cap on the dynamic penalty, in turns — so a hard crash doesn't knock a
+ *  player out of the race entirely. */
 export const CRASH_PENALTY_MAX = 8;
-/** Два уровня «строгости» (показателя степени) динамического штрафа. Выше 1.5 штраф
- *  почти сразу упирается в потолок, поэтому континуума нет — только два варианта. */
-export const CRASH_EXPONENT_STANDARD = 1; // линейно: скорость 1→1, 2→2, 3→3, 4→4
-export const CRASH_EXPONENT_STRICT = 1.5; // круче: 1→1, 2→3, 3→5, 4→8
-/** Диапазон и шаг размера статического штрафа (ходов) для ползунка настроек. */
+/** Two "severity" levels (the exponent) for the dynamic penalty. Above 1.5 the
+ *  penalty hits the cap almost immediately, so there's no real continuum —
+ *  just these two options. */
+export const CRASH_EXPONENT_STANDARD = 1; // linear: speed 1→1, 2→2, 3→3, 4→4
+export const CRASH_EXPONENT_STRICT = 1.5; // steeper: 1→1, 2→3, 3→5, 4→8
+/** Range and step for the static penalty size (in turns) slider in settings. */
 export const STATIC_TURNS_MIN = 1;
 export const STATIC_TURNS_MAX = 8;
 
-// ── Управляемость машины («круг сцепления») ─────────────
-// Модель хода (drive, см. Rules и reachableTargets в turns.ts): вокруг точки наката
-// C = pos + vel лежит «эллипс сцепления» в системе координат скорости — целые узлы,
-// у которых изменение скорости a = target − C влезает в эллипс. Три «механических»
-// полуоси (клетки/ход): разгон вперёд (accel), торможение назад (brake) и боковой
-// хват (grip). Углы эллипса скруглены → нельзя одновременно максимально разгоняться
-// и круто доворачивать (компромисс сцепления); чем выше скорость, тем меньше доворот
-// за ход. Все три равны → изотропный круг = классика 3×3.
+// ── Car handling ("grip ellipse") ────────────────────────
+// The drive model (see Rules and reachableTargets in turns.ts): around the
+// coasting point C = pos + vel there's a "grip ellipse" in velocity space —
+// the integer nodes whose velocity change a = target − C fits inside the
+// ellipse. There are three "mechanical" semi-axes (cells/turn): forward
+// acceleration (accel), braking (brake), and lateral grip (grip). The
+// ellipse's corners are rounded, so you can't simultaneously max out
+// acceleration and turn sharply (that's the grip trade-off); the faster you
+// go, the less you can turn per move. If all three are equal, the ellipse is
+// an isotropic circle — the classic 3×3.
 //
-// Четвёртая ось — downforce (аэродинамический прижим): в отличие от механического
-// хвата (постоянного), прижим растёт с квадратом скорости и добавляется к grip и
-// brake — grip_eff = grip·aero, brake_eff = brake·aero, где aero = 1 + downforce·
-// (speed/DOWNFORCE_VREF)² (см. aeroFactor в turns.ts). Разгон (accel) прижим не
-// трогает. Так F1 (большой downforce) проходит быстрые повороты почти в полный газ,
-// а дорожная/спорткар — нет. Значения тюнятся плейтестом.
-/** Готовые наборы управляемости (лесенка по прижиму). classic — изотроп (все оси
- *  равны, downforce 0 → квадрат 3×3); sports — тормоза вдвое дальше разгона, без
- *  аэро; gt — больше хвата + лёгкий прижим; f1 — сильный прижим. Будущие «машины с
- *  перками» добавляются сюда же. */
+// The fourth axis is downforce (aerodynamic load): unlike mechanical grip
+// (constant), downforce grows with the square of speed and is added to grip
+// and brake — grip_eff = grip·aero, brake_eff = brake·aero, where aero = 1 +
+// downforce·(speed/DOWNFORCE_VREF)² (see aeroFactor in turns.ts). Acceleration
+// (accel) is unaffected by downforce. This is how an F1 car (high downforce)
+// takes fast corners nearly flat out, while a road car / sports car can't.
+// Values are tuned by playtesting.
+/** Preset handling profiles (a ladder by downforce). classic — isotropic (all
+ *  axes equal, downforce 0 → a 3×3 square); sports — brakes reach twice as
+ *  far as acceleration, no aero; gt — more grip plus a bit of downforce; f1 —
+ *  strong downforce. Future "cars with perks" get added here too. */
 export const DRIVE_PRESETS = {
   classic: { accel: 1.5, brake: 1.5, grip: 1.5, downforce: 0 },
   sports: { accel: 1, brake: 2, grip: 1.5, downforce: 0 },
   gt: { accel: 1, brake: 2, grip: 2, downforce: 0.3 },
   f1: { accel: 1, brake: 2.5, grip: 2, downforce: 0.75 },
 } as const;
-/** Диапазон и шаг ползунков механических осей (accel/brake/grip) в режиме «Своё».
- *  Минимум — 1: полуось меньше 1 не дотягивается ни до одного целого узла (= разгон/
- *  тормоз/поворот невозможен), такое значение бессмысленно. */
+/** Range and step for the mechanical-axis sliders (accel/brake/grip) in
+ *  "Custom" mode. Minimum is 1: a semi-axis below 1 wouldn't reach a single
+ *  integer node (i.e. accel/brake/turning would be impossible), so such a
+ *  value would be meaningless. */
 export const DRIVE_MIN = 1;
 export const DRIVE_MAX = 4;
 export const DRIVE_STEP = 0.5;
-/** Диапазон и шаг ползунка прижима (downforce) — своя шкала: 0 (нет аэро) .. 1.5,
- *  шаг 0.25. Отдельно от механических осей: это безразмерный коэффициент роста хвата
- *  со скоростью, а не полуось в клетках. */
+/** Range and step for the downforce slider — its own scale: 0 (no aero) to
+ *  1.5, step 0.25. Kept separate from the mechanical axes since it's a
+ *  dimensionless coefficient for how grip grows with speed, not a semi-axis
+ *  in cells. */
 export const DOWNFORCE_MIN = 0;
 export const DOWNFORCE_MAX = 1.5;
 export const DOWNFORCE_STEP = 0.25;
-/** Референсная скорость (клетки/ход) в формуле прижима aero = 1 + downforce·
- *  (speed/DOWNFORCE_VREF)²: на этой скорости прижим при downforce = 1 удваивает хват.
- *  Важно для баланса: из-за сокращения v² минимальный радиус поворота при прижиме
- *  выходит на «пол» R_floor = DOWNFORCE_VREF²/(grip·downforce) — повороты положе него
- *  проходятся в пол на любой скорости. Держим VREF высоким (прижим включается только
- *  на реально высокой скорости), чтобы этот пол был больше типичных поворотов трассы и
- *  тормозить всё равно приходилось (иначе гонка теряет смысл). Тюнится плейтестом. */
+/** Reference speed (cells/turn) in the downforce formula aero = 1 +
+ *  downforce·(speed/DOWNFORCE_VREF)²: at this speed, downforce = 1 doubles
+ *  grip. Matters for balance: because of the v² term, the minimum turning
+ *  radius under downforce bottoms out at a "floor" R_floor =
+ *  DOWNFORCE_VREF²/(grip·downforce) — corners gentler than that floor can be
+ *  taken flat out at any speed. We keep VREF high (downforce only kicks in at
+ *  genuinely high speed) so that floor stays bigger than typical track
+ *  corners and braking is still required (otherwise the race loses its
+ *  point). Tuned by playtesting. */
 export const DOWNFORCE_VREF = 6;
-/** Пол радиуса разгона на старте (vel = 0): гарантирует диагональный старт (набор
- *  3×3) при любом разгоне. Мощный разгон (accel > √2) стартует дальше по прямой. */
+/** Floor on launch radius at the start (vel = 0): guarantees a diagonal start
+ *  (the 3×3 set) regardless of acceleration. A powerful accel (> √2) launches
+ *  further in a straight line. */
 export const MIN_LAUNCH = Math.SQRT2;
 /**
- * Допуск на заезд за край трассы, в клетках. Ход, задевший стенку не глубже
- * этого, аварией не считается — можно проскочить впритирку. 0 вернул бы строгое
- * «точно по кромке».
+ * Tolerance for straying past the track edge, in cells. A move that clips the
+ * wall no deeper than this doesn't count as a crash — you can graze it. 0
+ * would mean strict "exactly on the edge."
  */
 export const OFFROAD_FORGIVE = 0.05;
-/** Шаг семплинга отрезка хода при проверке аварии, в клетках (мельче — точнее). */
+/** Sampling step for a move segment during crash checks, in cells (smaller =
+ *  more precise). */
 export const CRASH_SAMPLE_STEP = 0.05;
 /**
- * Минимальная ширина «травяной перегородки» между двумя проходами трассы, в
- * клетках. Трасса с перегородкой у́же этого не проходит валидацию: иначе ход через
- * неё не отлавливается как авария (глубина за кромкой в тонкой перегородке ≤
- * OFFROAD_FORGIVE), и болид проезжает «насквозь» на другой виток. Жёсткий пол
- * корректности — 2·OFFROAD_FORGIVE = 0.1; берём с запасом на фазу семплинга.
- * Генератор целится в зазор SELF_GAP = 1.0 ≫ этого, так что нормальные трассы
- * проходят всегда — порог бьёт лишь по патологическим самокасаниям. */
+ * Minimum width of a "grass median" between two passes of the track, in
+ * cells. A track with a narrower median fails validation: otherwise a move
+ * through it wouldn't be caught as a crash (the depth past the edge inside a
+ * thin median stays ≤ OFFROAD_FORGIVE), letting a car drive "straight
+ * through" onto another loop of the track. The hard correctness floor is
+ * 2·OFFROAD_FORGIVE = 0.1; we add margin for the sampling step. The generator
+ * targets a gap of SELF_GAP = 1.0 ≫ this, so normal tracks always pass — this
+ * threshold only catches pathological self-touching. */
 export const GAP_MIN = 0.3;
 
-// ── Онлайн: устойчивость к дисконнектам ─────────────────
-/** Сколько ждём ход игрока, прежде чем его можно пропустить, мс. Присутствующего
- *  пропускают вручную, отсутствующего — авто (первый раз с этой форой, дальше сразу). */
+// ── Online: disconnect resilience ────────────────────────
+/** How long we wait for a player's turn before it can be skipped, ms. A
+ *  present player is skipped manually; an absent one is skipped
+ *  automatically (the first time with this grace period, instantly after). */
 export const TURN_TIMEOUT_MS = 60_000;
-/** Через сколько после ухода из присутствия убираем брошенное место из лобби, мс. */
+/** How long after a player leaves presence before we remove their abandoned
+ *  seat from the lobby, ms. */
 export const LOBBY_PRUNE_MS = 10_000;
-/** Таймаут сетевого запроса Supabase (REST), мс: дольше — считаем запрос
- *  провалившимся и отпускаем await, чтобы UI никогда не завис на неразрешённом промисе. */
+/** Timeout for a Supabase (REST) network request, ms: past this we treat the
+ *  request as failed and release the await, so the UI never hangs on an
+ *  unresolved promise. */
 export const NET_TIMEOUT_MS = 10_000;
-/** Пауза перед тихим повтором авто-пропуска после неудачной записи, мс. */
+/** Delay before a silent retry of auto-skip after a failed write, ms. */
 export const SKIP_RETRY_MS = 5_000;
 
-// ── Игра с компьютером ──────────────────────────────────
-/** Пауза перед ходом бота, мс — чтобы человек успевал следить за чужими ходами. */
+// ── vs. Computer ─────────────────────────────────────────
+/** Delay before a bot's move, ms — gives the human time to follow other
+ *  players' moves. */
 export const AI_MOVE_DELAY_MS = 600;
 
-// ── Мир / сетка ─────────────────────────────────────────
+// ── World / grid ─────────────────────────────────────────
 /**
- * Сторона квадратного «условно бесконечного» поля в клетках. Сетка рисуется
- * только по видимому вьюпорту (см. render.ts), а кадрирование берётся из bbox
- * трассы (fit-to-track), поэтому пропорции экрана на размер мира не влияют. Это
- * лишь щедрые предохранители геометрии и безопасный диапазон для key() —
- * реальная рисованная трасса занимает лишь десятки клеток у центра поля. */
+ * Side length of the square "effectively infinite" field, in cells. The grid
+ * is only drawn within the visible viewport (see render.ts), and framing
+ * comes from the track's bbox (fit-to-track), so screen aspect ratio doesn't
+ * affect world size. This is just a generous geometry safety margin and a
+ * safe range for key() — the actual drawn track only occupies a few dozen
+ * cells near the center of the field. */
 export const WORLD_SIZE = 240;
-/** Зазор до стенки: узлы ближе этого к краю не считаются частью дороги. */
+/** Clearance from the wall: nodes closer than this to the edge don't count as
+ *  part of the road. */
 export const WALL_CLEARANCE = 0.15;
-/** Сколько стартовых позиций готовит трасса — фактический максимум болидов. */
+/** How many starting positions the track prepares — the effective max number
+ *  of cars. */
 export const MAX_START_POINTS = 6;
-// ── Геометрия стартовой решётки (клетки) ────────────────
-// Болиды расставляются рядами вдоль коридора от линии назад (см. layoutStartGrid в
-// track.ts). «Ряд» — один слой коридорной глубины (шаги BFS от линии): на прямой это
-// колонка узлов, на повороте — дуга по изгибу дороги. Ряд заполняется от центра трассы
-// к бокам до START_ROW_MAX болидов; не влезли — переносятся в следующий (более глубокий)
-// слой. Смысл — минимум глубины при центральном старте: никто не стоит сбоку у стенки
-// (боковой старт то выгоден, то нет — этот шум убираем), а лишняя глубина появляется
-// лишь когда болидов больше, чем помещается в центральную полосу. Кому какой слот —
-// решает случайная перестановка (newGame); при меньшем числе игроков берутся передние
-// слоты (первый ряд на линии), так что 2–3 болида стартуют без глубины вовсе.
-/** Максимум болидов в ряду (ширина центральной полосы). Шире не ставим, чтобы никто
- *  не стартовал у стенки; лишние уходят в следующий ряд. */
+// ── Starting grid geometry (cells) ───────────────────────
+// Cars are arranged in rows along the corridor behind the finish line (see
+// layoutStartGrid in track.ts). A "row" is one layer of corridor depth (BFS
+// steps back from the line): on a straight this is a column of nodes, on a
+// curve it's an arc following the road's bend. A row fills from the track's
+// centerline outward to the sides, up to START_ROW_MAX cars; any that don't
+// fit spill into the next (deeper) layer. The point is to minimize depth for
+// a centered start: nobody stands off to the side near the wall (a side
+// start is sometimes an advantage and sometimes not — we remove that noise),
+// and extra depth only appears once there are more cars than fit across the
+// central lane. Which car gets which slot is decided by a random shuffle
+// (newGame); with fewer players, the front slots are used (the first row on
+// the line), so 2–3 cars start with no extra depth at all.
+/** Max cars per row (width of the central lane). We don't go wider than this
+ *  so nobody starts against the wall; extras spill into the next row. */
 export const START_ROW_MAX = 3;
-/** Глубина стартовой зоны в шагах BFS назад от финишной линии. Полуплоскость «позади
- *  финиша» на змейке захватывает и далёкие сегменты трассы (центральную петлю) — если
- *  оставить их кандидатами, запасное заполнение могло усадить болид посреди круга.
- *  Ограничиваем зону связным коридором сразу за линией: MAX_START_POINTS болидов
- *  «паровозиком» = глубина ~6, берём с запасом, но много меньше, чем обход петли до
- *  далёкого сегмента (десятки клеток). */
+/** Depth of the starting zone, in BFS steps back from the finish line. The
+ *  half-plane "behind the finish" on a winding track can also reach far-off
+ *  segments of the track (e.g. the central loop) — if those were left as
+ *  candidates, fallback filling could place a car in the middle of a lap.
+ *  We restrict the zone to the connected corridor right behind the line:
+ *  MAX_START_POINTS cars lined up nose-to-tail need a depth of about 6; we
+ *  take some margin, but it's still far shallower than the loop distance to
+ *  a far segment (dozens of cells). */
 export const START_REGION_DEPTH = 8;
-/** Насколько близко к ОТРЕЗКУ финиша (не к его бесконечной прямой) должен лежать узел,
- *  чтобы стать затравкой BFS стартовой зоны. Бесконечная прямая финиша пересекает и
- *  другие сегменты змейки — привязка к самому отрезку не даёт зоне «прорасти» оттуда. */
+/** How close to the finish SEGMENT (not its infinite line) a node must lie to
+ *  become a BFS seed for the starting zone. The finish line's infinite
+ *  extension also crosses other segments of a winding track — anchoring to
+ *  the segment itself keeps the zone from "growing" out of those. */
 export const START_SEED_TOL = 1.6;
-/** Во сколько условных км/ч оценивается одна клетка разгона за ход.
- *  Реалистичный потолок гонки ~7 клеток соответствует топовой скорости
- *  Формулы-1 (~350 км/ч), так что показания спидометра ощущаются «по-гоночному». */
+/** How many notional km/h one cell of acceleration per turn represents.
+ *  A realistic race ceiling of ~7 cells maps to a Formula 1 top speed
+ *  (~350 km/h), so the speedometer reading feels "race-authentic." */
 export const KMH_PER_CELL = 50;
 
-// ── Валидация нарисованной трассы ───────────────────────
-/** Минимум клеток дороги в полотне — иначе «полотно слишком узкое». */
+// ── Drawn-track validation ───────────────────────────────
+/** Minimum road cells in the ribbon — otherwise "the track is too narrow." */
 export const MIN_ROAD_CELLS = 30;
-/** Минимальная площадь петли осевой (клетки²) — иначе «тесновато для гонки». */
+/** Minimum centerline loop area (cells²) — otherwise "too tight for a race." */
 export const MIN_CENTER_AREA = 60;
-/** Минимальная ширина полотна трассы, в клетках. */
+/** Minimum track ribbon width, in cells. */
 export const WIDTH_MIN = 2;
-/** Максимальная ширина полотна трассы, в клетках. */
+/** Maximum track ribbon width, in cells. */
 export const WIDTH_MAX = 6;
 
-// ── Камера / зум ────────────────────────────────────────
-/** Минимальный размер клетки на экране, css-px — потолок «отдаления». */
+// ── Camera / zoom ────────────────────────────────────────
+/** Minimum on-screen cell size, css-px — the "zoom out" ceiling. */
 export const SCALE_MIN = 8;
-/** Максимальный размер клетки на экране, css-px — предел приближения. */
+/** Maximum on-screen cell size, css-px — the zoom-in limit. */
 export const SCALE_MAX = 64;
-/** Размер клетки для стартового вида пустого поля (до рисования), css-px. */
+/** Cell size for the initial view of the empty field (before drawing), css-px. */
 export const SCALE_DEFAULT = 18;
-/** Доля свободного поля вокруг трассы при авто-вписывании (по тесной оси). */
+/** Fraction of free space to leave around the track on auto-fit (along the
+ *  tighter axis). */
 export const FIT_MARGIN = 0.08;
-/** Множитель зума за одно нажатие кнопки ＋/－. */
+/** Zoom multiplier per tap of the ＋/－ button. */
 export const ZOOM_BTN_FACTOR = 1.35;
-/** Чувствительность зума колесом мыши (множитель на «щелчок» колеса). */
+/** Mouse-wheel zoom sensitivity (multiplier per wheel "click"). */
 export const WHEEL_FACTOR = 1.0015;
 
-// ── Взаимодействие (тач/мышь) ───────────────────────────
-/** На сколько css-px поднимать точку над пальцем при рисовании/прицеливании,
- *  чтобы палец её не закрывал. */
+// ── Interaction (touch/mouse) ────────────────────────────
+/** How many css-px to lift the point above the finger while drawing/aiming,
+ *  so the finger doesn't cover it. */
 export const TOUCH_LIFT = 28;
-/** Радиус попадания пальцем по кандидату хода / точке кромки, css-px. */
+/** Hit radius for a finger tap on a move candidate / edge point, css-px. */
 export const TOUCH_TOL_PX = 24;
-/** Радиус активации прицела вокруг ближайшего кандидата, css-px: касание ближе
- *  этого включает прицеливание, дальше — начинает пан карты. */
+/** Activation radius for aiming around the nearest candidate, css-px: a touch
+ *  closer than this starts aiming, farther starts panning the map. */
 export const AIM_ZONE_PX = 44;
-/** Порог «тап или пан», css-px: смещение указателя больше этого превращает
- *  клик-действие (финиш/ход/выбор стрелки) в панорамирование. */
+/** "Tap vs. pan" threshold, css-px: pointer movement past this turns a
+ *  click-action (finish/move/arrow selection) into panning. */
 export const DRAG_PX = 6;
-/** Если размер клетки на экране достиг этого, точки и так легко выбрать пальцем —
- *  лупа при прицеливании больше не показывается. */
+/** Once the on-screen cell size reaches this, points are already easy to tap
+ *  with a finger — the aiming loupe is no longer shown. */
 export const LOUPE_MAX_CELL_PX = 26;
-/** Двойной тап по полю в гонке зумит камеру к точке. Макс. окно между тапами, мс. */
+/** Double-tapping the field during a race zooms the camera to that point. Max
+ *  window between taps, ms. */
 export const DOUBLE_TAP_MS = 300;
-/** Макс. расстояние между двумя тапами двойного тапа, css-px (иначе это два разных). */
+/** Max distance between the two taps of a double-tap, css-px (otherwise
+ *  they're treated as two separate taps). */
 export const DOUBLE_TAP_SLOP_PX = 30;
-/** Сколько css-px вертикальной протяжки удвоенного тапа удваивают/делят масштаб —
- *  чувствительность непрерывного зума «двойной тап + тяни» (как в картах). */
+/** How many css-px of vertical drag after a double-tap doubles/halves the
+ *  zoom — sensitivity for the continuous "double-tap + drag" zoom gesture
+ *  (as in map apps). */
 export const DOUBLE_TAP_DRAG_PX_PER_2X = 160;
-/** Высота нижней зоны поля (css-px от нижнего края), в которую если заходит
- *  кандидат — плавающую кнопку подтверждения уводим наверх, чтобы она его не
- *  накрывала. Покрывает саму кнопку (bottom 16 + высота ~48) с запасом на радиус
- *  точки и палец. Пока кандидаты выше — кнопка остаётся внизу. */
+/** Height of the field's bottom zone (css-px from the bottom edge) that, if a
+ *  candidate falls into it, causes the floating confirm button to move up so
+ *  it doesn't cover the candidate. Covers the button itself (bottom 16 +
+ *  height ~48) with margin for the point radius and the finger. While
+ *  candidates stay above this zone, the button remains at the bottom. */
 export const CONFIRM_BTN_ZONE_PX = 104;

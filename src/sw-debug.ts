@@ -1,31 +1,32 @@
-// Диагностика жизненного цикла service worker — для отладки авто-обновления PWA
-// на iOS (standalone), где обновление не подхватывается. Включается флагом
-// `?swdebug` в URL и сохраняется в localStorage, чтобы пережить (1) запуск с
-// домашнего экрана, где query-строки нет (start_url = '.'), и (2) авто-
-// перезагрузку по `controllerchange` в режиме autoUpdate, которая стирает
-// JS-состояние — а нам важно увидеть, ЧТО было ДО перезагрузки.
+// Service worker lifecycle diagnostics — for debugging PWA auto-update on iOS
+// (standalone), where the update isn't picked up. Enabled via the `?swdebug`
+// URL flag and persisted to localStorage, so it survives (1) launching from
+// the home screen, where there's no query string (start_url = '.'), and (2)
+// the auto-reload on `controllerchange` in autoUpdate mode, which wipes JS
+// state — and seeing WHAT happened BEFORE the reload is exactly the point.
 //
-// Это ТОЛЬКО наблюдение: поведение обновления не меняется (фиксы — фазы 2/3).
-// По умолчанию выключено — оверлея в проде нет, накладных расходов нет.
+// This is observation ONLY: update behavior itself isn't changed (fixes are
+// phases 2/3). Disabled by default — no overlay in prod, no overhead.
 //
-// Remote-инспекция подвешенного standalone-PWA с макбука ненадёжна, поэтому лог
-// показываем прямо на экране, с кнопкой «copy» — чтобы можно было прислать текст.
+// Remote-inspecting a stuck standalone PWA from a laptop is unreliable, so we
+// show the log right on screen, with a "copy" button so the text can be sent
+// over.
 
 const FLAG_KEY = 'pr-swdebug';
 const LOG_KEY = 'pr-swdebug-log';
 const LOG_CAP = 200;
 
 interface LogEntry {
-  t: number; // epoch-мс
+  t: number; // epoch-ms
   msg: string;
 }
 
-/** Публичный контракт для `pwa.ts`. Когда `enabled === false` — всё no-op. */
+/** Public contract for `pwa.ts`. When `enabled === false`, everything is a no-op. */
 export interface SwDebug {
   readonly enabled: boolean;
-  /** Записать строку в лог (с меткой времени). No-op, если отладка выключена. */
+  /** Write a line to the log (timestamped). No-op if debugging is off. */
   log(msg: string): void;
-  /** Навесить логирование `updatefound`/`statechange` и обновить строку состояния. */
+  /** Attach `updatefound`/`statechange` logging and refresh the status line. */
   attachRegistration(reg: ServiceWorkerRegistration): void;
 }
 
@@ -35,14 +36,15 @@ const NOOP: SwDebug = {
   attachRegistration() {},
 };
 
-/** Активна ли отладка. Побочно синхронизирует сохранённый флаг по URL:
- *  `?swdebug`/`?swdebug=1` — включить (запомнить), `?swdebug=0` — выключить. */
+/** Whether debugging is active. As a side effect, syncs the saved flag from
+ *  the URL: `?swdebug`/`?swdebug=1` turns it on (and remembers it),
+ *  `?swdebug=0` turns it off. */
 function resolveEnabled(): boolean {
   let flag = false;
   try {
     flag = localStorage.getItem(FLAG_KEY) === '1';
   } catch {
-    // localStorage недоступен (приватный режим) — ориентируемся только на URL
+    // localStorage unavailable (private browsing) — go by the URL alone
   }
   const params = new URLSearchParams(location.search);
   if (params.has('swdebug')) {
@@ -52,17 +54,18 @@ function resolveEnabled(): boolean {
       if (flag) localStorage.setItem(FLAG_KEY, '1');
       else localStorage.removeItem(FLAG_KEY);
     } catch {
-      // пропускаем — не критично
+      // ignore — not critical
     }
   }
   return flag;
 }
 
-/** Переключить сохранённый флаг отладки и вернуть новое состояние. Нужно для
- *  активации ИЗНУТРИ приложения: у standalone-PWA на iOS отдельная банка
- *  localStorage (флаг `?swdebug`, выставленный в Safari, туда не попадает), а
- *  адресной строки нет — задать query-параметр негде. Вызывающий перезагружает
- *  страницу, чтобы `initSwDebug()` увидел флаг и построил оверлей. */
+/** Toggle the saved debug flag and return the new state. Needed to turn
+ *  debugging on FROM INSIDE the app: a standalone PWA on iOS has its own
+ *  separate localStorage jar (a `?swdebug` flag set in Safari doesn't carry
+ *  over to it), and there's no address bar to add a query param to. The
+ *  caller reloads the page afterward so `initSwDebug()` sees the flag and
+ *  builds the overlay. */
 export function toggleSwDebug(): boolean {
   let on = false;
   try {
@@ -70,7 +73,7 @@ export function toggleSwDebug(): boolean {
     if (on) localStorage.setItem(FLAG_KEY, '1');
     else localStorage.removeItem(FLAG_KEY);
   } catch {
-    // localStorage недоступен — переключить нельзя
+    // localStorage unavailable — can't toggle
   }
   return on;
 }
@@ -79,7 +82,7 @@ function pad(n: number, w = 2): string {
   return String(n).padStart(w, '0');
 }
 
-/** Настенное время `ЧЧ:ММ:СС.ммм` — чтобы «только что» совпадало с часами телефона. */
+/** Wall-clock time `HH:MM:SS.mmm` — so "just now" lines up with the phone's clock. */
 function fmtTime(t: number): string {
   const d = new Date(t);
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
@@ -105,7 +108,7 @@ function writeLog(entries: LogEntry[]): void {
   try {
     localStorage.setItem(LOG_KEY, JSON.stringify(entries));
   } catch {
-    // переполнение квоты / приватный режим — молча пропускаем
+    // quota exceeded / private browsing — fail silently
   }
 }
 
@@ -189,8 +192,9 @@ const CSS = `
 .swdbg__t {
   color: #6f9c88;
 }
-/* Атрибут hidden сам по себе даёт лишь display:none из UA-стилей, который
-   перебивается авторским .swdbg__panel{display:flex} — поэтому гасим явно. */
+/* The hidden attribute by itself only gives display:none from UA styles,
+   which gets overridden by our own .swdbg__panel{display:flex} — so we
+   suppress it explicitly. */
 .swdbg[hidden],
 .swdbg__panel[hidden],
 .swdbg__badge[hidden] {
@@ -238,7 +242,7 @@ class SwDebugImpl implements SwDebug {
     });
   }
 
-  /** Логировать все переходы состояния конкретного воркера. */
+  /** Log every state transition of a given worker. */
   private watchWorker(w: ServiceWorker, tag: string): void {
     w.addEventListener('statechange', () => {
       this.log(`${tag} sw statechange → ${w.state}`);
@@ -253,7 +257,7 @@ class SwDebugImpl implements SwDebug {
     }
     const c = navigator.serviceWorker.controller;
     this.log(`boot: controller=${c ? c.state : 'none'} standalone=${isStandalone()}`);
-    // Регистрация может быть ещё не готова — дочитаем состояния асинхронно.
+    // The registration might not be ready yet — read the rest of the state async.
     void navigator.serviceWorker.getRegistration().then((reg) => {
       if (!reg) {
         this.log('boot: getRegistration() → none');
@@ -267,7 +271,7 @@ class SwDebugImpl implements SwDebug {
     });
   }
 
-  /** Сигналы возврата на передний план — только логируем (фикс — фаза 2). */
+  /** Signals of returning to the foreground — logged only (the fix is phase 2). */
   private wireResumeSignals(): void {
     document.addEventListener('visibilitychange', () => {
       this.visCount += 1;
@@ -334,14 +338,15 @@ class SwDebugImpl implements SwDebug {
     spacer.className = 'swdbg__spacer';
 
     const shareBtn = mkBtn('share', () => this.shareLog());
-    // Web Share есть не везде (десктоп Chrome) — без него кнопку не показываем,
-    // унести лог помогает copy. На iOS-standalone share — главный способ (AirDrop/
-    // Сообщения/Почта из системного листа), т.к. буфер обмена туда не дотянешь.
+    // Web Share isn't available everywhere (desktop Chrome) — hide the button
+    // when it's missing, copy still gets the log out. On iOS standalone,
+    // share is the main way out (AirDrop/Messages/Mail from the system
+    // sheet), since the clipboard doesn't reach off-device.
     shareBtn.hidden = typeof navigator.share !== 'function';
     const copyBtn = mkBtn('copy', () => this.copyLog());
     const clearBtn = mkBtn('clear', () => this.clearLog());
-    const collapseBtn = mkBtn('▾', () => this.setCollapsed(true)); // свернуть в бейдж
-    const offBtn = mkBtn('✕', () => this.disable()); // совсем выключить отладку
+    const collapseBtn = mkBtn('▾', () => this.setCollapsed(true)); // collapse to badge
+    const offBtn = mkBtn('✕', () => this.disable()); // turn debugging off entirely
 
     head.append(
       title,
@@ -364,14 +369,15 @@ class SwDebugImpl implements SwDebug {
     this.refreshState();
   }
 
-  /** Совсем выключить отладку: снять сохранённый флаг и убрать оверлей из DOM
-   *  (без перезагрузки — при следующем запуске флага уже нет, оверлея не будет).
-   *  Слушатели цикла SW остаются висеть до перезагрузки, но молча (лог не рисуется). */
+  /** Turn debugging off entirely: clear the saved flag and remove the overlay
+   *  from the DOM (no reload needed — on the next launch the flag is gone
+   *  and there'll be no overlay). SW lifecycle listeners stay attached until
+   *  the next reload, but silently (nothing gets logged to the UI). */
   private disable(): void {
     try {
       localStorage.removeItem(FLAG_KEY);
     } catch {
-      // localStorage недоступен — не критично
+      // localStorage unavailable — not critical
     }
     this.root.remove();
     document.getElementById('swdbg-style')?.remove();
@@ -406,7 +412,7 @@ class SwDebugImpl implements SwDebug {
     this.render();
   }
 
-  /** Полный текст для выгрузки: шапка (build id + снимок состояния) + весь лог. */
+  /** Full text for export: a header (build id + state snapshot) plus the whole log. */
   private fullLogText(): string {
     const header = `SW log · build ${__COMMIT__} · ${fmtDateTime(__BUILD_TIME__)}\nstate: ${this.stateEl.textContent}`;
     const body = this.entries.map((e) => `${fmtTime(e.t)} ${e.msg}`).join('\n');
@@ -424,16 +430,16 @@ class SwDebugImpl implements SwDebug {
     }
   }
 
-  /** Унести лог с телефона через системный лист (AirDrop/Сообщения/Почта). */
+  /** Get the log off the phone via the system share sheet (AirDrop/Messages/Mail). */
   private shareLog(): void {
     if (typeof navigator.share !== 'function') {
-      this.copyLog(); // страховка, если кнопка всё же нажата без Web Share
+      this.copyLog(); // fallback in case the button gets clicked without Web Share
       return;
     }
     navigator.share({ title: 'PR SW log', text: this.fullLogText() }).then(
       () => this.flash('shared'),
       (e: unknown) => {
-        // Пользователь закрыл лист (AbortError) — это не ошибка, молчим.
+        // The user dismissed the sheet (AbortError) — not an error, stay quiet.
         if (e && typeof e === 'object' && (e as { name?: string }).name === 'AbortError')
           return;
         this.flash('share failed');
@@ -474,15 +480,15 @@ function mkBtn(label: string, onClick: () => void): HTMLButtonElement {
   return b;
 }
 
-/** Запущены ли из ярлыка на домашнем экране (iOS standalone / display-mode). */
+/** Whether launched from a home-screen shortcut (iOS standalone / display-mode). */
 function isStandalone(): boolean {
   const iosStandalone =
     (navigator as unknown as { standalone?: boolean }).standalone === true;
   return iosStandalone || window.matchMedia('(display-mode: standalone)').matches;
 }
 
-/** Инициализировать отладку SW. Если флаг не выставлен — вернуть no-op контракт
- *  (оверлей не строится, слушатели не вешаются). */
+/** Initialize SW debugging. If the flag isn't set, return the no-op contract
+ *  (no overlay built, no listeners attached). */
 export function initSwDebug(): SwDebug {
   if (!resolveEnabled()) return NOOP;
   return new SwDebugImpl();

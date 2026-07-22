@@ -1,32 +1,37 @@
-// Растр знакового зазора до кромок трассы — дешёвая проверка «аварийный ли ход»
-// для планировщика ИИ (planner.ts). Чистая логика без DOM.
+// Signed clearance raster to the track edges — a cheap "did this move crash" check
+// for the AI planner (planner.ts). Pure logic, no DOM.
 //
-// Зачем: точный computeOutcome (game.ts) семплит отрезок густо и на каждой точке
-// зовёт pointInPolygon по сотням вершин — дорого. Планировщику A* нужен лишь факт
-// «пересёк ли ход стенку», а не точка аварии. Предпосчитываем поле зазора один раз
-// на гонку (как buildNavField) и потом выбираем его билинейно за O(1) на семпл.
+// Why: the exact computeOutcome (game.ts) samples a segment densely and calls
+// pointInPolygon against hundreds of vertices at every point — expensive. The A*
+// planner only needs to know whether a move crossed a wall, not the exact crash
+// point. We precompute a clearance field once per race (like buildNavField), then
+// sample it bilinearly in O(1) per lookup.
 //
-// Зазор со знаком: на дороге — +расстояние до ближайшей кромки, за кромкой —
-// −(глубина за кромкой). Ход — авария, если вдоль отрезка зазор где-то опускается
-// ниже −OFFROAD_FORGIVE (та же семантика, что scanMove в game.ts). Выборка чуть
-// консервативна (−0.5·шаг запаса), чтобы «запланированно безопасный» ход не вылетал
-// в реальном движке из-за огрубления растра.
+// Signed clearance: on the road it's +distance to the nearest edge; off the road
+// it's −(depth past the edge). A move is a crash if clearance anywhere along its
+// segment drops below −OFFROAD_FORGIVE (same semantics as scanMove in game.ts).
+// Sampling is slightly conservative (a half-cell margin) so a move the planner
+// considers safe doesn't actually clip a wall in the real engine due to raster
+// coarseness.
 
 import { Vec, distPointToPolyline } from '../../geometry';
 import { Track, onRoad } from '../track';
 import { OFFROAD_FORGIVE } from '../../config';
 
-/** Шаг растра в клетках. 0.2 ≪ типичной ширины трассы (2..6) — тонкие перегородки
- *  и кромки ловятся, память умеренная (несколько сотен КБ на гонку). */
+/** Raster cell size, in grid units. 0.2 is much smaller than a typical track width
+ *  (2..6), so thin barriers and edges are still caught, and memory stays modest (a
+ *  few hundred KB per race). */
 const CELL = 0.2;
-/** Шаг семплинга отрезка хода при проверке (в клетках). Как у движка (scanMove),
- *  чтобы не «перепрыгнуть» мелкий срез угла между семплами. */
+/** Sampling step along a move's segment when checking it (in grid units). Matches
+ *  the engine's step (scanMove) so we don't skip over a small corner clip between
+ *  samples. */
 const STEP = 0.05;
-/** Запас консервативности сверх допуска, в клетках. Билинейная выборка у выпуклого
- *  угла стенки ЗАВЫШАЕТ зазор (истинный минимум — в самой вершине, между узлами
- *  решётки) на ~CELL/2. Требуем зазор с этим запасом, иначе планировщик поверит в
- *  «быстрый безопасный план» у апекса, которого в точном движке нет, и через пару
- *  ходов влетит в скоростную ловушку. */
+/** Conservative margin added on top of the tolerance, in grid units. Bilinear
+ *  sampling near a convex wall corner OVERESTIMATES clearance (the true minimum sits
+ *  right at the vertex, between grid nodes) by about CELL/2. We require clearance
+ *  with this margin, otherwise the planner could believe in a "fast safe plan" past
+ *  an apex that doesn't actually exist in the exact engine, and run into a
+ *  speed trap a few moves later. */
 const MARGIN = CELL;
 
 export interface Clearance {
@@ -34,11 +39,12 @@ export interface Clearance {
   minY: number;
   cols: number;
   rows: number;
-  /** Знаковый зазор в узлах решётки (row-major): + на дороге, − за кромкой. */
+  /** Signed clearance at each grid node (row-major): + on the road, − past the edge. */
   data: Float32Array;
 }
 
-/** Знаковый зазор точки: + на дороге (до ближайшей кромки), − за кромкой (глубина). */
+/** Signed clearance of a point: + on the road (distance to nearest edge), − past the
+ *  edge (depth beyond it). */
 function signedClearance(track: Track, p: Vec): number {
   const d = Math.min(
     distPointToPolyline(p, track.outer),
@@ -47,7 +53,8 @@ function signedClearance(track: Track, p: Vec): number {
   return onRoad(p, track.outer, track.inner) ? d : -d;
 }
 
-/** Построить растр зазора по bbox внешнего контура (+поля). Раз на гонку. */
+/** Build the clearance raster over the outer boundary's bbox (plus a margin). Once
+ *  per race. */
 export function buildClearance(track: Track): Clearance {
   let minX = Infinity;
   let minY = Infinity;
@@ -59,7 +66,7 @@ export function buildClearance(track: Track): Clearance {
     if (p.x > maxX) maxX = p.x;
     if (p.y > maxY) maxY = p.y;
   }
-  // Поле в 1 клетку: болид может законно оказаться в полосе допуска у самой кромки.
+  // 1-cell margin: a car can legitimately end up within tolerance right at the edge.
   minX -= 1;
   minY -= 1;
   maxX += 1;
@@ -78,7 +85,8 @@ export function buildClearance(track: Track): Clearance {
   return { minX, minY, cols, rows, data };
 }
 
-/** Билинейная выборка зазора в произвольной точке. Вне решётки — глубоко за краем. */
+/** Bilinear sampling of clearance at an arbitrary point. Outside the grid, treated
+ *  as deep off-road. */
 function sample(f: Clearance, x: number, y: number): number {
   const fx = (x - f.minX) / CELL;
   const fy = (y - f.minY) / CELL;
@@ -96,14 +104,14 @@ function sample(f: Clearance, x: number, y: number): number {
 }
 
 /**
- * Проходим ли отрезок хода a→b, ни разу не зайдя за кромку глубже допуска.
- * Консервативно (запас в полшага растра): бордерлайн считаем аварией, чтобы
- * запланированный «безопасный» ход не вылетал в точном движке.
+ * Whether the move segment a→b stays clear, never going past the edge deeper than
+ * the tolerance. Conservative (half a raster cell of margin): borderline cases count
+ * as a crash, so a move planned as "safe" doesn't actually fail in the exact engine.
  */
 export function segClear(f: Clearance, a: Vec, b: Vec): boolean {
   const len = Math.hypot(b.x - a.x, b.y - a.y);
   const steps = Math.max(1, Math.ceil(len / STEP));
-  const floor = -OFFROAD_FORGIVE + MARGIN; // допуск движка + запас консервативности
+  const floor = -OFFROAD_FORGIVE + MARGIN; // engine's tolerance + conservative margin
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
     if (sample(f, a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t) < floor) return false;

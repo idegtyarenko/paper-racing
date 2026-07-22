@@ -1,5 +1,5 @@
-// Модальные диалоги оверлея: ввод имени (создание/вход по ссылке), вход по коду
-// и короткие всплывающие уведомления (тост). DOM-шторки живут в #overlay.
+// Overlay modal dialogs: name entry (create a race / join via link), join by
+// code, and short popup notifications (toasts). The DOM sheets live in #overlay.
 
 import { bindTap, openSheet, closeOverlay } from './dom';
 import { strings } from '../i18n';
@@ -15,11 +15,11 @@ const joinConfirm = document.getElementById('joinConfirm') as HTMLButtonElement;
 const toast = document.getElementById('toast')!;
 const connBanner = document.getElementById('connBanner')!;
 
-// Колбэки подтверждения диалогов имени/кода (заполняются при открытии диалога).
+// Confirm callbacks for the name/code dialogs (set when the dialog is opened).
 let nameCb: ((name: string) => void) | null = null;
 let joinCb: ((code: string, name: string) => void) | null = null;
 
-/** Диалог ввода имени (создание игры / вход по ссылке). */
+/** Name-entry dialog (creating a race / joining via a link). */
 export function openNameDialog(
   confirmLabel: string,
   defaultName: string,
@@ -33,8 +33,8 @@ export function openNameDialog(
   setTimeout(() => nameInput.focus(), 50);
 }
 
-/** Пометить поле как пустое-обязательное (красная рамка) и увести на него фокус,
- *  если это первое найденное пустое. Рамка снимается при первом вводе. */
+/** Flag a field as empty-but-required (red outline) and focus it, if it's the
+ *  first empty field found. The outline clears as soon as the user types. */
 function flagEmpty(field: HTMLInputElement, focusFirst: boolean): void {
   field.classList.add('field--invalid');
   if (focusFirst) field.focus();
@@ -51,7 +51,7 @@ function submitName(): void {
   cb?.(v);
 }
 
-/** Диалог входа по коду (код + имя). Оверлей не закрывается сам — это делает вызывающий. */
+/** Join-by-code dialog (code + name). The overlay doesn't close itself — the caller does. */
 export function openJoinDialog(
   defaultName: string,
   defaultCode: string,
@@ -68,8 +68,8 @@ export function openJoinDialog(
   setTimeout(() => (defaultCode ? joinNameInput : joinCodeInput).focus(), 50);
 }
 
-/** Пока идёт запрос входа: заблокировать кнопку и показать «Подключаемся…»,
- *  чтобы повторные тапы не плодили параллельные join'ы. */
+/** While the join request is in flight: disable the button and show "Connecting…"
+ *  so repeated taps don't spawn parallel join attempts. */
 export function setJoinBusy(busy: boolean): void {
   joinConfirm.disabled = busy;
   joinConfirm.textContent = busy ? strings.online.joining : strings.online.joinSubmit;
@@ -87,20 +87,20 @@ function submitJoin(): void {
   joinCb?.(code, name);
 }
 
-/** Показать ошибку в диалоге входа (не закрывая его). */
+/** Show an error in the join dialog (without closing it). */
 export function showJoinError(msg: string): void {
   joinError.textContent = msg;
   joinError.hidden = false;
 }
 
-/** Показать/скрыть баннер «нет связи» (обрыв realtime-канала). */
+/** Show/hide the "connection lost" banner (realtime channel dropped). */
 export function setConnBanner(lost: boolean): void {
   connBanner.hidden = !lost;
 }
 
 let toastTimer: number | undefined;
 
-/** Короткое всплывающее уведомление (ссылка/код скопированы и т.п.). */
+/** Short popup notification (link/code copied, etc.). */
 export function showToast(msg: string, ms = 1800): void {
   toast.textContent = msg;
   toast.hidden = false;
@@ -108,7 +108,7 @@ export function showToast(msg: string, ms = 1800): void {
   toastTimer = window.setTimeout(() => (toast.hidden = true), ms);
 }
 
-/** Навесить подтверждение диалогов (кнопки + Enter в полях ввода). */
+/** Wire up dialog confirmation (buttons + Enter in input fields). */
 export function bindDialogs(): void {
   bindTap(nameConfirm, submitName);
   nameInput.addEventListener('keydown', (e) => {
@@ -118,7 +118,7 @@ export function bindDialogs(): void {
   joinNameInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') submitJoin();
   });
-  // Снять красную рамку, как только в поле начали вводить.
+  // Clear the red outline as soon as the field receives input.
   for (const f of [nameInput, joinCodeInput, joinNameInput]) {
     f.addEventListener('input', () => f.classList.remove('field--invalid'));
   }

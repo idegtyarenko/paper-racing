@@ -1,13 +1,15 @@
-// Dev-only тест-хелперы (`window.__pr`). Ручное прохождение мастера редактора
-// (нарисовать петлю → кромки → финиш → направление → режим → игроки) при браузерной
-// валидации сжигает уйму шагов и токенов. Эти хелперы прыгают сразу в нужное
-// состояние на готовой трассе и возвращают дешёвый JSON-снимок — читать состояние
-// можно одним вызовом вместо цепочки скриншотов.
+// Dev-only test helpers (`window.__pr`). Manually stepping through the editor
+// wizard (draw a loop → edges → finish → direction → mode → players) for
+// every browser-based check burns a ton of steps and tokens. These helpers
+// jump straight to the state we need on a ready-made track and return a
+// cheap JSON snapshot — reading state takes one call instead of a chain of
+// screenshots.
 //
-// Модуль подключается динамическим импортом только под `import.meta.env.DEV`
-// (см. `main.ts`). В ПРОД-БАНДЛ НЕ ПОПАДАЕТ: Vite заменяет `import.meta.env.DEV` на
-// `false`, ветка с импортом удаляется как мёртвый код, и чанк не создаётся —
-// проверяется `npm run build` + grep по dist. Пользователю не виден.
+// The module is loaded via dynamic import only under `import.meta.env.DEV`
+// (see `main.ts`). IT NEVER ENDS UP IN THE PROD BUNDLE: Vite replaces
+// `import.meta.env.DEV` with `false`, the import branch is eliminated as dead
+// code, and the chunk is never created — verified via `npm run build` + grep
+// over dist. Not visible to end users.
 
 import { AppState } from './app-state';
 import { setLocale as applyLocale, type LocaleCode } from './i18n';
@@ -19,8 +21,9 @@ import { worldToScreen } from './view/camera';
 import * as vp from './view/viewport';
 import * as input from './view/input';
 
-/** Зависимости из `main.ts`, которые хелперы дёргают по ссылке — оркестрация
- *  остаётся приватной в main.ts, наружу отдаём ровно нужное. */
+/** Dependencies from `main.ts` that the helpers call by reference —
+ *  orchestration stays private to main.ts, and we only expose exactly what's
+ *  needed here. */
 export interface DevHelperDeps {
   S: AppState;
   canvas: HTMLCanvasElement;
@@ -48,14 +51,15 @@ export function installDevHelpers(deps: DevHelperDeps): void {
     myTurn,
   } = deps;
 
-  // Готовая прямоугольная трасса-«бублик»: дорога — рамка между внешним и
-  // внутренним прямоугольниками, финиш поперёк НИЖНЕЙ прямой, гонка в +x.
-  // Финиш строится так же, как в редакторе, — коротким штрихом поперёк дороги,
-  // обрезанным по кромкам через `clipFinishLine` (концы вынесены за кромки на
-  // 0.25). Так фикстура остаётся реально рисуемой мастером: линия пересекает всю
-  // ширину дороги от кромки до кромки (y=0 внешняя → y=8 внутренняя), а не
-  // обрывается посередине, как раньше на ЛЕВОЙ прямой (x=6, где дорога тянется
-  // до y=24, а линия доходила лишь до y=8).
+  // A ready-made rectangular "donut" track: the road is the frame between an
+  // outer and an inner rectangle, the finish line crosses the BOTTOM
+  // straight, and the race runs in +x. The finish is built the same way the
+  // editor does it — a short stroke across the road, clipped to the edges
+  // via `clipFinishLine` (its ends extend 0.25 past the edges). That keeps
+  // the fixture actually drawable by the wizard: the line spans the full
+  // width of the road from edge to edge (y=0 outer → y=8 inner), instead of
+  // stopping partway as it used to on the LEFT straight (x=6, where the road
+  // runs to y=24 but the line only reached y=8).
   const devTrack = (): Track => {
     const outer = [
       { x: 0, y: 0 },
@@ -75,7 +79,7 @@ export function installDevHelpers(deps: DevHelperDeps): void {
     if ('error' in res) throw new Error(`dev track invalid: ${res.error}`);
     return res.track;
   };
-  // Дешёвый снимок ключевого состояния для ассертов без скриншотов.
+  // A cheap snapshot of key state for assertions, no screenshots needed.
   const snap = () => ({
     phase: S.phase,
     gamePhase: S.game?.phase ?? null,
@@ -91,29 +95,33 @@ export function installDevHelpers(deps: DevHelperDeps): void {
         finished: isFinished(p),
       })) ?? null,
     lastLocalRace: S.lastLocalRace,
-    // Предвыбор: место-владелец веера, число кандидатов и текущая наметка.
+    // Pre-selection: the seat that owns the candidate fan, candidate count,
+    // and the current pending pick.
     candSeat: candOwner(),
     candsCount: S.cands?.length ?? null,
     pending: S.pending?.target ?? null,
     hover: input.getHover()?.target ?? null,
   });
   (window as unknown as Record<string, unknown>).__pr = {
-    /** Тест-переключатель языка: пишет выбор в localStorage и перезагружает. Для
-     *  проверки локалей без UI (то же делает `?lang=en|ru|be` в URL). */
+    /** Test language switcher: writes the choice to localStorage and reloads.
+     *  For checking locales without going through the UI (same effect as
+     *  `?lang=en|ru|be` in the URL). */
     setLocale(code: LocaleCode) {
       applyLocale(code);
     },
-    /** Готовая трасса + сразу локальная гонка: humans людей, bots ботов. */
+    /** Ready-made track plus an immediate local race: `humans` human players,
+     *  `bots` bot players. */
     race(humans = 1, bots = 1, difficulty: Difficulty = 'medium') {
       S.raceTrack = devTrack();
       startRace(humans, bots, difficulty);
       return snap();
     },
-    /** Живая гонка, придвинутая к финишу: всем (людям и ботам) выставляется
-     *  crossings = WIN−laps, позиции не трогаем (болиды остаются на стартовой
-     *  решётке за линией). При laps=1 первое же пересечение финиша побеждает —
-     *  удобно доиграть концовку вручную (расстановка мест, заморозка порядка,
-     *  переход в phase='over', win-экран), не наматывая круги. */
+    /** A live race pushed right up to the finish: every player (human and
+     *  bot) gets crossings = WIN−laps, positions are left untouched (cars
+     *  stay on the starting grid behind the line). With laps=1, the very
+     *  first finish crossing wins — handy for manually playing out the
+     *  endgame (place assignment, order freeze, transition to phase='over',
+     *  the win screen) without grinding through laps. */
     nearFinish(humans = 1, bots = 1, laps = 1, difficulty: Difficulty = 'medium') {
       S.raceTrack = devTrack();
       startRace(humans, bots, difficulty);
@@ -123,12 +131,13 @@ export function installDevHelpers(deps: DevHelperDeps): void {
       redraw();
       return snap();
     },
-    /** Гонка, где человек (seat 0) в одном ходе от победы: crossings = WIN−1, стоит
-     *  на нижней прямой перед линией финиша (x=20) с инерцией (2,0) сквозь неё
-     *  (18→20); соперники убраны на верхнюю прямую, чтобы не мешать и не
-     *  финишировать. После tapAccel(0,0) человек побеждает, но place ещё null (идёт
-     *  доигровка раунда) — это и есть «окно финиша», в котором финишёру НЕ должен
-     *  предлагаться ход. */
+    /** A race where the human (seat 0) is one move from winning: crossings =
+     *  WIN−1, positioned on the bottom straight just before the finish line
+     *  (x=20) with velocity (2,0) carrying it through (18→20); opponents are
+     *  moved to the top straight so they don't interfere or finish
+     *  themselves. After tapAccel(0,0) the human wins, but place is still
+     *  null (the round is still playing out) — this is the "finish window"
+     *  during which the finisher should NOT be offered a move. */
     raceAtWin(bots = 1, difficulty: Difficulty = 'medium') {
       S.raceTrack = devTrack();
       startRace(1, bots, difficulty);
@@ -137,16 +146,17 @@ export function installDevHelpers(deps: DevHelperDeps): void {
       h.pos = { x: 18, y: 4 };
       h.vel = { x: 2, y: 0 };
       for (let i = 1; i < S.game!.players.length; i++) {
-        S.game!.players[i].pos = { x: 16, y: 20 }; // верхняя прямая, не блокируют финиш
+        S.game!.players[i].pos = { x: 16, y: 20 }; // top straight, out of the finisher's way
       }
       refreshCands();
       updateUI();
       redraw();
       return snap();
     },
-    /** Готовая трасса → редактор на финальном шаге `ready` (минуя рисование): та же
-     *  общая canvas-поверхность, что в гонке, плюс редакторский оверлей. Для
-     *  визуальной проверки полотна/кромок в режиме edit без прохождения мастера. */
+    /** Ready-made track → editor at the final `ready` step (skipping the
+     *  drawing phase): the same shared canvas surface used in-race, plus the
+     *  editor overlay. For visually checking the ribbon/edges in edit mode
+     *  without going through the wizard. */
     toEdit() {
       S.editor = editorFromTrack(devTrack());
       S.phase = 'edit';
@@ -155,7 +165,7 @@ export function installDevHelpers(deps: DevHelperDeps): void {
       redraw();
       return snap();
     },
-    /** Готовая трасса → экран выбора режима (минуя рисование). */
+    /** Ready-made track → mode-select screen (skipping the drawing phase). */
     toMode() {
       S.raceTrack = devTrack();
       S.playersReturn = 'edit';
@@ -165,19 +175,22 @@ export function installDevHelpers(deps: DevHelperDeps): void {
       redraw();
       return snap();
     },
-    /** Обнулить сохранённый локальный состав (эмуляция «после онлайн-гонки»,
-     *  когда рематч одним тапом недоступен и кнопка «Рематч» прячется). */
+    /** Clear the saved local lineup (simulates "after an online race," where
+     *  a one-tap rematch isn't available and the "Rematch" button is
+     *  hidden). */
     clearLastRace() {
       S.lastLocalRace = null;
       updateUI();
       return snap();
     },
-    /** Снимок состояния приложения для ассертов. */
+    /** Snapshot of app state for assertions. */
     state: snap,
     /**
-     * Тап по кандидату с ускорением (ax, ay) у места-владельца веера — тем же
-     * решением, что input.endGesture: в чужой ход это наметка (setPending), в свой —
-     * коммит. Позволяет прогнать предвыбор без синтетики pointer-событий по canvas.
+     * Taps the candidate with acceleration (ax, ay) for the seat that owns
+     * the fan — using the same logic as input.endGesture: on someone else's
+     * turn this is a pending pick (setPending), on your own turn it commits.
+     * Lets tests exercise pre-selection without synthesizing pointer events
+     * on the canvas.
      */
     tapAccel(ax: number, ay: number) {
       const seat = candOwner();
@@ -188,20 +201,21 @@ export function installDevHelpers(deps: DevHelperDeps): void {
       const c = S.cands.find((k) => k.target.x === tx && k.target.y === ty);
       if (!c) return snap();
       if (!myTurn() && seat >= 0) {
-        S.pending = c; // наметка (как setPending в input-deps)
+        S.pending = c; // pending pick (same as setPending in input-deps)
         redraw();
       } else {
         commitMove(c);
       }
       return snap();
     },
-    /** Подтвердить наметку в свой ход (эквивалент кнопки «Газу!»). */
+    /** Confirm the pending pick on your own turn (equivalent to the "Go!"
+     *  button). */
     confirm() {
       if (S.pending && myTurn()) commitMove(S.pending);
       return snap();
     },
-    /** Синтетический ховер мышью над кандидатом с ускорением (ax, ay) — проверить,
-     *  что наведение переживает чужой ход (reaimHover). */
+    /** Synthetic mouse hover over the candidate with acceleration (ax, ay) —
+     *  checks that the hover survives someone else's turn (reaimHover). */
     hoverAccel(ax: number, ay: number) {
       const seat = candOwner();
       if (seat < 0) return snap();
@@ -219,7 +233,8 @@ export function installDevHelpers(deps: DevHelperDeps): void {
       );
       return snap();
     },
-    /** Прогнать refreshCands+redraw — эмуляция входящего чужого хода без смены стейта. */
+    /** Run refreshCands+redraw — simulates an incoming move from another
+     *  player without changing state. */
     refresh() {
       refreshCands();
       redraw();

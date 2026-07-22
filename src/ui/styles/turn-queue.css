@@ -1,10 +1,11 @@
-/* Контейнер верхнего HUD над полем: очередь ходов + (в онлайне) код гонки. Флекс с
-   переносом — когда обе капсулы в строку не влезают (узкий экран / длинный состав),
-   код гонки переносится на строку НИЖЕ очереди, а не налезает на неё. Сам контейнер
-   не перехватывает жесты по карте; кликабельные дети включают pointer-events сами. */
+/* Container for the top HUD above the board: turn queue + (online only) race code.
+   Flex with wrapping — when both pills don't fit on one line (narrow screen / long
+   roster), the race code wraps to the line BELOW the queue rather than overlapping it.
+   The container itself doesn't intercept map gestures; clickable children re-enable
+   pointer-events themselves. */
 .board-hud-top {
   position: absolute;
-  /* Отступ от краёв + вырезы (бровь/челка) iPhone, иначе HUD прячется под ними. */
+  /* Inset from the edges + iPhone notches (dynamic island/notch), otherwise the HUD hides under them. */
   top: calc(10px + env(safe-area-inset-top));
   left: calc(10px + env(safe-area-inset-left));
   right: calc(10px + env(safe-area-inset-right));
@@ -17,8 +18,8 @@
   pointer-events: none;
 }
 
-/* Полоса очереди ходов: капсула с точками игроков у верхнего края поля, поверх
-   canvas (как zoom-ctl / confirm-move). Не перехватывает жесты по карте. */
+/* Turn-queue strip: a pill with player dots at the top edge of the board, above
+   the canvas (like zoom-ctl / confirm-move). Doesn't intercept map gestures. */
 .turn-queue {
   display: flex;
   align-items: center;
@@ -29,14 +30,14 @@
   background: var(--surface-glass);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
   overflow: hidden;
-  pointer-events: none; /* полоса информативная — клики уходят на карту под ней */
+  pointer-events: none; /* the strip is informational — clicks pass through to the map underneath */
 }
 
 .turn-queue[hidden] {
   display: none;
 }
 
-/* Текстовая подпись полосы — поясняет, что означают точки. */
+/* Text label for the strip — explains what the dots mean. */
 .turn-queue__label {
   flex: 0 0 auto;
   font-size: 11px;
@@ -51,7 +52,7 @@
   gap: 8px;
 }
 
-/* Точка очереди — болид соответствующего цвета. */
+/* Queue dot — colored to match the player's car. */
 .turn-queue__dot {
   flex: 0 0 auto;
   width: 12px;
@@ -59,15 +60,15 @@
   border-radius: 50%;
 }
 
-/* Текущий ход: крупнее и в тёмной рамке — сразу видно, чей ход сейчас. */
+/* Current turn: larger and with a dark outline — makes it obvious whose turn it is. */
 .turn-queue__dot--current {
   width: 18px;
   height: 18px;
   box-shadow: 0 0 0 2px var(--text-muted);
 }
 
-/* Граница круга: тонкая вертикальная черта между точками разных кругов —
-   поясняет одинаковый цвет на стыке (конец круга / начало следующего). */
+/* Lap boundary: a thin vertical line between dots of different laps — clarifies
+   the matching color at the seam (end of one lap / start of the next). */
 .turn-queue__sep {
   flex: 0 0 auto;
   width: 1px;

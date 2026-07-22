@@ -1,7 +1,8 @@
-/* Чип с кодом игры над полем во время онлайн-гонки: живёт в .board-hud-top рядом с
-   очередью ходов (переносится под неё, когда в строку не влезают). В отличие от
-   turn-queue кликабельна — тап делится ссылкой на игру, чтобы подсказать выпавшему код.
-   Контейнер .board-hud-top не ловит жесты, поэтому чип возвращает pointer-events себе. */
+/* Game-code chip above the board during an online race: lives in .board-hud-top next
+   to the turn queue (wraps below it when both don't fit on one line). Unlike
+   turn-queue it's clickable — tapping shares the game link, to remind a disconnected
+   player of the code. The .board-hud-top container doesn't capture gestures, so the
+   chip re-enables pointer-events for itself. */
 .race-code {
   pointer-events: auto;
   padding: 7px 12px;

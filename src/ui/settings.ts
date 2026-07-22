@@ -1,9 +1,9 @@
-// Лист-модалка настроек правил заезда: управляемость машины (пресеты Спорткар/GT/F1/
-// Классическая или ручная «Своё» с ползунками разгон/тормоза/хват/прижим и живым
-// предпросмотром облака ходов), тип штрафа за вылет, строгость динамической формулы,
-// размер статического штрафа и лимит времени на ход (только онлайн). Владеет своими
-// DOM-элементами; текущие правила держит вызывающий — сюда
-// они приходят копией, а изменения уезжают через onChange.
+// Race-rules settings sheet: car handling (Sports/GT/F1/Classic presets, or a
+// manual "Custom" mode with accel/brake/grip/downforce sliders and a live
+// preview of the reachable-moves cloud), crash-penalty type, dynamic-formula
+// strictness, static-penalty size, and the per-turn time limit (online only).
+// Owns its own DOM elements; the caller holds the actual rules — they arrive
+// here as a copy, and changes are sent back out via onChange.
 
 import { Rules, Drive } from '../model/game';
 import { reachableTargets, aeroFactor } from '../model/turns';
@@ -51,19 +51,20 @@ type DrivePreset = keyof typeof DRIVE_PRESETS;
 type DriveMode = DrivePreset | 'custom';
 type SettingsTab = 'drive' | 'rules';
 
-/** Показатель степени, соответствующий выбору сегмента строгости. */
+/** The exponent corresponding to the selected strictness segment. */
 const exponentOf = (kind: string): number =>
   kind === 'strict' ? CRASH_EXPONENT_STRICT : CRASH_EXPONENT_STANDARD;
 
-/** Совпадает ли drive с готовым пресетом (все четыре оси равны его значениям). */
+/** Whether drive matches a built-in preset (all four axes equal its values). */
 const isPreset = (d: Drive, p: Drive): boolean =>
   d.accel === p.accel &&
   d.brake === p.brake &&
   d.grip === p.grip &&
   d.downforce === p.downforce;
 
-/** Режим управляемости по значениям drive: совпал с пресетом — его имя, иначе «Своё».
- *  Перебор по DRIVE_PRESETS — новые пресеты подхватываются автоматически. */
+/** Handling mode derived from drive values: the preset's name if it matches
+ *  one, otherwise "Custom". Iterates over DRIVE_PRESETS, so new presets are
+ *  picked up automatically. */
 function driveModeOf(d: Drive): DriveMode {
   for (const [name, p] of Object.entries(DRIVE_PRESETS)) {
     if (isPreset(d, p)) return name as DrivePreset;
@@ -71,17 +72,18 @@ function driveModeOf(d: Drive): DriveMode {
   return 'custom';
 }
 
-// Рабочая копия правил (мутируется контролами) и колбэк наружу — задаются при
-// открытии. mode — какой сегмент управляемости показан (локально, в Rules не хранится:
-// в Rules едет только числовой drive). online — показывать ли строку лимита времени.
+// Working copy of the rules (mutated by the controls) and the outward
+// callback — set when the sheet opens. mode is which handling segment is
+// shown (kept locally, not stored in Rules: Rules only carries the numeric
+// drive values). online controls whether the time-limit row is shown.
 let rules: Rules;
 let mode: DriveMode = 'sports';
 let onChange: ((r: Rules) => void) | null = null;
 let online = false;
-// Какая вкладка листа открыта («Управляемость»/«Правила»). Локально, в Rules не хранится.
+// Which sheet tab is open ("Handling"/"Rules"). Kept locally, not stored in Rules.
 let activeTab: SettingsTab = 'drive';
 
-/** Показать активную вкладку: переключить видимость групп и подсветку кнопок-табов. */
+/** Show the active tab: toggle group visibility and the tab-button highlight. */
 function applyTab(): void {
   driveTab.hidden = activeTab !== 'drive';
   rulesTab.hidden = activeTab !== 'rules';
@@ -90,13 +92,13 @@ function applyTab(): void {
   });
 }
 
-/** Обновить вид контролов под текущие rules (активные сегменты, значения, видимость строк). */
+/** Refresh the controls to match the current rules (active segments, values, row visibility). */
 function render(): void {
   applyTab();
   driveMode.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
     btn.classList.toggle('seg__btn--active', btn.dataset.mode === mode);
   });
-  // Для пресетов — пояснение, для «Своей» — ползунки. Предпросмотр виден всегда.
+  // Presets get an explanation; "Custom" gets sliders. The preview is always visible.
   const custom = mode === 'custom';
   driveSliders.hidden = !custom;
   driveExplain.hidden = custom;
@@ -142,19 +144,21 @@ function render(): void {
   staticTurnsValue.textContent = String(rules.staticTurns);
 }
 
-/** Скорости (клетки/ход) для предпросмотра облака: 0.5 / 1 / 1.5 × DOWNFORCE_VREF
- *  (низкая ≈ чистая механика, средняя = референсная скорость прижима, высокая — прижим
- *  в полную силу). В км/ч (× KMH_PER_CELL): 150 / 300 / 450. */
+/** Speeds (cells/turn) for the preview cloud: 0.5 / 1 / 1.5 × DOWNFORCE_VREF
+ *  (low ≈ pure mechanics, mid = the downforce reference speed, high = downforce
+ *  at full strength). In km/h (× KMH_PER_CELL): 150 / 300 / 450. */
 const PREVIEW_SPEEDS = [3, 6, 9] as const;
 
 /**
- * Живой предпросмотр облака доступных ходов для текущего drive. Рисуем облако на
- * нескольких скоростях (PREVIEW_SPEEDS), сведённых к общей точке наката: с ростом
- * скорости аэродинамический прижим раздвигает боковой хват и торможение (aero растёт
- * как квадрат скорости), и облако распухает — то, чего не видно на одной скорости.
- * Точки тонированы по ярусу (насыщенные доступны с низкой скорости, бледные добавляет
- * прижим), у контуров — подписи км/ч. downforce = 0 → форма от скорости не зависит,
- * показываем одно облако. Цели берём из reachableTargets — без дублирования модели.
+ * Live preview of the reachable-moves cloud for the current drive settings. We
+ * draw the cloud at several speeds (PREVIEW_SPEEDS), all aligned to a shared
+ * coasting point: as speed increases, aerodynamic downforce widens both
+ * lateral grip and braking (aero grows with the square of speed), so the
+ * cloud swells — something a single-speed view wouldn't show. Points are
+ * tinted by tier (saturated ones are reachable already at low speed, faded
+ * ones are added by downforce), and the outlines carry km/h labels.
+ * downforce = 0 → shape doesn't depend on speed, so we show a single cloud.
+ * Targets come from reachableTargets — no duplicating the model.
  */
 function drawPreview(): void {
   const dpr = window.devicePixelRatio || 1;
@@ -168,12 +172,13 @@ function drawPreview(): void {
   ctx.clearRect(0, 0, cssW, cssH);
 
   const { accel, brake, grip, downforce } = rules.drive;
-  // downforce = 0 → aero ≡ 1 на любой скорости, облако не растёт: одна скорость (без подписей).
+  // downforce = 0 → aero ≡ 1 at any speed, so the cloud doesn't grow: a single speed (no labels).
   const showSpeeds = downforce > 0;
   const speeds = showSpeeds ? [...PREVIEW_SPEEDS] : [PREVIEW_SPEEDS[0]];
 
-  // Слой на каждую скорость: смещения a = target − C (клетки относительно ОБЩЕЙ точки
-  // наката) + эффективные полуоси эллипса (перёд = accel, прижим его не трогает).
+  // One layer per speed: offsets a = target − C (cells relative to the SHARED
+  // coasting point) plus the effective ellipse semi-axes (front = accel, which
+  // downforce leaves untouched).
   const layers = speeds.map((v) => {
     const aero = aeroFactor(downforce, v);
     const off = reachableTargets({ x: 0, y: 0 }, { x: v, y: 0 }, rules.drive).map(
@@ -185,7 +190,7 @@ function drawPreview(): void {
     return { v, aero, back: brake * aero, side: grip * aero, off };
   });
 
-  // Универсум точек (объединение по всем скоростям) + ярус первого появления.
+  // The universe of points (union over all speeds) + the tier of first appearance.
   const tierOf = new Map<string, number>();
   layers.forEach((l, i) => {
     for (const o of l.off) {
@@ -198,7 +203,7 @@ function drawPreview(): void {
     return { x, y, tier };
   });
 
-  // Рамка обзора: bbox облака и контуров (+поле; сверху больше — под верхнюю подпись).
+  // Viewport frame: bbox of the cloud and outlines (+padding; more at the top, for the label above).
   const maxBack = Math.max(...layers.map((l) => l.back));
   const maxSide = Math.max(...layers.map((l) => l.side));
   let minX = -maxBack;
@@ -223,9 +228,9 @@ function drawPreview(): void {
   const X = (gx: number) => ox + gx * cell;
   const Y = (gy: number) => oy + gy * cell;
   const cx = X(0);
-  const cy = Y(0); // общая точка наката (a = 0)
+  const cy = Y(0); // the shared coasting point (a = 0)
 
-  // Бледная сетка узлов.
+  // Faint node grid.
   ctx.fillStyle = '#cfc8b6';
   for (let gy = Math.ceil(minY); gy <= Math.floor(maxY); gy++) {
     for (let gx = Math.ceil(minX); gx <= Math.floor(maxX); gx++) {
@@ -235,7 +240,8 @@ function drawPreview(): void {
     }
   }
 
-  // Стрелка направления: слева в точку наката — эллипс асимметричен (перёд разгон, зад тормоз).
+  // Direction arrow: pointing left into the coasting point — the ellipse is
+  // asymmetric (front is acceleration, back is braking).
   ctx.strokeStyle = '#a49c86';
   ctx.fillStyle = '#a49c86';
   ctx.lineWidth = 1.5;
@@ -250,8 +256,8 @@ function drawPreview(): void {
   ctx.closePath();
   ctx.fill();
 
-  // Контуры сцепления (от большой скорости к малой — меньший поверх). Полуэллипс:
-  // перёд accel, зад back, вбок side.
+  // Grip outlines (from high speed to low — the smaller one drawn on top).
+  // Half-ellipse: front = accel, back = back, side = side.
   const traceEllipse = (back: number, side: number): void => {
     ctx.beginPath();
     ctx.ellipse(cx, cy, accel * cell, side * cell, 0, -Math.PI / 2, Math.PI / 2);
@@ -269,13 +275,13 @@ function drawPreview(): void {
     ctx.stroke();
   }
 
-  // Точки-кандидаты, тонированные по ярусу (насыщенные доступны с низкой скорости,
-  // бледные добавил прижим на скорости).
+  // Candidate points, tinted by tier (saturated ones are reachable already at
+  // low speed, faded ones were added by downforce at speed).
   const dotAlpha = [0.85, 0.5, 0.28];
   const dotR = Math.max(2.2, cell * 0.14);
   ctx.fillStyle = '#0a8a4f';
   for (const p of points) {
-    if (p.x === 0 && p.y === 0) continue; // накат рисуем кольцом
+    if (p.x === 0 && p.y === 0) continue; // the coasting point is drawn as a ring
     ctx.globalAlpha = dotAlpha[p.tier] ?? 0.28;
     ctx.beginPath();
     ctx.arc(X(p.x), Y(p.y), dotR, 0, Math.PI * 2);
@@ -283,16 +289,17 @@ function drawPreview(): void {
   }
   ctx.globalAlpha = 1;
 
-  // Точка наката — кольцо.
+  // The coasting point — a ring.
   ctx.strokeStyle = '#4a4636';
   ctx.lineWidth = 1.8;
   ctx.beginPath();
   ctx.arc(cx, cy, dotR + 1, 0, Math.PI * 2);
   ctx.stroke();
 
-  // Подписи км/ч у верхней вершины каждого контура (только когда прижим растит облако —
-  // иначе форма от скорости не зависит и подпись вводила бы в заблуждение). Раскладываем
-  // сверху вниз с гарантированным зазором, чтобы близкие контуры (напр. GT) не слиплись.
+  // km/h labels at the top vertex of each outline (only when downforce grows
+  // the cloud — otherwise shape doesn't depend on speed and the label would be
+  // misleading). Laid out top to bottom with a guaranteed gap so close
+  // outlines (e.g. GT) don't overlap.
   if (showSpeeds) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
@@ -312,16 +319,17 @@ function drawPreview(): void {
   }
 }
 
-/** Применить изменение правил: перерисовать и уведомить вызывающего. */
+/** Apply a rules change: re-render and notify the caller. */
 function commit(): void {
   render();
   onChange?.(rules);
 }
 
 /**
- * Открыть настройки. current — текущие правила (копируем: изменения сразу отдаём
- * через onChange, чужой объект не трогаем; drive копируем глубоко — его мутируют
- * ползунки). isOnline — сетевой заезд: тогда показываем строку лимита времени.
+ * Open the settings sheet. current is the active rules (we copy it: changes
+ * are sent out immediately via onChange, and we never mutate the caller's
+ * object; drive is deep-copied since the sliders mutate it directly).
+ * isOnline marks a networked race — in that case we show the time-limit row.
  */
 export function openSettings(
   current: Rules,
@@ -332,22 +340,22 @@ export function openSettings(
   mode = driveModeOf(rules.drive);
   online = isOnline;
   onChange = onChangeCb;
-  activeTab = 'drive'; // лист всегда открывается на «Управляемости»
+  activeTab = 'drive'; // the sheet always opens on the "Handling" tab
   render();
   openSheet(sheet);
-  // Первый render шёл при скрытом листе (нулевая ширина канваса) — перерисуем превью,
-  // когда лист виден и известна фактическая ширина.
+  // The first render ran while the sheet was hidden (zero-width canvas) —
+  // redraw the preview once the sheet is visible and the actual width is known.
   requestAnimationFrame(() => drawPreview());
 }
 
-/** Навесить обработчики сегментов и ползунков (один раз при инициализации панели). */
+/** Wire up segment and slider handlers (once, at panel init). */
 export function bindSettings(): void {
   for (const el of [accelSlider, brakeSlider, gripSlider]) {
     el.min = String(DRIVE_MIN);
     el.max = String(DRIVE_MAX);
     el.step = String(DRIVE_STEP);
   }
-  // Прижим — своя шкала (безразмерный коэффициент 0..1.5), не как механические оси.
+  // Downforce has its own scale (a dimensionless 0..1.5 coefficient), unlike the mechanical axes.
   downforceSlider.min = String(DOWNFORCE_MIN);
   downforceSlider.max = String(DOWNFORCE_MAX);
   downforceSlider.step = String(DOWNFORCE_STEP);
@@ -355,12 +363,12 @@ export function bindSettings(): void {
     bindTap(btn, () => {
       activeTab = btn.dataset.tab as SettingsTab;
       applyTab();
-      // Возврат на «Управляемость»: канвас мог лежать скрытым (нулевая ширина) —
-      // перерисуем превью, когда он снова видим (как в openSettings).
+      // Returning to "Handling": the canvas may have been sitting hidden (zero
+      // width) — redraw the preview now that it's visible again (as in openSettings).
       if (activeTab === 'drive') requestAnimationFrame(() => drawPreview());
     });
   });
-  // Кнопки-подсказки «?»: тап раскрывает/прячет пояснение в своей строке настройки.
+  // "?" hint buttons: tapping expands/collapses the explanation in that setting's row.
   sheet.querySelectorAll<HTMLButtonElement>('.setting__help').forEach((btn) => {
     const hint = btn.closest('.setting')!.querySelector<HTMLElement>('.setting__hint')!;
     bindTap(btn, () => {
@@ -371,8 +379,8 @@ export function bindSettings(): void {
   driveMode.querySelectorAll<HTMLButtonElement>('.seg__btn').forEach((btn) => {
     bindTap(btn, () => {
       mode = btn.dataset.mode as DriveMode;
-      // Пресет задаёт числа; «Своё» оставляет текущий drive (ползунки открываются на
-      // его значениях, дальше правь как хочешь).
+      // A preset sets the numbers; "Custom" leaves the current drive values as
+      // they are (the sliders open at those values, then can be adjusted freely).
       const preset = DRIVE_PRESETS[mode as DrivePreset];
       if (preset) rules.drive = { ...preset };
       commit();
@@ -381,7 +389,7 @@ export function bindSettings(): void {
   const bindDrive = (el: HTMLInputElement, axis: keyof Drive): void => {
     el.addEventListener('input', () => {
       rules.drive[axis] = Number(el.value);
-      mode = 'custom'; // правка ползунком = ручной режим
+      mode = 'custom'; // adjusting a slider switches to manual mode
       commit();
     });
   };

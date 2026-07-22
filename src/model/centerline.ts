@@ -1,7 +1,7 @@
-// Построение трассы по осевой линии: случайная плавная ширина откладывается от
-// осевой в обе стороны, с локальным ужиманием, чтобы кромки не налезали ни на
-// себя, ни на соседние части трассы. Плюс перестроение кромок после ручного
-// тюнинга (перетаскивание точек кромки).
+// Building a track from a centerline: a random smooth width is laid out from the
+// centerline to both sides, with local shrinking so the edges never overlap
+// themselves or neighboring parts of the track. Also handles rebuilding the
+// edges after manual tuning (dragging edge points).
 
 import {
   Vec,
@@ -25,41 +25,41 @@ import {
 import { strings } from '../i18n';
 import { WIDTH_MIN, WIDTH_MAX, WORLD_SIZE, GAP_MIN } from '../config';
 
-// Диапазон полной ширины трассы (клетки) — реэкспорт из config для внешних импортов.
+// Range of overall track width (cells) — re-exported from config for external imports.
 export { WIDTH_MIN, WIDTH_MAX };
 
-/** Нижний предел половины ширины: у́же — и на дороге не останется клеток. */
+/** Lower bound on half-width: any narrower and the road wouldn't have room for cells. */
 const HALF_MIN = 0.7;
-/** Зазор «травы» между близко проходящими частями трассы, клетки. */
+/** Grass gap between closely-passing parts of the track, in cells. */
 const SELF_GAP = 1.0;
-/** Доля радиуса кривизны, до которой разрешено смещать вогнутую кромку. */
+/** Fraction of the curvature radius up to which a concave edge may be offset. */
 const CURV_SAFETY = 0.85;
-/** Отступ кромки от края поля. */
+/** Edge margin from the world boundary. */
 const WORLD_MARGIN = 0.3;
-/** Сглаживание итоговой кромки: число проходов и сила (0..1). */
+/** Smoothing of the final edge: number of passes and strength (0..1). */
 const EDGE_SMOOTH_ITERS = 4;
 const EDGE_SMOOTH_FACTOR = 0.5;
-/** Целевой шаг ресемплинга осевой: держит число вершин в разумных пределах. */
+/** Target resampling step for the centerline: keeps vertex count within reasonable bounds. */
 const CENTER_MAX_VERTS = 380;
 
-/** Данные ширины трассы: осевая, нормали и смещения кромок в каждой вершине. */
+/** Track width data: centerline, normals, and edge offsets at every vertex. */
 export interface WidthModel {
   center: Polyline;
-  /** Единичная нормаль наружу в каждой вершине осевой. */
+  /** Unit outward normal at each centerline vertex. */
   outNormal: Vec[];
-  /** Смещение от осевой до внешней кромки в каждой вершине. */
+  /** Offset from the centerline to the outer edge at each vertex. */
   outW: number[];
-  /** Смещение от осевой до внутренней кромки в каждой вершине. */
+  /** Offset from the centerline to the inner edge at each vertex. */
   inW: number[];
 }
 
-/** Верхние пределы смещения кромок в вершине (близость, кривизна, край поля). */
+/** Upper bounds on edge offset at a vertex (proximity, curvature, world edge). */
 export interface OffsetCaps {
   maxOut: number[];
   maxIn: number[];
 }
 
-/** Кумулятивная длина дуги по вершинам замкнутой полилинии + полная длина. */
+/** Cumulative arc length over the vertices of a closed polyline, plus total length. */
 function arcLengths(poly: Polyline): { cum: number[]; total: number } {
   const n = poly.length;
   const cum: number[] = new Array(n);
@@ -71,15 +71,15 @@ function arcLengths(poly: Polyline): { cum: number[]; total: number } {
   return { cum, total: s };
 }
 
-/** Кратчайшее расстояние по кольцу между двумя позициями дуги. */
+/** Shortest distance around the ring between two arc positions. */
 function arcGap(a: number, b: number, total: number): number {
   const d = Math.abs(a - b);
   return Math.min(d, total - d);
 }
 
 /**
- * Случайная полная ширина в каждой вершине: несколько контрольных значений,
- * равномерно по дуге, плавно интерполированных по кольцу и сглаженных.
+ * Random overall width at every vertex: a handful of control values spread
+ * evenly along the arc, smoothly interpolated around the ring and smoothed.
  */
 function randomWidths(center: Polyline): number[] {
   const n = center.length;
@@ -91,17 +91,17 @@ function randomWidths(center: Polyline): number[] {
   );
   const w: number[] = new Array(n);
   for (let i = 0; i < n; i++) {
-    const f = (i / n) * k; // позиция вершины в шкале контрольных точек
+    const f = (i / n) * k; // vertex position on the control-point scale
     const i0 = Math.floor(f) % k;
     const i1 = (i0 + 1) % k;
-    // Косинусная интерполяция между соседними контрольными значениями.
+    // Cosine interpolation between neighboring control values.
     const t = (1 - Math.cos((f - Math.floor(f)) * Math.PI)) / 2;
     w[i] = ctrl[i0] + (ctrl[i1] - ctrl[i0]) * t;
   }
   return smoothRing(w, 2);
 }
 
-/** Сглаживание кольцевого массива усреднением с соседями. */
+/** Smooth a ring-shaped array by averaging with its neighbors. */
 function smoothRing(arr: number[], iterations: number): number[] {
   const n = arr.length;
   let a = arr;
@@ -116,9 +116,9 @@ function smoothRing(arr: number[], iterations: number): number[] {
 }
 
 /**
- * Максимальное смещение от точки p вдоль единичного направления d до границы
- * поля (с отступом WORLD_MARGIN). Возвращает Infinity, если направление не
- * приближает ни к одной границе.
+ * Maximum offset from point p along the unit direction d before hitting the
+ * world boundary (inset by WORLD_MARGIN). Returns Infinity if the direction
+ * doesn't approach any boundary.
  */
 function worldCap(p: Vec, d: Vec): number {
   let t = Infinity;
@@ -130,23 +130,24 @@ function worldCap(p: Vec, d: Vec): number {
 }
 
 /**
- * Пределы смещения кромок в каждой вершине:
- *  - близость к другим частям трассы (петля рядом сама с собой);
- *  - радиус кривизны на вогнутой стороне (крутой поворот);
- *  - край поля.
+ * Edge offset limits at each vertex:
+ *  - proximity to other parts of the track (a loop running close to itself);
+ *  - curvature radius on the concave side (a tight turn);
+ *  - the world edge.
  */
 export function offsetCaps(center: Polyline, outNormal: Vec[]): OffsetCaps {
   const n = center.length;
   const { cum, total } = arcLengths(center);
   const maxOut = new Array(n).fill(Infinity);
   const maxIn = new Array(n).fill(Infinity);
-  // Не считать «другой частью» сегменты ближе этого по дуге (свои же соседи).
+  // Segments closer than this along the arc aren't counted as "another part"
+  // (they're just this vertex's own neighbors).
   const nearArc = WIDTH_MAX * 1.5;
 
   for (let i = 0; i < n; i++) {
     const p = center[i];
 
-    // 1. Близость к несоседним частям осевой: обе кромки делят зазор пополам.
+    // 1. Proximity to non-adjacent parts of the centerline: both edges split the gap in half.
     let dSelf = Infinity;
     for (let j = 0; j < n; j++) {
       const midArc = (cum[j] + cum[(j + 1) % n]) / 2;
@@ -159,7 +160,7 @@ export function offsetCaps(center: Polyline, outNormal: Vec[]): OffsetCaps {
       maxIn[i] = Math.min(maxIn[i], half);
     }
 
-    // 2. Кривизна: смещение на вогнутую сторону ограничено радиусом поворота.
+    // 2. Curvature: offset on the concave side is limited by the turn radius.
     const prev = center[(i - 1 + n) % n];
     const next = center[(i + 1) % n];
     const eIn = sub(p, prev);
@@ -171,16 +172,16 @@ export function offsetCaps(center: Polyline, outNormal: Vec[]): OffsetCaps {
       const dout = scale(eOut, 1 / lo);
       const theta = Math.atan2(Math.abs(cross(din, dout)), dot(din, dout));
       if (theta > 1e-3) {
-        const R = (li + lo) / 2 / theta; // радиус кривизны
+        const R = (li + lo) / 2 / theta; // curvature radius
         const cap = Math.max(HALF_MIN, CURV_SAFETY * R);
-        // Вогнутая сторона — куда указывает биссектриса поворота.
-        const bis = add(scale(din, -1), dout); // ≈ направление к центру кривизны
+        // The concave side is wherever the turn's bisector points.
+        const bis = add(scale(din, -1), dout); // ~ direction toward the curvature center
         if (dot(bis, outNormal[i]) > 0) maxOut[i] = Math.min(maxOut[i], cap);
         else maxIn[i] = Math.min(maxIn[i], cap);
       }
     }
 
-    // 3. Край поля.
+    // 3. World edge.
     maxOut[i] = Math.min(maxOut[i], worldCap(p, outNormal[i]));
     maxIn[i] = Math.min(maxIn[i], worldCap(p, scale(outNormal[i], -1)));
   }
@@ -188,10 +189,11 @@ export function offsetCaps(center: Polyline, outNormal: Vec[]): OffsetCaps {
 }
 
 /**
- * Построение кромок по осевой, нормалям и смещениям с финальным сглаживанием,
- * чтобы граница всегда была плавной линией (без острых углов и зазубрин от
- * шума ширины или стыка росчерка). Число вершин сохраняется — индексы кромок
- * соответствуют вершинам осевой (нужно для перетаскивания).
+ * Build the edges from the centerline, normals, and offsets, with a final
+ * smoothing pass so the boundary is always a smooth curve (no sharp corners or
+ * jaggies from width noise or where the freehand stroke closes up). Vertex
+ * count is preserved — edge indices correspond to centerline vertices (needed
+ * for dragging).
  */
 export function offsetEdges(
   center: Polyline,
@@ -211,7 +213,7 @@ export function offsetEdges(
   };
 }
 
-/** Все вершины внутри поля (с учётом отступа). */
+/** Whether every vertex lies within the world bounds (accounting for margin). */
 function withinWorld(poly: Polyline): boolean {
   for (const p of poly) {
     if (p.x < 0 || p.y < 0 || p.x > WORLD_SIZE || p.y > WORLD_SIZE) return false;
@@ -220,13 +222,14 @@ function withinWorld(poly: Polyline): boolean {
 }
 
 /**
- * Есть ли между несоседними частями кромки target травяная перегородка тоньше
- * minGap (probe — кольцо-зонд, чьи вершины проверяем). Для каждой вершины зонда
- * берём ближайшую точку на несоседнем ребре target; если середина этого зазора
- * вне дороги — это травяная перегородка, а не узкое полотно между внешней и
- * внутренней кромкой. Соседей по дуге пропускаем (sameRing), как в offsetCaps.
- * Проверку «вне дороги» (O(n) на pointInPolygon) гейтим порогом minGap, поэтому
- * она срабатывает лишь на редких тонких сближениях — общая сложность ~O(n²).
+ * Whether there's a grass strip thinner than minGap between non-adjacent parts
+ * of edge target (probe is the ring whose vertices we're checking). For each
+ * probe vertex we take the closest point on a non-adjacent segment of target;
+ * if the midpoint of that gap lies off the road, it's a grass strip, not just
+ * the narrow band of road between the outer and inner edge. Arc neighbors are
+ * skipped (sameRing), same as in offsetCaps. The "off the road" check
+ * (O(n) via pointInPolygon) is gated by the minGap threshold, so it only fires
+ * on the rare close approaches — overall complexity is ~O(n^2).
  */
 function neckThinnerThan(
   probe: Polyline,
@@ -244,13 +247,14 @@ function neckThinnerThan(
     const p = probe[i];
     for (let j = 0; j < nt; j++) {
       if (sameRing) {
-        // Конец замыкающего ребра — total, а не cum[0]=0 (иначе его середина
-        // уезжает на середину кольца и сосед вершины 0 не отсекается).
+        // The closing segment's end is total, not cum[0]=0 (otherwise its
+        // midpoint would land at the ring's middle and vertex 0's neighbor
+        // wouldn't get excluded).
         const midArc = (tc[j] + (j + 1 < nt ? tc[j + 1] : tt)) / 2;
-        if (arcGap(pc[i], midArc, pt) < nearArc) continue; // свой же сосед по дуге
+        if (arcGap(pc[i], midArc, pt) < nearArc) continue; // this is our own arc neighbor
       }
       const c = closestPointOnSegment(p, target[j], target[(j + 1) % nt]);
-      if (dist(p, c) >= minGap) continue; // не тоньше порога — не перегородка
+      if (dist(p, c) >= minGap) continue; // not thinner than the threshold — not a strip
       const mid = { x: (p.x + c.x) / 2, y: (p.y + c.y) / 2 };
       const onRoad = pointInPolygon(mid, outer) && !pointInPolygon(mid, inner);
       if (!onRoad) return true;
@@ -260,10 +264,11 @@ function neckThinnerThan(
 }
 
 /**
- * Есть ли где-то травяная перегородка между двумя проходами трассы тоньше minGap.
- * Тонкая перегородка — баг: ход сквозь неё не ловится как авария (глубина за
- * кромкой ≤ OFFROAD_FORGIVE), и болид проезжает на другой виток. Проверяем пары
- * несоседних рёбер каждой кромки с собой и внешней с внутренней.
+ * Whether there's anywhere a grass strip thinner than minGap between two passes
+ * of the track. A too-thin strip is a bug: a move straight through it doesn't
+ * register as a crash (depth past the edge stays <= OFFROAD_FORGIVE), letting a
+ * car cross onto another lap segment. Checks non-adjacent segment pairs of each
+ * edge against itself and the outer edge against the inner one.
  */
 export function hasNarrowGrassNeck(
   outer: Polyline,
@@ -277,8 +282,9 @@ export function hasNarrowGrassNeck(
   );
 }
 
-/** Кромки валидны: в поле, каждая проста, внутренняя вложена без пересечений,
- *  и нет тонкой травяной перегородки между проходами (проезд «насквозь»). */
+/** Whether the edges are valid: within the world, each is simple, the inner one
+ *  nests without intersections, and there's no thin grass strip between passes
+ *  (which would let a car drive straight through). */
 export function edgesValid(outer: Polyline, inner: Polyline): boolean {
   if (!withinWorld(outer) || !withinWorld(inner)) return false;
   if (selfIntersectsClosed(outer) || selfIntersectsClosed(inner)) return false;
@@ -296,12 +302,12 @@ export type GenerateResult =
   { model: WidthModel; outer: Polyline; inner: Polyline } | { error: string };
 
 /**
- * Генерация кромок из осевой линии: случайная ширина, ужатая до пределов
- * близости/кривизны/края. Если после клампа кромки всё же где-то пересекаются,
- * несколько раз слегка ужимаем ширину глобально; иначе — ошибка.
+ * Generate edges from the centerline: random width, clamped down to the
+ * proximity/curvature/edge limits. If the edges still overlap somewhere after
+ * clamping, shrink the width slightly and globally a few times; otherwise, fail.
  */
 export function generateEdges(centerRaw: Polyline): GenerateResult {
-  // Ресемпл держит число вершин ограниченным (быстрый драг) и равномерным.
+  // Resampling keeps vertex count bounded (fast dragging) and even.
   const { total } = arcLengths(centerRaw);
   const center = resampleClosed(centerRaw, Math.max(1, total / CENTER_MAX_VERTS));
   const outNormal = closedNormals(center);
@@ -318,7 +324,8 @@ export function generateEdges(centerRaw: Polyline): GenerateResult {
   for (let i = 0; i < n; i++) outW[i] = inW[i] = w[i] / 2;
   clampCaps(outW, caps.maxOut);
   clampCaps(inW, caps.maxIn);
-  // Чередуем сглаживание ширины и кламп к пределам: итог и плавный, и валидный.
+  // Alternate width smoothing with clamping to the limits: the result ends up
+  // both smooth and valid.
   for (let pass = 0; pass < 2; pass++) {
     outW = smoothRing(outW, 2);
     inW = smoothRing(inW, 2);
@@ -330,7 +337,7 @@ export function generateEdges(centerRaw: Polyline): GenerateResult {
   for (let attempt = 0; attempt < 5; attempt++) {
     const { outer, inner } = rebuildEdges(model);
     if (edgesValid(outer, inner)) return { model, outer, inner };
-    // Пробуем ещё ужать — глобально, но мягко.
+    // Try shrinking further — globally, but gently.
     for (let i = 0; i < n; i++) {
       model.outW[i] = Math.max(HALF_MIN, model.outW[i] * 0.85);
       model.inW[i] = Math.max(HALF_MIN, model.inW[i] * 0.85);
@@ -339,14 +346,14 @@ export function generateEdges(centerRaw: Polyline): GenerateResult {
   return { error: strings.centerline.selfOverlap };
 }
 
-/** Перестроить кромки модели (после правки outW/inW). */
+/** Rebuild the model's edges (after editing outW/inW). */
 export function rebuildEdges(m: WidthModel): { outer: Polyline; inner: Polyline } {
   return offsetEdges(m.center, m.outNormal, m.outW, m.inW);
 }
 
 /**
- * Индекс ближайшей вершины осевой к точке p и сторона (внешняя/внутренняя),
- * кромку которой тянут, если p попала в толеранс. Иначе null.
+ * Index of the centerline vertex closest to point p, and which side
+ * (outer/inner) its edge belongs to, if p falls within tolerance. Otherwise null.
  */
 export function pickEdge(
   m: WidthModel,
@@ -372,13 +379,14 @@ export function pickEdge(
 }
 
 /**
- * Применить перетаскивание: сдвинуть кромку `edge` в вершине `index` к точке p
- * (проекция на нормаль), с плавным затуханием на соседей. Тянемая точка следует
- * за пальцем целиком (без пер-вершинного клампа, из-за которого она «застревала»,
- * а по бокам ехало полотно). Если полное смещение сделало бы кромку невалидной
- * (налезла бы на другую часть трассы или ушла за поле) — подбираем бисекцией
- * максимально далёкое валидное положение, и кромка плавно «упирается». Модель
- * меняется только на валидное состояние. Возвращает true, если что-то сдвинулось.
+ * Apply a drag: move edge `edge` at vertex `index` toward point p (projected
+ * onto the normal), with a smooth falloff onto its neighbors. The dragged point
+ * follows the pointer exactly (no per-vertex clamping, which used to make it
+ * "stick" while the surrounding band of road kept moving). If the full offset
+ * would make the edge invalid (overlapping another part of the track, or going
+ * off the world), we bisect for the farthest valid position, so the edge smoothly
+ * "runs up against" the limit. The model is only ever updated to a valid state.
+ * Returns true if anything actually moved.
  */
 export function applyEdgeDrag(
   m: WidthModel,
@@ -390,17 +398,17 @@ export function applyEdgeDrag(
   const nrm = edge === 'outer' ? m.outNormal[index] : scale(m.outNormal[index], -1);
   const base = edge === 'outer' ? m.outW : m.inW;
   const cur = base[index];
-  // Желаемое смещение тянемой вершины: проекция пальца на нормаль (с полом).
+  // Desired offset of the dragged vertex: pointer projected onto the normal (floored).
   const desired = Math.max(HALF_MIN, dot(sub(p, m.center[index]), nrm));
-  const R = Math.max(6, Math.round(n / 10)); // окно затухания на соседей
+  const R = Math.max(6, Math.round(n / 10)); // falloff window onto neighbors
 
-  // Массив смещений при доле alpha пути от текущего положения к desired.
+  // Offset array at fraction alpha of the way from the current position to desired.
   const build = (alpha: number): number[] => {
     const target = cur + (desired - cur) * alpha;
     const next = base.slice();
     for (let k = -R; k <= R; k++) {
       const i = (index + k + n) % n;
-      const wgt = 0.5 * (1 + Math.cos((Math.PI * k) / (R + 1))); // 1 в центре → 0 к краям
+      const wgt = 0.5 * (1 + Math.cos((Math.PI * k) / (R + 1))); // 1 at the center -> 0 at the edges
       next[i] = Math.max(HALF_MIN, base[i] + (target - base[i]) * wgt);
     }
     return next;
@@ -417,7 +425,7 @@ export function applyEdgeDrag(
     return edgesValid(outer, inner) ? next : null;
   };
 
-  // Сначала пробуем дойти до пальца целиком; если нельзя — ищем предел бисекцией.
+  // First try reaching the pointer's full offset; if that's invalid, bisect for the limit.
   let best = tryAlpha(1);
   if (!best) {
     let lo = 0;

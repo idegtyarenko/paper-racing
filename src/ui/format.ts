@@ -1,6 +1,6 @@
-// Мелкие форматтеры для UI. Чистые функции — покрыты vitest.
+// Small UI formatters. Pure functions — covered by vitest.
 
-/** Миллисекунды → «м:сс» (секунды с ведущим нулём). Отрицательное — «0:00». */
+/** Milliseconds → "m:ss" (seconds zero-padded). Negative values clamp to "0:00". */
 export function msToClock(ms: number): string {
   const total = Math.max(0, Math.ceil(ms / 1000));
   const m = Math.floor(total / 60);

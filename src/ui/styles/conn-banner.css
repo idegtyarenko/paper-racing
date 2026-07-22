@@ -1,5 +1,5 @@
-/* Баннер «нет связи» при обрыве realtime-канала: закреплён вверху по центру,
-   янтарный, поверх всего, не перехватывает клики (игра под ним живёт). */
+/* "No connection" banner when the realtime channel drops: fixed at top center,
+   amber, above everything, doesn't intercept clicks (the game keeps running underneath). */
 .conn-banner {
   position: fixed;
   top: 12px;

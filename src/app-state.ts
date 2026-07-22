@@ -1,11 +1,13 @@
-// Единое состояние приложения. Раньше жило дюжиной модульных `let` в main.ts, а
-// онлайн/ввод дотягивались до них через десятки get/set-переходников. Теперь это
-// один объект: main.ts владеет им, а online-controller и input читают и мутируют
-// его по ссылке (`deps.state.game = …`). Служебные ручки (таймер хода бота) сюда не
-// кладём — здесь только данные. Сохранение (persist.ts) сериализует его подмножество.
+// Single source of truth for app state. It used to live as a dozen module-level
+// `let`s in main.ts, with online/input reaching them through dozens of get/set
+// shims. Now it's one object: main.ts owns it, and online-controller and input
+// read and mutate it by reference (`deps.state.game = …`). Non-data handles
+// (like the bot-move timer) don't belong here — this holds data only. Saving
+// (persist.ts) serializes a subset of it.
 //
-// Здесь же живут кросс-слойные типы `Phase` и `LastLocalRace`: без этого
-// persist/view/online тянули бы `ui/panel` ради одного типа (лишнее ребро графа).
+// The cross-layer types `Phase` and `LastLocalRace` also live here: without
+// this, persist/view/online would each have to pull in `ui/panel` just for
+// one type (an unnecessary edge in the module graph).
 
 import { EditorState, newEditor } from './model/editor';
 import { Track } from './model/track';
@@ -13,53 +15,57 @@ import { GameState, Candidate, Rules, DEFAULT_RULES } from './model/game';
 import { NavField } from './model/nav';
 import { Difficulty } from './model/ai';
 
-/** Экран/фаза приложения: рисование трассы, выбор режима/числа игроков/сложности
- *  ботов, лобби, гонка. */
+/** App screen/phase: track drawing, mode/player-count/bot-difficulty
+ *  selection, lobby, race. */
 export type Phase = 'edit' | 'modeSelect' | 'players' | 'ai' | 'lobby' | 'race';
 
-/** Последний локальный состав — для «По той же трассе» одним тапом. Покрывает и
- *  хотсит (bots 0), и игру против компьютера (humans 1). */
+/** Last local lineup — powers "Same track" as a one-tap restart. Covers both
+ *  hotseat (bots 0) and vs-computer (humans 1). */
 export type LastLocalRace = { humans: number; bots: number; difficulty: Difficulty };
 
-/** Состояние приложения — единый источник правды для main/online/input. */
+/** App state — the single source of truth for main/online/input. */
 export interface AppState {
-  /** Текущий экран/фаза. */
+  /** Current screen/phase. */
   phase: Phase;
-  /** Состояние мастера рисования трассы. */
+  /** State of the track-drawing wizard. */
   editor: EditorState;
   /**
-   * Готовая трасса, ожидающая выбора числа игроков (шаг «players»). Приходит либо
-   * из редактора после выбора направления, либо из «Новая гонка → та же трасса».
+   * A finished track waiting on player-count selection (the "players" step).
+   * Comes either from the editor after direction is chosen, or from
+   * "New race → same track".
    */
   raceTrack: Track | null;
-  /** Куда вернуться из шага выбора игроков по «Назад»: в редактор или в гонку. */
+  /** Where "Back" from the player-select step returns to: editor or race. */
   playersReturn: 'edit' | 'race';
   /**
-   * Последний локальный состав (люди + боты + сложность) — чтобы «По той же трассе»
-   * стартовала одним тапом, без повторного мастера. Онлайн сюда не попадает: рематч
-   * того же состава — отдельная задача.
+   * Last local lineup (humans + bots + difficulty) — so "Same track" starts
+   * with one tap, without going through the wizard again. Online races don't
+   * populate this: rematching the same lineup online is a separate feature.
    */
   lastLocalRace: LastLocalRace | null;
-  /** Текущая гонка. null — вне гонки. */
+  /** The current race. null when not racing. */
   game: GameState | null;
-  /** Кандидаты хода для веера места-владельца. null — веера нет. */
+  /** Move candidates for the seat that currently owns the fan. null when
+   *  there's no fan. */
   cands: Candidate[] | null;
   /**
-   * Предвыбор хода («наметка»): кандидат, намеченный своим местом ещё в чужую очередь
-   * (онлайн/vs-боты), ждущий ручного подтверждения «Газу!» в свой ход. Живёт здесь, а
-   * не в input.selected (тот транзиентный и стирается каждым refreshCands). null — нет.
+   * Pending move pick: a candidate picked by the local seat during someone
+   * else's turn (online/vs-bots), waiting for manual "Go!" confirmation on
+   * your own turn. Lives here rather than in input.selected, which is
+   * transient and gets cleared on every refreshCands. null means no pick.
    */
   pending: Candidate | null;
-  /** Правила заезда, выбранные в настройках (⚙). В онлайне их задаёт хост. */
+  /** Race rules chosen in settings (⚙). In online play, the host sets these. */
   rules: Rules;
   /**
-   * Навигационное поле трассы текущей гонки (расстояния до финиша). Нужно ботам
-   * (chooseMove) и полосе текущих мест (renderStandings). null — вне гонки.
+   * Navigation field for the current race's track (distances to the finish).
+   * Needed by bots (chooseMove) and by the current-standings strip
+   * (renderStandings). null when not racing.
    */
   raceNav: NavField | null;
 }
 
-/** Свежее состояние приложения: чистый редактор, правила по умолчанию. */
+/** Fresh app state: a blank editor, default rules. */
 export function newAppState(): AppState {
   return {
     phase: 'edit',

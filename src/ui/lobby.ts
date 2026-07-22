@@ -1,5 +1,6 @@
-// Экран лобби онлайн-игры: код игры, список игроков (ростер), кнопки «Начать»/
-// «Поделиться»/«Выйти» и статус ожидания. Пишет свою инструкцию в общий статус.
+// Online-race lobby screen: race code, player list (roster), the "Start"/
+// "Share"/"Leave" buttons, and the waiting status. Writes its own instruction
+// into the shared status area.
 
 import { bindTap } from './dom';
 import { renderStepStatus } from './status';
@@ -23,40 +24,42 @@ export interface LobbyView {
   players: { name: string; color: string; you: boolean; offline?: boolean }[];
   canStart: boolean;
   isHost: boolean;
-  /** Досаженных ботов (host-local); блок управления виден только хосту. */
+  /** Bots added by the host (host-local); the controls are visible only to the host. */
   botCount: number;
-  /** Сколько ботов ещё влезает на свободные места (для лимита степпера). */
+  /** How many more bots still fit in the open seats (for the stepper's limit). */
   maxBots: number;
-  /** Сложность досаживаемых ботов. */
+  /** Difficulty of the bots being added. */
   botDifficulty: Difficulty;
 }
 
-/** Обработчики кнопок лобби (подмножество PanelHandlers, передаётся структурно). */
+/** Lobby button handlers (a subset of PanelHandlers, passed structurally). */
 export interface LobbyHandlers {
-  /** Хост стартует онлайн-гонку. */
+  /** Host starts the online race. */
   onLobbyStart: () => void;
-  /** Поделиться ссылкой на игру. */
+  /** Share the race link. */
   onLobbyShare: () => void;
-  /** Скопировать код игры. */
+  /** Copy the race code. */
   onLobbyCopyCode: () => void;
-  /** Открыть настройки правил (только хост). */
+  /** Open rules settings (host only). */
   onLobbySettings: () => void;
-  /** Хост: досадить ещё одного бота. */
+  /** Host: add one more bot. */
   onLobbyBotAdd: () => void;
-  /** Хост: убрать одного бота. */
+  /** Host: remove one bot. */
   onLobbyBotRemove: () => void;
-  /** Хост: сложность досаживаемых ботов. */
+  /** Host: difficulty of the bots being added. */
   onLobbyBotDifficulty: (d: Difficulty) => void;
-  /** Выйти из лобби. */
+  /** Leave the lobby. */
   onLobbyLeave: () => void;
 }
 
-/** Идёт ли запись стартового стейта (кнопка «Начать» заблокирована). Живёт вне
- *  renderLobby, чтобы переживать ре-рендеры лобби по presence во время await. */
+/** Whether the starting game state is currently being written (the "Start"
+ *  button is disabled). Lives outside renderLobby so it survives lobby
+ *  re-renders triggered by presence updates during the await. */
 let starting = false;
 
-/** Пока хост стартует гонку: заблокировать «Начать игру» и показать «Запускаем…».
- *  Применяем сразу (без ре-рендера) и запоминаем для будущих renderLobby. */
+/** While the host is starting the race: disable "Start game" and show
+ *  "Starting…". Applied immediately (no re-render needed) and remembered for
+ *  future renderLobby calls. */
 export function setLobbyStarting(b: boolean): void {
   starting = b;
   lobbyStartBtn.disabled = b;
@@ -64,7 +67,7 @@ export function setLobbyStarting(b: boolean): void {
   else lobbyStartBtn.textContent = strings.online.start;
 }
 
-/** Отрисовать экран лобби: код, список игроков, кнопку «Начать» и статус. */
+/** Render the lobby screen: code, player list, "Start" button, and status. */
 export function renderLobby(v: LobbyView): void {
   lobbyCodeBtn.textContent = v.code;
   lobbyRoster.replaceChildren(
@@ -91,8 +94,8 @@ export function renderLobby(v: LobbyView): void {
       return li;
     }),
   );
-  // Блок досаживания ботов — только у хоста. Степпер зажат в [0, maxBots], подсветка
-  // выбранной сложности — как на экранах состава.
+  // The bot-adding controls are host-only. The stepper is clamped to
+  // [0, maxBots]; the selected-difficulty highlight matches the setup screens.
   lobbyBots.hidden = !v.isHost;
   if (v.isHost) {
     lobbyBotCountEl.textContent = String(v.botCount);
@@ -119,7 +122,7 @@ export function renderLobby(v: LobbyView): void {
   renderStepStatus(strings.online.lobbyBadge, body);
 }
 
-/** Навесить кнопки лобби. */
+/** Wire up the lobby buttons. */
 export function bindLobby(h: LobbyHandlers): void {
   bindTap(lobbyStartBtn, h.onLobbyStart);
   bindTap(lobbyShareBtn, h.onLobbyShare);

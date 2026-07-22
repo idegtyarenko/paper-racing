@@ -1,22 +1,24 @@
-// ИИ-соперник: навигация по трассе и выбор хода. Чистая логика без DOM.
+// AI opponent: track navigation and move selection. Pure logic, no DOM.
 //
-// Навигация — поле расстояний до финиша (BFS по узлам дороги track.inside,
-// 8-связность): dist(клетка) = шагов при скорости 1 до следующего пересечения
-// финишной линии вперёд (см. nav.ts).
+// Navigation is a distance-to-finish field (BFS over the road nodes in track.inside,
+// 8-connected): dist(cell) = number of moves at speed 1 to the next forward finish
+// crossing (see nav.ts).
 //
-// Выбор хода зависит от сложности:
-// Все уровни — один планировщик A* по состояниям (pos, vel), минимизирующий ЧИСЛО
-// ХОДОВ до следующего пересечения финиша вперёд (см. planner.ts). Так рождаются
-// гоночная траектория и торможение перед поворотом. Уровни различаются «ослаблением»:
-// горизонт планирования, жадность эвристики, потолок скорости, шум выбора и инвариант
-// торможения (easy идёт по краю и иногда бьётся) — см. таблицу DIFFICULTY.
+// Move selection depends on difficulty:
+// Every level shares the same A* planner over (pos, vel) states, minimizing the
+// NUMBER OF MOVES to the next forward finish crossing (see planner.ts). That's what
+// produces the racing line and braking before corners. Levels differ only in how
+// much they're "weakened": planning horizon, heuristic greediness, speed cap,
+// selection noise, and the braking invariant (easy drives on the edge and
+// occasionally crashes) — see the DIFFICULTY table.
 //
-// Соперники учитываются только на первом слое (blocked-ходы отсеяны в candidates():
-// нельзя встать на чужую клетку или проехать сквозь неё) — к более глубоким слоям
-// они всё равно сдвинутся, а A* при занятой оптимальной клетке строит план в объезд.
-// Искусственного «расталкивания» пачки нет намеренно: штраф за близость к сопернику
-// заставлял бота уступать гоночную линию и терял ~40% темпа; болиды и без него
-// расходятся (разные старты → разные A*-линии, blocked разводит на пересечениях).
+// Opponents are only considered at the first ply (blocked moves are filtered out in
+// candidates(): you can't land on or drive through an opponent's cell) — deeper
+// plies ignore them since they'll have moved on by then, and if A*'s optimal cell is
+// occupied it just plans around it. There's deliberately no artificial pack
+// repulsion: a proximity penalty made the bot yield the racing line and cost it
+// ~40% of its pace. Cars spread out on their own anyway — different starting cells
+// lead to different A* lines, and blocked cells separate them at intersections.
 
 import { GameState, Candidate } from '../game';
 import { NavField } from '../nav';
@@ -28,9 +30,10 @@ import { pickMove } from './scoring';
 export type { Difficulty };
 
 /**
- * Выбрать ход бота из candidates(state). Возвращает не-blocked кандидата;
- * null — пат (все 9 заняты соперниками), вызывающий пасует (coastMove).
- * Соперники дальше первого слоя не учитываются — к тому времени они сдвинутся.
+ * Choose the bot's move from candidates(state). Returns a non-blocked candidate;
+ * null means a deadlock (all 9 cells occupied by opponents), and the caller should
+ * fall back to coasting (coastMove). Opponents beyond the first ply are not
+ * considered, since they'll have moved by then.
  */
 export function chooseMove(
   state: GameState,
@@ -42,8 +45,9 @@ export function chooseMove(
   const open = candidates(state).filter((c) => !c.blocked);
   if (open.length === 0) return null;
 
-  // Ранжирование корней: best — оптимальный ход стратегии, scored — почти-оптимальные
-  // (для epsilon-разнообразия easy/medium), terminal — финиш/безвыходная авария.
+  // Rank the root moves: best is the strategy's optimal move, scored holds the
+  // near-optimal ones (for easy/medium epsilon-variety), terminal marks a
+  // finish/unavoidable-crash case.
   const rank = scoreByPlan(
     state,
     nav,

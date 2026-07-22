@@ -1,9 +1,9 @@
-/* Карточка игрока: имя, цвет, скорость, аварии — в одну компактную строку. */
+/* Player card: name, color, speed, crashes — all in one compact row. */
 .player-card {
   display: flex;
   align-items: center;
   gap: 6px;
-  min-width: 0; /* даёт карточке ужаться в узкой колонке (иначе распирает сетку) */
+  min-width: 0; /* lets the card shrink in a narrow column (otherwise it stretches the grid) */
   border: 2px solid transparent;
   border-radius: 8px;
   padding: 5px 8px;
@@ -13,22 +13,22 @@
   overflow: hidden;
 }
 
-/* Подсветка карточки игрока, чей сейчас ход. */
+/* Highlight for the card of the player whose turn it currently is. */
 .player-card--active {
   border-color: var(--text-muted);
 }
 
-/* Игрок офлайн (закрыл вкладку) — приглушаем карточку. */
+/* Player is offline (closed the tab) — dim the card. */
 .player-card--offline {
   opacity: 0.5;
 }
 
-/* Игрок выбыл из гонки (финишировал или сдался) — приглушаем карточку. */
+/* Player has left the race (finished or retired) — dim the card. */
 .player-card--out {
   opacity: 0.55;
 }
 
-/* Цветная точка рядом с именем игрока. */
+/* Colored dot next to the player's name. */
 .player-card__dot {
   flex: 0 0 auto;
   width: 10px;
@@ -36,8 +36,8 @@
   border-radius: 50%;
 }
 
-/* Имя игрока — жирное, занимает свободное место и при нехватке усекается
-   многоточием, чтобы статы справа всегда помещались. */
+/* Player name — bold, takes up available space and truncates with an
+   ellipsis when tight, so the stats on the right always fit. */
 .player-card__name {
   flex: 1 1 auto;
   min-width: 0;
@@ -45,7 +45,7 @@
   text-overflow: ellipsis;
 }
 
-/* Статы иконками (скорость / аварии / боксы), прижаты к правому краю. */
+/* Icon stats (speed / crashes / pit stops), pinned to the right edge. */
 .player-card__stats {
   margin-left: auto;
   display: flex;
@@ -53,8 +53,8 @@
   flex: 0 0 auto;
 }
 
-/* На узких (мобильных, двухколоночных) карточках прячем «км/ч» — иначе
-   фиксированный по ширине стат съедает имя игрока. Остаётся голое число. */
+/* On narrow (mobile, two-column) cards, hide "km/h" — otherwise the
+   fixed-width stat eats into the player name. Just the bare number remains. */
 @media (max-width: 700px) {
   .player-card__unit {
     display: none;

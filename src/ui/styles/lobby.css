@@ -1,6 +1,6 @@
-/* Экран лобби онлайн-игры: код, список игроков, поля ввода и всплывашка-тост. */
+/* Online game lobby screen: code, player list, input fields, and toast popup. */
 
-/* Блок с кодом игры. */
+/* Game code block. */
 .lobby__code {
   display: flex;
   align-items: center;
@@ -29,7 +29,7 @@
   padding: 0;
 }
 
-/* Список подключившихся игроков. */
+/* List of connected players. */
 .lobby__roster {
   list-style: none;
   margin: 0;
@@ -50,7 +50,7 @@
   border-radius: 6px;
 }
 
-/* Игрок офлайн (закрыл вкладку) — приглушаем строку ростера. */
+/* Player is offline (closed the tab) — dim the roster row. */
 .lobby__player--offline {
   opacity: 0.5;
 }
@@ -76,7 +76,7 @@
   color: #6b6659;
 }
 
-/* Текстовые поля диалогов (имя, код). */
+/* Dialog text fields (name, code). */
 .field {
   width: 100%;
   padding: 10px 12px;
@@ -91,9 +91,9 @@
   outline-offset: 1px;
 }
 
-/* Пустое обязательное поле при попытке подтвердить — красная рамка (снимается
-   при вводе). Фокус-обводка тоже краснеет, чтобы поле в фокусе читалось как
-   ошибочное, а не зелёное. */
+/* An empty required field on submit attempt — red border (cleared once the user
+   starts typing). The focus outline turns red too, so a focused field still reads
+   as invalid rather than green. */
 .field--invalid {
   border-color: var(--danger);
 }
@@ -119,7 +119,7 @@
   display: none;
 }
 
-/* Всплывающее уведомление (ссылка/код скопированы). */
+/* Popup notification (link/code copied). */
 .toast {
   position: fixed;
   left: 50%;

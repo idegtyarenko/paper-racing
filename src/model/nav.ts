@@ -1,32 +1,33 @@
-// Навигационное поле трассы: расстояния до финиша по узлам дороги (BFS,
-// 8-связность). Изначально строилось для ИИ (см. ai.ts), но используется и
-// табло текущих мест (standings.ts) как оценка «сколько ещё ехать до финиша»,
-// поэтому вынесено в отдельный модуль. Чистая логика без DOM.
+// Track navigation field: distances to the finish over road nodes (BFS,
+// 8-connectivity). Originally built for the AI (see ai.ts), but also used by
+// the standings board (standings.ts) as an estimate of "how far is there still
+// left to the finish", so it lives in its own module. Pure logic, no DOM.
 //
-// dist(клетка) = шагов при скорости 1 до следующего пересечения финишной линии
-// вперёд. Линия финиша в BFS — «стенка» (рёбра сквозь неё не проходят), кроме
-// финального прыжка из клеток-сидов: так клетки сразу за линией получают
-// ≈длину круга «в обход», и болиду всегда выгодно ехать вперёд.
+// dist(cell) = number of steps at speed 1 to the next forward crossing of the
+// finish line. In the BFS, the finish line acts as a "wall" (edges don't pass
+// through it), except for the final hop from seed cells: that way cells right
+// behind the line get roughly a full lap's distance "the long way around", and
+// it's always in the car's interest to keep driving forward.
 
 import { Vec, dist, lerp, segSegIntersection } from '../geometry';
 import { Track, key, unkey, sideOfFinish } from './track';
 import { offRoadDepth } from './game';
 import { OFFROAD_FORGIVE } from '../config';
 
-/** Поле расстояний до финиша по узлам дороги. */
+/** Field of distances to the finish over road nodes. */
 export interface NavField {
-  /** key(x,y) → шагов (при скорости 1) до следующего пересечения финиша вперёд. */
+  /** key(x,y) -> steps (at speed 1) to the next forward finish crossing. */
   dist: Map<number, number>;
-  /** ≈ длина круга в шагах: max конечного dist + 1. Слагаемое за недоеханный круг. */
+  /** ~ lap length in steps: max finite dist + 1. Added for a lap not yet completed. */
   lap: number;
-  /** Трасса поля — для стороны финиша в navAt (окно не должно глядеть через линию). */
+  /** The field's track — used for which side of the finish navAt is on (the search window must not look across the line). */
   track: Track;
 }
 
 /**
- * Направление пересечения финиша ребром u→v: +1 вперёд, −1 назад, 0 нет.
- * Та же семантика, что у computeOutcome: точка ровно на линии считается
- * стороной «впереди», чтобы не засчитать одно пересечение дважды.
+ * Direction of a finish crossing along edge u->v: +1 forward, -1 backward, 0
+ * none. Same semantics as computeOutcome: a point exactly on the line counts as
+ * the "ahead" side, so a single crossing never gets counted twice.
  */
 function crossDir(track: Track, u: Vec, v: Vec): number {
   if (!segSegIntersection(u, v, track.finish.a, track.finish.b)) return 0;
@@ -38,9 +39,10 @@ function crossDir(track: Track, u: Vec, v: Vec): number {
 }
 
 /**
- * Ребро проходимо: его середина не глубже допуска за кромкой. Отсекает
- * диагонали и рёбра, «туннелирующие» узкую травяную перегородку между
- * двумя проходами трассы (иначе поле повело бы ботов в невозможный срез).
+ * Whether an edge is traversable: its midpoint doesn't stray past the edge
+ * tolerance. Rules out diagonals and edges that "tunnel" through a thin grass
+ * strip between two passes of the track (otherwise the field would steer bots
+ * into an impossible shortcut).
  */
 function edgeOk(track: Track, u: Vec, v: Vec): boolean {
   return (
@@ -48,12 +50,12 @@ function edgeOk(track: Track, u: Vec, v: Vec): boolean {
   );
 }
 
-/** Построить поле расстояний до финиша. Считается один раз на гонку. */
+/** Build the field of distances to the finish. Computed once per race. */
 export function buildNavField(track: Track): NavField {
   const d = new Map<number, number>();
   const queue: Vec[] = [];
 
-  // Сиды: клетки за линией, из которых один шаг пересекает финиш вперёд.
+  // Seeds: cells behind the line from which a single step crosses the finish forward.
   track.inside.forEach((k) => {
     const u = unkey(k);
     for (let dy = -1; dy <= 1; dy++) {
@@ -70,8 +72,8 @@ export function buildNavField(track: Track): NavField {
     }
   });
 
-  // BFS назад по рёбрам, не пересекающим финиш: клетки «впереди» линии
-  // получают расстояние длинным путём в обход круга.
+  // BFS backward over edges that don't cross the finish: cells "ahead" of the
+  // line get their distance via the long way around the lap.
   for (let head = 0; head < queue.length; head++) {
     const u = queue[head];
     const du = d.get(key(u.x, u.y))!;
@@ -96,9 +98,10 @@ export function buildNavField(track: Track): NavField {
 }
 
 /**
- * Отрезок a→b целиком на дороге (в пределах допуска). Тот же критерий, что у
- * движка в scanMove: середины семплов не глубже OFFROAD_FORGIVE за кромкой. Шаг
- * ~0.5 клетки ловит тонкую травяную перегородку (≥ ~1 клетка) между проходами.
+ * Whether segment a->b lies entirely on the road (within tolerance). Same
+ * criterion the engine uses in scanMove: sample midpoints don't stray past
+ * OFFROAD_FORGIVE beyond the edge. A step of ~0.5 cells catches a thin grass
+ * strip (>= ~1 cell) between passes.
  */
 function segOnRoad(track: Track, a: Vec, b: Vec): boolean {
   const steps = Math.max(1, Math.ceil(dist(a, b) / 0.5));
@@ -109,11 +112,12 @@ function segOnRoad(track: Track, a: Vec, b: Vec): boolean {
 }
 
 /**
- * Расстояние до финиша для произвольной точки — не обязательно узла дороги
- * (точка аварии дробная; легальный ход может закончиться в полосе допуска или
- * ближе WALL_CLEARANCE к стенке, где узлов в inside нет). Берём минимум
- * dist + евклидов добор по клеткам окна ±3; совсем вне окна (глухой гравий) —
- * консервативно длина круга.
+ * Distance to the finish for an arbitrary point — not necessarily a road node
+ * (a crash point has fractional coordinates; a legal move can end within the
+ * tolerance band or closer than WALL_CLEARANCE to a wall, where there are no
+ * nodes in inside). We take the minimum of dist plus the Euclidean remainder
+ * over the cells in a +-3 window; if nothing is found in that window at all
+ * (deep in the gravel), we conservatively return a full lap length.
  */
 export function navAt(field: NavField, p: Vec): number {
   const cx = Math.round(p.x);
@@ -126,13 +130,15 @@ export function navAt(field: NavField, p: Vec): number {
       if (v === undefined) continue;
       const est = v + dist(p, c);
       if (est >= best) continue;
-      // Клетка по ту сторону финишной линии не годится: её расстояние учитывает
-      // другое число оставшихся пересечений (иначе потенциал у линии схлопывается,
-      // и бот «прилипает» к ней вместо честного круга).
+      // A cell on the other side of the finish line doesn't count: its distance
+      // reflects a different number of crossings remaining (otherwise the
+      // potential collapses right at the line, and the bot "sticks" to it
+      // instead of running an honest lap).
       if (crossDir(field.track, p, c) !== 0) continue;
-      // Луч p→c не должен резать стену: иначе поле «протекает» на соседний
-      // проход трассы через тонкую перегородку, и бот едет прямо в неё. Проверяем
-      // лениво — только кандидатов, реально тянущих минимум вниз.
+      // The ray p->c must not cut through a wall: otherwise the field "leaks"
+      // into a neighboring pass of the track through a thin strip, and the bot
+      // drives straight into it. Checked lazily — only for candidates that
+      // would actually improve the minimum.
       if (!segOnRoad(field.track, p, c)) continue;
       best = est;
     }

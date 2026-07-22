@@ -1,4 +1,4 @@
-// Отрисовка обеих фаз на одном canvas: полная перерисовка по событию.
+// Rendering for both phases on a single canvas: a full redraw on every event.
 
 import { Vec, Polyline, add, sub, scale, normalize, lerp } from '../geometry';
 import { Track } from '../model/track';
@@ -14,90 +14,94 @@ export interface AppView {
   game: GameState | null;
   cands: Candidate[] | null;
   hover: Candidate | null;
-  /** Кандидат, выбранный касанием и ждущий подтверждающего тапа. */
+  /** Candidate picked by touch, awaiting a confirming tap. */
   selected: Candidate | null;
-  /** Наметка: ход, предвыбранный своим местом в чужую очередь (онлайн/vs-боты),
-   *  ждущий ручного «Газу!». Рисуется отдельным стилем (пунктирное кольцо). */
+  /** Pending pick: a move pre-selected for our seat while it's someone else's
+   *  turn (online/vs bots), waiting for a manual "Go!". Drawn in a distinct
+   *  style (dashed ring). */
   pending: Candidate | null;
-  /** Место-владелец веера кандидатов: в свой ход — game.current; в чужой ход при
-   *  предвыборе — своё место. −1 — веера нет. */
+  /** Seat that owns the candidate fan: on our turn it's game.current; on the
+   *  opponent's turn while pre-picking, it's our own seat. −1 means no fan. */
   candSeat: number;
-  /** Позиция пальца в css-пикселях canvas — включает «лупу» при прицеливании. */
+  /** Finger position in canvas css pixels — drives the "loupe" while aiming. */
   loupe: Vec | null;
-  /** Камера: единый переход мир↔экран (масштаб + смещение). */
+  /** Camera: the single world↔screen transform (scale + offset). */
   cam: Camera;
 }
 
-// Палитра canvas-рендера — направление «blueprint»: тёмно-синее поле, голубая сетка,
-// полотно дороги подсвечено ПОВЕРХ фона (см. дизайн «Paper Racing — Canvas System»).
-// Раньше BG/EDGE/ACCENT зеркалили DOM-токены base.css (--paper/--ink/--accent). На
-// этой фазе редизайна меняется только canvas; DOM пока остаётся кремовым, поэтому
-// зеркала base.css СОЗНАТЕЛЬНО рассинхронены — их сведёт следующая фаза (DOM).
-/** Фон поля (тёмно-синий «блюпринт»); также заливка лупы и база подмешивания следа. */
+// Canvas render palette — the "blueprint" direction: dark blue field, cyan
+// grid, road surface highlighted ON TOP of the background (see the "Paper
+// Racing — Canvas System" design). BG/EDGE/ACCENT used to mirror the DOM
+// tokens in base.css (--paper/--ink/--accent). This redesign phase only
+// touches the canvas; the DOM still stays cream-colored, so these values are
+// DELIBERATELY out of sync with base.css — the next phase (DOM) will
+// reconcile them.
+/** Field background (dark blue "blueprint"); also the loupe fill and the base for trail blending. */
 const BG = '#0d3252';
-/** Кромка трассы и чертёж в редакторе — сплошная голубая линия поверх фона. */
+/** Track edge and editor sketch lines — a solid cyan line over the background. */
 const EDGE = '#7fd3ff';
-/** Сетка поверх голого фона — едва заметная холодная голубая (жирная — каждые 5). */
+/** Grid over the bare background — barely-there cool cyan (heavier every 5 cells). */
 const GRID_LIGHT = 'rgba(127, 211, 255, 0.05)';
 const GRID_HEAVY = 'rgba(127, 211, 255, 0.10)';
-/** Та же сетка, подсвеченная под полотном дороги (клип по кольцу трассы). */
+/** Same grid, brightened under the road surface (clipped to the track ring). */
 const GRID_ROAD_LIGHT = 'rgba(127, 211, 255, 0.15)';
 const GRID_ROAD_HEAVY = 'rgba(127, 211, 255, 0.24)';
-/** Лёгкая голубая заливка-подсветка полотна дороги. */
+/** Light cyan wash highlighting the road surface. */
 const ROAD_WASH = 'rgba(127, 211, 255, 0.05)';
-/** Янтарный акцент: стрелка направления и ручки перетаскивания в редакторе. */
+/** Amber accent: the direction arrow and drag handles in the editor. */
 const ACCENT = '#ffb454';
-/** Нимб под болидом и крестиком — цвет фона, читается контрастом над следом. */
+/** Halo behind the car and crash mark — background color, reads as contrast over the trail. */
 const HALO = '#0d3252';
-/** Приглушённый серо-голубой: прыжок-сегмент следа и заблокированный кандидат. */
+/** Muted blue-gray: jump segments of the trail and blocked candidates. */
 const MUTED = '#a7bdd0';
-/** Голубое кольцо лупы. */
+/** Cyan loupe ring. */
 const LOUPE_RING = '#7fd3ff';
-/** Осевая-подсказка в фазе тюнинга кромок (можно тянуть). */
+/** Centerline hint during edge tuning (draggable). */
 const CENTERLINE_HINT = 'rgba(127, 211, 255, 0.5)';
-/** Крест аварийного кандидата (красный). */
+/** Crash candidate cross (red). */
 const CRASH = '#ff5d5d';
-/** Клетки, тень и рамка клетчатого флага финиша (тёмная клетка = цвет фона). */
+/** Cells, shadow, and border of the finish line's checkered flag (dark cell = background color). */
 const FLAG_DARK = '#0d3252';
 const FLAG_LIGHT = '#bfe6ff';
 const FLAG_SHADOW = 'rgba(0,0,0,0.1)';
 const FLAG_BORDER = 'rgba(127, 211, 255, 0.45)';
 
-// Толщина следа растёт со скоростью хода (длиной сегмента): быстрые прямые — жирная
-// линия, медленное ковыряние в поворотах — тонкая. Цвет всегда ЧИСТЫЙ (цвет болида,
-// непрозрачный): подмес к тёмному фону давал грязный тон, а globalAlpha — тёмные точки
-// на стыках сегментов. TRAIL_SPEED_REF (клеток/ход) — скорость максимальной толщины.
+// Trail thickness grows with move speed (segment length): fast straights get
+// a heavy line, slow crawling through corners a thin one. Color is always
+// PURE (opaque car color): blending into the dark background made the tone
+// muddy, and globalAlpha left dark spots at segment joints. TRAIL_SPEED_REF
+// (cells/turn) is the speed at which thickness maxes out.
 const TRAIL_SPEED_REF = 6;
 const TRAIL_WIDTH_MIN = 2;
 const TRAIL_WIDTH_MAX = 3.6;
 
-// Геометрия меток гонки. Радиусы масштабируются с `s` (px/клетку), толщины —
-// константны в px, как в дизайне. Значения приведены к дизайну «Canvas System»
-// (первично) и «Design Exploration» (для состояний, которых в CS нет); дизайн
-// рисует на сетке 26px, поэтому `размер_px / 26` = доля от `s`. Вынесено сюда,
-// чтобы подкручивать в одном месте.
-/** Кандидат хода: голубое пунктирное кольцо (обычный / инерционный). */
+// Geometry for race markers. Radii scale with `s` (px per cell); line widths
+// are constant px, matching the design. Values are taken from the "Canvas
+// System" design (primary source) and "Design Exploration" (for states not
+// covered by CS); the design draws on a 26px grid, so `size_px / 26` gives
+// the fraction of `s`. Collected here so they can all be tuned in one place.
+/** Move candidate: dashed cyan ring (normal / inertial). */
 const CAND_R = 0.27;
 const CAND_R_INERTIAL = 0.34;
 const CAND_R_MIN = 4;
 const CAND_DASH: [number, number] = [3, 4];
 const CAND_LW = 1.6;
 const CAND_ALPHA = 0.85;
-/** Наведённый/выбранный кандидат: сплошное кольцо + точка в центре. */
+/** Hovered/selected candidate: solid ring + center dot. */
 const CAND_HOVER_LW = 2;
 const CAND_HOVER_DOT_R = 0.12;
-/** Заблокированный узел: серый крестик. */
+/** Blocked node: gray cross. */
 const BLOCK_R = 0.23;
 const BLOCK_R_MIN = 3.5;
 const BLOCK_LW = 1.8;
-/** Кандидат-авария (ход в стену): сплошное красное кольцо. */
+/** Crash candidate (move into a wall): solid red ring. */
 const CRASH_CAND_LW = 2;
-/** Отметка аварии на следе: нимб-фон + красный крест. */
+/** Crash mark on the trail: halo background + red cross. */
 const CRASH_MARK_R = 0.27;
 const CRASH_MARK_R_MIN = 4;
 const CRASH_HALO_LW = 4.5;
 const CRASH_STROKE_LW = 2.2;
-/** Обводка болида (нимб-фон поверх следа). */
+/** Car outline (halo background over the trail). */
 const CAR_STROKE_LW = 2;
 
 export function render(ctx: CanvasRenderingContext2D, app: AppView): void {
@@ -110,7 +114,7 @@ export function render(ctx: CanvasRenderingContext2D, app: AppView): void {
   ctx.fillStyle = BG;
   ctx.fillRect(0, 0, w, h);
 
-  // Сцена рисуется под камерой (зум/пан); лупа — поверх, в экранных координатах.
+  // The scene is drawn under the camera transform (zoom/pan); the loupe is drawn on top, in screen coordinates.
   ctx.save();
   ctx.translate(app.cam.ox, app.cam.oy);
   drawGrid(ctx, s, app.cam.ox, app.cam.oy, 0, 0, w, h, GRID_LIGHT, GRID_HEAVY);
@@ -133,8 +137,8 @@ export function render(ctx: CanvasRenderingContext2D, app: AppView): void {
 }
 
 /**
- * «Лупа» для тач-прицеливания: увеличенный фрагмент сцены вокруг точки
- * касания, вынесенный выше пальца, чтобы палец его не закрывал.
+ * "Loupe" for touch aiming: a zoomed-in fragment of the scene around the
+ * touch point, offset above the finger so the finger doesn't cover it.
  */
 function drawLoupe(
   ctx: CanvasRenderingContext2D,
@@ -155,7 +159,7 @@ function drawLoupe(
   ctx.clip();
   ctx.fillStyle = BG;
   ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
-  // Мировая точка под пальцем (с учётом камеры) — в центр лупы.
+  // World point under the finger (accounting for the camera) — placed at the loupe's center.
   const wx = (p.x - app.cam.ox) / app.cam.scale;
   const wy = (p.y - app.cam.oy) / app.cam.scale;
   const ox2 = cx - wx * s2;
@@ -181,10 +185,10 @@ function drawLoupe(
 }
 
 /**
- * Бесконечная сетка: рисуем только линии, попадающие в видимое окно
- * [vx0..vx1] × [vy0..vy1] (экранные css-px). ctx уже сдвинут на (ox, oy), поэтому
- * узел мира n рисуется в координате n*s. Жирная линия — каждые 5 клеток
- * (корректно и для отрицательных координат).
+ * Infinite grid: only draw lines that fall inside the visible window
+ * [vx0..vx1] × [vy0..vy1] (screen css px). ctx is already translated by
+ * (ox, oy), so world node n is drawn at coordinate n*s. A heavier line every
+ * 5 cells (works correctly for negative coordinates too).
  */
 function drawGrid(
   ctx: CanvasRenderingContext2D,
@@ -237,7 +241,7 @@ function strokePoly(
   ctx.stroke();
 }
 
-/** Добавить замкнутый контур полилинии в текущий path (без заливки/обводки). */
+/** Add a closed polyline contour to the current path (without filling/stroking). */
 function addPolyPath(ctx: CanvasRenderingContext2D, s: number, poly: Polyline): void {
   if (poly.length < 2) return;
   ctx.moveTo(poly[0].x * s, poly[0].y * s);
@@ -246,10 +250,11 @@ function addPolyPath(ctx: CanvasRenderingContext2D, s: number, poly: Polyline): 
 }
 
 /**
- * Полотно трассы «blueprint»: дорога рисуется ПОВЕРХ фона, а не вычитается из него.
- * Внетрассовая территория остаётся голым тёмным фоном (уже залит в render). Полотно —
- * кольцо между outer и inner (без inner — вся внутренность outer): лёгкая голубая
- * подсветка + сетка, усиленная под клипом кольца, + сплошная голубая кромка.
+ * "Blueprint" track surface: the road is drawn ON TOP of the background
+ * rather than cut out of it. The off-track area stays the bare dark
+ * background (already filled in render). The surface is the ring between
+ * outer and inner (without inner, it's the whole interior of outer): a light
+ * cyan wash + grid brightened under the ring clip, plus a solid cyan edge.
  */
 function drawRoadSurface(
   ctx: CanvasRenderingContext2D,
@@ -258,24 +263,26 @@ function drawRoadSurface(
   inner: Polyline | null,
 ): void {
   if (!outer) return;
-  // Путь полотна: кольцо outer/inner (even-odd); без inner — вся внутренность outer.
+  // Surface path: the outer/inner ring (even-odd); without inner, the whole interior of outer.
   const ringPath = (): void => {
     ctx.beginPath();
     addPolyPath(ctx, s, outer);
     if (inner) addPolyPath(ctx, s, inner);
   };
 
-  // 1) Лёгкая голубая подсветка полотна.
+  // 1) Light cyan wash over the surface.
   ctx.save();
   ctx.fillStyle = ROAD_WASH;
   ringPath();
   ctx.fill('evenodd');
   ctx.restore();
 
-  // 2) Усиленная сетка под полотном — клип по кольцу поверх бледной фоновой сетки.
-  //    ctx уже сдвинут на (cam.ox, cam.oy) в render; линии сетки стоят на worldNode*s
-  //    независимо от сдвига, поэтому здесь передаём ox/oy=0 и окно в этих же translated-
-  //    координатах (bbox внешней кромки, с запасом в клетку). Клип отсекает лишнее.
+  // 2) Brightened grid under the surface — clipped to the ring, over the pale
+  //    background grid. ctx is already translated by (cam.ox, cam.oy) in
+  //    render; grid lines sit at worldNode*s regardless of that translation,
+  //    so here we pass ox/oy=0 and a window in those same translated
+  //    coordinates (the outer edge's bbox, padded by one cell). The clip
+  //    trims off the rest.
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -305,7 +312,7 @@ function drawRoadSurface(
   );
   ctx.restore();
 
-  // 3) Сплошная голубая кромка по обеим границам полотна.
+  // 3) Solid cyan edge along both boundaries of the surface.
   ctx.save();
   ctx.strokeStyle = EDGE;
   ctx.lineWidth = 1.5;
@@ -343,8 +350,8 @@ function drawFinishLine(ctx: CanvasRenderingContext2D, s: number, a: Vec, b: Vec
   const rows = 2;
   const cell = Math.max(2.5, s * 0.2);
   const bandHalf = (rows * cell) / 2;
-  // Слегка отступаем от краёв трассы, чтобы прямоугольная полоса не
-  // вылезала за изогнутую кромку у самых точек a/b.
+  // Inset slightly from the track edges so the rectangular band doesn't
+  // stick out past the curved edge right at points a/b.
   const inset = Math.min(lenPx * 0.15, bandHalf);
   const usableLen = Math.max(cell, lenPx - inset * 2);
   const ax = a.x * s + dir.x * inset;
@@ -353,7 +360,7 @@ function drawFinishLine(ctx: CanvasRenderingContext2D, s: number, a: Vec, b: Vec
   const actualCell = usableLen / cols;
 
   ctx.save();
-  // Лёгкая тень под флагом для объёма.
+  // Light shadow under the flag for a bit of depth.
   ctx.save();
   ctx.translate(0.5, 0.7);
   ctx.fillStyle = FLAG_SHADOW;
@@ -381,7 +388,7 @@ function drawFinishLine(ctx: CanvasRenderingContext2D, s: number, a: Vec, b: Vec
     }
   }
 
-  // Тонкая рамка по периметру полосы для аккуратного края.
+  // Thin border around the band's perimeter for a clean edge.
   ctx.strokeStyle = FLAG_BORDER;
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -454,7 +461,7 @@ function drawArrow(
 }
 
 function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): void {
-  // В фазе тюнинга — слабая осевая как подсказка, что кромки можно тянуть.
+  // During edge tuning, show a faint centerline as a hint that edges are draggable.
   if (ed.step === 'adjust' && ed.center) {
     ctx.save();
     ctx.strokeStyle = CENTERLINE_HINT;
@@ -464,16 +471,16 @@ function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): 
     ctx.restore();
   }
 
-  // С фазы «adjust» кромки уже замкнуты — показываем ту же визуализацию, что и в
-  // гонке: полупрозрачную заливку внетрассовой территории со светло-серой кромкой.
-  // В фазе «center» (черчение осевой) заливки ещё нет — рисуем простой контур.
+  // From the "adjust" step onward, the edges are already closed — show the
+  // same visualization as during the race: the road surface fill with its edge.
+  // During "center" (drawing the centerline) there's no surface yet — draw a plain outline.
   if (ed.step !== 'center' && ed.outer && ed.inner) {
     drawRoadSurface(ctx, s, ed.outer, ed.inner);
   } else {
     drawTrackEdges(ctx, s, ed.outer, ed.inner);
   }
 
-  // Активная перетаскиваемая точка кромки.
+  // Actively dragged edge point.
   if (ed.step === 'adjust' && ed.dragEdge && ed.dragIndex !== null) {
     const edge = ed.dragEdge === 'outer' ? ed.outer : ed.inner;
     const pt = edge?.[ed.dragIndex];
@@ -497,7 +504,7 @@ function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): 
 
   if (ed.finish) drawFinishLine(ctx, s, ed.finish.a, ed.finish.b);
 
-  // Точка касания в фазе старт/финиша — куда «пришпилена» перпендикулярная черта.
+  // Touch point during the finish-line step — where the perpendicular mark is "pinned".
   if (ed.step === 'finish' && ed.dragStart) {
     ctx.save();
     ctx.fillStyle = ACCENT;
@@ -526,13 +533,14 @@ function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): 
 }
 
 /**
- * Заливка «эллипса сцепления» управляемости — зоны вокруг точки наката C = pos + vel,
- * внутри которой лежат точки-кандидаты. В системе координат скорости: перёд —
- * полуэллипс с полуосями (accel × grip_eff), зад — (brake_eff × grip_eff); на старте
- * (vel = 0) — круг радиуса max(accel, MIN_LAUNCH). Торможение и хват берутся с учётом
- * прижима на текущей скорости (grip_eff/brake_eff = grip/brake · aeroFactor), чтобы
- * заливка совпадала с фактически достижимыми узлами. Рисуется бледной заливкой без
- * обводки — обозначить границу с минимумом шума.
+ * Fill for the "traction ellipse" — the zone around the coast point
+ * C = pos + vel that contains the candidate points. In velocity-relative
+ * coordinates: the front is a half-ellipse with semi-axes (accel × grip_eff),
+ * the back is (brake_eff × grip_eff); at the start (vel = 0) it's a circle of
+ * radius max(accel, MIN_LAUNCH). Braking and grip account for downforce at
+ * the current speed (grip_eff/brake_eff = grip/brake · aeroFactor), so the
+ * fill matches the actually reachable nodes. Drawn as a pale fill with no
+ * stroke — marks the boundary with minimal visual noise.
  */
 function drawDriveArea(
   ctx: CanvasRenderingContext2D,
@@ -556,9 +564,10 @@ function drawDriveArea(
   } else {
     const cx = (pos.x + vel.x) * s;
     const cy = (pos.y + vel.y) * s;
-    const phi = Math.atan2(vel.y, vel.x); // продольная ось = направление движения
-    // Две полудуги эллипса, стыкующиеся по поперечной оси (углы ±π/2): передняя с
-    // полуосью accel вдоль движения, задняя с brake_eff; обе с grip_eff вбок.
+    const phi = Math.atan2(vel.y, vel.x); // longitudinal axis = direction of travel
+    // Two ellipse half-arcs meeting along the lateral axis (angles ±π/2): the
+    // front uses semi-axis accel along the direction of travel, the back uses
+    // brake_eff; both use grip_eff sideways.
     ctx.ellipse(cx, cy, accel * s, gripEff * s, phi, -Math.PI / 2, Math.PI / 2);
     ctx.ellipse(cx, cy, brakeEff * s, gripEff * s, phi, Math.PI / 2, (3 * Math.PI) / 2);
     ctx.closePath();
@@ -582,12 +591,12 @@ function drawRace(
   drawCandidates(ctx, s, game, cands, hover, pending, candSeat);
 }
 
-/** Статичный декор трассы: полотно дороги, финиш и стрелка направления. */
+/** Static track decoration: road surface, finish line, and direction arrow. */
 function drawTrackDecor(ctx: CanvasRenderingContext2D, s: number, track: Track): void {
   drawRoadSurface(ctx, s, track.outer, track.inner);
   drawFinishLine(ctx, s, track.finish.a, track.finish.b);
 
-  // Стрелка направления гонки у финишной линии.
+  // Race direction arrow at the finish line.
   const m = lerp(track.finish.a, track.finish.b, 0.5);
   drawArrow(
     ctx,
@@ -600,18 +609,20 @@ function drawTrackDecor(ctx: CanvasRenderingContext2D, s: number, track: Track):
 }
 
 /**
- * След одного игрока плюс отметки аварий. Насыщенность и толщина следа растут
- * со скоростью хода; чтобы цвет менялся плавно вдоль трассы, а не ступенькой на
- * каждой границе ходов, каждый сегмент заливаем линейным градиентом между
- * «цветами скорости» в его узлах-концах. Фактор в узле — среднее скоростей
- * примыкающих сегментов (если сосед есть, не «прыжок» и делит с сегментом этот
- * узел), иначе — скорость самого сегмента.
+ * One player's trail plus crash marks. Trail saturation and thickness grow
+ * with move speed; so the color changes smoothly along the track instead of
+ * stepping at each move boundary, every segment is filled with a linear
+ * gradient between the "speed colors" at its endpoint nodes. The factor at a
+ * node is the average of the speeds of its adjacent segments (when a
+ * neighbor exists, isn't a "jump", and shares this node with the segment),
+ * otherwise it's just the segment's own speed.
  */
 function drawTrail(ctx: CanvasRenderingContext2D, s: number, p: Player): void {
   const trail = p.trail;
-  // Скорость хода 0..1 по длине сегмента (степень >1 растягивает разрыв медленный↔
-  // быстрый). Кодирует ТОЛЬКО толщину следа: цвет — чистый цвет болида. Подмес к
-  // тёмному фону (как на светлой бумаге) давал грязный тон, поэтому сняли.
+  // Move speed normalized to 0..1 by segment length (exponent >1 stretches
+  // the slow↔fast gap). Encodes ONLY trail thickness: color is the pure car
+  // color. Blending into the dark background (as if it were light paper)
+  // made the tone muddy, so that was removed.
   const segFactor = (i: number): number => {
     const seg = trail[i];
     const speed = Math.hypot(seg.to.x - seg.from.x, seg.to.y - seg.from.y);
@@ -642,9 +653,9 @@ function drawTrail(ctx: CanvasRenderingContext2D, s: number, p: Player): void {
 }
 
 /**
- * Болиды. Выбывшие (получили место в разрешённом раунде или сдались) ушли с
- * трассы — их маркер не рисуем (и клетки они не блокируют, см. otherPositions).
- * След остаётся как история проезда.
+ * Cars. Players who are out (finished in an earlier round, or retired) have
+ * left the track — we don't draw their marker (and they don't block cells
+ * either, see otherPositions). The trail stays behind as a record of their run.
  */
 function drawCars(ctx: CanvasRenderingContext2D, s: number, game: GameState): void {
   for (const p of game.players) {
@@ -659,7 +670,7 @@ function drawCars(ctx: CanvasRenderingContext2D, s: number, game: GameState): vo
   }
 }
 
-/** Кандидаты хода текущего игрока: зона сцепления, линия наведения и точки. */
+/** Current player's move candidates: traction zone, aim line, and points. */
 function drawCandidates(
   ctx: CanvasRenderingContext2D,
   s: number,
@@ -670,11 +681,12 @@ function drawCandidates(
   candSeat: number,
 ): void {
   if (!cands || candSeat < 0 || game.phase !== 'race') return;
-  // Владелец веера: в свой ход — ходящий, в чужой (предвыбор) — своё место. Позиция,
-  // цвет и зона сцепления берутся отсюда, а не от game.current.
+  // Fan owner: on our turn it's whoever's moving, on the opponent's turn
+  // (pre-pick) it's our own seat. Position, color, and the traction zone are
+  // all taken from here, not from game.current.
   const p = game.players[candSeat];
-  // Заливка зоны сцепления — под точками; изотропную управляемость (как классика)
-  // не рисуем, там квадрат и так очевиден.
+  // Traction zone fill goes under the points; we skip it for isotropic
+  // handling (like classic mode), where it's just an obvious square.
   const d = game.rules.drive;
   if (!(d.accel === d.brake && d.brake === d.grip && d.downforce === 0)) {
     drawDriveArea(ctx, s, p.pos, p.vel, d, p.color);
@@ -695,22 +707,22 @@ function drawCandidates(
     const y = c.target.y * s;
     const r = Math.max(CAND_R_MIN, s * (c.inertial ? CAND_R_INERTIAL : CAND_R));
     if (c.blocked) {
-      // Занятый узел — серый крестик.
+      // Occupied node — gray cross.
       const br = Math.max(BLOCK_R_MIN, s * BLOCK_R);
       ctx.strokeStyle = MUTED;
       ctx.lineWidth = BLOCK_LW;
       crossPath(ctx, x, y, br);
       ctx.stroke();
     } else if (c.crash) {
-      // Ход в стену — сплошное красное кольцо (отличается от голубого «можно»).
+      // Move into a wall — solid red ring (distinct from the cyan "allowed" ring).
       ctx.strokeStyle = CRASH;
       ctx.lineWidth = CRASH_CAND_LW;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.stroke();
     } else if (c === hover) {
-      // Наведён/выбран: сплошное (без пунктира) кольцо + точка в центре, полная
-      // непрозрачность — фокус среди пунктирного веера.
+      // Hovered/selected: solid (non-dashed) ring + center dot, full opacity
+      // — draws the eye among the dashed fan.
       ctx.save();
       ctx.strokeStyle = EDGE;
       ctx.lineWidth = CAND_HOVER_LW;
@@ -723,7 +735,7 @@ function drawCandidates(
       ctx.fill();
       ctx.restore();
     } else {
-      // Доступный ход — голубое пунктирное кольцо (яркий контраст на тёмном поле).
+      // Available move — dashed cyan ring (bright contrast on the dark field).
       ctx.save();
       ctx.strokeStyle = EDGE;
       ctx.globalAlpha = CAND_ALPHA;
@@ -735,8 +747,9 @@ function drawCandidates(
       ctx.restore();
     }
   }
-  // Наметка (предвыбор в чужую очередь): пунктирное кольцо + направляющая от болида —
-  // «намечено, ещё не подтверждено», отличается от сплошного выбора на своём ходу.
+  // Pending pick (pre-selected for the opponent's turn): dashed ring + guide
+  // line from the car — reads as "queued, not confirmed yet", distinct from
+  // the solid selection shown on our own turn.
   if (pending) {
     const px = pending.target.x * s;
     const py = pending.target.y * s;
@@ -759,7 +772,7 @@ function drawCandidates(
   }
 }
 
-/** Путь диагонального крестика ✕ (радиус r) — общий для аварии и блок-клетки. */
+/** Path for a diagonal ✕ cross (radius r) — shared by crash marks and blocked cells. */
 function crossPath(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
   ctx.beginPath();
   ctx.moveTo(x - r, y - r);
@@ -778,7 +791,7 @@ function drawCrashMark(
   const x = at.x * s;
   const y = at.y * s;
   ctx.lineCap = 'round';
-  // Нимб-фон под крестиком — контраст над следом того же цвета.
+  // Halo background under the cross — contrast against a same-colored trail.
   ctx.strokeStyle = HALO;
   ctx.lineWidth = CRASH_HALO_LW;
   crossPath(ctx, x, y, r);

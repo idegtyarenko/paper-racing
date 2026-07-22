@@ -1,41 +1,45 @@
-// Ручки силы бота: сложности и их параметры поиска. Чистые данные без DOM.
+// Bot-strength levers: difficulty levels and their search parameters. Pure data, no DOM.
 
 export type Difficulty = 'easy' | 'medium' | 'hard';
 
-/** Настройки планировщика A* — общий движок всех уровней. */
+/** A* planner settings — the shared search engine behind every difficulty level. */
 export interface PlanParams {
-  /** Лимит раскрытий узлов A*: выше — дальновиднее и оптимальнее план. */
+  /** Cap on A* node expansions: higher means a farther-sighted, more optimal plan. */
   budget: number;
-  /** Опорная скорость: перевод «клеток до финиша» в «ходы» для эвристики. */
+  /** Reference speed: converts "cells to the finish" into "moves" for the heuristic. */
   vref: number;
-  /** Вес эвристики (>1 — жаднее к финишу): меньше раскрытий, чуть менее оптимально. */
+  /** Heuristic weight (>1 is greedier toward the finish): fewer expansions, slightly
+   *  less optimal. */
   weight: number;
 }
 
-/** Ручки силы бота — см. таблицу в DIFFICULTY. Все уровни — один A*, различаются
- *  «ослаблением»: горизонт (budget), жадность (weight), потолок скорости (maxSpeed),
- *  шум выбора (epsilon), инвариант торможения (enforceStop). */
+/** Bot-strength levers — see the DIFFICULTY table. Every level runs the same A*
+ *  search; they only differ in how much it's "weakened": horizon (budget),
+ *  greediness (weight), speed cap (maxSpeed), selection noise (epsilon), and the
+ *  braking invariant (enforceStop). */
 export interface DifficultyParams {
-  /** Лимит рекурсии canStop; на срезе — оптимистичное «успею». */
+  /** Recursion cap for canStop; at the limit we optimistically assume it'll manage. */
   stopCap: number;
-  /** Мягкий потолок скорости: превышение штрафуется, но не запрещено. */
+  /** Soft speed cap: exceeding it is penalized, not forbidden. */
   maxSpeed: number;
-  /** Вероятность взять случайный из почти-лучших ходов (разнообразие без дёрганья). */
+  /** Probability of picking a random near-best move (variety without jitter). */
   epsilon: number;
-  /** Держать инвариант безопасности (предпочитать корни, из которых тормозим). false
-   *  у easy — бот идёт по краю и иногда не успевает затормозить (намеренные аварии). */
+  /** Whether to enforce the safety invariant (prefer roots we can brake from). false
+   *  for easy — it drives on the edge and sometimes fails to brake in time
+   *  (intentional crashes). */
   enforceStop: boolean;
-  /** Параметры A*-поиска. */
+  /** A* search parameters. */
   plan: PlanParams;
 }
 
-// Все уровни планируют время (A*), а не путь. Значения откалиброваны на плотную
-// лестницу: на просторной трассе medium ~+18%, easy ~+42% ходов/круг над оптимумом
-// hard (на тесных трассах уровни сближаются — потолок скорости не упирается). hard —
-// оптимум и едет чисто; medium аккуратен; easy заметно медленнее, короткозорче и
-// иногда бьётся (enforceStop=false → изредка не успевает затормозить, ~раз в несколько
-// заездов, макс. одна авария). Поиск укладывается в единицы-десятки мс на ход
-// (маскируется паузой AI_MOVE_DELAY_MS=600).
+// Every level plans on time (A*), not on path. Values are calibrated on a dense
+// slalom track: on an open track medium runs ~18% and easy ~42% more moves per lap
+// than hard's optimum (on tight tracks the levels converge, since the speed cap
+// stops being the binding constraint). hard is optimal and drives clean; medium is
+// careful; easy is noticeably slower, shorter-sighted, and occasionally crashes
+// (enforceStop=false → it occasionally fails to brake in time, roughly once every
+// few races, at most one crash). The search runs in single-to-low-double-digit
+// milliseconds per move (hidden behind the AI_MOVE_DELAY_MS=600 pause).
 export const DIFFICULTY: Record<Difficulty, DifficultyParams> = {
   easy: {
     stopCap: 6,

@@ -1,6 +1,6 @@
-// Игровой движок — общее ядро: состояние гонки, правила, расчёт исхода одного хода
-// (авария, финиш, новые pos/vel/след), возврат из штрафа и определение победителя.
-// Чистая логика без DOM. Очерёдность ходов вынесена в turns.ts.
+// Game engine — the shared core: race state, rules, computing the outcome of a single
+// move (crash, finish, new pos/vel/trail), returning from a penalty, and determining
+// the winner. Pure logic, no DOM. Turn ordering lives in turns.ts.
 
 import { Vec, dist, lerp, distPointToPolyline, segSegIntersection } from '../geometry';
 import { Track, key, unkey, sideOfFinish, onRoad } from './track';
@@ -20,7 +20,7 @@ import {
 export interface TrailSeg {
   from: Vec;
   to: Vec;
-  /** true — «телепорт» на точку возврата после аварии (рисуется пунктиром). */
+  /** true means a "teleport" jump to the return point after a crash (drawn as a dashed line). */
   jump: boolean;
 }
 
@@ -32,37 +32,38 @@ export interface Player {
   trail: TrailSeg[];
   crashes: Vec[];
   skipTurns: number;
-  /** Знаковый счётчик пересечений финишной линии: вперёд +1, назад −1. */
+  /** Signed count of finish-line crossings: +1 going forward, -1 going backward. */
   crossings: number;
   finishOvershoot: number | null;
   /**
-   * Итоговое место (1-based), присвоенное после разрешения раунда, в котором
-   * болид финишировал; null — ещё едет / сдался / финишировал, но раунд не
-   * разрешён. Делится при равном заезде за линию («1224»: два вторых → следующий
-   * четвёртый).
+   * Final position (1-based), assigned once the round in which this car finished
+   * gets resolved; null while still racing / retired / finished-but-round-not-resolved
+   * yet. Ties are shared when cars cross the line at the same overshoot depth
+   * ("1224" scoring: two seconds are followed by a fourth).
    */
   place: number | null;
-  /** Игрок сдался — выбыл из гонки, места не занимает и ходов не делает. */
+  /** Player has retired — out of the race, doesn't occupy a place and doesn't take turns. */
   retired: boolean;
   /**
-   * Место занято ботом этой сложности; undefined — за местом человек. Хранится в
-   * модели (а не сайд-каналом), поэтому едет вместе со стейтом: и в онлайн-синк
-   * (гости видят ботов), и в локальный снимок persist — отдельной сериализации не
-   * нужно (serializeState структурно копирует все поля игрока). Ходы ботов считает
-   * chooseMove; в онлайне их коммитит только хост (см. online-controller).
+   * Seat is controlled by a bot of this difficulty; undefined means a human owns
+   * the seat. Stored on the model itself (not as a side channel) so it travels
+   * with the state everywhere: through online sync (guests see the bots) and into
+   * the local persisted snapshot — no separate serialization needed since
+   * serializeState structurally copies every player field. Bot moves are computed
+   * by chooseMove; in online play only the host commits them (see online-controller).
    */
   bot?: Difficulty;
 }
 
-// Число пересечений финиша для победы (см. WIN_CROSSINGS в config) — реэкспорт.
+// Number of finish crossings needed to win (see WIN_CROSSINGS in config) — re-exported.
 export { WIN_CROSSINGS };
 
 /**
- * Управляемость машины: три механических полуоси «эллипса сцепления» (клетки/ход) —
- * разгон вперёд (accel), торможение назад (brake), боковой хват (grip) — плюс
- * аэродинамический прижим (downforce), который растёт с квадратом скорости и
- * добавляется к grip/brake (см. aeroFactor и reachableTargets в turns.ts, пресеты
- * DRIVE_PRESETS в config).
+ * Car handling: the three mechanical semi-axes of the "traction ellipse" (cells per
+ * move) — forward acceleration (accel), braking (brake), lateral grip (grip) —
+ * plus aerodynamic downforce, which grows with the square of speed and adds to
+ * grip/brake (see aeroFactor and reachableTargets in turns.ts, and the
+ * DRIVE_PRESETS presets in config).
  */
 export interface Drive {
   accel: number;
@@ -72,35 +73,37 @@ export interface Drive {
 }
 
 /**
- * Настройки правил заезда. В онлайне их задаёт хост, и они едут вместе со стейтом
- * (rules — часть GameState, а сериализуется весь стейт кроме track), поэтому у всех
- * игроков применяются одни и те же правила.
+ * Race rule settings. In online play these are set by the host and travel with
+ * the state (rules is part of GameState, and the whole state except track gets
+ * serialized), so every player ends up applying the same rules.
  */
 export interface Rules {
-  /** Как считать штраф за вылет: 'dynamic' — по скорости, 'static' — фиксированный. */
+  /** How to compute the off-track penalty: 'dynamic' scales with speed, 'static' is fixed. */
   penalty: 'dynamic' | 'static';
-  /** Размер штрафа в ходах при статическом штрафе. */
+  /** Penalty size in turns for the static penalty mode. */
   staticTurns: number;
-  /** Показатель степени («строгость») формулы динамического штрафа. */
+  /** Exponent ("harshness") of the dynamic penalty formula. */
   dynamicExponent: number;
   /**
-   * Управляемость машины (генерация ходов, см. reachableTargets в turns.ts): три
-   * независимых полуоси «эллипса сцепления» в клетках/ход — разгон вперёд, торможение
-   * назад, маневр вбок. Все три равны → изотропный круг = классика 3×3; анизотропия
-   * даёт гоночные траектории. Пресеты — DRIVE_PRESETS в config. Бот играет по этой же
-   * модели (планировщик зовёт reachableTargets), отдельной «классики для бота» нет.
+   * Car handling (used for move generation, see reachableTargets in turns.ts): three
+   * independent semi-axes of the "traction ellipse" in cells per move — forward
+   * acceleration, braking, and lateral maneuvering. Equal on all three gives an
+   * isotropic circle (classic 3x3); anisotropy produces racing-style trajectories.
+   * Presets live in DRIVE_PRESETS in config. The bot plays under the same model
+   * (the planner calls reachableTargets too) — there's no separate "classic mode
+   * for bots".
    */
   drive: Drive;
   /**
-   * Лимит времени на ход, мс. Действует только в онлайне: по его истечении ход
-   * присутствующего, но задумавшегося игрока становится доступен остальным для
-   * ручного пропуска, а ход отсутствующего авто-пропускает назначенный клиент
-   * (см. armTurnWatch в online-controller.ts). В hotseat/против бота не влияет.
+   * Per-turn time limit in ms. Only matters online: once it elapses, a present
+   * but stalling player's turn becomes available for others to skip manually,
+   * and an absent player's turn is auto-skipped by the assigned client (see
+   * armTurnWatch in online-controller.ts). Has no effect in hotseat or vs-bot play.
    */
   turnLimitMs: number;
 }
 
-/** Правила по умолчанию: динамический штраф со стандартной (линейной) строгостью, реалистичная управляемость. */
+/** Default rules: dynamic penalty at standard (linear) harshness, realistic handling. */
 export const DEFAULT_RULES: Rules = {
   penalty: 'dynamic',
   staticTurns: CRASH_SKIP_TURNS,
@@ -110,20 +113,21 @@ export const DEFAULT_RULES: Rules = {
 };
 
 /**
- * Привести (частичные) правила из стейта/снимка к полным, с бэкфиллом дефолтами и
- * миграцией легаси в drive. Используется на всех точках десериализации (онлайн-стейт,
- * восстановление из persist), чтобы старые снимки поднимались корректно. Мигрирует:
- * легаси-поле physics ('classic'|'realistic') → drive; старое поле оси maneuver → grip;
- * отсутствующий downforce → 0. drive собирается по полям (не клонируется целиком),
- * иначе новые поля из старого снимка оказались бы undefined (→ NaN в эллипсе). Итог —
- * свежий объект, не связанный с исходным снимком (настройки его мутируют).
+ * Bring (partial) rules from state/snapshot up to a complete Rules object, backfilling
+ * defaults and migrating legacy drive fields. Used at every deserialization point
+ * (online state, restoring from persist) so old snapshots come back up correctly.
+ * Migrates: the legacy physics field ('classic'|'realistic') into drive; the old
+ * maneuver axis into grip; a missing downforce into 0. drive is assembled field by
+ * field (not cloned wholesale), otherwise new fields absent from an old snapshot
+ * would come out undefined (-> NaN in the ellipse). The result is a fresh object
+ * unrelated to the source snapshot (settings screens mutate it in place).
  */
 export function normalizeRules(
   partial: (Partial<Rules> & { physics?: string }) | undefined,
 ): Rules {
   const { physics, ...rest } = partial ?? {};
-  // Легаси-строка physics: 'realistic' — прежний набор {1,2,2} (теперь без пресета,
-  // осядет как «Своё»); 'classic' — текущий пресет.
+  // Legacy physics string: 'realistic' was the old {1,2,2} set (no longer a preset,
+  // now settles as "Custom"); 'classic' is the current preset.
   const legacy: Partial<Drive> =
     physics === 'realistic'
       ? { accel: 1, brake: 2, grip: 2, downforce: 0 }
@@ -132,7 +136,7 @@ export function normalizeRules(
         : {};
   const merged = { ...DEFAULT_RULES, ...rest };
   const d = DEFAULT_RULES.drive;
-  // Источник может быть частичным/легаси (старое поле maneuver, без downforce).
+  // Source may be partial/legacy (old maneuver field, no downforce).
   const src = (rest.drive ?? legacy) as Partial<Drive> & { maneuver?: number };
   merged.drive = {
     accel: src.accel ?? d.accel,
@@ -144,10 +148,11 @@ export function normalizeRules(
 }
 
 /**
- * Штраф за аварию в ходах. Статический — фиксированное число. Динамический —
- * степенная функция скорости хода (длины вектора перемещения):
- * round(speed ^ строгость), зажатая в [1, CRASH_PENALTY_MAX]. При строгости 1
- * это линейно (скорость 1→1 ход, 2→2, 3→3), выше — круче для быстрых вылетов.
+ * Crash penalty in turns. Static mode is a fixed number. Dynamic mode is a power
+ * function of move speed (the length of the displacement vector):
+ * round(speed ^ exponent), clamped to [1, CRASH_PENALTY_MAX]. At exponent 1 this
+ * is linear (speed 1 -> 1 turn, 2 -> 2, 3 -> 3); higher exponents punish fast
+ * crashes more steeply.
  */
 export function crashPenalty(rules: Rules, speed: number): number {
   if (rules.penalty === 'static') return rules.staticTurns;
@@ -158,65 +163,67 @@ export function crashPenalty(rules: Rules, speed: number): number {
 export interface GameState {
   track: Track;
   players: Player[];
-  /** Правила заезда (штраф за вылет, порядок ходов). */
+  /** Race rules (off-track penalty, turn ordering). */
   rules: Rules;
   current: number;
   /**
-   * Сквозной счётчик слотов хода (0-based) для честной очерёдности. Круг — это
-   * n слотов; на каждом круге стартовый игрок сдвигается на 1, чтобы убрать
-   * преимущество первого. Игрок слота задаётся playerForTurn(); current держим
-   * в синхроне для остального кода, читающего его как индекс ходящего.
+   * Running counter of turn slots (0-based), used to keep turn order fair. A lap
+   * is n slots; each lap the starting player shifts by 1 so nobody keeps the
+   * advantage of going first. The player for a given slot is resolved by
+   * playerForTurn(); current is kept in sync for the rest of the code that reads
+   * it as "the index of whoever is moving now".
    */
   turn: number;
   phase: 'race' | 'over';
   /**
-   * Победитель гонки (место 1). Определяется при разрешении первого раунда, где
-   * кто-то финишировал, и дальше не меняется. `'draw'` — если 1-е место
-   * разделили несколько болидов с равным заездом за линию. Гонка при этом
-   * продолжается для остальных (см. phase).
+   * Race winner (1st place). Determined when the first round with a finisher gets
+   * resolved, and never changes after that. `'draw'` means multiple cars tied for
+   * 1st place at the same overshoot depth. The race keeps going for everyone else
+   * in that case (see phase).
    */
   winner: number | 'draw' | null;
   /**
-   * Сколько ходов осталось доиграть в текущем раунде. null — раунд не идёт
-   * (никто в нём ещё не пересёк финиш). Как только кто-то пересекает финиш,
-   * остальные болиды этого же круга доигрывают свои ходы (это число); по
-   * исчерпании раунд разрешается (resolveRound) — финишировавшим в нём
-   * раздаются места по глубине заезда за линию. В отличие от прежней логики
-   * гонка на этом не заканчивается: следующие круги играют оставшиеся болиды,
-   * пока все не финишируют или не сдадутся.
+   * How many more turns to play out in the current round. null means no round is
+   * in progress (nobody has crossed the finish yet). As soon as someone crosses
+   * the finish, the rest of the cars on that lap get this many turns to finish
+   * theirs; once it hits zero the round is resolved (resolveRound) and finishers
+   * from that round get places assigned by overshoot depth. Unlike the old logic,
+   * the race doesn't end here — remaining cars keep racing over subsequent laps
+   * until everyone has either finished or retired.
    */
   finalTurnsLeft: number | null;
   /**
-   * Болиды (seat'ы), пересёкшие финиш в текущем ещё не разрешённом раунде и
-   * ждущие расстановки мест. Опустошается в resolveRound.
+   * Seats that crossed the finish in the current, not-yet-resolved round and are
+   * waiting to have places assigned. Cleared out in resolveRound.
    */
   roundFinishers: number[];
   /**
-   * Порядок хода по стартовой решётке: startGridOrder[p] — seat, стоящий на p-й
-   * позиции решётки спереди назад (p=0 — поул). Первый круг ходит именно в этом
-   * порядке (поул раньше второго ряда — как в реальной гонке), дальше стартовый
-   * сдвигается каждый круг как прежде (см. playerForTurn в turns.ts). Это
-   * ОБРАТНАЯ перестановка к startOrder из newGame (seat i стоит на решётке на
-   * позиции startOrder[i]); тождественная при старте без перемешивания. Едет в
-   * сериализованном стейте (детерминизм у всех клиентов); старые снимки без поля
-   * поднимаются как тождественная (см. deserializeState).
+   * Turn order for the starting grid: startGridOrder[p] is the seat standing at
+   * grid position p, front to back (p=0 is pole). The first lap is played in this
+   * exact order (pole goes before the second row, like a real race); after that,
+   * the starting player still shifts each lap as before (see playerForTurn in
+   * turns.ts). This is the INVERSE permutation of startOrder from newGame (seat i
+   * stands at grid position startOrder[i]); identity when there's no shuffling at
+   * the start. Travels in the serialized state (so it's deterministic across all
+   * clients); old snapshots without this field come back up as the identity
+   * permutation (see deserializeState).
    */
   startGridOrder: number[];
 }
 
-/** Цвета и имена болидов по индексу игрока (до шести участников). */
-// Осветлённая палитра под тёмное поле «blueprint» — те же оттенки (и порядок имён,
-// см. NAMES), но ярче, чтобы читаться на синем фоне.
+/** Car colors and names by player index (up to six participants). */
+// Brightened palette for the dark "blueprint" track surface — same hues (and name
+// order, see NAMES), just punched up so they read clearly against the blue background.
 const COLORS = ['#ff5d5d', '#5db4ff', '#4fd58a', '#ffa94d', '#c58cff', '#2fd4c8'];
 
-/** Имена болидов по цвету — строго в порядке COLORS. */
+/** Car names by color — strictly in the same order as COLORS. */
 const NAMES = strings.players.names;
 
 export const MAX_PLAYERS = COLORS.length;
-// Минимум участников (см. MIN_PLAYERS в config) — реэкспорт.
+// Minimum number of participants (see MIN_PLAYERS in config) — re-exported.
 export { MIN_PLAYERS };
 
-/** Цвет болида по индексу места — для рендера ростера лобби в онлайне. */
+/** Car color by seat index — used to render the lobby roster in online play. */
 export function seatColor(i: number): string {
   return COLORS[i % COLORS.length];
 }
@@ -224,17 +231,18 @@ export function seatColor(i: number): string {
 export interface Candidate {
   target: Vec;
   crash: boolean;
-  /** Точка занята соперником — ход запрещён. */
+  /** Target cell is occupied by another car — this move isn't allowed. */
   blocked: boolean;
-  /** Кандидат чистой инерции (ускорение 0,0). */
+  /** The pure-inertia candidate (zero acceleration). */
   inertial: boolean;
 }
 
 /**
- * Случайная перестановка индексов [0..n) (Фишер—Йетс). rng инъектируется (как в
- * chooseMove бота) — по умолчанию Math.random. Используется для случайной раздачи
- * стартовых слотов болидам: в онлайне зовётся только у хоста и уезжает в
- * сериализованном стейте, так что сеять одинаково у всех клиентов не нужно.
+ * Random permutation of indices [0..n) (Fisher-Yates). rng is injectable (same as
+ * in the bot's chooseMove) and defaults to Math.random. Used to randomly assign
+ * starting slots to cars: in online play this only ever runs on the host and
+ * travels along in the serialized state, so there's no need for every client to
+ * seed it the same way.
  */
 export function shuffledIndices(n: number, rng: () => number = Math.random): number[] {
   const a = Array.from({ length: n }, (_, i) => i);
@@ -249,8 +257,9 @@ export function newGame(
   track: Track,
   playerCount = 2,
   rules: Rules = DEFAULT_RULES,
-  // Перестановка стартовых слотов: болид i встаёт на startPoints[startOrder[i]].
-  // По умолчанию — тождественная (поул у seat 0): детерминизм тестов/фикстуры.
+  // Permutation of starting slots: car i is placed at startPoints[startOrder[i]].
+  // Defaults to the identity permutation (pole goes to seat 0), keeping tests and
+  // fixtures deterministic.
   startOrder?: number[],
 ): GameState {
   const n = Math.max(
@@ -270,16 +279,16 @@ export function newGame(
     place: null,
     retired: false,
   });
-  // Порядок хода по решётке — обратная перестановка к startOrder: seat i стоит на
-  // позиции eff[i], значит на позиции p (спереди назад) стоит seat eff.indexOf(p).
-  // Без перемешивания eff тождественна → startGridOrder тоже тождественна.
+  // Grid turn order is the inverse permutation of startOrder: seat i stands at
+  // position eff[i], so the seat standing at position p (front to back) is
+  // eff.indexOf(p). Without shuffling, eff is the identity, so startGridOrder is too.
   const eff = Array.from({ length: n }, (_, i) => startOrder?.[i] ?? i);
   const startGridOrder = Array.from({ length: n }, (_, p) => eff.indexOf(p));
   return {
     track,
     players: Array.from({ length: n }, (_, i) => mk(i)),
     rules,
-    current: startGridOrder[0], // поул ходит первым (turn 0)
+    current: startGridOrder[0], // pole position moves first (turn 0)
     turn: 0,
     phase: 'race',
     winner: null,
@@ -290,17 +299,18 @@ export function newGame(
 }
 
 /**
- * Глубокая копия стейта для confirm-first отправки хода: применяем ход к копии,
- * шлём её на сервер и лишь при успехе делаем её текущей — оригинал остаётся цел,
- * чтобы при ошибке выбор игрока не пропал. Всё, кроме track (неизменная трасса,
- * шарим по ссылке), — обычные JSON-данные, поэтому structuredClone безопасен.
+ * Deep-copy the state for confirm-first move submission: apply the move to the
+ * copy, send it to the server, and only make it current on success — the original
+ * stays intact so the player's choice isn't lost if the request fails. Everything
+ * except track (an immutable track shared by reference) is plain JSON data, so
+ * structuredClone is safe to use here.
  */
 export function cloneState(g: GameState): GameState {
   const { track, ...rest } = g;
   return { ...structuredClone(rest), track };
 }
 
-/** Насколько глубоко точка зашла за край дороги: 0 на дороге, иначе — до ближайшей стенки. */
+/** How far past the road edge a point has strayed: 0 on the road, otherwise distance to the nearest wall. */
 export function offRoadDepth(track: Track, p: Vec): number {
   if (onRoad(p, track.outer, track.inner)) return 0;
   return Math.min(
@@ -309,42 +319,44 @@ export function offRoadDepth(track: Track, p: Vec): number {
   );
 }
 
-/** Результат прохода по отрезку хода: авария ли, и где именно случилась. */
+/** Result of scanning a move segment: whether it crashed, and exactly where. */
 interface MoveScan {
   crash: boolean;
-  /** Параметр вдоль from→to в точке аварии (Infinity, если аварии нет). */
+  /** Parameter along from->to at the crash point (Infinity if there's no crash). */
   tCrash: number;
-  /** Точка аварии на кромке (null, если аварии нет). */
+  /** Crash point on the tolerance boundary (null if there's no crash). */
   crashAt: Vec | null;
 }
 
 /**
- * Единый проход по отрезку хода: и детект аварии, и её локализация одним
- * критерием (глубина за кромкой > OFFROAD_FORGIVE). Ход — авария, если где-то
- * вдоль отрезка он заходит за стенку глубже допуска: густой семплинг ловит и
- * заезды «насквозь» через газон, и глубокие срезы углов, но прощает касания
- * впритирку.
+ * A single pass over the move segment that both detects a crash and locates it,
+ * using one criterion: depth past the edge > OFFROAD_FORGIVE. A move counts as a
+ * crash if anywhere along the segment it goes past the wall deeper than the
+ * tolerance: dense sampling catches both moves that punch straight through the
+ * grass and deep corner-cuts, while still forgiving grazing touches.
  *
- * Точку аварии находим бисекцией по изолинии допуска (глубина == OFFROAD_FORGIVE),
- * а не по самой кромке: если ход стартует уже в полосе допуска за стенкой и уходит
- * глубже по ту же сторону, отрезок кромку может вовсе не пересечь — тогда искать
- * «пересечение со стенкой» бессмысленно, а порог допуска всегда взят в вилку
- * (from — внутри допуска по инварианту, первый «плохой» семпл — за ним). Так
- * crashAt садится ≈на кромку одинаково, стартовал ход внутри трассы или в полосе
- * допуска — в этом и была асимметрия старой логики.
+ * We find the crash point by bisecting on the tolerance isoline (depth ==
+ * OFFROAD_FORGIVE) rather than on the wall itself: if the move already starts
+ * inside the tolerance band past the wall and goes deeper on the same side, the
+ * segment may never actually cross the wall — so looking for a "wall intersection"
+ * wouldn't make sense there, whereas the tolerance threshold is always bracketed
+ * (from is inside the tolerance by invariant, and the first "bad" sample is past
+ * it). This way crashAt lands roughly on the boundary consistently, whether the
+ * move started inside the track or already within the tolerance band — that
+ * consistency is exactly what the old logic lacked.
  *
- * Инвариант «from в пределах допуска»: старт — узел дороги (см. track.ts), обычный
- * ход кончается там, где scanMove не дал аварии (глубина конца ≤ допуска), аварийный
- * ход кончается на crashAt (тоже в допуске), а возврат после штрафа — на узле дороги
- * (nearestFreeInsidePoint).
+ * The "from is within tolerance" invariant: the start is a road node (see
+ * track.ts), a normal move ends where scanMove found no crash (end depth <=
+ * tolerance), a crashed move ends at crashAt (also within tolerance), and a
+ * post-penalty return ends on a road node (nearestFreeInsidePoint).
  */
 function scanMove(track: Track, from: Vec, to: Vec): MoveScan {
   const steps = Math.max(2, Math.ceil(dist(from, to) / CRASH_SAMPLE_STEP));
-  let loT = 0; // последний параметр, где точка была в пределах допуска
+  let loT = 0; // last parameter value where the point was within tolerance
   for (let i = 1; i <= steps; i++) {
     const t = i / steps;
     if (offRoadDepth(track, lerp(from, to, t)) > OFFROAD_FORGIVE) {
-      // Кромка допуска лежит в (loT, t] — уточняем бисекцией.
+      // The tolerance boundary lies in (loT, t] — refine it with bisection.
       let lo = loT;
       let hi = t;
       for (let k = 0; k < 24; k++) {
@@ -359,31 +371,32 @@ function scanMove(track: Track, from: Vec, to: Vec): MoveScan {
   return { crash: false, tCrash: Infinity, crashAt: null };
 }
 
-/** Результат хода одного болида — чистые данные для применения (без мутации игрока). */
+/** Outcome of a single car's move — plain data to apply, no player mutation. */
 export interface MoveOutcome {
-  /** Где болид оказался: crashAt при аварии, иначе целевая клетка. */
+  /** Where the car ends up: crashAt on a crash, otherwise the target cell. */
   end: Vec;
-  /** Новая скорость (нулевая при аварии). */
+  /** New velocity (zero on a crash). */
   vel: Vec;
   crash: boolean;
   crashAt: Vec | null;
-  /** Штраф в ходах при аварии, иначе 0. */
+  /** Penalty in turns on a crash, otherwise 0. */
   skipTurns: number;
-  /** Изменение счётчика пересечений финиша: −1 / 0 / +1. */
+  /** Change to the finish-crossing counter: -1 / 0 / +1. */
   crossingDelta: number;
   trailSeg: TrailSeg;
 }
 
 /**
- * Посчитать исход хода болида из точки from в клетку target — авария и её точка,
- * пересечение финиша, новые скорость/след. Чистая функция, ничего не мутирует;
- * применяет результат applyOutcome.
+ * Compute the outcome of a car's move from point from to cell target — the crash
+ * and its location, finish crossing, new velocity/trail. A pure function that
+ * mutates nothing; applyOutcome applies the result.
  */
 /**
- * Знак пересечения финиша отрезком from→to: +1 (вперёд), −1 (назад) или 0. Точка
- * ровно на линии считается стороной «впереди» (sideOfFinish >= 0), чтобы не
- * засчитывать одно пересечение дважды. tCrashCutoff отсекает пересечения после
- * аварии (для чистого хода; телепорт возврата аварии не имеет — Infinity).
+ * Sign of the finish crossing for segment from->to: +1 (forward), -1 (backward),
+ * or 0. A point exactly on the line counts as the "ahead" side (sideOfFinish >= 0)
+ * so the same crossing never gets counted twice. tCrashCutoff excludes crossings
+ * that happen after a crash (for a clean move; a crash's return teleport has no
+ * cutoff — Infinity).
  */
 function finishCrossingDelta(
   track: Track,
@@ -409,8 +422,8 @@ export function computeOutcome(
   const to = { ...target };
   const { tCrash, crashAt } = scanMove(track, from, to);
 
-  // Пересечение финишной линии засчитывается, только если случилось до аварии
-  // (tCrash отсекает пересечения после точки вылета).
+  // A finish-line crossing only counts if it happened before the crash
+  // (tCrash excludes crossings that occur after the point of impact).
   const crossingDelta = finishCrossingDelta(track, from, to, tCrash);
 
   if (crashAt) {
@@ -419,8 +432,8 @@ export function computeOutcome(
       vel: { x: 0, y: 0 },
       crash: true,
       crashAt: { ...crashAt },
-      // Скорость вылета — длина запланированного хода (|vel+accel|): чем быстрее
-      // ехал, тем дальше в гравий и тем дольше выбираться.
+      // Crash speed is the length of the planned move (|vel+accel|): the faster
+      // you were going, the deeper into the gravel and the longer it takes to get back.
       skipTurns: crashPenalty(rules, dist(from, to)),
       crossingDelta,
       trailSeg: { from: { ...from }, to: { ...crashAt }, jump: false },
@@ -438,16 +451,18 @@ export function computeOutcome(
 }
 
 /**
- * Применить посчитанный исход к болиду: обновить счётчик финиша, след, аварию,
- * позицию/скорость/штраф и (при достижении победы) глубину заезда за линию.
- * Смену очереди и определение победителя вызывающий делает сам (см. turns.ts).
+ * Apply a computed outcome to a car: update the finish counter, trail, crash list,
+ * position/velocity/penalty, and (once the win condition is reached) overshoot
+ * depth. Advancing the turn order and determining the winner are the caller's
+ * responsibility (see turns.ts).
  */
 export function applyOutcome(track: Track, p: Player, o: MoveOutcome): void {
   p.crossings += o.crossingDelta;
   p.trail.push(o.trailSeg);
   if (o.crashAt) {
-    // Болид остаётся в точке аварии на время штрафа — вернуть его на трассу
-    // (returnFromPenalty) нужно только когда штраф отбыт, иначе он мешает другим.
+    // The car stays at the crash point while serving its penalty — it only gets
+    // returned to the track (returnFromPenalty) once the penalty is served,
+    // otherwise it would be in everyone else's way.
     p.crashes.push({ ...o.crashAt });
   }
   p.pos = { ...o.end };
@@ -459,23 +474,25 @@ export function applyOutcome(track: Track, p: Player, o: MoveOutcome): void {
 }
 
 /**
- * Болид завершил гонку и больше не ходит: получил место ИЛИ уже пересёк финиш
- * нужное число раз (finishOvershoot выставляется на самом пересечении, а place —
- * позже, в resolveRound, когда доиграется раунд). В этом окне place ещё null, но
- * ходить/намечать ход финишировавшему уже нельзя — поэтому проверять надо именно
- * это, а не один place. NB: на трассе он в это окно ещё стоит и блокирует
- * (см. otherPositions) — здесь речь только про право хода.
+ * Whether a car has finished the race and no longer takes turns: it either has a
+ * place already OR has already crossed the finish the required number of times
+ * (finishOvershoot is set right at the crossing, while place is assigned later,
+ * in resolveRound, once the round plays out). During that window place is still
+ * null, but the car must not move or plan a move anymore — so this check needs
+ * to cover both cases, not just place. NB: during that same window the car is
+ * still physically on the track and still blocks others (see otherPositions) —
+ * this function is only about whether it gets to take a turn.
  */
 export function isFinished(p: Player): boolean {
   return p.place !== null || p.finishOvershoot !== null;
 }
 
 /**
- * Позиции всех игроков, кроме указанного места и тех, кто не мешает чужому пути:
- * отбывающих штраф после аварии (ещё не вернулись на трассу), а также выбывших
- * из гонки — уже получивших место (разрешённый раунд) или сдавшихся. Болиды,
- * пересёкшие финиш, но ждущие расстановки мест (place === null), пока стоят на
- * трассе и блокируют, как любой активный.
+ * Positions of every player except the given seat and anyone who can't block a
+ * path: cars still serving a crash penalty (not yet back on the track), and cars
+ * out of the race — either already assigned a place (round resolved) or retired.
+ * Cars that crossed the finish but are still waiting for places to be assigned
+ * (place === null) still stand on the track and block, same as any active car.
  */
 export function otherPositions(state: GameState, exclude: number): Vec[] {
   return state.players
@@ -485,7 +502,7 @@ export function otherPositions(state: GameState, exclude: number): Vec[] {
     .map((pl) => ({ ...pl.pos }));
 }
 
-/** Ближайшая свободная (не занятая другим болидом) клетка трассы к точке q. */
+/** Nearest free (unoccupied by another car) track cell to point q. */
 export function nearestFreeInsidePoint(state: GameState, q: Vec, exclude: number): Vec {
   const occupied = new Set(otherPositions(state, exclude).map((o) => key(o.x, o.y)));
   let best: Vec | null = null;
@@ -508,16 +525,17 @@ export function nearestFreeInsidePoint(state: GameState, q: Vec, exclude: number
 }
 
 /**
- * Штраф отбыт — вернуть болид на ближайшую свободную клетку трассы с пунктирным
- * «телепортом» из гравия (см. afterAction в turns.ts).
+ * Penalty served — return the car to the nearest free track cell with a dashed
+ * "teleport" out of the gravel (see afterAction in turns.ts).
  */
 export function returnFromPenalty(state: GameState, seat: number): void {
   const p = state.players[seat];
   const { track } = state;
   const resetTo = nearestFreeInsidePoint(state, p.pos, seat);
-  // Телепорт возврата может перебросить болид за линию финиша — засчитываем
-  // пересечение, иначе круг, «доеханный» до аварии, потеряется. Смена стороны
-  // считается так же, как в computeOutcome (afterAction затем поймает финиш).
+  // The return teleport can carry the car across the finish line — count that
+  // crossing, or a lap "completed" right up to the crash would get lost. The side
+  // change is computed the same way as in computeOutcome (afterAction then picks
+  // up the finish).
   p.crossings += finishCrossingDelta(track, p.pos, resetTo);
   if (p.crossings >= WIN_CROSSINGS && p.finishOvershoot === null) {
     p.finishOvershoot = sideOfFinish(track, resetTo);
@@ -527,13 +545,14 @@ export function returnFromPenalty(state: GameState, seat: number): void {
 }
 
 /**
- * Разрешить текущий раунд: раздать места болидам, пересёкшим в нём финиш
- * (state.roundFinishers), по глубине заезда за линию (finishOvershoot) —
- * заехавший дальше получает место выше. Спортивная нумерация «1224»: равный
- * заезд даёт одинаковое место, а следующий за парой — место со сдвигом (два
- * вторых → следующий четвёртый). Победитель гонки (place 1) фиксируется при
- * первом же разрешённом раунде с финишировавшими; если 1-е место разделили —
- * `'draw'`. Когда все болиды получили место или сдались — гонка окончена.
+ * Resolve the current round: assign places to cars that crossed the finish in it
+ * (state.roundFinishers), ranked by overshoot depth (finishOvershoot) — whoever
+ * went farther past the line gets the better place. Uses "1224" sports scoring:
+ * ties get the same place, and whoever comes right after a tied pair gets a
+ * shifted place (two seconds are followed by a fourth). The race winner (place 1)
+ * is locked in on the first resolved round that has any finishers; if 1st place
+ * is tied, winner becomes `'draw'`. Once every car has a place or has retired,
+ * the race is over.
  */
 export function resolveRound(state: GameState): void {
   const ranked = [...state.roundFinishers].sort(

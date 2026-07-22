@@ -1,33 +1,36 @@
-// Оценка и выбор хода: константы эвристик, ранжирование корней и epsilon-выбор.
-// Общая для планировщика (planner.ts) часть. Чистая логика без DOM.
+// Move scoring and selection: heuristic constants, root ranking, and epsilon-greedy
+// selection. Shared with the planner (planner.ts). Pure logic, no DOM.
 
 import { Candidate } from '../game';
 import { DifficultyParams } from './difficulty';
 
-// ── Константы оценки (алгоритмические, не игровые — потому здесь, не в config) ──
-/** Штраф за клетку превышения мягкого потолка скорости. */
+// ── Scoring constants (algorithmic, not gameplay constants — hence here, not in config) ──
+/** Penalty per cell over the soft speed cap. */
 export const OVERSPEED_PENALTY = 8;
-/** Ходы в этой полосе от лучшего считаются «почти лучшими» (для epsilon-выбора). */
+/** Moves within this margin of the best plan count as "near-best" (for epsilon selection). */
 export const EPS_MARGIN = 3;
 
-/** Результат ранжирования корней стратегией выбора хода. */
+/** Result of ranking the root moves for a move-selection strategy. */
 export interface Ranking {
-  /** Оптимальный ход стратегии — возвращается всегда, кроме epsilon-разнообразия. */
+  /** The strategy's optimal move — always returned except under epsilon variety. */
   best: Candidate;
-  /** Финиш/безвыходная авария — вернуть best точно (без epsilon-подмены). */
+  /** Finish/unavoidable-crash case — return best exactly, no epsilon substitution. */
   terminal: boolean;
-  /** Все корни со «стоимостью» (меньше — лучше): для epsilon-выбора easy/medium. */
+  /** All root moves with a "cost" (lower is better): used for easy/medium epsilon
+   *  selection. */
   scored: { c: Candidate; score: number }[];
 }
 
 /**
- * Выбор хода из ранжированных корней: лучший (оптимум стратегии), кроме easy/medium,
- * где с вероятностью epsilon берётся случайный из почти-оптимальных — «живость» без
- * дёрганья. Расталкивания нет намеренно: у быстрого A* соперника обводят сам поиск
- * (blocked-ходы отсеяны в candidates, план строится в объезд), а искусственный штраф
- * за близость заставлял бота уступать гоночную линию любому сопернику и терять ~40%
- * темпа. Болиды и так расходятся: стартуют с разных клеток, A* из разных состояний
- * даёт разные линии, а blocked разводит на пересечениях.
+ * Picks a move from the ranked root moves: the best one (the strategy's optimum),
+ * except for easy/medium, where with probability epsilon a random near-optimal move
+ * is picked instead — variety without jitter. There's deliberately no pack
+ * repulsion: opponents get routed around by the A* search itself (blocked moves are
+ * filtered out in candidates, and the plan routes around them), whereas an artificial
+ * proximity penalty made the bot yield the racing line to any opponent and cost it
+ * ~40% of its pace. Cars separate on their own anyway: they start from different
+ * cells, A* from different states produces different lines, and blocked cells split
+ * them up at intersections.
  */
 export function pickMove(
   rank: Ranking,

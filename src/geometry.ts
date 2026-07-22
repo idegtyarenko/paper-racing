@@ -1,6 +1,6 @@
-// Чистые геометрические примитивы. Все координаты — в клетках (world space).
-// Замкнутые полилинии хранятся без дублирования первой точки: ребро
-// последняя→первая подразумевается.
+// Pure geometric primitives. All coordinates are in cells (world space).
+// Closed polylines are stored without duplicating the first point: the
+// last→first edge is implied.
 
 export interface Vec {
   x: number;
@@ -28,7 +28,7 @@ export function normalize(a: Vec): Vec {
   return l < EPS ? { x: 0, y: 0 } : scale(a, 1 / l);
 }
 
-/** Тест «точка внутри полигона» методом чёт/нечет (ray casting). */
+/** "Point inside polygon" test via the even-odd rule (ray casting). */
 export function pointInPolygon(p: Vec, poly: Polyline): boolean {
   let inside = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -43,14 +43,14 @@ export function pointInPolygon(p: Vec, poly: Polyline): boolean {
 }
 
 export interface SegHit {
-  /** Параметр вдоль первого отрезка p1→p2, 0..1. */
+  /** Parameter along the first segment p1→p2, 0..1. */
   t: number;
   point: Vec;
 }
 
 /**
- * Пересечение отрезков p1→p2 и q1→q2. Касание считается пересечением.
- * Для коллинеарного перекрытия возвращается начало общей части.
+ * Intersection of segments p1→p2 and q1→q2. A touch counts as an
+ * intersection. For collinear overlap, returns the start of the shared part.
  */
 export function segSegIntersection(p1: Vec, p2: Vec, q1: Vec, q2: Vec): SegHit | null {
   const r = sub(p2, p1);
@@ -58,9 +58,9 @@ export function segSegIntersection(p1: Vec, p2: Vec, q1: Vec, q2: Vec): SegHit |
   const denom = cross(r, s);
   const qp = sub(q1, p1);
   if (Math.abs(denom) < EPS) {
-    if (Math.abs(cross(qp, r)) > EPS) return null; // параллельны, не на одной прямой
+    if (Math.abs(cross(qp, r)) > EPS) return null; // parallel, not collinear
     const rr = dot(r, r);
-    if (rr < EPS) return null; // вырожденный первый отрезок
+    if (rr < EPS) return null; // degenerate first segment
     let t0 = dot(qp, r) / rr;
     let t1 = dot(sub(q2, p1), r) / rr;
     if (t0 > t1) [t0, t1] = [t1, t0];
@@ -76,16 +76,17 @@ export function segSegIntersection(p1: Vec, p2: Vec, q1: Vec, q2: Vec): SegHit |
   return { t: tc, point: lerp(p1, p2, tc) };
 }
 
-/** Лежит ли точка p на отрезке a→b (включая концы, с допуском EPS). */
+/** Whether point p lies on segment a→b (endpoints included, with EPS
+ *  tolerance). */
 export function pointOnSegment(p: Vec, a: Vec, b: Vec): boolean {
   const ab = sub(b, a);
   const ap = sub(p, a);
-  if (Math.abs(cross(ab, ap)) > EPS) return false; // не коллинеарна прямой a→b
+  if (Math.abs(cross(ab, ap)) > EPS) return false; // not collinear with line a→b
   const proj = dot(ap, ab);
   return proj >= -EPS && proj <= dot(ab, ab) + EPS;
 }
 
-/** Ближайшая к p точка на отрезке a→b. */
+/** Closest point to p on segment a→b. */
 export function closestPointOnSegment(p: Vec, a: Vec, b: Vec): Vec {
   const ab = sub(b, a);
   const ab2 = dot(ab, ab);
@@ -105,7 +106,8 @@ export function distPointToPolyline(p: Vec, poly: Polyline): number {
   return d;
 }
 
-/** Все пересечения отрезка a→b с рёбрами замкнутой полилинии, по возрастанию t. */
+/** All intersections of segment a→b with the edges of a closed polyline,
+ *  sorted by increasing t. */
 export function segmentPolylineIntersections(a: Vec, b: Vec, poly: Polyline): SegHit[] {
   const hits: SegHit[] = [];
   for (let i = 0; i < poly.length; i++) {
@@ -116,7 +118,7 @@ export function segmentPolylineIntersections(a: Vec, b: Vec, poly: Polyline): Se
   return hits;
 }
 
-/** Перераспределяет вершины замкнутой полилинии равномерно с заданным шагом. */
+/** Redistributes a closed polyline's vertices evenly at a given spacing. */
 export function resampleClosed(poly: Polyline, spacing: number): Polyline {
   const n = poly.length;
   if (n < 3) return poly.slice();
@@ -140,7 +142,7 @@ export function resampleClosed(poly: Polyline, spacing: number): Polyline {
   return out;
 }
 
-/** Сглаживание Чайкина для замкнутой полилинии (срезание углов). */
+/** Chaikin smoothing for a closed polyline (corner-cutting). */
 export function chaikinClosed(poly: Polyline, iterations: number): Polyline {
   let pts = poly;
   for (let it = 0; it < iterations; it++) {
@@ -157,13 +159,15 @@ export function chaikinClosed(poly: Polyline, iterations: number): Polyline {
 }
 
 /**
- * Подрезка самопересечения на стыке открытого штриха. Ищет пересечение раннего
- * сегмента (голова) с поздним (хвост); если суммарная длина отбрасываемых концов
- * не превышает maxTrim — срезает нахлёст, возвращая контур [X, raw[i+1..j]], где
- * X — точка пересечения. Иначе возвращает исходный штрих без изменений.
+ * Trims a self-overlap at the seam of an open stroke. Looks for an
+ * intersection between an early segment (the head) and a later one (the
+ * tail); if the total length of the discarded ends doesn't exceed maxTrim,
+ * it cuts the overlap, returning the contour [X, raw[i+1..j]], where X is
+ * the intersection point. Otherwise returns the original stroke unchanged.
  *
- * Малый порог отсекает серединные петли (у них большая отбрасываемая дуга) и
- * оставляет их валидатору — чинится только мелкий нахлёст концов кольца.
+ * A small threshold rules out mid-loop self-intersections (which would
+ * discard a large arc) and leaves those for the validator to reject — this
+ * only fixes a small overlap at the ends of the ring.
  */
 export function trimSeamOverlap(raw: Vec[], maxTrim: number): Vec[] {
   const n = raw.length;
@@ -175,7 +179,7 @@ export function trimSeamOverlap(raw: Vec[], maxTrim: number): Vec[] {
   let best: { i: number; j: number; point: Vec } | null = null;
   let bestTrim = maxTrim;
   for (let i = 0; i < n - 1; i++) {
-    if (cum[i] >= bestTrim) break; // голова уже длиннее лучшего — дальше только хуже
+    if (cum[i] >= bestTrim) break; // head already longer than the best so far — no point continuing
     for (let j = i + 2; j < n - 1; j++) {
       const trim = cum[i] + (total - cum[j + 1]);
       if (trim >= bestTrim) continue;
@@ -191,9 +195,10 @@ export function trimSeamOverlap(raw: Vec[], maxTrim: number): Vec[] {
 }
 
 /**
- * Лапласово сглаживание замкнутой полилинии: каждая вершина подтягивается к
- * середине соседей на долю factor. Число вершин сохраняется (в отличие от
- * Чайкина) — важно там, где индексы вершин должны оставаться стабильными.
+ * Laplacian smoothing for a closed polyline: each vertex is pulled toward the
+ * midpoint of its neighbors by a fraction `factor`. The vertex count is
+ * preserved (unlike Chaikin) — important wherever vertex indices need to
+ * stay stable.
  */
 export function smoothClosed(poly: Polyline, iterations: number, factor = 0.5): Polyline {
   let pts = poly;
@@ -214,21 +219,21 @@ export function smoothClosed(poly: Polyline, iterations: number, factor = 0.5): 
   return pts;
 }
 
-/** Проверка самопересечения замкнутой полилинии (несмежные рёбра). */
+/** Checks whether a closed polyline self-intersects (non-adjacent edges). */
 export function selfIntersectsClosed(poly: Polyline): boolean {
   const n = poly.length;
   for (let i = 0; i < n; i++) {
     const a1 = poly[i];
     const a2 = poly[(i + 1) % n];
     for (let j = i + 2; j < n; j++) {
-      if (i === 0 && j === n - 1) continue; // смежны через замыкание
+      if (i === 0 && j === n - 1) continue; // adjacent via the closing edge
       if (segSegIntersection(a1, a2, poly[j], poly[(j + 1) % n])) return true;
     }
   }
   return false;
 }
 
-/** Знаковая площадь замкнутой полилинии (>0 — обход против часовой стрелки). */
+/** Signed area of a closed polyline (>0 means counter-clockwise winding). */
 export function signedArea(poly: Polyline): number {
   let s = 0;
   for (let i = 0; i < poly.length; i++) {
@@ -242,19 +247,20 @@ export function polygonArea(poly: Polyline): number {
 }
 
 /**
- * Единичные нормали в каждой вершине замкнутой полилинии, повёрнутые наружу
- * (от центра фигуры). Нормаль строится из усреднённого тангенса соседних рёбер.
+ * Unit normals at each vertex of a closed polyline, pointing outward (away
+ * from the shape's center). Each normal is built from the averaged tangent
+ * of the adjacent edges.
  */
 export function closedNormals(poly: Polyline): Vec[] {
   const n = poly.length;
-  // Ориентация обхода определяет, куда смотрит «левая» нормаль тангенса.
+  // The winding direction determines which way the tangent's "left" normal points.
   const outward = signedArea(poly) > 0 ? -1 : 1;
   const out: Vec[] = [];
   for (let i = 0; i < n; i++) {
     const prev = poly[(i - 1 + n) % n];
     const next = poly[(i + 1) % n];
     const t = normalize(sub(next, prev));
-    // Поворот тангенса на 90°, знак — наружу от фигуры.
+    // Rotate the tangent by 90°, sign determined by outward direction.
     out.push({ x: -t.y * outward, y: t.x * outward });
   }
   return out;

@@ -1,35 +1,35 @@
-/* Дизайн-токены: единый источник палитры для DOM (var(--…) в компонентах). Значения
-   извлечены как есть — экстракция без смены вида. Здесь пока только повторяющаяся
-   семантическая палитра; отдельные component-local цвета и близкие-но-разные оттенки
-   (дрейф серых/янтарных) оставлены литералами и будут сведены редизайном, когда он
-   выберет новые значения. canvas держит свои значения-зеркала в render.ts (два
-   источника — осознанный компромисс, риск дрейфа; см. комментарий там). */
+/* Design tokens: single source of truth for the DOM palette (var(--…) in components).
+   Values are extracted as-is — a straight extraction with no visual change. For now this
+   only covers the shared semantic palette; component-local colors and near-duplicate
+   shades (gray/amber drift) are left as literals and will be reconciled by the redesign
+   once it settles on new values. The canvas keeps its own mirrored values in render.ts
+   (two sources of truth — a deliberate tradeoff, with drift risk; see the comment there). */
 :root {
-  /* Поверхности (бумага/крем). */
-  --paper: #fbfaf4; /* фон поля (зеркалит canvas PAPER) */
-  --surface: #f4f1e8; /* панель */
+  /* Surfaces (paper/cream). */
+  --paper: #fbfaf4; /* board background (mirrors canvas PAPER) */
+  --surface: #f4f1e8; /* panel */
   --surface-hover: #f0ecdf;
   --surface-active: #e6e0cf;
-  --surface-glass: rgba(255, 255, 255, 0.92); /* полупрозрачные плавающие кнопки */
+  --surface-glass: rgba(255, 255, 255, 0.92); /* translucent floating buttons */
   --white: #fff;
-  /* Границы. */
+  /* Borders. */
   --border: #b7b0a0;
   --border-soft: #d8d2c0;
-  /* Текст/чернила. */
-  --ink: #3a3a3a; /* основной (зеркалит canvas INK) */
+  /* Text/ink. */
+  --ink: #3a3a3a; /* primary (mirrors canvas INK) */
   --ink-strong: #33322e;
   --text-muted: #55524a;
-  /* Акцент (зелёный). */
-  --accent: #0a8a4f; /* зеркалит canvas ARROW_COLOR */
+  /* Accent (green). */
+  --accent: #0a8a4f; /* mirrors canvas ARROW_COLOR */
   --accent-active: #097843;
   --accent-translucent: rgba(10, 138, 79, 0.55);
-  /* Опасное действие (красный). */
+  /* Danger action (red). */
   --danger: #b3261e;
   --danger-strong: #8f1a14;
   --danger-hover: #9f211a;
   --danger-bg: #fdecea;
   --danger-border: #f3b7b0;
-  /* Предупреждение / «Шаг N из 4» (янтарный). */
+  /* Warning / "Step N of 4" (amber). */
   --warn: #e0a800;
   --warn-bg: #fff3cd;
   --warn-border: #f0d98c;
@@ -37,7 +37,7 @@
   --warn-badge: #8a6d00;
 }
 
-/* Глобальный сброс и базовые стили элементов. */
+/* Global reset and base element styles. */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -49,20 +49,20 @@ body {
 }
 body {
   height: 100dvh;
-  /* Шрифт задаём на body, а не только на .app: оверлей со шторками и тост —
-     соседи .app, иначе унаследовали бы дефолтный серифный шрифт браузера. */
+  /* Font is set on body, not just .app: the sheet overlay and the toast are
+     siblings of .app, so they'd otherwise inherit the browser's default serif font. */
   font-family:
     system-ui,
     -apple-system,
     sans-serif;
-  /* iOS: гасим системное меню выделения/копирования (long-press callout) и
-     случайное выделение текста при тапах по полю и UI-хрому. Ввод — исключение
-     ниже (иначе не выделить/не вставить код или имя). */
+  /* iOS: suppress the system selection/copy menu (long-press callout) and
+     accidental text selection when tapping the board and UI chrome. Inputs are
+     the exception below (otherwise you couldn't select/paste a code or name). */
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
 }
-/* Поля ввода (имя, код) остаются выделяемыми и с callout ради вставки. */
+/* Input fields (name, code) stay selectable with callout enabled, for pasting. */
 input,
 textarea {
   -webkit-touch-callout: default;
@@ -75,7 +75,7 @@ canvas {
   touch-action: none;
   cursor: crosshair;
 }
-/* Во время панорамирования карты — «схваченная рука». */
+/* While panning the map — a "grabbing hand" cursor. */
 canvas.grabbing {
   cursor: grabbing;
 }

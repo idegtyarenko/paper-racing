@@ -1,4 +1,4 @@
-/* Кнопки панели. */
+/* Panel buttons. */
 .button {
   padding: 8px 10px;
   min-height: 44px;
@@ -11,9 +11,9 @@
   touch-action: manipulation;
 }
 
-/* Hover — только на устройствах с настоящим курсором. На тач-экранах :hover
-   «залипает» после тапа и на iOS съедает первый клик (кнопка срабатывает лишь
-   со второго нажатия), поэтому наведение туда не пускаем. */
+/* Hover — only on devices with a real pointer. On touchscreens :hover
+   "sticks" after a tap and on iOS it eats the first click (the button only
+   fires on the second tap), so we keep hover styles out of that path. */
 @media (hover: hover) {
   .button:hover:not(:disabled) {
     background: var(--surface-hover);
@@ -27,18 +27,18 @@
   cursor: default;
 }
 
-/* Главная кнопка «Старт!». */
+/* Main "Start!" button. */
 .button--primary {
   font-weight: 700;
   text-align: center;
 }
 
-/* Кнопка с центрированной подписью («← Назад»). */
+/* Button with a centered label ("← Back"). */
 .button--center {
   text-align: center;
 }
 
-/* Опасное действие (подтверждение сдачи) — красная заливка. */
+/* Dangerous action (confirming a retirement) — solid red fill. */
 .button--danger {
   font-weight: 700;
   color: var(--white);
@@ -54,7 +54,7 @@
   background: var(--danger-strong);
 }
 
-/* Плавающая кнопка подтверждения хода: у нижнего края поля, поверх canvas. */
+/* Floating move-confirm button: at the bottom edge of the board, above the canvas. */
 .confirm-move {
   position: absolute;
   left: 50%;
@@ -74,8 +74,8 @@
   touch-action: manipulation;
 }
 
-/* Кандидаты внизу поля — кнопку уводим наверх, ниже полосы очереди ходов
-   (turn-queue сидит на top:10px), чтобы не накрывать точки-цели. */
+/* Candidate targets sit at the bottom of the board — move the button up, below
+   the turn-queue strip (turn-queue sits at top:10px), so it doesn't cover them. */
 .confirm-move--top {
   top: calc(52px + env(safe-area-inset-top));
   bottom: auto;
@@ -84,8 +84,9 @@
 .confirm-move:active {
   background: var(--accent-active);
 }
-/* Режим «только таймер»: цель ещё не выбрана — кнопка показывает отсчёт, но не
-   кликается и пропускает клики/тапы к полю (иначе накрыла бы кандидата под собой). */
+/* "Timer-only" mode: no target picked yet — the button shows a countdown but isn't
+   clickable and passes clicks/taps through to the board (otherwise it would cover
+   a candidate underneath it). */
 .confirm-move--timer {
   pointer-events: none;
   background: var(--accent-translucent);
@@ -95,7 +96,7 @@
   display: none;
 }
 
-/* Кнопки зума карты поверх поля — только на десктопе (на тач-экранах зум пинчем). */
+/* Map zoom buttons above the board — desktop only (touchscreens zoom via pinch). */
 .zoom-ctl {
   position: absolute;
   right: 12px;
@@ -136,7 +137,7 @@
   background: var(--surface-active);
 }
 
-/* Кнопки-действия в шапке панели («Правила», «Сдаться») — компактные пилюли. */
+/* Action buttons in the panel header ("Rules", "Retire") — compact pill shapes. */
 .panel__header-actions {
   flex: none;
   display: flex;

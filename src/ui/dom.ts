@@ -1,29 +1,31 @@
-// Общий низкий уровень UI: тип указателя, надёжная активация кнопок и оверлей
-// со шторками. Не знает про состояние игры — используется панелью, диалогами и лобби.
+// Shared low-level UI primitives: pointer type detection, reliable button
+// activation, and the sheet overlay. Knows nothing about game state — used by
+// the panel, dialogs, and lobby.
 
-/** Основной указатель устройства — палец (телефон/планшет). */
+/** Primary input is touch (phone/tablet). */
 export const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
 
 const overlay = document.getElementById('overlay')!;
 
-/** Показать одну шторку оверлея, спрятав остальные. */
+/** Show one overlay sheet, hiding the rest. */
 export function openSheet(sheet: HTMLElement): void {
   overlay.querySelectorAll<HTMLElement>('.sheet').forEach((s) => (s.hidden = true));
   sheet.hidden = false;
   overlay.hidden = false;
 }
 
-/** Спрятать оверлей со всеми шторками. */
+/** Hide the overlay along with all its sheets. */
 export function closeOverlay(): void {
   overlay.hidden = true;
 }
 
-/** Навесить закрытие оверлея по фону, `[data-close]`-кнопкам и Escape. */
+/** Wire up overlay dismissal via the backdrop, `[data-close]` buttons, and Escape. */
 export function bindOverlayClose(): void {
-  // Закрываем по фону, только если и нажатие началось на фоне. Иначе на iOS
-  // синтетический `click` после тапа, свернувшего подсказку в bottom-sheet
-  // (шторка анкерится снизу и уезжает вниз, а координаты клика оказываются над
-  // её верхним краем — на фоне), перенаправлялся на фон и ложно закрывал оверлей.
+  // Only close on a backdrop tap if the press also started on the backdrop.
+  // Otherwise on iOS the synthetic `click` that follows a tap which collapsed
+  // a bottom-sheet hint (the sheet anchors to the bottom and slides down, so
+  // the click coordinates end up above its top edge — over the backdrop)
+  // would land on the backdrop and falsely close the overlay.
   const backdrop = overlay.querySelector<HTMLElement>('.overlay__backdrop')!;
   let pressedBackdrop = false;
   overlay.addEventListener('pointerdown', (e) => {
@@ -40,23 +42,25 @@ export function bindOverlayClose(): void {
   });
 }
 
-/** Сдвиг пальца между down и up больше этого — это скролл/перетаскивание, не тап. */
+/** Finger movement between down and up beyond this is a scroll/drag, not a tap. */
 const TAP_SLOP_PX = 10;
-/** Окно после тач-активации, в которое давим призрачный синтетический `click`. */
+/** Window after a touch activation during which we suppress the ghost synthetic `click`. */
 const GHOST_CLICK_MS = 400;
-/** Дедуп: повторное срабатывание того же элемента в этом окне игнорируем. */
+/** Dedup: ignore a repeat firing on the same element within this window. */
 const RETAP_MS = 350;
-/** Призрачный click прилетает в точку тапа; дальше этого радиуса — уже другой тап. */
+/** The ghost click lands at the tap point; beyond this radius it's a separate tap. */
 const GHOST_SLOP_PX = 24;
 
-// Глобальный «гаситель» призрачного click. На coarse-указателе кнопку активируем по
-// `pointerup`, а следом браузер шлёт синтетический `click` в ту же точку. Пер-элементного
-// окна мало: за время удержания панель могла перерисоваться и под палец подставить другую
-// кнопку — её `click` не «свой», а passthrough, и пер-элементная защита его пропускала.
-// Поэтому один слушатель на документе в фазе capture съедает `click` сразу после
-// тач-активации в той же точке — до того как он дойдёт до целевого элемента (в т.ч. нового
-// под пальцем). Привязка к координатам, а не только ко времени, не даёт погасить
-// осознанный тап по другой кнопке (например зуму) в это же окно.
+// Global ghost-click suppressor. On a coarse pointer we activate the button on
+// `pointerup`, and the browser then sends a synthetic `click` at the same point.
+// A per-element window isn't enough: during the hold the panel may have
+// re-rendered and swapped in a different button under the finger — that
+// button's `click` isn't "its own" but a passthrough, and per-element guarding
+// let it through. So a single document-level listener in the capture phase
+// eats the `click` right after a touch activation at the same point — before
+// it reaches the target element (including a new one now under the finger).
+// Keying off coordinates, not just time, avoids suppressing a deliberate tap
+// on a different button (e.g. zoom) within the same window.
 let swallowClickUntil = -Infinity;
 let swallowX = 0;
 let swallowY = 0;
@@ -70,42 +74,45 @@ function installClickSwallow(): void {
       const atTapPoint =
         Math.hypot(e.clientX - swallowX, e.clientY - swallowY) <= GHOST_SLOP_PX;
       if (e.timeStamp <= swallowClickUntil && atTapPoint) {
-        e.stopPropagation(); // не даём click дойти до любой кнопки (и «своей», и чужой)
+        e.stopPropagation(); // block the click from reaching any button (its own or a passthrough)
         e.preventDefault();
       }
     },
-    true, // capture — перехватываем до целевого элемента
+    true, // capture — intercept before it reaches the target element
   );
 }
 
 /**
- * Надёжная активация кнопки на сенсорном экране. На iOS первый синтетический
- * `click` по кнопке, показанной сразу после жеста на canvas (например «Вперёд» в
- * редакторе или «Газу!» после прицела), теряется — кнопка срабатывает лишь со
- * второго тапа. Поэтому на coarse-указателе активируем прямо по завершению касания
- * (`pointerup` доходит с первого раза), а призрачный `click` следом гасим глобально
- * (см. `installClickSwallow`). Тапом считаем только пару `pointerdown`+`pointerup` на
- * одном элементе (тот же `pointerId`, без ухода за `TAP_SLOP_PX`) — это отсекает
- * passthrough и «обратный» drag (нажал в другом месте, отпустил на кнопке). Прокрутка,
- * начатая с кнопки, шлёт `pointercancel` — тап отменяется. Мышь, стилус и клавиатура
- * (Enter/Space шлют `click` без касания) идут обычным `click`-путём.
+ * Reliable button activation on touch screens. On iOS the first synthetic
+ * `click` on a button that appeared right after a canvas gesture (e.g. "Next"
+ * in the editor or "Go!" after aiming) gets dropped — the button only responds
+ * on the second tap. So on a coarse pointer we activate directly on touch end
+ * (`pointerup` always arrives on the first try), then globally suppress the
+ * ghost `click` that follows (see `installClickSwallow`). We only count a tap
+ * as a `pointerdown`+`pointerup` pair on the same element (same `pointerId`,
+ * without exceeding `TAP_SLOP_PX`) — this filters out passthrough events and
+ * "reverse" drags (press elsewhere, release on the button). A scroll that
+ * starts from the button sends `pointercancel`, cancelling the tap. Mouse,
+ * stylus, and keyboard (Enter/Space send `click` without touch) go through the
+ * normal `click` path.
  *
- * Контракт с `view/input.ts`: коммит хода кнопкой «Едем!» завязан на приход `pointerup`
- * на неё. Если под кнопкой оказался кандидат, input.ts на `pointerdown` забирает
- * указатель на canvas через `setPointerCapture` — тогда `pointerup` сюда не придёт и
- * тап не сработает (намеренно: уходим в прицеливание, а не коммитим чужой ход).
+ * Contract with `view/input.ts`: committing a move via the "Go!" button
+ * depends on a `pointerup` reaching it. If a target candidate ends up under
+ * the button, input.ts grabs the pointer on canvas via `setPointerCapture` on
+ * `pointerdown` — then `pointerup` never reaches here and the tap doesn't
+ * fire (intentional: we go into aiming rather than commit someone else's move).
  */
 export function bindTap(el: HTMLElement, handler: () => void): void {
   const disabled = () => el.matches(':disabled');
   let firedAt = -Infinity;
   const fire = (ts: number) => {
-    if (disabled() || ts - firedAt < RETAP_MS) return; // дедуп двойного тапа
+    if (disabled() || ts - firedAt < RETAP_MS) return; // dedup a double tap
     firedAt = ts;
     handler();
   };
-  // Мышь/стилус/клавиатура. На coarse этот путь остаётся для клавиатуры и не-тач
-  // указателей; «свой» синтетический click тач-тапа сюда не дойдёт — его съест
-  // глобальный гаситель в фазе capture.
+  // Mouse/stylus/keyboard. On a coarse pointer this path remains for keyboard
+  // and non-touch pointers; a touch tap's own synthetic click never reaches
+  // here — it gets eaten by the global capture-phase suppressor.
   el.addEventListener('click', (e) => fire(e.timeStamp));
   if (!coarsePointer) return;
   installClickSwallow();
@@ -124,8 +131,8 @@ export function bindTap(el: HTMLElement, handler: () => void): void {
   el.addEventListener('pointerup', (e) => {
     if (e.pointerType !== 'touch' || e.pointerId !== downId) return;
     downId = -1;
-    if (Math.hypot(e.clientX - downX, e.clientY - downY) > TAP_SLOP_PX) return; // скролл
-    // Гасим призрачный click, прилетающий в эту точку следом (глобально, см. выше).
+    if (Math.hypot(e.clientX - downX, e.clientY - downY) > TAP_SLOP_PX) return; // scroll
+    // Suppress the ghost click that will land at this point next (globally, see above).
     swallowClickUntil = e.timeStamp + GHOST_CLICK_MS;
     swallowX = e.clientX;
     swallowY = e.clientY;
