@@ -671,6 +671,9 @@ function drawCars(ctx: CanvasRenderingContext2D, s: number, game: GameState): vo
 }
 
 /** Current player's move candidates: traction zone, aim line, and points. */
+/** What a candidate *is*, independent of whether it is currently selected. */
+type CandKind = 'normal' | 'crash' | 'blocked';
+
 function drawCandidates(
   ctx: CanvasRenderingContext2D,
   s: number,
@@ -706,24 +709,29 @@ function drawCandidates(
     const x = c.target.x * s;
     const y = c.target.y * s;
     const r = Math.max(CAND_R_MIN, s * (c.inertial ? CAND_R_INERTIAL : CAND_R));
-    if (c.blocked) {
+    // Two orthogonal axes: what the candidate *is* (kind) and what state it is
+    // in (selected). Branching on them separately keeps a selected crash from
+    // being shadowed by the crash styling.
+    const kind: CandKind = c.blocked ? 'blocked' : c.crash ? 'crash' : 'normal';
+    const selected = c === hover;
+    ctx.save();
+    if (kind === 'blocked') {
       // Occupied node — gray cross.
       const br = Math.max(BLOCK_R_MIN, s * BLOCK_R);
       ctx.strokeStyle = MUTED;
       ctx.lineWidth = BLOCK_LW;
       crossPath(ctx, x, y, br);
       ctx.stroke();
-    } else if (c.crash) {
+    } else if (kind === 'crash') {
       // Move into a wall — solid red ring (distinct from the cyan "allowed" ring).
       ctx.strokeStyle = CRASH;
       ctx.lineWidth = CRASH_CAND_LW;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.stroke();
-    } else if (c === hover) {
+    } else if (selected) {
       // Hovered/selected: solid (non-dashed) ring + center dot, full opacity
       // — draws the eye among the dashed fan.
-      ctx.save();
       ctx.strokeStyle = EDGE;
       ctx.lineWidth = CAND_HOVER_LW;
       ctx.beginPath();
@@ -733,10 +741,8 @@ function drawCandidates(
       ctx.beginPath();
       ctx.arc(x, y, Math.max(2, s * CAND_HOVER_DOT_R), 0, Math.PI * 2);
       ctx.fill();
-      ctx.restore();
     } else {
       // Available move — dashed cyan ring (bright contrast on the dark field).
-      ctx.save();
       ctx.strokeStyle = EDGE;
       ctx.globalAlpha = CAND_ALPHA;
       ctx.lineWidth = CAND_LW;
@@ -744,8 +750,8 @@ function drawCandidates(
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.restore();
     }
+    ctx.restore();
   }
   // Pending pick (pre-selected for the opponent's turn): dashed ring + guide
   // line from the car — reads as "queued, not confirmed yet", distinct from
