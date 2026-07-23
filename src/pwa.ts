@@ -6,7 +6,8 @@
 // update from the CLIENT side: once a new version is installed and waiting
 // (`onNeedRefresh`), at a SAFE moment (not mid-race) we send it SKIP_WAITING
 // via `updateSW()` — the worker activates, `controlling` fires, and we get
-// one reload onto the fresh build.
+// one reload onto the fresh build. (The staging preview applies the update
+// immediately instead of waiting for a safe moment — see `__PWA_EAGER_UPDATE__`.)
 //
 // We check for a new version every time the app returns to the foreground
 // (visibilitychange) — deliberately not on a periodic timer, to avoid
@@ -72,11 +73,13 @@ export function initPwa(isSafeToReload: () => boolean): void {
     },
   });
 
-  // Apply the waiting update if no race is currently active. Otherwise defer
-  // it until the next safe moment (pendingRefresh stays armed).
+  // Apply the waiting update. Production defers while a race is active (a reload
+  // mid-move isn't acceptable) and retries on the next safe foreground return.
+  // Staging is a preview env — it applies immediately so it's always fresh, even
+  // if that means a reload during a race (updates only land right after a deploy).
   function applyIfIdle(): void {
     if (!pendingRefresh) return;
-    if (!isSafeToReload()) {
+    if (!__PWA_EAGER_UPDATE__ && !isSafeToReload()) {
       dbg.log('update deferred (in race)');
       return;
     }

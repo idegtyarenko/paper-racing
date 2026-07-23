@@ -3,8 +3,11 @@
 
 /** Short commit SHA of the build. */
 declare const __COMMIT__: string;
-/** Build time, epoch milliseconds. */
+/** Last commit time on the build's branch, epoch milliseconds. */
 declare const __BUILD_TIME__: number;
+/** Whether a waiting SW update is applied immediately (staging preview) rather
+ *  than only at a safe, not-mid-race moment (production). */
+declare const __PWA_EAGER_UPDATE__: boolean;
 
 interface ImportMetaEnv {
   /** Supabase project URL (online mode). See .env.example. */
