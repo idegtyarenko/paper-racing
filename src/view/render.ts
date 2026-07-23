@@ -85,8 +85,8 @@ const CAND_R = 0.27;
 const CAND_R_INERTIAL = 0.34;
 const CAND_R_MIN = 4;
 const CAND_DASH: [number, number] = [3, 4];
-const CAND_LW = 1.6;
-const CAND_ALPHA = 0.85;
+const CAND_LW = 1.9;
+const CAND_ALPHA = 1;
 /** Hovered/selected candidate: solid ring + center dot. */
 const CAND_HOVER_LW = 2;
 const CAND_HOVER_DOT_R = 0.12;
@@ -94,8 +94,17 @@ const CAND_HOVER_DOT_R = 0.12;
 const BLOCK_R = 0.23;
 const BLOCK_R_MIN = 3.5;
 const BLOCK_LW = 1.8;
-/** Crash candidate (move into a wall): solid red ring. */
+/** Crash candidate (move into a wall): solid red ring. Held just under full
+ *  strength so it reads as a warning rather than the loudest mark on screen —
+ *  an available move is the thing the eye should land on first. */
 const CRASH_CAND_LW = 2;
+const CRASH_CAND_ALPHA = 0.85;
+/** Pending pick (queued for a later turn): the selection ring, one step quieter. */
+const PENDING_LW = 2;
+const PENDING_DASH: [number, number] = [4, 3];
+const PENDING_RING_ALPHA = 0.55;
+const PENDING_LINE_ALPHA = 0.4;
+const PENDING_R_PAD = 3;
 /** Crash mark on the trail: halo background + red cross. */
 const CRASH_MARK_R = 0.27;
 const CRASH_MARK_R_MIN = 4;
@@ -671,6 +680,9 @@ function drawCars(ctx: CanvasRenderingContext2D, s: number, game: GameState): vo
 }
 
 /** Current player's move candidates: traction zone, aim line, and points. */
+/** What a candidate *is*, independent of whether it is currently selected. */
+type CandKind = 'normal' | 'crash' | 'blocked';
+
 function drawCandidates(
   ctx: CanvasRenderingContext2D,
   s: number,
@@ -706,46 +718,49 @@ function drawCandidates(
     const x = c.target.x * s;
     const y = c.target.y * s;
     const r = Math.max(CAND_R_MIN, s * (c.inertial ? CAND_R_INERTIAL : CAND_R));
-    if (c.blocked) {
-      // Occupied node — gray cross.
+    // Two orthogonal axes: what the candidate *is* (kind) and what state it is
+    // in (selected). Branching on them separately keeps a selected crash from
+    // being shadowed by the crash styling.
+    const kind: CandKind = c.blocked ? 'blocked' : c.crash ? 'crash' : 'normal';
+    const selected = c === hover;
+    // A car already sits on that cell — the marker says "you can't go here"
+    // better than a cross would. Only a barred *path* to an otherwise free
+    // cell needs marking, since nothing else on screen shows it.
+    if (c.blockReason === 'occupied') continue;
+    ctx.save();
+    if (kind === 'blocked') {
+      // Another car stands somewhere along the way — gray cross.
       const br = Math.max(BLOCK_R_MIN, s * BLOCK_R);
       ctx.strokeStyle = MUTED;
       ctx.lineWidth = BLOCK_LW;
       crossPath(ctx, x, y, br);
       ctx.stroke();
-    } else if (c.crash) {
-      // Move into a wall — solid red ring (distinct from the cyan "allowed" ring).
-      ctx.strokeStyle = CRASH;
-      ctx.lineWidth = CRASH_CAND_LW;
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.stroke();
-    } else if (c === hover) {
-      // Hovered/selected: solid (non-dashed) ring + center dot, full opacity
-      // — draws the eye among the dashed fan.
-      ctx.save();
-      ctx.strokeStyle = EDGE;
-      ctx.lineWidth = CAND_HOVER_LW;
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.fillStyle = EDGE;
-      ctx.beginPath();
-      ctx.arc(x, y, Math.max(2, s * CAND_HOVER_DOT_R), 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
     } else {
-      // Available move — dashed cyan ring (bright contrast on the dark field).
-      ctx.save();
-      ctx.strokeStyle = EDGE;
-      ctx.globalAlpha = CAND_ALPHA;
-      ctx.lineWidth = CAND_LW;
-      ctx.setLineDash(CAND_DASH);
+      // Normal and crash candidates share one shape — a ring, plus a center dot
+      // when selected — and differ only in color, so selection reads the same
+      // way everywhere. Blocked candidates have no selected state: they are
+      // filtered out of hit-testing and can never be picked.
+      const color = kind === 'crash' ? CRASH : EDGE;
+      ctx.strokeStyle = color;
+      if (selected) {
+        ctx.lineWidth = CAND_HOVER_LW;
+      } else {
+        ctx.globalAlpha = kind === 'crash' ? CRASH_CAND_ALPHA : CAND_ALPHA;
+        ctx.lineWidth = kind === 'crash' ? CRASH_CAND_LW : CAND_LW;
+        // A crash ring stays solid — it's a wall, not one option among many.
+        if (kind === 'normal') ctx.setLineDash(CAND_DASH);
+      }
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.restore();
+      if (selected) {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x, y, Math.max(2, s * CAND_HOVER_DOT_R), 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
+    ctx.restore();
   }
   // Pending pick (pre-selected for the opponent's turn): dashed ring + guide
   // line from the car — reads as "queued, not confirmed yet", distinct from
@@ -754,17 +769,23 @@ function drawCandidates(
     const px = pending.target.x * s;
     const py = pending.target.y * s;
     const pr =
-      Math.max(CAND_R_MIN, s * (pending.inertial ? CAND_R_INERTIAL : CAND_R)) + 3;
+      Math.max(CAND_R_MIN, s * (pending.inertial ? CAND_R_INERTIAL : CAND_R)) +
+      PENDING_R_PAD;
     ctx.save();
+    ctx.lineWidth = PENDING_LW;
+    ctx.setLineDash(PENDING_DASH);
+    // The guide line keeps the player's color — it says whose plan this is.
     ctx.strokeStyle = p.color;
-    ctx.lineWidth = 2;
-    ctx.setLineDash([4, 3]);
-    ctx.globalAlpha = 0.4;
+    ctx.globalAlpha = PENDING_LINE_ALPHA;
     ctx.beginPath();
     ctx.moveTo(p.pos.x * s, p.pos.y * s);
     ctx.lineTo(px, py);
     ctx.stroke();
-    ctx.globalAlpha = 1;
+    // The ring does not: in the player's own color it is red for seat 0, which
+    // reads as an error rather than a queued move. Same cyan as a selection,
+    // one step quieter, so the two are obviously the same gesture.
+    ctx.strokeStyle = EDGE;
+    ctx.globalAlpha = PENDING_RING_ALPHA;
     ctx.beginPath();
     ctx.arc(px, py, pr, 0, Math.PI * 2);
     ctx.stroke();

@@ -88,6 +88,15 @@ describe('pointOnSegment', () => {
   it('off the line is not on the segment', () => {
     expect(pointOnSegment({ x: 2, y: 1 }, a, b)).toBe(false);
   });
+  // A zero-length segment is a single point: only that point lies on it. Without
+  // an explicit guard every term (cross, proj, dot(ab,ab)) collapses to 0 and the
+  // check matches any point at all — which marked the "stay put" move as blocked
+  // by whichever car happened to be on the track.
+  it('a degenerate segment (a === b) contains only a itself', () => {
+    expect(pointOnSegment(a, a, a)).toBe(true);
+    expect(pointOnSegment({ x: 3, y: 2 }, a, a)).toBe(false);
+    expect(pointOnSegment({ x: 0, y: 1 }, a, a)).toBe(false);
+  });
 });
 
 describe('closestPointOnSegment / distPointToSegment', () => {

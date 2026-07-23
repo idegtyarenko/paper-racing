@@ -17,6 +17,7 @@ import { ringTrack } from './test-fixtures';
 const cand = (x: number, y: number): Candidate => ({
   target: { x, y },
   crash: false,
+  blockReason: null,
   blocked: false,
   inertial: false,
 });
@@ -59,6 +60,7 @@ describe('candidates', () => {
     place(g.players[1], [13, 4]); // target (13,4) under acceleration (1,0)
     const c = candidates(g).find((c) => c.target.x === 13 && c.target.y === 4)!;
     expect(c.blocked).toBe(true);
+    expect(c.blockReason).toBe('occupied');
   });
 
   it('is blocked when an opponent sits on the move path (driving "through" is not allowed)', () => {
@@ -68,6 +70,31 @@ describe('candidates', () => {
     const inertial = candidates(g).find((c) => c.inertial)!;
     expect(inertial.target).toEqual({ x: 12, y: 4 });
     expect(inertial.blocked).toBe(true);
+    expect(inertial.blockReason).toBe('path');
+  });
+
+  // Occupancy wins over the path reason: the target cell itself is what the
+  // player sees, and a car is already drawn there.
+  it('a car on the target cell reports "occupied" even when one is also on the path', () => {
+    const g = newGame(ringTrack(), 3, {
+      ...DEFAULT_RULES,
+      drive: { ...DRIVE_PRESETS.classic },
+    });
+    place(g.players[0], [10, 4], [2, 0]);
+    place(g.players[1], [11, 4]); // on the segment
+    place(g.players[2], [12, 4]); // on the target
+    const inertial = candidates(g).find((c) => c.inertial)!;
+    expect(inertial.target).toEqual({ x: 12, y: 4 });
+    expect(inertial.blockReason).toBe('occupied');
+  });
+
+  it('an unblocked candidate has a null blockReason', () => {
+    const g = classicGame();
+    place(g.players[0], [10, 4], [2, 0]);
+    place(g.players[1], [20, 9]);
+    const inertial = candidates(g).find((c) => c.inertial)!;
+    expect(inertial.blocked).toBe(false);
+    expect(inertial.blockReason).toBeNull();
   });
 
   it('an opponent serving a penalty (skipTurns>0) does not block', () => {
@@ -86,6 +113,18 @@ describe('candidates', () => {
     expect(cs).toHaveLength(9);
     // diagonal move is available
     expect(cs.some((c) => c.target.x === 11 && c.target.y === 5)).toBe(true);
+  });
+
+  // The "stay put" move is a zero-length segment. A degenerate pointOnSegment
+  // used to report every opponent as lying on it, so standing still was blocked
+  // by any car anywhere on the track.
+  it('staying put (target = pos) is not blocked by a distant opponent', () => {
+    const g = classicGame();
+    place(g.players[0], [10, 4], [0, 0]);
+    place(g.players[1], [20, 9]); // nowhere near (10,4)
+    const stay = candidates(g).find((c) => c.target.x === 10 && c.target.y === 4)!;
+    expect(stay).toBeDefined();
+    expect(stay.blocked).toBe(false);
   });
 });
 

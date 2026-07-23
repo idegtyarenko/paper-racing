@@ -228,10 +228,20 @@ export function seatColor(i: number): string {
   return COLORS[i % COLORS.length];
 }
 
+/**
+ * Why a move isn't allowed: another car sits on the target cell ('occupied'),
+ * or one is in the way along the path to an otherwise free cell ('path'). The
+ * two are indistinguishable to the player unless drawn differently — the car
+ * marker already explains 'occupied', while 'path' has nothing else to show it.
+ */
+export type BlockReason = 'occupied' | 'path';
+
 export interface Candidate {
   target: Vec;
   crash: boolean;
-  /** Target cell is occupied by another car — this move isn't allowed. */
+  /** Why the move is blocked, or null if it's allowed. */
+  blockReason: BlockReason | null;
+  /** Convenience mirror of `blockReason !== null` — the common check. */
   blocked: boolean;
   /** The pure-inertia candidate (zero acceleration). */
   inertial: boolean;

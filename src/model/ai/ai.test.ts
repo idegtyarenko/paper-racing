@@ -262,6 +262,10 @@ describe('chooseMove', () => {
 
   it('returns null when fully surrounded (all 9 candidates blocked)', () => {
     const state = gameOn(track, 2);
+    // Classic mode: the fan is exactly the 3×3 around the coast point, so occupying
+    // those 9 cells is a real deadlock. In the realistic model braking to a stop is
+    // also reachable, and standing still is a legal move out of the box.
+    state.rules.drive = { ...DRIVE_PRESETS.classic };
     const me = state.players[0];
     me.pos = { x: 24, y: 3 };
     me.vel = { x: 2, y: 0 };
@@ -270,7 +274,9 @@ describe('chooseMove', () => {
     for (let y = 2; y <= 4; y++) {
       for (let x = 25; x <= 27; x++) state.players.push(playerAt({ x, y }));
     }
-    expect(candidates(state).every((c) => c.blocked)).toBe(true);
+    const cs = candidates(state);
+    expect(cs).toHaveLength(9);
+    expect(cs.every((c) => c.blocked)).toBe(true);
     expect(chooseMove(state, nav, 'hard')).toBeNull();
   });
 

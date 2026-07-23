@@ -8,6 +8,7 @@ import { MIN_LAUNCH, DOWNFORCE_VREF } from '../config';
 import {
   GameState,
   Candidate,
+  BlockReason,
   Drive,
   WIN_CROSSINGS,
   computeOutcome,
@@ -108,15 +109,25 @@ export function candidatesForSeat(state: GameState, seat: number): Candidate[] {
   const cx = p.pos.x + p.vel.x; // coast point C (pure inertia, a = 0)
   const cy = p.pos.y + p.vel.y;
   const targets = reachableTargets(p.pos, p.vel, state.rules.drive);
-  return targets.map((target) => ({
-    target,
+  return targets.map((target) => {
     // A move is blocked if an opponent occupies the target cell, or if the move
     // segment passes through a cell an opponent currently occupies (no driving
-    // "through" another car).
-    blocked: occupied.some((o) => pointOnSegment(o, p.pos, target)),
-    crash: computeOutcome(state.track, state.rules, p.pos, target).crash,
-    inertial: target.x === cx && target.y === cy,
-  }));
+    // "through" another car). The two reasons are kept apart so the renderer can
+    // stay quiet about the self-evident one (a car is already drawn there).
+    const onTarget = occupied.some((o) => o.x === target.x && o.y === target.y);
+    const blockReason: BlockReason | null = onTarget
+      ? 'occupied'
+      : occupied.some((o) => pointOnSegment(o, p.pos, target))
+        ? 'path'
+        : null;
+    return {
+      target,
+      blockReason,
+      blocked: blockReason !== null,
+      crash: computeOutcome(state.track, state.rules, p.pos, target).crash,
+      inertial: target.x === cx && target.y === cy,
+    };
+  });
 }
 
 export function candidates(state: GameState): Candidate[] {
