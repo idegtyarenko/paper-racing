@@ -35,6 +35,41 @@
   --warn-border: #f0d98c;
   --warn-text: #4a3d00;
   --warn-badge: #8a6d00;
+
+  /* ── Blueprint tokens (the redesign, --pr-*). ────────────────────────────
+     The new DOM palette, matching the "Blueprint" hi-fi and the canvas, which
+     already carries these values (render.ts). Adopted editor-first: the editor
+     chrome uses these now; race/setup migrate off the cream --paper/--accent
+     tokens above incrementally. Fonts are Cyrillic-capable substitutes for the
+     hi-fi's Archivo / Spline Sans Mono (see index.css). */
+  --pr-font: 'Onest Variable', system-ui, sans-serif;
+  --pr-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+  /* Surfaces (dark navy blueprint). */
+  --pr-bg: #101218; /* page / letterbox */
+  --pr-board: #0d3252; /* blueprint board + floating panels */
+  --pr-panel: rgba(9, 40, 63, 0.82); /* translucent chrome over the board */
+  --pr-panel-solid: #09283f; /* opaque chrome (menus, sheets) */
+  /* Lines / edges (cyan). */
+  --pr-edge: #7fd3ff; /* track edge, hairlines, quiet arrow */
+  --pr-grid: rgba(127, 211, 255, 0.07); /* blueprint grid */
+  /* Accent (amber) — primary action + selected direction. */
+  --pr-accent: #ffb454;
+  --pr-accent-ink: #0d3252; /* text/icon on amber */
+  /* Borders. */
+  --pr-border: #4f9dd0; /* control outlines */
+  --pr-border-dim: #1c4c73; /* panel/divider outlines */
+  /* Text/ink (on dark). */
+  --pr-ink: #eaf6ff; /* primary */
+  --pr-ink-soft: #bfe6ff; /* secondary (cyan-tinted) */
+  --pr-ink-dim: #8fb8d6; /* muted */
+  /* Error toast. */
+  --pr-error: #ff5d5d;
+  --pr-error-bg: rgba(58, 20, 20, 0.94);
+  --pr-error-ink: #ffe6e6;
+  /* Shape. */
+  --pr-radius: 8px;
+  --pr-radius-lg: 12px;
+  --pr-radius-pill: 999px;
 }
 
 /* Global reset and base element styles. */

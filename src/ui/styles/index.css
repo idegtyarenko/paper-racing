@@ -1,4 +1,10 @@
 /* Style aggregator: ordered from base styles to components. */
+/* Self-hosted fonts (bundled, no CDN — keeps the PWA offline-capable). The
+   Blueprint hi-fi's Archivo + Spline Sans Mono lack Cyrillic, so RU/BE would
+   break; these are the closest Cyrillic-capable substitutes (variable = one file
+   per family, all weights): Archivo→Onest, Spline Sans Mono→JetBrains Mono. */
+@import '@fontsource-variable/onest/index.css';
+@import '@fontsource-variable/jetbrains-mono/index.css';
 @import './base.css';
 @import './layout.css';
 @import './panel.css';
