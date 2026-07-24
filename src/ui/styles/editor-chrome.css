@@ -1,0 +1,285 @@
+/* Full-bleed editor chrome (Blueprint redesign). Floats over the board while
+   drawing a track; owned/built by ui/editor-chrome.ts. Scoped to .pr-* so it
+   doesn't touch the still-cream race/setup panel (editor-first migration). */
+
+/* In the edit phase the side panel steps aside and the board goes full-bleed;
+   the chrome floats over it. */
+body.is-editing .panel {
+  display: none;
+}
+body.is-editing .app__board {
+  background: var(--pr-bg);
+}
+
+/* Chrome layer — spans the board, but only its children capture pointer events
+   (drawing/panning must pass through to the canvas). */
+.pr-edit {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  font-family: var(--pr-font);
+  color: var(--pr-ink);
+}
+.pr-edit > * {
+  pointer-events: auto;
+}
+
+/* ── Top strip: burger + title/counter + progress ──────────────────────────── */
+.pr-edit__top {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  left: 12px;
+  right: 12px;
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+.pr-edit__burger {
+  flex: 0 0 auto;
+  width: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--pr-radius);
+  background: var(--pr-panel);
+  border: 1px solid var(--pr-border);
+  color: var(--pr-ink-soft);
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+.pr-edit__burger:active {
+  transform: scale(0.96);
+}
+.pr-edit__burger-ico svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+.pr-edit__head {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 14px;
+  border-radius: var(--pr-radius);
+  background: var(--pr-panel);
+  border: 1px solid var(--pr-border);
+  backdrop-filter: blur(6px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+}
+.pr-edit__titlerow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.pr-edit__title {
+  font-family: var(--pr-mono);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--pr-edge);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pr-edit__counter {
+  flex: 0 0 auto;
+  font-family: var(--pr-mono);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--pr-accent);
+}
+.pr-edit__progress {
+  display: flex;
+  gap: 6px;
+}
+.pr-edit__seg {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(127, 211, 255, 0.25);
+  transition:
+    background 0.35s ease,
+    opacity 0.35s ease;
+}
+.pr-edit__seg--done {
+  background: var(--pr-ink);
+  opacity: 0.5;
+}
+.pr-edit__seg--active {
+  background: var(--pr-accent);
+}
+
+/* ── Coach-mark: travels between steps (the motion is the attention cue) ────── */
+.pr-coach {
+  position: absolute;
+  left: 50%;
+  width: min(340px, calc(100% - 44px));
+  transform: translateX(-50%);
+  top: 62%;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 12px 15px;
+  border-radius: var(--pr-radius-lg);
+  background: var(--pr-panel-solid);
+  border: 1px solid var(--pr-border);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--pr-ink);
+  transition:
+    top 0.55s cubic-bezier(0.34, 1.2, 0.64, 1),
+    transform 0.55s cubic-bezier(0.34, 1.2, 0.64, 1);
+}
+.pr-coach__ico {
+  color: var(--pr-accent);
+  flex: 0 0 auto;
+  line-height: 1;
+}
+.pr-coach__ico svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+/* Per-step anchor: draw sits low (over a fresh board); later steps sit higher,
+   nearer the feature being tuned. */
+.pr-edit[data-step='center'] .pr-coach {
+  top: 60%;
+}
+.pr-edit[data-step='adjust'] .pr-coach {
+  top: 22%;
+}
+.pr-edit[data-step='finish'] .pr-coach {
+  top: 28%;
+}
+.pr-edit[data-step='direction'] .pr-coach {
+  top: 24%;
+}
+
+/* ── Bottom action bar (re-parented wizard buttons) ────────────────────────── */
+.pr-edit__bar {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+/* The re-homed #editButtons wrapper dissolves so its buttons become direct flex
+   items of the bar (its `hidden` toggle from panel.ts still hides them). */
+.pr-edit__bar > #editButtons {
+  display: contents;
+}
+.pr-edit__bar .button {
+  margin: 0;
+  border-radius: var(--pr-radius);
+  font-family: var(--pr-font);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  padding: 15px 18px;
+  cursor: pointer;
+}
+/* Disabled = not applicable at this step (e.g. Back on step 1) — hide it. */
+.pr-edit__bar .button:disabled {
+  display: none;
+}
+/* Secondary (Back / Redraw): outlined. */
+.pr-edit__bar #backBtn {
+  order: 1;
+  flex: 0 0 auto;
+  background: var(--pr-panel);
+  border: 1px solid var(--pr-border);
+  color: var(--pr-ink-soft);
+}
+/* Primary (Next / Choose mode): amber fill. */
+.pr-edit__bar #nextBtn {
+  order: 2;
+  flex: 1;
+  background: var(--pr-accent);
+  border: none;
+  color: var(--pr-accent-ink);
+  font-weight: 800;
+}
+/* Join online: full-width secondary (only on step 1). */
+.pr-edit__bar #joinByCode {
+  order: 3;
+  flex-basis: 100%;
+  background: var(--pr-panel);
+  border: 1px solid var(--pr-border);
+  color: var(--pr-ink-soft);
+}
+.pr-edit__bar .button:active {
+  transform: scale(0.98);
+}
+
+/* Final step's primary pulses gently to invite the tap (design 3D). */
+@keyframes pr-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 180, 84, 0);
+  }
+  50% {
+    box-shadow: 0 0 18px 2px rgba(255, 180, 84, 0.5);
+  }
+}
+.pr-edit[data-step='direction'] .pr-edit__bar #nextBtn {
+  animation: pr-pulse 1.8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pr-edit[data-step='direction'] .pr-edit__bar #nextBtn {
+    animation: none;
+  }
+}
+
+/* Zoom controls (desktop) sit above the bottom bar and adopt Blueprint styling
+   while editing, instead of overlapping it in the cream style. */
+body.is-editing .zoom-ctl {
+  bottom: 92px;
+}
+body.is-editing .zoom-ctl__btn {
+  background: var(--pr-panel);
+  border-color: var(--pr-border);
+  color: var(--pr-ink-soft);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+}
+body.is-editing .zoom-ctl__btn:hover {
+  background: var(--pr-panel-solid);
+}
+
+/* Editor errors surface as a red Blueprint toast under the top strip (design
+   3E). In the edit phase the toast only ever carries an error. */
+body.is-editing #toast {
+  top: calc(env(safe-area-inset-top, 0px) + 88px);
+  bottom: auto;
+  left: 16px;
+  right: 16px;
+  transform: none;
+  max-width: 480px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: var(--pr-error-bg);
+  border: 1px solid var(--pr-error);
+  border-radius: var(--pr-radius-lg);
+  color: var(--pr-error-ink);
+  font-family: var(--pr-font);
+  font-weight: 600;
+  text-align: left;
+  padding: 13px 16px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+}
+body.is-editing #toast::before {
+  content: '⚠';
+  color: var(--pr-error);
+  font-size: 15px;
+}

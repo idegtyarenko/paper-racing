@@ -8,6 +8,7 @@
 @import './base.css';
 @import './layout.css';
 @import './panel.css';
+@import './editor-chrome.css';
 @import './button.css';
 @import './players-select.css';
 @import './settings.css';

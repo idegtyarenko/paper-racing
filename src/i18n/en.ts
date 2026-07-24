@@ -42,8 +42,19 @@ export const en = {
       direction: 'Direction is set — tap the other arrow to flip it, or continue.',
       ready: 'Track ready! Choose a game mode.',
     },
+    /** Short step title for the editor's top strip (the coach-mark carries the
+     *  full instruction). Rendered in caps by CSS. */
+    stepTitle: {
+      center: 'Draw track',
+      adjust: 'Adjust width',
+      finish: 'Start/finish',
+      direction: 'Direction',
+      ready: 'Ready',
+    },
     /** Badge for a wizard step, e.g. "Track: step 2 of 4". */
     stepBadge: (n: number, total: number): string => `Track: step ${n} of ${total}`,
+    /** Compact step counter for the top strip, e.g. "Step 2/4" (rendered caps). */
+    stepCounter: (n: number, total: number): string => `Step ${n}/${total}`,
     errors: {
       selfCross: "The track can't cross itself\u00A0— draw it again.",
       tooSmall: "That loop's too small\u00A0— draw a bigger one.",

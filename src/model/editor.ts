@@ -97,6 +97,10 @@ export function pointerDown(st: EditorState, p: Vec, tol = 1.2): void {
   if (st.step === 'center') {
     st.drawing = true;
     st.stroke = [p];
+    // A fresh attempt clears the previous error/prompt (so, e.g., a second
+    // self-crossing draw re-shows the error toast rather than being deduped).
+    st.error = false;
+    st.message = MSG.center;
   } else if (st.step === 'adjust' && st.width) {
     const pick = pickEdge(st.width, p, tol);
     if (pick) {

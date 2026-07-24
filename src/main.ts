@@ -37,6 +37,7 @@ import {
   showConfirmMove,
 } from './ui/panel';
 import { renderTurnQueue } from './ui/turn-queue';
+import { initEditorChrome, renderEditorChrome } from './ui/editor-chrome';
 import { renderStandings } from './ui/standings';
 import { openSettings } from './ui/settings';
 import { localizeDom } from './ui/localize';
@@ -183,6 +184,7 @@ function updateUI(): void {
   });
   renderTurnQueue(S.phase === 'race' ? S.game : null);
   renderStandings(S.phase === 'race' ? S.game : null, S.raceNav);
+  renderEditorChrome(S.editor, S.phase);
 }
 
 /** Can this client move right now: in a local game, always (except during a
@@ -535,6 +537,14 @@ bindButtons({
   onSkip: () => online.skip(),
   onRaceShare: () => online.share(),
   onRetire: () => retire(),
+});
+
+// Build the full-bleed editor chrome and re-home the wizard buttons into it.
+// Must run after bindButtons (which captured the button elements) — re-parenting
+// keeps their handlers. The burger opens the global menu; until that's built,
+// it reuses the Rules sheet (the help button's action).
+initEditorChrome({
+  onBurger: () => document.getElementById('helpBtn')?.click(),
 });
 
 /**

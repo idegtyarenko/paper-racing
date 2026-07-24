@@ -22,7 +22,15 @@ export const be: Strings = {
     },
     // Бейдж рендерится капсом (.status__badge, text-transform: uppercase), а вялікая
     // «З» паміж лічбамі чытаецца як тройка («1 З 4» → «1 3 4») — таму слэш, без «з».
+    stepTitle: {
+      center: 'Траса',
+      adjust: 'Шырыня',
+      finish: 'Старт/фініш',
+      direction: 'Напрамак',
+      ready: 'Гатова',
+    },
     stepBadge: (n, total) => `Траса: крок ${n}/${total}`,
+    stepCounter: (n, total) => `Крок ${n}/${total}`,
     errors: {
       selfCross: 'Траса не\u00A0павінна перасякаць сама сябе\u00A0— намалюй зноў.',
       tooSmall: 'Занадта кароткая траса\u00A0— намалюй кола большае.',
