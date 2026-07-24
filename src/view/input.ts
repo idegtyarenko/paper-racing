@@ -42,8 +42,6 @@ export interface InputDeps {
   isPreselect(): boolean;
   /** Pre-pick a move (queued for our next turn) instead of committing/highlighting the button. */
   setPending(cand: Candidate): void;
-  /** Leave the editor and go to race setup (tap on the direction arrow). */
-  goToMode(from: 'edit' | 'race'): void;
   updateUI(): void;
   redraw(): void;
 }
@@ -382,12 +380,11 @@ function handleEditDown(e: PointerEvent, scr: Vec, touch: boolean): void {
       activeId = e.pointerId;
       break;
     case 'direction':
-      pointerDown(editor, w, tol); // tapping the arrow immediately advances to ready
-      if (editor.step === 'ready') {
-        deps.goToMode('edit');
-        return;
-      }
-      beginPan(scr.x, scr.y, e.pointerId); // missed the arrow → pan
+      // Tapping an arrow flips the (pre-selected) direction; it no longer
+      // advances — the primary button does that. A tap that misses simply pans,
+      // and a tap that hits leaves a harmless zero-length pan.
+      pointerDown(editor, w, tol);
+      beginPan(scr.x, scr.y, e.pointerId);
       break;
     default:
       beginPan(scr.x, scr.y, e.pointerId);

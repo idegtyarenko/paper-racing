@@ -7,7 +7,13 @@
 import './ui/styles/index.css';
 import { newAppState, Phase } from './app-state';
 import { finalizeTrack } from './model/track';
-import { newEditor, stepBack, confirmEdges } from './model/editor';
+import {
+  newEditor,
+  stepBack,
+  confirmEdges,
+  confirmFinish,
+  confirmDirection,
+} from './model/editor';
 import {
   Candidate,
   normalizeRules,
@@ -444,7 +450,6 @@ input.initInput({
     showConfirmMove(false); // not our turn — don't show the button, the pending pick is visible on the field
     redraw();
   },
-  goToMode,
   updateUI,
   redraw,
 });
@@ -454,8 +459,17 @@ bindButtons({
     stepBack(S.editor);
     commit();
   },
+  // Editor "Next" / "Choose mode": advance the drawing wizard one step. On the
+  // final (direction) step this leaves the editor for mode selection.
   onNext: () => {
-    confirmEdges(S.editor);
+    const st = S.editor;
+    if (st.step === 'adjust') confirmEdges(st);
+    else if (st.step === 'finish') confirmFinish(st);
+    else if (st.step === 'direction') {
+      confirmDirection(st); // → transient 'ready'
+      goToMode('edit'); // finalizes the track and opens mode selection (commits)
+      return;
+    }
     commit();
   },
   onConfirmMove: () => {

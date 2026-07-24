@@ -22,6 +22,7 @@ import {
   rebuildEdges,
   pickEdge,
   applyEdgeDrag,
+  autoFinishIndex,
 } from './centerline';
 import { strings } from '../i18n';
 import { MIN_CENTER_AREA } from '../config';
@@ -106,10 +107,12 @@ export function pointerDown(st: EditorState, p: Vec, tol = 1.2): void {
     st.dragStart = p;
     previewFinish(st, p);
   } else if (st.step === 'direction' && st.arrows) {
+    // Direction is pre-selected; tapping an arrow only flips which way is
+    // forward — advancing to the next screen is the explicit primary button.
     for (const arrow of st.arrows) {
       if (distPointToSegment(p, arrow.from, arrow.tip) < tol) {
         st.forward = arrow.forward;
-        setStep(st, 'ready');
+        st.error = false;
         return;
       }
     }
@@ -171,23 +174,16 @@ export function pointerUp(st: EditorState): void {
     st.dragEdge = null;
     st.dragIndex = null;
   } else if (st.step === 'finish' && st.dragStart && st.width) {
+    // Relocating the auto-placed start/finish: commit the tapped position if it
+    // sits on the road, otherwise keep the previous (valid) placement — a stray
+    // tap shouldn't wipe out a line that's already there. Advancing is the Next
+    // button (confirmFinish), not this gesture.
     const p = st.dragStart;
     st.dragStart = null;
     st.dragEnd = null;
     const res = clipPerpAt(st.width, p, st.outer!, st.inner!);
-    if ('error' in res) {
-      st.finish = null;
-      fail(
-        st,
-        res.error === 'narrow'
-          ? strings.editor.errors.finishNarrow
-          : strings.editor.errors.finishMiss,
-      );
-      return;
-    }
-    st.finish = res.finish;
-    computeArrows(st);
-    setStep(st, 'direction');
+    if (!('error' in res)) st.finish = res.finish;
+    st.error = false;
   }
 }
 
@@ -240,9 +236,55 @@ export function pointerCancel(st: EditorState): void {
   st.error = false;
 }
 
-/** Confirm the edges and move on to drawing the start/finish. */
+/**
+ * Place the default start/finish: a wide spot near the end of a long straight
+ * (autoFinishIndex). Tries that vertex first, then falls back to the widest
+ * vertices, so we always end up with a valid line on a normal track.
+ */
+function placeDefaultFinish(st: EditorState): void {
+  if (!st.width || !st.outer || !st.inner) return;
+  const m = st.width;
+  const tryAt = (i: number): FinishLine | null => {
+    const res = clipPerpAt(m, m.center[i], st.outer!, st.inner!);
+    return 'error' in res ? null : res.finish;
+  };
+  let f = tryAt(autoFinishIndex(m));
+  if (!f) {
+    // Widest vertices first — the roomiest spots are the likeliest to clip cleanly.
+    const order = [...m.center.keys()].sort(
+      (a, b) => m.outW[b] + m.inW[b] - (m.outW[a] + m.inW[a]),
+    );
+    for (const i of order) {
+      f = tryAt(i);
+      if (f) break;
+    }
+  }
+  st.finish = f;
+}
+
+/** Confirm the edges and move on to placing the start/finish (auto-placed). */
 export function confirmEdges(st: EditorState): void {
-  if (st.step === 'adjust') setStep(st, 'finish');
+  if (st.step !== 'adjust') return;
+  setStep(st, 'finish');
+  placeDefaultFinish(st);
+}
+
+/** Confirm the start/finish and move on to the (pre-selected) racing direction. */
+export function confirmFinish(st: EditorState): void {
+  if (st.step !== 'finish' || !st.finish) return;
+  computeArrows(st);
+  st.forward = st.arrows![0].forward; // pre-select a direction; a tap can flip it
+  setStep(st, 'direction');
+}
+
+/**
+ * Confirm the racing direction. `ready` is a transient state: the caller
+ * immediately routes on to mode selection — there's no standalone "ready"
+ * screen. Kept as a distinct step so stepping back from setup lands on
+ * `direction` with the chosen arrow still selected.
+ */
+export function confirmDirection(st: EditorState): void {
+  if (st.step === 'direction' && st.forward) setStep(st, 'ready');
 }
 
 function computeArrows(st: EditorState): void {
@@ -288,12 +330,14 @@ export function resetAdjust(st: EditorState): void {
 
 export function resetFinish(st: EditorState): void {
   if (!st.inner) return;
-  st.finish = null;
   st.forward = null;
   st.arrows = null;
   st.dragStart = null;
   st.dragEnd = null;
   setStep(st, 'finish');
+  // Keep the user's placement if there is one; otherwise re-place the default so
+  // the finish step always arrives with a line already on the track.
+  if (!st.finish) placeDefaultFinish(st);
 }
 
 /** A single step back through the drawing state machine. */
@@ -315,7 +359,7 @@ export function stepBack(st: EditorState): void {
       if (st.error) {
         resetAdjust(st);
       } else {
-        st.forward = null;
+        // Keep the chosen direction selected when returning from setup.
         setStep(st, 'direction');
       }
       break;

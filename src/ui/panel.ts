@@ -616,7 +616,12 @@ export function updatePanel(ctx: PanelCtx): void {
     // On step 2, "← Back" erases the whole drawn track — name the action honestly.
     backBtn.textContent =
       editor.step === 'adjust' ? strings.buttons.redraw : strings.buttons.back;
-    nextBtn.hidden = editor.step !== 'adjust';
+    // Next advances adjust → finish → direction; the finish and direction steps
+    // are auto-placed/pre-selected, so they confirm with an explicit button. On
+    // the last step it becomes "Choose mode" (leaves the editor for setup).
+    nextBtn.hidden = !['adjust', 'finish', 'direction'].includes(editor.step);
+    nextBtn.textContent =
+      editor.step === 'direction' ? strings.buttons.chooseMode : strings.buttons.next;
     // "Join by code" only makes sense on the first step; later in the wizard it's just in the way.
     joinByCodeBtn.hidden = !onlineEnabled || editor.step !== 'center';
     return;

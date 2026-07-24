@@ -38,8 +38,8 @@ export const en = {
     step: {
       center: 'Draw a full loop track without lifting your finger.',
       adjust: 'Drag the road edges to reshape it. ' + 'When it looks right, tap Next.',
-      finish: 'Tap where the start/finish line should be.',
-      direction: 'Choose the racing direction.',
+      finish: 'Start/finish placed automatically — tap the track to move it.',
+      direction: 'Direction is set — tap the other arrow to flip it, or continue.',
       ready: 'Track ready! Choose a game mode.',
     },
     /** Badge for a wizard step, e.g. "Track: step 2 of 4". */
@@ -268,6 +268,7 @@ export const en = {
     next: 'Next →',
     back: '← Back',
     redraw: '↺ Redraw',
+    chooseMode: 'Choose mode →',
     newRace: '🏁 New race',
     confirmMove: '✓ Go!',
     sameTrack: '🔄 Rematch',

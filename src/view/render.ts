@@ -530,7 +530,16 @@ function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): 
   }
 
   if (ed.step === 'direction' && ed.arrows) {
-    for (const arrow of ed.arrows) drawArrow(ctx, s, arrow.from, arrow.tip, ACCENT, 2.5);
+    // Direction is pre-selected: the chosen way is drawn loud (amber, thick),
+    // the other quiet (cyan, thin) so it reads as "tap to flip", not "unset".
+    for (const arrow of ed.arrows) {
+      const chosen =
+        !!ed.forward &&
+        arrow.forward.x === ed.forward.x &&
+        arrow.forward.y === ed.forward.y;
+      if (chosen) drawArrow(ctx, s, arrow.from, arrow.tip, ACCENT, 3);
+      else drawArrow(ctx, s, arrow.from, arrow.tip, EDGE, 1.8);
+    }
   }
 
   if (ed.step === 'ready' && ed.arrows && ed.forward) {

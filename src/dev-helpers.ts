@@ -82,6 +82,12 @@ export function installDevHelpers(deps: DevHelperDeps): void {
   // A cheap snapshot of key state for assertions, no screenshots needed.
   const snap = () => ({
     phase: S.phase,
+    // Editor wizard introspection (for verifying the drawing flow without screenshots).
+    editor: {
+      step: S.editor.step,
+      hasFinish: S.editor.finish !== null,
+      forward: S.editor.forward,
+    },
     gamePhase: S.game?.phase ?? null,
     current: S.game?.current ?? null,
     players:
@@ -108,6 +114,24 @@ export function installDevHelpers(deps: DevHelperDeps): void {
      *  `?lang=en|ru|be` in the URL). */
     setLocale(code: LocaleCode) {
       applyLocale(code);
+    },
+    /** Editor direction arrows in screen (css px) coords — so a browser test can
+     *  tap the exact arrow to flip the pre-selected direction. */
+    editorArrowsScreen() {
+      const cam = vp.camera();
+      const r = canvas.getBoundingClientRect();
+      return (S.editor.arrows ?? []).map((a) => {
+        const from = worldToScreen(cam, a.from);
+        const tip = worldToScreen(cam, a.tip);
+        const midW = { x: (a.from.x + a.tip.x) / 2, y: (a.from.y + a.tip.y) / 2 };
+        const mid = worldToScreen(cam, midW);
+        return {
+          forward: a.forward,
+          mid: { x: r.left + mid.x, y: r.top + mid.y },
+          from: { x: r.left + from.x, y: r.top + from.y },
+          tip: { x: r.left + tip.x, y: r.top + tip.y },
+        };
+      });
     },
     /** Ready-made track plus an immediate local race: `humans` human players,
      *  `bots` bot players. */
