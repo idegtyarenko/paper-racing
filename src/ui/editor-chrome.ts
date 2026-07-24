@@ -11,10 +11,17 @@
 
 import { EditorState, EditorStep } from '../model/editor';
 import { Phase } from '../app-state';
-import { strings } from '../i18n';
+import { strings, setLocale, locale, LocaleCode } from '../i18n';
 import { showToast } from './dialogs';
 
 const board = document.querySelector('.app__board')!;
+
+/** Language options for the menu — endonyms (not translated). */
+const LANGS: { code: LocaleCode; label: string }[] = [
+  { code: 'en', label: 'English' },
+  { code: 'ru', label: 'Русский' },
+  { code: 'be', label: 'Беларуская' },
+];
 
 /** Wizard step → progress index (1..4); `ready`/errors have none. */
 const STEP_NUM: Partial<Record<EditorStep, number>> = {
@@ -26,8 +33,10 @@ const STEP_NUM: Partial<Record<EditorStep, number>> = {
 const STEP_TOTAL = 4;
 
 export interface ChromeHandlers {
-  /** Open the global (burger) menu. */
-  onBurger: () => void;
+  /** Open the Rules / How-to-play sheet. */
+  onRules: () => void;
+  /** Open the join-by-code dialog. */
+  onJoin: () => void;
 }
 
 let handlers: ChromeHandlers;
@@ -68,9 +77,9 @@ function build(): void {
   const top = el('div', 'pr-edit__top', root);
   const burger = el('button', 'pr-edit__burger', top) as HTMLButtonElement;
   burger.type = 'button';
-  burger.setAttribute('aria-label', strings.buttons.rulesTitle);
+  burger.setAttribute('aria-label', strings.menu.title);
   icon('pr-edit__burger-ico', BURGER_SVG, burger);
-  burger.addEventListener('click', () => handlers.onBurger());
+  burger.addEventListener('click', openMenu);
 
   const head = el('div', 'pr-edit__head', top);
   const titleRow = el('div', 'pr-edit__titlerow', head);
@@ -92,6 +101,73 @@ function build(): void {
 
   board.append(root);
   built = true;
+}
+
+// ── Global (burger) menu ─────────────────────────────────────────────────────
+let menuRoot: HTMLElement | null = null;
+
+function menuItem(parent: HTMLElement, label: string, onClick: () => void): void {
+  const b = el('button', 'pr-menu__item', parent) as HTMLButtonElement;
+  b.type = 'button';
+  b.textContent = label;
+  b.addEventListener('click', onClick);
+}
+
+function buildMenu(): HTMLElement {
+  const root = el('div', 'pr-menu');
+  root.hidden = true;
+  el('div', 'pr-menu__backdrop', root).addEventListener('click', closeMenu);
+  const panel = el('div', 'pr-menu__panel', root);
+
+  const head = el('div', 'pr-menu__head', panel);
+  el('span', 'pr-menu__title', head).textContent = strings.menu.title;
+  const close = el('button', 'pr-menu__close', head) as HTMLButtonElement;
+  close.type = 'button';
+  close.textContent = '×';
+  close.setAttribute('aria-label', strings.menu.title);
+  close.addEventListener('click', closeMenu);
+
+  menuItem(panel, strings.menu.rules, () => {
+    closeMenu();
+    handlers.onRules();
+  });
+  menuItem(panel, strings.menu.join, () => {
+    closeMenu();
+    handlers.onJoin();
+  });
+
+  // Language: an expandable sublist; picking one writes the choice and reloads.
+  const langs = document.createElement('div');
+  langs.className = 'pr-menu__langs';
+  langs.hidden = true;
+  for (const l of LANGS) {
+    const b = el('button', 'pr-menu__lang', langs) as HTMLButtonElement;
+    b.type = 'button';
+    b.textContent = l.label;
+    if (l.code === locale) b.classList.add('pr-menu__lang--active');
+    b.addEventListener('click', () => setLocale(l.code));
+  }
+  menuItem(panel, strings.menu.language, () => {
+    langs.hidden = !langs.hidden;
+  });
+  panel.append(langs);
+
+  const foot = el('div', 'pr-menu__foot', panel);
+  const ver = document.getElementById('appVersion')?.textContent ?? '';
+  foot.textContent = ver
+    ? `${ver} · ${strings.menu.offlineReady}`
+    : strings.menu.offlineReady;
+
+  document.body.append(root);
+  return root;
+}
+
+function openMenu(): void {
+  if (!menuRoot) menuRoot = buildMenu();
+  menuRoot.hidden = false;
+}
+function closeMenu(): void {
+  if (menuRoot) menuRoot.hidden = true;
 }
 
 export function initEditorChrome(h: ChromeHandlers): void {

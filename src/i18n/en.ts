@@ -65,6 +65,15 @@ export const en = {
     gestureCancelled: "That didn't take\u00A0— try again.",
   },
 
+  // Global (burger) menu — reachable from the editor's top-left menu button.
+  menu: {
+    title: 'Menu',
+    rules: '📖 Rules / How to play',
+    join: '🔑 Join by code',
+    language: '🌐 Language',
+    offlineReady: 'offline ready',
+  },
+
   track: {
     strokeShort: 'Draw it in one stroke, without lifting your finger.',
     notClosed: 'The track has to be a loop\u00A0— close it up.',

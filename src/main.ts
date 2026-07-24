@@ -541,10 +541,11 @@ bindButtons({
 
 // Build the full-bleed editor chrome and re-home the wizard buttons into it.
 // Must run after bindButtons (which captured the button elements) — re-parenting
-// keeps their handlers. The burger opens the global menu; until that's built,
-// it reuses the Rules sheet (the help button's action).
+// keeps their handlers. The burger menu's items delegate to the existing Rules
+// and Join controls (still wired in the panel).
 initEditorChrome({
-  onBurger: () => document.getElementById('helpBtn')?.click(),
+  onRules: () => document.getElementById('helpBtn')?.click(),
+  onJoin: () => document.getElementById('joinByCode')?.click(),
 });
 
 /**

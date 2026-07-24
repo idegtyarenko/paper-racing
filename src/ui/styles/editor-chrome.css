@@ -283,3 +283,112 @@ body.is-editing #toast::before {
   color: var(--pr-error);
   font-size: 15px;
 }
+
+/* ── Global (burger) menu ───────────────────────────────────────────────────── */
+.pr-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  font-family: var(--pr-font);
+}
+.pr-menu[hidden] {
+  display: none;
+}
+.pr-menu__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 16, 26, 0.55);
+  backdrop-filter: blur(2px);
+  animation: pr-fade 0.15s ease-out;
+}
+.pr-menu__panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(320px, 84vw);
+  padding: calc(env(safe-area-inset-top, 0px) + 16px) 16px
+    calc(env(safe-area-inset-bottom, 0px) + 16px);
+  background: var(--pr-panel-solid);
+  border-right: 1px solid var(--pr-border-dim);
+  box-shadow: 8px 0 30px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: pr-slide-in 0.22s cubic-bezier(0.34, 1.1, 0.64, 1);
+}
+@keyframes pr-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes pr-slide-in {
+  from {
+    transform: translateX(-100%);
+  }
+}
+.pr-menu__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.pr-menu__title {
+  font-family: var(--pr-mono);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--pr-edge);
+}
+.pr-menu__close {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--pr-radius);
+  border: 1px solid var(--pr-border-dim);
+  background: transparent;
+  color: var(--pr-ink-soft);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.pr-menu__item,
+.pr-menu__lang {
+  text-align: left;
+  padding: 13px 14px;
+  border-radius: var(--pr-radius);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--pr-ink);
+  font-family: var(--pr-font);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pr-menu__item:hover,
+.pr-menu__lang:hover {
+  background: var(--pr-panel);
+}
+.pr-menu__langs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 12px;
+}
+.pr-menu__lang {
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--pr-ink-soft);
+}
+.pr-menu__lang--active {
+  color: var(--pr-accent);
+}
+.pr-menu__foot {
+  margin-top: auto;
+  padding-top: 12px;
+  font-family: var(--pr-mono);
+  font-size: 11px;
+  color: var(--pr-ink-dim);
+}
