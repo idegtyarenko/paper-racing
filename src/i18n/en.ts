@@ -68,10 +68,9 @@ export const en = {
   // Global (burger) menu — reachable from the editor's top-left menu button.
   menu: {
     title: 'Menu',
-    rules: '📖 Rules / How to play',
-    join: '🔑 Join by code',
-    language: '🌐 Language',
-    offlineReady: 'offline ready',
+    rules: 'Rules / How to play',
+    join: 'Join online game',
+    language: 'Language',
   },
 
   track: {

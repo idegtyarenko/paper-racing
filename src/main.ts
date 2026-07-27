@@ -38,6 +38,7 @@ import {
 } from './ui/panel';
 import { renderTurnQueue } from './ui/turn-queue';
 import { initEditorChrome, renderEditorChrome } from './ui/editor-chrome';
+import { initMenu } from './ui/menu';
 import {
   initSetupChrome,
   renderSetupChrome,
@@ -522,9 +523,12 @@ bindButtons({
 
 // Build the full-bleed editor chrome and re-home the wizard buttons into it.
 // Must run after bindButtons (which captured the button elements) — re-parenting
-// keeps their handlers. The burger menu's items delegate to the existing Rules
-// and Join controls (still wired in the panel).
-initEditorChrome({
+// keeps their handlers.
+initEditorChrome();
+
+// The global menu's entries delegate to the existing Rules and Join controls
+// (still wired in the panel).
+initMenu({
   onRules: () => document.getElementById('helpBtn')?.click(),
   onJoin: () => document.getElementById('joinByCode')?.click(),
 });

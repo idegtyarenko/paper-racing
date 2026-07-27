@@ -157,6 +157,181 @@
   display: block;
 }
 
+/* ── Brand mark: app icon + skewed wordmark over a checkered rule ───────────
+   Heads the menu drawer and the editor's wide-screen rail (`--sm`). */
+.pr-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pr-brand__logo {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+}
+.pr-brand__text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.pr-brand__wordmark {
+  display: inline-block;
+  font-family: var(--pr-font);
+  font-weight: 800;
+  font-size: 15.5px;
+  line-height: 1;
+  letter-spacing: -0.3px;
+  transform: skew(-6deg);
+}
+.pr-brand__word {
+  color: var(--pr-ink);
+}
+.pr-brand__word--accent {
+  color: var(--pr-accent);
+}
+.pr-brand__dashes {
+  display: flex;
+  gap: 2px;
+}
+.pr-brand__dash {
+  width: 7px;
+  height: 3px;
+  background: var(--pr-ink);
+}
+.pr-brand__dash--hollow {
+  background: transparent;
+  border: 1px solid rgba(234, 246, 255, 0.4);
+}
+/* Compact: the editor rail, where the brand shares its row with the burger. */
+.pr-brand--sm {
+  gap: 9px;
+}
+.pr-brand--sm .pr-brand__logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+}
+.pr-brand--sm .pr-brand__text {
+  gap: 2px;
+}
+.pr-brand--sm .pr-brand__wordmark {
+  font-size: 13px;
+  letter-spacing: -0.2px;
+}
+.pr-brand--sm .pr-brand__dashes {
+  gap: 1.5px;
+}
+.pr-brand--sm .pr-brand__dash {
+  width: 5px;
+  height: 2.5px;
+}
+
+/* ── List item: icon tile + text + chevron ──────────────────────────────────
+   One shape for every "tap this row" element — the mode-select cards and the
+   global menu's entries. The base is the menu size and carries layout only, so
+   a row can sit on a `.pr-card` surface (mode select) or bring its own soft
+   fill (`--fill`, the menu) without either fighting the other. */
+.pr-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 12px;
+  text-align: left;
+  color: var(--pr-ink);
+  font-family: var(--pr-font);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.pr-item:active {
+  transform: scale(0.99);
+}
+/* Same as .pr-btn: keep `hidden` winning over the flex display (the online card
+   is hidden when no backend is configured). */
+.pr-item[hidden] {
+  display: none;
+}
+@media (hover: hover) {
+  .pr-item:hover {
+    background: var(--pr-hover);
+    border-color: var(--pr-edge);
+  }
+}
+/* Soft-filled row, used where there is no card underneath (menu entries). */
+.pr-item--fill {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--pr-fill-soft);
+}
+/* Card-sized row: the mode-select cards. */
+.pr-item--lg {
+  gap: 16px;
+  padding: 20px 18px;
+}
+.pr-item__ico {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: rgba(127, 211, 255, 0.12);
+  color: var(--pr-edge);
+}
+.pr-item__ico svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+.pr-item--lg .pr-item__ico {
+  width: 44px;
+  height: 44px;
+}
+.pr-item--lg .pr-item__ico svg {
+  width: 22px;
+  height: 22px;
+}
+.pr-item__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pr-item__title {
+  font-family: var(--pr-font);
+  font-weight: 600;
+  font-size: 14px;
+}
+.pr-item--lg .pr-item__title {
+  font-weight: 700;
+  font-size: 15px;
+}
+.pr-item__sub {
+  font-family: var(--pr-font);
+  font-weight: 400;
+  font-size: 12px;
+  color: #9fc3dd;
+}
+.pr-item__chev {
+  flex: 0 0 auto;
+  color: #5f8ba8;
+}
+.pr-item__chev svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+.pr-item--lg .pr-item__chev {
+  color: var(--pr-edge);
+}
+.pr-item--lg .pr-item__chev svg {
+  width: 16px;
+  height: 16px;
+}
+
 /* ── Segmented options: a row/grid of choices with one active ───────────────── */
 .pr-seg {
   display: flex;

@@ -38,6 +38,62 @@ export const ARROW_SVG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>';
 export const CHEVRON_SVG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
+export const CLOSE_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+export const RULES_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.1 9.5a2.9 2.9 0 1 1 4.4 2.5c-1 .6-1.5 1.1-1.5 2.1"/><circle cx="12" cy="17.2" r=".4" fill="currentColor" stroke="none"/></svg>';
+/** Globe with meridians — the online mode card and "join by code". */
+export const GLOBE_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18M4.5 7.5h15M4.5 16.5h15"/></svg>';
+export const LANG_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg>';
+
+/**
+ * A tappable list row: icon tile, title (+ optional subtitle), optional chevron.
+ * The mode-select cards and the global menu's entries are the same component —
+ * `cls` carries the surface each screen needs (a `.pr-card` under the mode
+ * cards, `.pr-item--fill` for the menu's soft-filled rows).
+ */
+export function buildItem(
+  parent: HTMLElement,
+  opts: { cls?: string; iconSvg: string; title: string; sub?: string; chevron?: boolean },
+): HTMLButtonElement {
+  const row = button(`pr-item${opts.cls ? ' ' + opts.cls : ''}`, parent);
+  icon('pr-item__ico', opts.iconSvg, row);
+  const text = el('span', 'pr-item__text', row);
+  el('span', 'pr-item__title', text).textContent = opts.title;
+  if (opts.sub) el('span', 'pr-item__sub', text).textContent = opts.sub;
+  if (opts.chevron) icon('pr-item__chev', CHEVRON_SVG, row);
+  return row;
+}
+
+/**
+ * The app's brand mark: icon, skewed wordmark and a checkered rule under it.
+ * Shared by the menu drawer's header and the editor's wide-screen rail (`--sm`),
+ * which differ only in size and in how many dashes fit.
+ */
+export function buildBrand(
+  parent: HTMLElement,
+  opts: { cls?: string; dashes: number } = { dashes: 8 },
+): HTMLElement {
+  const brand = el('span', `pr-brand${opts.cls ? ' ' + opts.cls : ''}`, parent);
+  const logo = el('img', 'pr-brand__logo', brand);
+  logo.src = `${import.meta.env.BASE_URL}pwa-192x192.png`;
+  logo.alt = '';
+  const text = el('span', 'pr-brand__text', brand);
+  const mark = el('span', 'pr-brand__wordmark', text);
+  el('span', 'pr-brand__word', mark).textContent = 'Paper';
+  el('span', 'pr-brand__word pr-brand__word--accent', mark).textContent = ' Racing';
+  const dashes = el('span', 'pr-brand__dashes', text);
+  for (let i = 0; i < opts.dashes; i++) {
+    el(
+      'span',
+      i % 2 ? 'pr-brand__dash pr-brand__dash--hollow' : 'pr-brand__dash',
+      dashes,
+    );
+  }
+  return brand;
+}
 
 export interface Topbar {
   root: HTMLElement;

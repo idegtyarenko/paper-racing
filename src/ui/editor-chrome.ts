@@ -2,7 +2,8 @@
 // over the board while drawing a track — a top strip (burger + step title +
 // 4-segment progress), a coach-mark that travels between steps, and a bottom
 // action bar. Built here (its owner module) and mounted into .app__board on
-// first show, rather than living statically in index.html.
+// first show, rather than living statically in index.html. The burger opens the
+// global menu, which owns itself (menu.ts).
 //
 // The existing wizard buttons (#editButtons: next/back/join) are re-parented
 // into the bottom bar — their handlers (wired in panel.ts via bindTap) and
@@ -11,18 +12,12 @@
 
 import { EditorState, EditorStep } from '../model/editor';
 import { Phase } from '../app-state';
-import { strings, setLocale, locale, LocaleCode } from '../i18n';
+import { strings } from '../i18n';
 import { showToast } from './dialogs';
-import { el, button, buildTopbar, BURGER_SVG } from './pr-chrome';
+import { el, button, icon, buildTopbar, buildBrand, BURGER_SVG } from './pr-chrome';
+import { openMenu } from './menu';
 
 const board = document.querySelector('.app__board')!;
-
-/** Language options for the menu — endonyms (not translated). */
-const LANGS: { code: LocaleCode; label: string }[] = [
-  { code: 'en', label: 'English' },
-  { code: 'ru', label: 'Русский' },
-  { code: 'be', label: 'Беларуская' },
-];
 
 /** Wizard step → progress index (1..4); `ready`/errors have none. */
 const STEP_NUM: Partial<Record<EditorStep, number>> = {
@@ -35,14 +30,6 @@ const STEP_TOTAL = 4;
 /** Wizard steps in order — for the wide-screen rail's numbered list. */
 const STEP_ORDER: EditorStep[] = ['center', 'adjust', 'finish', 'direction'];
 
-export interface ChromeHandlers {
-  /** Open the Rules / How-to-play sheet. */
-  onRules: () => void;
-  /** Open the join-by-code dialog. */
-  onJoin: () => void;
-}
-
-let handlers: ChromeHandlers;
 let root: HTMLElement;
 let titleEl: HTMLElement;
 let counterEl: HTMLElement;
@@ -86,6 +73,14 @@ function build(): void {
   // ── Wide-screen rail: step list + coach (replaces the top strip ≥700px).
   //    Static structure; renderRail() updates the active row + coach text. ─────
   const rail = el('div', 'pr-edit__rail', root);
+  // Header row: brand + the burger, which is the menu's only entry point here
+  // (the mobile top strip is hidden at this width).
+  const railHead = el('div', 'pr-edit__rail-head', rail);
+  buildBrand(railHead, { cls: 'pr-brand--sm', dashes: 6 });
+  const railBurger = button('pr-btn pr-btn--icon pr-edit__rail-burger', railHead);
+  railBurger.setAttribute('aria-label', strings.menu.title);
+  icon('pr-btn__ico', BURGER_SVG, railBurger);
+  railBurger.addEventListener('click', openMenu);
   el('div', 'pr-label pr-edit__rail-title', rail);
   const railSteps = el('div', 'pr-edit__rail-steps', rail);
   STEP_ORDER.forEach((step, i) => {
@@ -119,72 +114,7 @@ function build(): void {
   built = true;
 }
 
-// ── Global (burger) menu ─────────────────────────────────────────────────────
-let menuRoot: HTMLElement | null = null;
-
-function menuItem(parent: HTMLElement, label: string, onClick: () => void): void {
-  const b = button('pr-menu__item', parent);
-  b.textContent = label;
-  b.addEventListener('click', onClick);
-}
-
-function buildMenu(): HTMLElement {
-  const root = el('div', 'pr-menu');
-  root.hidden = true;
-  el('div', 'pr-menu__backdrop', root).addEventListener('click', closeMenu);
-  const panel = el('div', 'pr-menu__panel', root);
-
-  const head = el('div', 'pr-menu__head', panel);
-  el('span', 'pr-label pr-menu__title', head).textContent = strings.menu.title;
-  const close = button('pr-menu__close', head);
-  close.textContent = '×';
-  close.setAttribute('aria-label', strings.menu.title);
-  close.addEventListener('click', closeMenu);
-
-  menuItem(panel, strings.menu.rules, () => {
-    closeMenu();
-    handlers.onRules();
-  });
-  menuItem(panel, strings.menu.join, () => {
-    closeMenu();
-    handlers.onJoin();
-  });
-
-  // Language: an expandable sublist; picking one writes the choice and reloads.
-  const langs = document.createElement('div');
-  langs.className = 'pr-menu__langs';
-  langs.hidden = true;
-  for (const l of LANGS) {
-    const b = button('pr-menu__lang', langs);
-    b.textContent = l.label;
-    if (l.code === locale) b.classList.add('pr-menu__lang--active');
-    b.addEventListener('click', () => setLocale(l.code));
-  }
-  menuItem(panel, strings.menu.language, () => {
-    langs.hidden = !langs.hidden;
-  });
-  panel.append(langs);
-
-  const foot = el('div', 'pr-menu__foot', panel);
-  const ver = document.getElementById('appVersion')?.textContent ?? '';
-  foot.textContent = ver
-    ? `${ver} · ${strings.menu.offlineReady}`
-    : strings.menu.offlineReady;
-
-  document.body.append(root);
-  return root;
-}
-
-function openMenu(): void {
-  if (!menuRoot) menuRoot = buildMenu();
-  menuRoot.hidden = false;
-}
-function closeMenu(): void {
-  if (menuRoot) menuRoot.hidden = true;
-}
-
-export function initEditorChrome(h: ChromeHandlers): void {
-  handlers = h;
+export function initEditorChrome(): void {
   build();
 }
 

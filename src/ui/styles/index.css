@@ -26,5 +26,6 @@
    elements that carry both (the re-skinned wizard buttons): shared components
    first, then the screens that compose them. */
 @import './pr-controls.css';
+@import './menu.css';
 @import './editor-chrome.css';
 @import './setup-chrome.css';

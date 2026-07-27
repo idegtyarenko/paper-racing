@@ -60,6 +60,10 @@
      buttons, options, tabs and menu rows all light up the same way. */
   --pr-hover: rgba(127, 211, 255, 0.14);
   --pr-press: rgba(127, 211, 255, 0.22);
+  /* Resting fill for rows that sit straight on a surface (menu entries). */
+  --pr-fill-soft: rgba(127, 211, 255, 0.05);
+  /* Scrim behind modal chrome (the menu drawer). */
+  --pr-scrim: rgba(6, 20, 33, 0.6);
   /* Borders. */
   --pr-border: #4f9dd0; /* control outlines */
   --pr-border-dim: #1c4c73; /* panel/divider outlines */
