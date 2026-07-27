@@ -7,6 +7,7 @@ import { GameState, Candidate, Drive, Player } from '../model/game';
 import { aeroFactor } from '../model/turns';
 import { MIN_LAUNCH } from '../config';
 import { Camera } from './camera';
+import { computeLanes, LaneStop } from './trail-lanes';
 
 export interface AppView {
   mode: 'edit' | 'race';
@@ -66,14 +67,65 @@ const FLAG_LIGHT = '#bfe6ff';
 const FLAG_SHADOW = 'rgba(0,0,0,0.1)';
 const FLAG_BORDER = 'rgba(127, 211, 255, 0.45)';
 
-// Trail thickness grows with move speed (segment length): fast straights get
-// a heavy line, slow crawling through corners a thin one. Color is always
-// PURE (opaque car color): blending into the dark background made the tone
-// muddy, and globalAlpha left dark spots at segment joints. TRAIL_SPEED_REF
-// (cells/turn) is the speed at which thickness maxes out.
+// Trail thickness, luminance, and glow all grow with move speed (segment
+// length): fast straights get a heavy, hot, glowing line, slow crawling
+// through corners a thin, dim one.
+//
+// On paper the trail mixed PAPER→color (0.14..1), so slow moves RECEDED INTO
+// THE FIELD and fast ones hit full strength — the readable channel was
+// contrast against the background, with a huge dynamic range. On navy that
+// same trick goes muddy: background-mixing pulls red toward a brown-gray.
+// The dark-field equivalent is to recede by dropping LUMINANCE while keeping
+// saturation — RGB scaled toward black proportionally stays unmistakably the
+// car's hue (r >> g,b for red) but sits low-contrast against the navy, just
+// like the pale stroke did on paper. So the ramp runs
+//   dark (dim) → pure car color (at TRAIL_MID) → hot, near-white
+// which restores the old dynamic range without ever touching the background.
+// Never globalAlpha: it left dark spots at segment joints.
 const TRAIL_SPEED_REF = 6;
-const TRAIL_WIDTH_MIN = 2;
-const TRAIL_WIDTH_MAX = 3.6;
+const TRAIL_WIDTH_MIN = 1.0;
+const TRAIL_WIDTH_MAX = 4.0;
+/** Luminance multiplier at zero speed. Not lower: cool cars (blue, teal) sit
+ *  closer to the navy field than warm ones and would vanish entirely. */
+const TRAIL_DIM_MIN = 0.5;
+/** Lightening toward white at max speed. */
+const TRAIL_LIGHTEN_MAX = 0.5;
+/** Speed factor at which the trail is the pure, unmodified car color. */
+const TRAIL_MID = 0.55;
+/** Glow radius (css px) at max speed — the blueprint "backlit line" idiom,
+ *  and the channel that reads fastest in peripheral vision. */
+const TRAIL_GLOW_MAX = 7;
+/**
+ * Lane separation between players' trails, in CELLS — see `trail-lanes.ts` for
+ * how the offsets are worked out. Kept in world units so it scales with zoom
+ * (and honestly disappears when zoomed far out, which is fine — so does every
+ * other detail). Big enough to clear TRAIL_WIDTH_MAX at normal zoom, small
+ * enough that the trail still reads as "through this node".
+ */
+const TRAIL_LANE_STEP = 0.22;
+/** Widest the outermost lanes may sit apart, in cells. */
+const TRAIL_LANE_MAX_SPREAD = 0.66;
+/** Distance over which a trail slides between lanes, in cells. */
+const TRAIL_LANE_RAMP = 0.5;
+/** Cap on the miter at sharp corners, in multiples of the lane offset. */
+const TRAIL_MITER_MAX = 2.5;
+
+/** `#rrggbb` → rgb triple. */
+function rgbOf(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff];
+}
+
+/**
+ * Car color moved along the speed ramp: `t` < 0 darkens toward black (scaling
+ * the channels, which preserves hue and saturation — unlike mixing into the
+ * background, which grays it out), `t` > 0 lightens toward white.
+ */
+function shade(hex: string, t: number): string {
+  const [r, g, b] = rgbOf(hex);
+  const f = t < 0 ? (c: number) => c * (1 + t) : (c: number) => c + (255 - c) * t;
+  return `rgb(${Math.round(f(r))}, ${Math.round(f(g))}, ${Math.round(f(b))})`;
+}
 
 // Geometry for race markers. Radii scale with `s` (px per cell); line widths
 // are constant px, matching the design. Values are taken from the "Canvas
@@ -631,7 +683,17 @@ function drawRace(
   candSeat: number,
 ): void {
   drawTrackDecor(ctx, s, game.track);
-  for (const p of game.players) drawTrail(ctx, s, p);
+  // Lanes need every trail at once (they depend on who overlaps whom), so they
+  // are solved for the whole field before any of it is drawn.
+  const lanes = computeLanes(
+    game.players.map((p) => p.trail),
+    {
+      step: TRAIL_LANE_STEP,
+      maxSpread: TRAIL_LANE_MAX_SPREAD,
+      ramp: TRAIL_LANE_RAMP,
+    },
+  );
+  game.players.forEach((p, i) => drawTrail(ctx, s, p, lanes[i]));
   drawCars(ctx, s, game);
   drawCandidates(ctx, s, game, cands, hover, pending, candSeat);
 }
@@ -654,44 +716,197 @@ function drawTrackDecor(ctx: CanvasRenderingContext2D, s: number, track: Track):
 }
 
 /**
- * One player's trail plus crash marks. Trail saturation and thickness grow
- * with move speed; so the color changes smoothly along the track instead of
- * stepping at each move boundary, every segment is filled with a linear
- * gradient between the "speed colors" at its endpoint nodes. The factor at a
- * node is the average of the speeds of its adjacent segments (when a
- * neighbor exists, isn't a "jump", and shares this node with the segment),
- * otherwise it's just the segment's own speed.
+ * One player's trail plus crash marks. Trail brightness and thickness grow
+ * with move speed, and BOTH have to change smoothly along the track rather
+ * than stepping at each move boundary.
+ *
+ * The factor at a node is the average of the speeds of its adjacent segments
+ * (when a neighbor exists, isn't a "jump", and shares this node with the
+ * segment), otherwise it's just the segment's own speed. Color then comes
+ * from a linear gradient between the two endpoint factors.
+ *
+ * Thickness can't be done with `stroke`: `lineWidth` is constant per stroke,
+ * so the line visibly jumped at every node. Instead each segment is FILLED as
+ * a tapered ribbon — a quad whose half-width at each end is that node's
+ * width. Neighbouring segments share the node factor, so they meet at exactly
+ * the same width and the taper is continuous across the whole trail. A disc
+ * at each node fills the notch on the outside of a corner and rounds the
+ * trail's ends (what `lineCap`/`lineJoin: round` used to do).
+ *
+ * Where this trail shares a line with another car it slides sideways into its
+ * own "lane" so the two don't paint over each other; `lanes` carries that
+ * offset (in cells) as stops along each segment, and a segment is subdivided
+ * at those stops. Cars, crash marks, and candidates stay on the true nodes.
  */
-function drawTrail(ctx: CanvasRenderingContext2D, s: number, p: Player): void {
+function drawTrail(
+  ctx: CanvasRenderingContext2D,
+  s: number,
+  p: Player,
+  lanes: LaneStop[][],
+): void {
   const trail = p.trail;
   // Move speed normalized to 0..1 by segment length (exponent >1 stretches
-  // the slow↔fast gap). Encodes ONLY trail thickness: color is the pure car
-  // color. Blending into the dark background (as if it were light paper)
-  // made the tone muddy, so that was removed.
+  // the slow↔fast gap).
   const segFactor = (i: number): number => {
     const seg = trail[i];
     const speed = Math.hypot(seg.to.x - seg.from.x, seg.to.y - seg.from.y);
     return Math.pow(Math.min(1, speed / TRAIL_SPEED_REF), 1.5);
   };
+  // Index of the segment continuing the trail at this endpoint, if it exists,
+  // isn't a jump, and actually touches this node — otherwise null (the node is
+  // a free end, and both the taper and the lane offset fall back to this
+  // segment alone).
+  const neighbor = (i: number, end: 'from' | 'to'): number | null => {
+    const j = end === 'from' ? i - 1 : i + 1;
+    const nb = trail[j];
+    if (!nb || nb.jump) return null;
+    const node = trail[i][end];
+    const shared = end === 'from' ? nb.to : nb.from;
+    return shared.x === node.x && shared.y === node.y ? j : null;
+  };
+  // Factor at one endpoint of segment `i`, averaged with the adjacent segment.
+  const nodeFactor = (i: number, end: 'from' | 'to'): number => {
+    const own = segFactor(i);
+    const j = neighbor(i, end);
+    return j === null ? own : (own + segFactor(j)) / 2;
+  };
+  /** Unit left-normal of segment `i`, or null when it has no direction. */
+  const segNormal = (i: number): Vec | null => {
+    const seg = trail[i];
+    const dx = seg.to.x - seg.from.x;
+    const dy = seg.to.y - seg.from.y;
+    const len = Math.hypot(dx, dy);
+    return len === 0 ? null : { x: -dy / len, y: dx / len };
+  };
+  /**
+   * Sideways shift (px) of one endpoint by `off` px. At a corner the two
+   * adjacent segments want different normals; offsetting along their bisector —
+   * lengthened by the miter factor 1/cos — keeps the lane a true parallel of
+   * the path, so the ribbon stays connected instead of opening a gap on the
+   * outside of the turn.
+   */
+  const nodeShift = (i: number, end: 'from' | 'to', off: number): Vec => {
+    if (off === 0) return { x: 0, y: 0 };
+    const own = segNormal(i);
+    const j = neighbor(i, end);
+    const nb = j === null ? null : segNormal(j);
+    if (!own) return nb ? scale(nb, off) : { x: 0, y: 0 };
+    if (!nb) return scale(own, off);
+    const m = add(own, nb);
+    const ml = Math.hypot(m.x, m.y);
+    // Near-reversal: the bisector degenerates, so just use our own normal.
+    if (ml < 1e-6) return scale(own, off);
+    const u = scale(m, 1 / ml);
+    const cos = u.x * own.x + u.y * own.y;
+    return scale(u, off * Math.min(TRAIL_MITER_MAX, 1 / Math.max(cos, 1e-3)));
+  };
+  /**
+   * Where a stop sits on screen (px). Endpoints follow the miter so they line
+   * up with the neighbouring segment; stops inside the segment just ride its
+   * own normal.
+   */
+  const stopPoint = (i: number, st: LaneStop): Vec => {
+    const seg = trail[i];
+    const base = lerp(seg.from, seg.to, st.t);
+    const off = st.offset * s;
+    const sh =
+      st.t <= 0
+        ? nodeShift(i, 'from', off)
+        : st.t >= 1
+          ? nodeShift(i, 'to', off)
+          : scale(segNormal(i) ?? { x: 0, y: 0 }, off);
+    return { x: base.x * s + sh.x, y: base.y * s + sh.y };
+  };
+  // Piecewise ramp through the pure car color at TRAIL_MID: below it we
+  // darken (recede into the field), above it we lighten (pop out of it).
+  const speedColor = (f: number): string =>
+    shade(
+      p.color,
+      f < TRAIL_MID
+        ? -(1 - TRAIL_DIM_MIN) * (1 - f / TRAIL_MID)
+        : (TRAIL_LIGHTEN_MAX * (f - TRAIL_MID)) / (1 - TRAIL_MID),
+    );
+
+  /** Half-thickness (css px) of the ribbon at a node of the given factor. */
+  const halfW = (f: number): number =>
+    (TRAIL_WIDTH_MIN + (TRAIL_WIDTH_MAX - TRAIL_WIDTH_MIN) * f) / 2;
 
   for (let i = 0; i < trail.length; i++) {
     const seg = trail[i];
+
     ctx.save();
     if (seg.jump) {
+      // Jumps never take a lane: a dashed line straight between the nodes.
       ctx.strokeStyle = MUTED;
       ctx.lineWidth = 1.5;
       ctx.setLineDash([4, 4]);
-    } else {
-      ctx.strokeStyle = p.color;
-      ctx.lineWidth =
-        TRAIL_WIDTH_MIN + (TRAIL_WIDTH_MAX - TRAIL_WIDTH_MIN) * segFactor(i);
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(seg.from.x * s, seg.from.y * s);
+      ctx.lineTo(seg.to.x * s, seg.to.y * s);
+      ctx.stroke();
+      ctx.restore();
+      continue;
     }
-    ctx.beginPath();
-    ctx.moveTo(seg.from.x * s, seg.from.y * s);
-    ctx.lineTo(seg.to.x * s, seg.to.y * s);
-    ctx.stroke();
+
+    const f0 = nodeFactor(i, 'from');
+    const f1 = nodeFactor(i, 'to');
+    const stops = lanes[i];
+    // One piece per lane stop: the offset is constant or ramping between any
+    // two of them, so a straight quad is exact.
+    for (let k = 0; k + 1 < stops.length; k++) {
+      const a = stops[k];
+      const b = stops[k + 1];
+      const pa = stopPoint(i, a);
+      const pb = stopPoint(i, b);
+      const fa = f0 + (f1 - f0) * a.t;
+      const fb = f0 + (f1 - f0) * b.t;
+      const wa = halfW(fa);
+      const wb = halfW(fb);
+      const dx = pb.x - pa.x;
+      const dy = pb.y - pa.y;
+      const len = Math.hypot(dx, dy);
+
+      // A standing car makes a zero-length segment; a gradient with coincident
+      // endpoints paints nothing, so such a dot gets a flat color.
+      if (len === 0) {
+        ctx.fillStyle = speedColor(fa);
+      } else {
+        const g = ctx.createLinearGradient(pa.x, pa.y, pb.x, pb.y);
+        g.addColorStop(0, speedColor(fa));
+        g.addColorStop(1, speedColor(fb));
+        ctx.fillStyle = g;
+      }
+      // Glow only on the fast half, so slow segments stay flat and quiet.
+      const fg = (fa + fb) / 2;
+      ctx.shadowBlur = 0;
+      if (fg > TRAIL_MID) {
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = (TRAIL_GLOW_MAX * (fg - TRAIL_MID)) / (1 - TRAIL_MID);
+      }
+
+      if (len > 0) {
+        // Left normal; the quad runs down one side and back up the other, so
+        // its winding is consistent regardless of the piece's direction.
+        const nx = -dy / len;
+        const ny = dx / len;
+        ctx.beginPath();
+        ctx.moveTo(pa.x + nx * wa, pa.y + ny * wa);
+        ctx.lineTo(pb.x + nx * wb, pb.y + ny * wb);
+        ctx.lineTo(pb.x - nx * wb, pb.y - ny * wb);
+        ctx.lineTo(pa.x - nx * wa, pa.y - ny * wa);
+        ctx.closePath();
+        ctx.fill();
+      }
+      // Round the ends/joins, and cover the kink where a ramp changes
+      // direction. Filled separately so their winding can't punch a hole in
+      // the quad under the nonzero rule.
+      ctx.beginPath();
+      ctx.arc(pa.x, pa.y, wa, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(pb.x, pb.y, wb, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
   }
   for (const c of p.crashes) drawCrashMark(ctx, s, c, p.color);
