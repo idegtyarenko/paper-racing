@@ -6,7 +6,7 @@
 import { KMH_PER_CELL } from '../config';
 import { Phase } from '../app-state';
 import { EditorState, EditorStep, canStepBack } from '../model/editor';
-import { GameState, Player, MIN_PLAYERS } from '../model/game';
+import { GameState, Player } from '../model/game';
 import { Difficulty } from '../model/ai';
 import { msToClock } from './format';
 import { len } from '../geometry';
@@ -21,18 +21,13 @@ import { bindLobby } from './lobby';
 const statusEl = statusElement();
 
 const editButtons = document.getElementById('editButtons')!;
-const modeButtons = document.getElementById('modeButtons')!;
-const aiButtons = document.getElementById('aiButtons')!;
 const lobbyButtons = document.getElementById('lobbyButtons')!;
-const playersButtons = document.getElementById('playersButtons')!;
 const raceButtons = document.getElementById('raceButtons')!;
 const backBtn = document.getElementById('backBtn') as HTMLButtonElement;
 const nextBtn = document.getElementById('nextBtn') as HTMLButtonElement;
-const playersBackBtn = document.getElementById('playersBack') as HTMLButtonElement;
 const helpBtn = document.getElementById('helpBtn') as HTMLButtonElement;
 const newRaceBtn = document.getElementById('newRace') as HTMLButtonElement;
 const retireBtn = document.getElementById('retireBtn') as HTMLButtonElement;
-const settingsBtn = document.getElementById('settingsBtn') as HTMLButtonElement;
 const confirmMoveBtn = document.getElementById('confirmMove') as HTMLButtonElement;
 const skipBtn = document.getElementById('skipTurn') as HTMLButtonElement;
 const raceCodeBtn = document.getElementById('raceCode') as HTMLButtonElement;
@@ -46,43 +41,8 @@ const dlgNewTrack = document.getElementById('dlgNewTrack') as HTMLButtonElement;
 const winnerBanner = document.querySelector('.winner')!;
 const winnerWho = winnerBanner.querySelector('.winner__title') as HTMLElement;
 
-// Hotseat setup screen: "Humans", "Bots", "Difficulty" rows (the last one
-// shown when bots ≥ 1) and the start button.
-const humanCount = document.getElementById('humanCount')!;
-const playersBotCount = document.getElementById('playersBotCount')!;
-const playersDifficulty = document.getElementById('playersDifficulty')!;
-const playersStartBtn = document.getElementById('playersStart') as HTMLButtonElement;
-
-// Online mode: mode-selection buttons (the lobby and dialogs live in sibling modules).
-const modeLocalBtn = document.getElementById('modeLocal') as HTMLButtonElement;
-const modeOnlineBtn = document.getElementById('modeOnline') as HTMLButtonElement;
-const modeBackBtn = document.getElementById('modeBack') as HTMLButtonElement;
+// The editor's join-by-code button (shown on the drawing step only).
 const joinByCodeBtn = document.getElementById('joinByCode') as HTMLButtonElement;
-
-// "Vs. computer" mode: the mode button, "Bots" (1–5) and "Difficulty" rows, and start.
-const modeAiBtn = document.getElementById('modeAI') as HTMLButtonElement;
-const aiBotCount = document.getElementById('aiBotCount')!;
-const aiDifficulty = document.getElementById('aiDifficulty')!;
-const aiStartBtn = document.getElementById('aiStart') as HTMLButtonElement;
-const aiSettingsBtn = document.getElementById('aiSettingsBtn') as HTMLButtonElement;
-const aiBackBtn = document.getElementById('aiBack') as HTMLButtonElement;
-
-// ── Setup-screen state (humans/bots/difficulty) ───────────────────────────────
-// A local race is assembled on the "Same device" (hotseat) and "Vs. computer"
-// (single human always) screens. The number of grid seats (capacity) arrives
-// via updatePanel and constrains the selection; each tap triggers a re-render.
-let setupHumans = 2;
-let setupBots = 0;
-let aiBots = 1;
-let setupDifficulty: Difficulty = 'medium';
-let seatCapacity = 6;
-
-/** Highlight the selected button in a row (matched by a data-attribute value). */
-function markSelected(container: HTMLElement, attr: string, value: string): void {
-  container.querySelectorAll<HTMLButtonElement>('.count-btn').forEach((btn) => {
-    btn.classList.toggle('count-btn--selected', btn.dataset[attr] === value);
-  });
-}
 
 export interface PanelHandlers {
   /** Step back in the track editor. */
@@ -103,26 +63,8 @@ export interface PanelHandlers {
   /** Whether an online session is currently active (the results dialog adjusts its buttons accordingly). */
   isOnline: () => boolean;
   onNewTrack: () => void;
-  /** Back from the player-selection step. */
-  onPlayersBack: () => void;
-  /** Start a local race: humans human players + bots bots at the given
-   *  difficulty (bots take the trailing seats). Shared handler for hotseat and
-   *  "Vs. computer". */
-  onStartLocal: (humans: number, bots: number, difficulty: Difficulty) => void;
-  /** Open the race-rules settings (⚙ button on the setup screen). */
-  onOpenSettings: () => void;
   /** Open the race-rules settings from the lobby (⚙ button, host only). */
   onLobbySettings: () => void;
-  /** Mode-selection step: local game. */
-  onModeLocal: () => void;
-  /** Mode-selection step: online (opens the name dialog → creates a race). */
-  onModeOnline: () => void;
-  /** Mode-selection step: vs. computer (moves to bot-count setup). */
-  onModeAI: () => void;
-  /** Back from the "Vs. computer" step. */
-  onAiBack: () => void;
-  /** Back from the mode-selection step. */
-  onModeBack: () => void;
   /** Open the join-by-code dialog (from the drawing screen). */
   onJoinByCode: () => void;
   /** Host starts the online race. */
@@ -275,58 +217,12 @@ export function setTurnCountdown(msLeft: number | null, mine = false): void {
 /** Hide online entry points if the backend isn't configured (local play only). */
 export function setOnlineEnabled(enabled: boolean): void {
   onlineEnabled = enabled;
-  modeOnlineBtn.hidden = !enabled;
   joinByCodeBtn.hidden = true; // shown only on the editor's first step (see update)
 }
 
 export function bindButtons(h: PanelHandlers): void {
   bindTap(backBtn, h.onBack);
   bindTap(nextBtn, h.onNext);
-  bindTap(playersBackBtn, h.onPlayersBack);
-  bindTap(confirmMoveBtn, h.onConfirmMove);
-  // Hotseat setup screen: humans / bots / difficulty — a tap changes the selection and re-renders.
-  humanCount.querySelectorAll<HTMLButtonElement>('.count-btn').forEach((btn) => {
-    bindTap(btn, () => {
-      setupHumans = Number(btn.dataset.humans);
-      renderPlayersSetup();
-    });
-  });
-  playersBotCount.querySelectorAll<HTMLButtonElement>('.count-btn').forEach((btn) => {
-    bindTap(btn, () => {
-      setupBots = Number(btn.dataset.bots);
-      renderPlayersSetup();
-    });
-  });
-  playersDifficulty
-    .querySelectorAll<HTMLButtonElement>('[data-difficulty]')
-    .forEach((btn) => {
-      bindTap(btn, () => {
-        setupDifficulty = btn.dataset.difficulty as Difficulty;
-        renderPlayersSetup();
-      });
-    });
-  bindTap(playersStartBtn, () => h.onStartLocal(setupHumans, setupBots, setupDifficulty));
-  bindTap(settingsBtn, h.onOpenSettings);
-  bindTap(modeLocalBtn, h.onModeLocal);
-  bindTap(modeOnlineBtn, h.onModeOnline);
-  bindTap(modeAiBtn, h.onModeAI);
-  // "Vs. computer" screen (single human always): bot count + their difficulty.
-  aiBotCount.querySelectorAll<HTMLButtonElement>('.count-btn').forEach((btn) => {
-    bindTap(btn, () => {
-      aiBots = Number(btn.dataset.bots);
-      renderAiSetup();
-    });
-  });
-  aiDifficulty.querySelectorAll<HTMLButtonElement>('[data-difficulty]').forEach((btn) => {
-    bindTap(btn, () => {
-      setupDifficulty = btn.dataset.difficulty as Difficulty;
-      renderAiSetup();
-    });
-  });
-  bindTap(aiStartBtn, () => h.onStartLocal(1, aiBots, setupDifficulty));
-  bindTap(aiSettingsBtn, h.onOpenSettings);
-  bindTap(aiBackBtn, h.onAiBack);
-  bindTap(modeBackBtn, h.onModeBack);
   bindTap(joinByCodeBtn, h.onJoinByCode);
   bindTap(skipBtn, h.onSkip);
   bindTap(raceCodeBtn, h.onRaceShare);
@@ -524,57 +420,15 @@ export interface NetTurn {
   isHost: boolean;
 }
 
-/**
- * Hotseat setup screen: apply grid-seat constraints to the "Humans"/"Bots"
- * rows, highlight the current selection, show the difficulty row when bots ≥
- * 1, and allow starting once there are at least MIN_PLAYERS participants and
- * they all fit on the starting grid (seatCapacity). Humans have a floor of
- * MIN_PLAYERS: a race with a single human is the "Vs. computer" mode (see
- * renderAiSetup), not hotseat, so the "Humans" row starts at 2.
- */
-function renderPlayersSetup(): void {
-  // Clamp the selection to capacity: humans from MIN_PLAYERS up to the grid size, bots fill the remainder.
-  setupHumans = Math.max(MIN_PLAYERS, Math.min(setupHumans, seatCapacity));
-  setupBots = Math.max(0, Math.min(setupBots, seatCapacity - setupHumans));
-  humanCount.querySelectorAll<HTMLButtonElement>('.count-btn').forEach((btn) => {
-    btn.disabled = Number(btn.dataset.humans) > seatCapacity;
-  });
-  playersBotCount.querySelectorAll<HTMLButtonElement>('.count-btn').forEach((btn) => {
-    btn.disabled = setupHumans + Number(btn.dataset.bots) > seatCapacity;
-  });
-  markSelected(humanCount, 'humans', String(setupHumans));
-  markSelected(playersBotCount, 'bots', String(setupBots));
-  playersDifficulty.hidden = setupBots === 0;
-  markSelected(playersDifficulty, 'difficulty', setupDifficulty);
-  const total = setupHumans + setupBots;
-  playersStartBtn.disabled = total < MIN_PLAYERS || total > seatCapacity;
-}
-
-/**
- * "Vs. computer" screen: one human, bot count 1..(grid size − 1), the
- * difficulty row is always visible. Start is enabled once the grid fits the
- * human plus at least one bot.
- */
-function renderAiSetup(): void {
-  aiBots = Math.max(1, Math.min(aiBots, Math.max(1, seatCapacity - 1)));
-  aiBotCount.querySelectorAll<HTMLButtonElement>('.count-btn').forEach((btn) => {
-    btn.disabled = 1 + Number(btn.dataset.bots) > seatCapacity;
-  });
-  markSelected(aiBotCount, 'bots', String(aiBots));
-  markSelected(aiDifficulty, 'difficulty', setupDifficulty);
-  aiStartBtn.disabled = seatCapacity < MIN_PLAYERS;
-}
-
 /** Context for re-rendering the panel. A single object instead of a pile of
  *  positional parameters: at the call site it's clear which flag means what
- *  (the old form was `updatePanel(m, e, g, 6, net, true, true)`). Splitting
- *  the body up by screen is left for the redesign (see INTERNAL_roadmap). */
+ *  (the old form was `updatePanel(m, e, g, 6, net, true, true)`). The setup
+ *  screens have already moved out to their own module (ui/setup-chrome.ts);
+ *  splitting the rest up by screen is left for the redesign's later steps. */
 export interface PanelCtx {
   phase: Phase;
   editor: EditorState;
   game: GameState | null;
-  /** Max seats (from the track's start-point count). Defaults to 6. */
-  playersMax?: number;
   /** Online context for the current turn. null means a local game. */
   net?: NetTurn | null;
   /** A bot is moving right now (local game) — don't show the "tap a point" hint. */
@@ -584,21 +438,9 @@ export interface PanelCtx {
 }
 
 export function updatePanel(ctx: PanelCtx): void {
-  const {
-    phase,
-    editor,
-    game,
-    playersMax = 6,
-    net = null,
-    aiTurn = false,
-    canRetire = false,
-  } = ctx;
-  seatCapacity = playersMax;
+  const { phase, editor, game, net = null, aiTurn = false, canRetire = false } = ctx;
   editButtons.hidden = phase !== 'edit';
-  modeButtons.hidden = phase !== 'modeSelect';
-  aiButtons.hidden = phase !== 'ai';
   lobbyButtons.hidden = phase !== 'lobby';
-  playersButtons.hidden = phase !== 'players';
   raceButtons.hidden = phase !== 'race';
   skipBtn.hidden = true; // shown below only during a race, when skipping is available
   retireBtn.hidden = !canRetire; // "Retire" in the header — only while the local player is still racing
@@ -627,25 +469,12 @@ export function updatePanel(ctx: PanelCtx): void {
     return;
   }
 
-  if (phase === 'modeSelect') {
-    renderStepStatus(strings.modeSelect.promptBadge, strings.modeSelect.prompt);
-    return;
-  }
-
-  if (phase === 'ai') {
-    renderStepStatus(strings.aiSelect.promptBadge, strings.aiSelect.prompt);
-    renderAiSetup();
-    return;
-  }
+  // Mode select and the two local setup screens are floating chrome now
+  // (ui/setup-chrome.ts) — the panel is hidden there (body.is-setup).
+  if (phase === 'modeSelect' || phase === 'ai' || phase === 'players') return;
 
   if (phase === 'lobby') {
     // Lobby content (code, roster, status) is rendered by renderLobby().
-    return;
-  }
-
-  if (phase === 'players') {
-    renderStepStatus(strings.players.promptBadge, strings.players.prompt);
-    renderPlayersSetup();
     return;
   }
 

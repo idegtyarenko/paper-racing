@@ -63,31 +63,36 @@ export const ru: Strings = {
 
   players: {
     names: ['Красный', 'Синий', 'Зеленый', 'Оранжевый', 'Фиолетовый', 'Бирюзовый'],
-    promptBadge: 'Состав',
-    prompt: 'Выбери, сколько людей и ботов участвуют — и поехали!',
     humansLabel: 'Люди',
     botsLabel: 'Боты',
+    botsWithSeats: (seats: number): string => `Боты · свободно ${seats}`,
     difficultyLabel: 'Сложность ботов',
-    start: '🏁 Поехали!',
   },
 
   modeSelect: {
-    promptBadge: 'Режим гонки',
-    prompt: 'Выбери, с кем играть.',
-    local: '📱 На одном устройстве',
-    online: '🌐 Онлайн с друзьями',
-    ai: '🤖 С компьютером',
+    title: 'С\u00A0кем играем?',
+    local: 'С\u00A0друзьями на\u00A0одном устройстве',
+    localSub: 'Передавайте телефон друг другу',
+    online: 'С\u00A0друзьями онлайн',
+    onlineSub: 'Создать гонку или войти по\u00A0коду',
+    ai: 'Против компьютера',
+    aiSub: 'Гонка с\u00A0ботами: до\u00A0пяти соперников',
+  },
+
+  setup: {
+    title: 'Настройка гонки',
+    tabLineup: 'Состав',
+    tabBehaviour: 'Поведение',
+    tabRules: 'Правила',
+    start: 'Поехали',
   },
 
   aiSelect: {
-    promptBadge: 'Соперники',
-    prompt: 'Выбери количество и сложность ботов — и поехали!',
-    easy: '🟢 Новички',
-    medium: '🟡 Любители',
-    hard: '🔴 Профи',
-    botsLabel: 'Боты',
+    easy: 'Новичок',
+    medium: 'Любитель',
+    hard: 'Профи',
+    botsLabel: 'Количество ботов',
     difficultyLabel: 'Сложность',
-    start: '🏁 Поехали!',
     botPrefix: '🤖',
   },
 
@@ -130,6 +135,7 @@ export const ru: Strings = {
     exponentStrict: 'Высокая',
     staticTurnsLabel: 'Число ходов штрафа',
     staticTurnsHint: 'Сколько ходов болид простаивает в гравии после вылета.',
+    reachableCells: 'Доступные клетки',
     turnLimitLabel: 'Время на ход',
     turnLimitHint:
       'Сколько дается на ход. Если игрок думает дольше лимита — остальные получают ' +

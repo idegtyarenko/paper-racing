@@ -64,31 +64,36 @@ export const be: Strings = {
 
   players: {
     names: ['Чырвоны', 'Сіні', 'Зялёны', 'Аранжавы', 'Фіялетавы', 'Бірузовы'],
-    promptBadge: 'Склад',
-    prompt: 'Выберы, колькі людзей і\u00A0ботаў удзельнічаюць\u00A0— і\u00A0паехалі!',
     humansLabel: 'Людзі',
     botsLabel: 'Боты',
+    botsWithSeats: (seats: number): string => `Боты · вольна ${seats}`,
     difficultyLabel: 'Складанасць ботаў',
-    start: '🏁 Паехалі!',
   },
 
   modeSelect: {
-    promptBadge: 'Рэжым гонкі',
-    prompt: 'Выберы, з\u00A0кім гуляць.',
-    local: '📱 На\u00A0адной прыладзе',
-    online: '🌐 Анлайн з\u00A0сябрамі',
-    ai: '🤖 З\u00A0камп’ютарам',
+    title: 'З\u00A0кім гуляем?',
+    local: 'З\u00A0сябрамі на\u00A0адной прыладзе',
+    localSub: 'Перадавайце тэлефон адзін аднаму',
+    online: 'З\u00A0сябрамі анлайн',
+    onlineSub: 'Стварыць гонку або ўвайсці па\u00A0кодзе',
+    ai: 'Супраць камп’ютара',
+    aiSub: 'Гонка з\u00A0ботамі: да\u00A0пяці сапернікаў',
+  },
+
+  setup: {
+    title: 'Наладка гонкі',
+    tabLineup: 'Склад',
+    tabBehaviour: 'Паводзіны',
+    tabRules: 'Правілы',
+    start: 'Паехалі',
   },
 
   aiSelect: {
-    promptBadge: 'Сапернікі',
-    prompt: 'Выберы колькасць і\u00A0складанасць ботаў\u00A0— і\u00A0паехалі!',
-    easy: '🟢 Навічкі',
-    medium: '🟡 Аматары',
-    hard: '🔴 Профі',
-    botsLabel: 'Боты',
+    easy: 'Навічок',
+    medium: 'Аматар',
+    hard: 'Профі',
+    botsLabel: 'Колькасць ботаў',
     difficultyLabel: 'Складанасць',
-    start: '🏁 Паехалі!',
     botPrefix: '🤖',
   },
 
@@ -131,6 +136,7 @@ export const be: Strings = {
     exponentStrict: 'Высокая',
     staticTurnsLabel: 'Колькасць хадоў штрафу',
     staticTurnsHint: 'Колькі хадоў балід прастойвае ў\u00A0жвіры пасля вылету.',
+    reachableCells: 'Даступныя клеткі',
     turnLimitLabel: 'Час на\u00A0ход',
     turnLimitHint:
       'Колькі даецца на\u00A0ход. Калі гулец думае даўжэй за\u00A0ліміт\u00A0— астатнія атрымліваюць ' +

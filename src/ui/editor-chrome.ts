@@ -13,6 +13,7 @@ import { EditorState, EditorStep } from '../model/editor';
 import { Phase } from '../app-state';
 import { strings, setLocale, locale, LocaleCode } from '../i18n';
 import { showToast } from './dialogs';
+import { el, button, buildTopbar, BURGER_SVG } from './pr-chrome';
 
 const board = document.querySelector('.app__board')!;
 
@@ -52,54 +53,40 @@ let built = false;
 /** Last error surfaced as a toast, so we don't re-toast on every re-render. */
 let lastErrorToast = '';
 
-function el(tag: string, cls: string, parent?: HTMLElement): HTMLElement {
-  const e = document.createElement(tag);
-  e.className = cls;
-  if (parent) parent.append(e);
-  return e;
-}
-
-/** An inline SVG icon (paths pre-composed). */
-function icon(cls: string, inner: string, parent: HTMLElement): HTMLElement {
-  const span = el('span', cls, parent);
-  span.innerHTML = inner;
-  return span;
-}
-
-const BURGER_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>';
 /** Coach-mark bullet — the amber ✎ glyph from the hi-fi (not a drawn pencil). */
 const PEN_GLYPH = '✎';
 
 function build(): void {
-  root = el('div', 'pr-edit');
+  root = el('div', 'pr-layer pr-edit');
   root.hidden = true;
 
-  // ── Top strip: burger + title/counter + progress ──────────────────────────
-  const top = el('div', 'pr-edit__top', root);
-  const burger = el('button', 'pr-edit__burger', top) as HTMLButtonElement;
-  burger.type = 'button';
-  burger.setAttribute('aria-label', strings.menu.title);
-  icon('pr-edit__burger-ico', BURGER_SVG, burger);
-  burger.addEventListener('click', openMenu);
-
-  const head = el('div', 'pr-edit__head', top);
-  const titleRow = el('div', 'pr-edit__titlerow', head);
-  titleEl = el('span', 'pr-edit__title', titleRow);
+  // ── Top bar (shared component) + the editor's own counter and progress ────
+  const top = buildTopbar(root, {
+    iconSvg: BURGER_SVG,
+    label: strings.menu.title,
+    onTap: openMenu,
+  });
+  top.root.classList.add('pr-edit__top');
+  // The title sits in a row with the "step N of 4" counter, so it moves into a
+  // row wrapper inside the shared head.
+  const titleRow = el('div', 'pr-edit__titlerow');
+  top.head.prepend(titleRow);
+  titleRow.append(top.title);
+  titleEl = top.title;
   counterEl = el('span', 'pr-edit__counter', titleRow);
-  const progress = el('div', 'pr-edit__progress', head);
+  const progress = el('div', 'pr-edit__progress', top.head);
   segEls = [];
   for (let i = 0; i < STEP_TOTAL; i++) segEls.push(el('span', 'pr-edit__seg', progress));
 
   // ── Coach-mark (travels between steps) ─────────────────────────────────────
-  coachEl = el('div', 'pr-coach', root);
+  coachEl = el('div', 'pr-card pr-card--lg pr-card--solid pr-coach', root);
   el('span', 'pr-coach__ico', coachEl).textContent = PEN_GLYPH;
   coachTextEl = el('span', 'pr-coach__text', coachEl);
 
   // ── Wide-screen rail: step list + coach (replaces the top strip ≥700px).
   //    Static structure; renderRail() updates the active row + coach text. ─────
   const rail = el('div', 'pr-edit__rail', root);
-  el('div', 'pr-edit__rail-title', rail);
+  el('div', 'pr-label pr-edit__rail-title', rail);
   const railSteps = el('div', 'pr-edit__rail-steps', rail);
   STEP_ORDER.forEach((step, i) => {
     const row = el('div', 'pr-edit__rail-step', railSteps);
@@ -107,14 +94,26 @@ function build(): void {
     el('span', 'pr-edit__rail-label', row).textContent =
       strings.editor.stepTitle[step] ?? '';
   });
-  const railCoach = el('div', 'pr-edit__rail-coach', rail);
+  const railCoach = el('div', 'pr-card pr-card--solid pr-edit__rail-coach', rail);
   el('span', 'pr-coach__ico', railCoach).textContent = PEN_GLYPH;
   el('span', 'pr-edit__rail-coach-text', railCoach);
 
   // ── Bottom action bar: re-home the existing wizard buttons ─────────────────
+  // They keep their ids/handlers/visibility logic and only gain the shared
+  // Blueprint button classes (which outrank the cream `.button` rules).
   const bar = el('div', 'pr-edit__bar', root);
   const editButtons = document.getElementById('editButtons');
-  if (editButtons) bar.append(editButtons); // keeps their handlers/visibility logic
+  if (editButtons) {
+    bar.append(editButtons);
+    // Queried inside the wrapper, not by id: it has just been detached from the
+    // document (root is mounted at the end of build), so getElementById would
+    // find nothing.
+    const skin = (id: string, cls: string): void =>
+      editButtons.querySelector('#' + id)?.classList.add(...cls.split(' '));
+    skin('nextBtn', 'pr-btn pr-btn--primary');
+    skin('backBtn', 'pr-btn');
+    skin('joinByCode', 'pr-btn pr-btn--caps');
+  }
 
   board.append(root);
   built = true;
@@ -124,8 +123,7 @@ function build(): void {
 let menuRoot: HTMLElement | null = null;
 
 function menuItem(parent: HTMLElement, label: string, onClick: () => void): void {
-  const b = el('button', 'pr-menu__item', parent) as HTMLButtonElement;
-  b.type = 'button';
+  const b = button('pr-menu__item', parent);
   b.textContent = label;
   b.addEventListener('click', onClick);
 }
@@ -137,9 +135,8 @@ function buildMenu(): HTMLElement {
   const panel = el('div', 'pr-menu__panel', root);
 
   const head = el('div', 'pr-menu__head', panel);
-  el('span', 'pr-menu__title', head).textContent = strings.menu.title;
-  const close = el('button', 'pr-menu__close', head) as HTMLButtonElement;
-  close.type = 'button';
+  el('span', 'pr-label pr-menu__title', head).textContent = strings.menu.title;
+  const close = button('pr-menu__close', head);
   close.textContent = '×';
   close.setAttribute('aria-label', strings.menu.title);
   close.addEventListener('click', closeMenu);
@@ -158,8 +155,7 @@ function buildMenu(): HTMLElement {
   langs.className = 'pr-menu__langs';
   langs.hidden = true;
   for (const l of LANGS) {
-    const b = el('button', 'pr-menu__lang', langs) as HTMLButtonElement;
-    b.type = 'button';
+    const b = button('pr-menu__lang', langs);
     b.textContent = l.label;
     if (l.code === locale) b.classList.add('pr-menu__lang--active');
     b.addEventListener('click', () => setLocale(l.code));

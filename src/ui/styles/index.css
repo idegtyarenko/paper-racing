@@ -8,7 +8,6 @@
 @import './base.css';
 @import './layout.css';
 @import './panel.css';
-@import './editor-chrome.css';
 @import './button.css';
 @import './players-select.css';
 @import './settings.css';
@@ -23,3 +22,9 @@
 @import './overlay.css';
 @import './install-prompt.css';
 @import './conn-banner.css';
+/* Blueprint redesign layer, last so its components win over the cream ones on
+   elements that carry both (the re-skinned wizard buttons): shared components
+   first, then the screens that compose them. */
+@import './pr-controls.css';
+@import './editor-chrome.css';
+@import './setup-chrome.css';

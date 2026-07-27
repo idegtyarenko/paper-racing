@@ -38,6 +38,11 @@ import {
 } from './ui/panel';
 import { renderTurnQueue } from './ui/turn-queue';
 import { initEditorChrome, renderEditorChrome } from './ui/editor-chrome';
+import {
+  initSetupChrome,
+  renderSetupChrome,
+  setSetupOnlineEnabled,
+} from './ui/setup-chrome';
 import { renderStandings } from './ui/standings';
 import { openSettings } from './ui/settings';
 import { localizeDom } from './ui/localize';
@@ -177,7 +182,6 @@ function updateUI(): void {
     phase: S.phase,
     editor: S.editor,
     game: S.game,
-    playersMax: S.raceTrack?.startPoints.length ?? 6,
     net,
     aiTurn,
     canRetire: canRetire(),
@@ -185,6 +189,7 @@ function updateUI(): void {
   renderTurnQueue(S.phase === 'race' ? S.game : null);
   renderStandings(S.phase === 'race' ? S.game : null, S.raceNav);
   renderEditorChrome(S.editor, S.phase);
+  renderSetupChrome(S.phase, S.raceTrack?.startPoints.length ?? 6);
 }
 
 /** Can this client move right now: in a local game, always (except during a
@@ -497,35 +502,11 @@ bindButtons({
   onSameTrackNewMode: () => goToMode('race'),
   canRematch: () => (!!S.game && !!S.lastLocalRace) || online.canRematch(),
   isOnline: () => session.active(),
-  onPlayersBack: () => {
-    // From the player-count screen, "back" goes to mode selection (it's always present now).
-    S.phase = 'modeSelect';
-    commit();
-  },
-  onStartLocal: (humans, bots, difficulty) => startRace(humans, bots, difficulty),
-  onOpenSettings: () =>
-    openSettings(S.rules, false, (r) => {
-      S.rules = r;
-    }),
   onLobbySettings: () =>
     openSettings(S.rules, true, (r) => {
       S.rules = r;
     }),
   onNewTrack: () => resetToEdit(),
-  onModeLocal: () => {
-    S.phase = 'players';
-    commit();
-  },
-  onModeOnline: () => online.promptCreate(),
-  onModeAI: () => {
-    S.phase = 'ai';
-    commit();
-  },
-  onAiBack: () => {
-    S.phase = 'modeSelect';
-    commit();
-  },
-  onModeBack: () => backFromSetup(),
   onJoinByCode: () => online.promptJoin(),
   onLobbyStart: () => online.start(),
   onLobbyShare: () => online.share(),
@@ -546,6 +527,32 @@ bindButtons({
 initEditorChrome({
   onRules: () => document.getElementById('helpBtn')?.click(),
   onJoin: () => document.getElementById('joinByCode')?.click(),
+});
+
+// Mode select + race setup: their own floating chrome, built on first show.
+// The screens own the lineup (humans/bots/difficulty) and edit the race rules
+// in place, so the settings sheet is only the lobby's entry point now.
+initSetupChrome({
+  onModeLocal: () => {
+    S.phase = 'players';
+    commit();
+  },
+  onModeOnline: () => online.promptCreate(),
+  onModeAI: () => {
+    S.phase = 'ai';
+    commit();
+  },
+  onModeBack: () => backFromSetup(),
+  // From either setup screen, "back" goes to mode selection (always present now).
+  onSetupBack: () => {
+    S.phase = 'modeSelect';
+    commit();
+  },
+  onStartLocal: (humans, bots, difficulty) => startRace(humans, bots, difficulty),
+  getRules: () => S.rules,
+  onRulesChange: (r) => {
+    S.rules = r;
+  },
 });
 
 /**
@@ -645,6 +652,7 @@ try {
 
 // Only show online entry points if the backend is configured (otherwise, local play only).
 setOnlineEnabled(onlineAvailable());
+setSetupOnlineEnabled(onlineAvailable());
 
 // Camera: wire the viewport to the canvas/wrapper and the content bounds provider.
 vp.initViewport(canvas, wrap, contentBounds);

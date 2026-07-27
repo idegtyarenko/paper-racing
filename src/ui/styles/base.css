@@ -54,7 +54,12 @@
   --pr-grid: rgba(127, 211, 255, 0.07); /* blueprint grid */
   /* Accent (amber) — primary action + selected direction. */
   --pr-accent: #ffb454;
+  --pr-accent-hover: #ffc47a; /* amber lifted (pointer hover) */
   --pr-accent-ink: #0d3252; /* text/icon on amber */
+  /* Hover wash for outlined/quiet controls — one cyan tint everywhere, so
+     buttons, options, tabs and menu rows all light up the same way. */
+  --pr-hover: rgba(127, 211, 255, 0.14);
+  --pr-press: rgba(127, 211, 255, 0.22);
   /* Borders. */
   --pr-border: #4f9dd0; /* control outlines */
   --pr-border-dim: #1c4c73; /* panel/divider outlines */
@@ -67,6 +72,7 @@
   --pr-error-bg: rgba(58, 20, 20, 0.94);
   --pr-error-ink: #ffe6e6;
   /* Shape. */
+  --pr-gutter: 16px; /* side margin every full-width floating element aligns to */
   --pr-radius: 8px;
   --pr-radius-lg: 12px;
   --pr-radius-pill: 999px;

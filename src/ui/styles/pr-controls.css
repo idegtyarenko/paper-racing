@@ -1,0 +1,429 @@
+/* Shared Blueprint components (redesign). The pieces every redesigned screen
+   needs — top bar, card surface, section label, buttons, segmented options,
+   help/hint, sliders — extracted here so the editor, the setup screens and
+   (later) the lobby/race/results all render the same component instead of a
+   per-screen copy. Screen-specific stylesheets (editor-chrome.css,
+   setup-chrome.css) only position these and add their own extras.
+
+   Imported after the legacy cream components so a `.pr-*` class wins over the
+   `.button`/`.seg` rules on elements that carry both (the wizard buttons in
+   index.html are re-skinned that way). */
+
+/* ── Overlay layer: spans the board, only children capture pointer events ───── */
+.pr-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  font-family: var(--pr-font);
+  color: var(--pr-ink);
+}
+.pr-layer > * {
+  pointer-events: auto;
+}
+
+/* ── Card: the floating panel surface (translucent over the board) ──────────── */
+.pr-card {
+  border-radius: var(--pr-radius);
+  background: var(--pr-panel);
+  border: 1px solid var(--pr-border);
+  backdrop-filter: blur(6px);
+}
+.pr-card--lg {
+  border-radius: var(--pr-radius-lg);
+}
+/* Opaque surface for elevated chrome (menus, coach-marks, sheets). */
+.pr-card--solid {
+  background: var(--pr-panel-solid);
+  backdrop-filter: none;
+}
+
+/* ── Section / screen label: mono caps in blueprint cyan ────────────────────── */
+.pr-label {
+  font-family: var(--pr-mono);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--pr-edge);
+}
+
+/* ── Top bar: 48px leading icon button + title card, aligned to the gutter ──── */
+.pr-topbar {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + var(--pr-gutter));
+  left: var(--pr-gutter);
+  right: var(--pr-gutter);
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+.pr-topbar__head {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+}
+.pr-topbar__title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────────── */
+.pr-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin: 0;
+  padding: 15px 18px;
+  border-radius: var(--pr-radius);
+  border: 1px solid var(--pr-border);
+  background: var(--pr-panel);
+  color: var(--pr-ink-soft);
+  font-family: var(--pr-font);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  touch-action: manipulation;
+  backdrop-filter: blur(6px);
+}
+.pr-btn:active {
+  transform: scale(0.98);
+}
+/* Hover — only on devices with a real pointer (on touch it "sticks" after a tap
+   and iOS eats the first click). These also override the cream `.button` hover
+   the re-skinned wizard buttons still carry, which washed them out. */
+@media (hover: hover) {
+  .pr-btn:hover:not(:disabled) {
+    background: var(--pr-hover);
+    border-color: var(--pr-edge);
+    color: var(--pr-ink);
+  }
+  .pr-btn--primary:hover:not(:disabled) {
+    background: var(--pr-accent-hover);
+    border-color: transparent;
+    color: var(--pr-accent-ink);
+  }
+}
+.pr-btn:active:not(:disabled) {
+  background: var(--pr-press);
+}
+.pr-btn--primary:active:not(:disabled) {
+  background: var(--pr-accent-hover);
+}
+/* The flex display above would otherwise beat the UA's [hidden] rule, so a
+   button hidden by its screen (Join off the draw step) would still show. */
+.pr-btn[hidden] {
+  display: none;
+}
+/* Primary action: amber fill. */
+.pr-btn--primary {
+  background: var(--pr-accent);
+  border-color: transparent;
+  color: var(--pr-accent-ink);
+  font-weight: 800;
+}
+/* Uppercase call to action (START RACE, JOIN ONLINE GAME). */
+.pr-btn--caps {
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+}
+/* Square icon button (burger, back). */
+.pr-btn--icon {
+  flex: 0 0 auto;
+  width: 48px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+.pr-btn--icon:active {
+  transform: scale(0.96);
+}
+.pr-btn--icon svg,
+.pr-btn__ico svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+.pr-btn svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+/* ── Segmented options: a row/grid of choices with one active ───────────────── */
+.pr-seg {
+  display: flex;
+  gap: 6px;
+}
+.pr-seg--grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
+.pr-seg--grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+.pr-seg--stack {
+  flex-direction: column;
+}
+.pr-seg__opt {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 11px 6px;
+  text-align: center;
+  border-radius: var(--pr-radius);
+  border: 1px solid var(--pr-border);
+  background: rgba(9, 40, 63, 0.5);
+  color: var(--pr-ink-soft);
+  font-family: var(--pr-font);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.pr-seg__opt--active {
+  background: var(--pr-accent);
+  border-color: var(--pr-accent);
+  color: var(--pr-accent-ink);
+  font-weight: 800;
+}
+/* Beyond the starting grid's capacity: offered but plainly unavailable. */
+.pr-seg__opt:disabled {
+  opacity: 0.32;
+  cursor: default;
+}
+@media (hover: hover) {
+  .pr-seg__opt:hover:not(:disabled):not(.pr-seg__opt--active) {
+    background: var(--pr-hover);
+    border-color: var(--pr-edge);
+    color: var(--pr-ink);
+  }
+  .pr-seg__opt--active:hover:not(:disabled) {
+    background: var(--pr-accent-hover);
+    border-color: var(--pr-accent-hover);
+  }
+}
+.pr-seg__opt:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* ── Setting row: label (+ "?" help) over its control ───────────────────────── */
+.pr-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pr-row[hidden] {
+  display: none;
+}
+.pr-row__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pr-row__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+/* Slider rows put the current value at the right end of the head. */
+.pr-row__value {
+  margin-left: auto;
+  font-family: var(--pr-font);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--pr-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Round "?" — expands the setting's explanation. */
+.pr-help {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--pr-edge);
+  background: none;
+  color: var(--pr-edge);
+  font-family: var(--pr-font);
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+/* ≥44px touch target without bloating the layout (a11y). */
+.pr-help::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+}
+@media (hover: hover) {
+  .pr-help:hover:not([aria-expanded='true']) {
+    background: var(--pr-hover);
+  }
+}
+.pr-help[aria-expanded='true'] {
+  background: var(--pr-accent);
+  border-color: var(--pr-accent);
+  color: var(--pr-accent-ink);
+}
+
+/* The explanation itself: an amber note under the control. */
+.pr-hint {
+  margin: 0;
+  padding: 11px 13px;
+  border-radius: var(--pr-radius);
+  background: rgba(255, 180, 84, 0.08);
+  border: 1px solid rgba(255, 180, 84, 0.3);
+  font-size: 12px;
+  line-height: 1.5;
+  color: #f0dcb8;
+}
+.pr-hint[hidden] {
+  display: none;
+}
+
+/* Neutral explanation card (e.g. what a handling preset feels like). */
+.pr-note {
+  padding: 13px 14px;
+  border-radius: var(--pr-radius);
+  background: rgba(127, 211, 255, 0.06);
+  border: 1px solid rgba(127, 211, 255, 0.2);
+  font-size: 13px;
+  line-height: 1.5;
+  color: #cfe4f4;
+}
+.pr-note[hidden] {
+  display: none;
+}
+
+/* ── Rules editor (ui/rules-editor.ts): handling + rules control stacks ─────── */
+.pr-rules {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.pr-rules--drive {
+  gap: 12px;
+  flex: 1;
+}
+.pr-rules--rules {
+  gap: 22px;
+}
+.pr-rules__sliders {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pr-rules__sliders[hidden] {
+  display: none;
+}
+/* The four handling axes are compact rows: label and value on one line, and the
+   label is plain text (not a section heading — the section is the tab itself). */
+.pr-rules__sliders .pr-row {
+  gap: 2px;
+}
+.pr-rules__sliders .pr-label {
+  font-family: var(--pr-font);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--pr-ink-soft);
+}
+/* Preview fills whatever height the tab has left. */
+/* Preview takes what the tab has left, within a band that keeps the cloud
+   readable (too tall and the cells balloon; too short and they collide). */
+.pr-rules__preview {
+  flex: 1;
+  min-height: 140px;
+  max-height: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pr-preview {
+  flex: 1;
+  min-height: 0;
+  border-radius: var(--pr-radius);
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(127, 211, 255, 0.18);
+  overflow: hidden;
+}
+.pr-preview__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* The settings sheet (still the lobby's host-settings entry) now holds
+   Blueprint controls, so its surface follows them — a minimal skin until the
+   lobby step of the redesign replaces the sheet outright. */
+#settingsSheet {
+  background: var(--pr-panel-solid);
+  border-color: var(--pr-border-dim);
+  color: var(--pr-ink);
+  font-family: var(--pr-font);
+  gap: 14px;
+}
+#settingsSheet .sheet__title {
+  color: var(--pr-ink);
+}
+#settingsSheet .seg__btn {
+  background: rgba(9, 40, 63, 0.5);
+  border-color: var(--pr-border);
+  color: var(--pr-ink-soft);
+}
+#settingsSheet .seg__btn--active {
+  background: var(--pr-accent);
+  border-color: var(--pr-accent);
+  color: var(--pr-accent-ink);
+}
+@media (hover: hover) {
+  #settingsSheet .seg__btn:hover:not(.seg__btn--active) {
+    background: var(--pr-hover);
+    border-color: var(--pr-edge);
+  }
+  #settingsSheet .seg__btn--active:hover {
+    background: var(--pr-accent-hover);
+    border-color: var(--pr-accent-hover);
+  }
+}
+#settingsSheet .button {
+  background: var(--pr-accent);
+  border-color: transparent;
+  color: var(--pr-accent-ink);
+}
+
+/* ── Slider ─────────────────────────────────────────────────────────────────── */
+.pr-slider {
+  width: 100%;
+  accent-color: var(--pr-accent);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.pr-slider__scale {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--pr-mono);
+  font-size: 11px;
+  color: var(--pr-ink-dim);
+  font-variant-numeric: tabular-nums;
+}
