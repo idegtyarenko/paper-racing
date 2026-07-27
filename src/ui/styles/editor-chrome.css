@@ -9,6 +9,14 @@ body.is-editing .panel {
 }
 body.is-editing .app__board {
   background: var(--pr-bg);
+  /* Cover the whole physical screen — including the home-indicator inset that
+     sits below the dynamic viewport (100dvh) — so the canvas, and with it the
+     blueprint grid, reaches the bottom edge instead of leaving a flat navy
+     strip. Under `viewport-fit=cover` a fixed inset:0 box resolves to the full
+     screen. The floating chrome inside keeps its controls clear of the inset
+     via env(safe-area-inset-*), so nothing lands under the home indicator. */
+  position: fixed;
+  inset: 0;
 }
 
 /* Chrome layer — spans the board, but only its children capture pointer events
