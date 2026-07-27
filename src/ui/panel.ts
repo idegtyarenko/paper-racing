@@ -223,6 +223,7 @@ export function setOnlineEnabled(enabled: boolean): void {
 export function bindButtons(h: PanelHandlers): void {
   bindTap(backBtn, h.onBack);
   bindTap(nextBtn, h.onNext);
+  bindTap(confirmMoveBtn, h.onConfirmMove);
   bindTap(joinByCodeBtn, h.onJoinByCode);
   bindTap(skipBtn, h.onSkip);
   bindTap(raceCodeBtn, h.onRaceShare);
