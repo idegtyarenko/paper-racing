@@ -135,22 +135,20 @@ body.is-editing .app__board {
   color: var(--pr-ink);
   transition:
     top 0.55s cubic-bezier(0.34, 1.2, 0.64, 1),
+    bottom 0.55s cubic-bezier(0.34, 1.2, 0.64, 1),
     transform 0.55s cubic-bezier(0.34, 1.2, 0.64, 1);
 }
 .pr-coach__ico {
   color: var(--pr-accent);
   flex: 0 0 auto;
+  font-size: 15px;
   line-height: 1;
 }
-.pr-coach__ico svg {
-  width: 16px;
-  height: 16px;
-  display: block;
-}
-/* Per-step anchor: draw sits low (over a fresh board); later steps sit higher,
-   nearer the feature being tuned. */
+/* Per-step anchor: draw sits low, just above the Join button (design 3A); the
+   later steps sit higher, nearer the feature being tuned. */
 .pr-edit[data-step='center'] .pr-coach {
-  top: 60%;
+  top: auto;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 88px);
 }
 .pr-edit[data-step='adjust'] .pr-coach {
   top: 22%;
@@ -208,13 +206,26 @@ body.is-editing .app__board {
   color: var(--pr-accent-ink);
   font-weight: 800;
 }
-/* Join online: full-width secondary (only on step 1). */
-.pr-edit__bar #joinByCode {
+/* Join online: full-width secondary (only on step 1), caps + globe icon.
+   Scoped to :not([hidden]) so the flex display never overrides panel.ts hiding
+   Join off the draw step (same reasoning as the toast above). */
+.pr-edit__bar #joinByCode:not([hidden]) {
   order: 3;
   flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
   background: var(--pr-panel);
   border: 1px solid var(--pr-border);
   color: var(--pr-ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.pr-edit__bar #joinByCode svg {
+  width: 16px;
+  height: 16px;
+  display: block;
 }
 .pr-edit__bar .button:active {
   transform: scale(0.98);
@@ -256,8 +267,10 @@ body.is-editing .zoom-ctl__btn:hover {
 }
 
 /* Editor errors surface as a red Blueprint toast under the top strip (design
-   3E). In the edit phase the toast only ever carries an error. */
-body.is-editing #toast {
+   3E). In the edit phase the toast only ever carries an error. Scoped to
+   :not([hidden]) so the flex display never overrides the element's own hidden
+   state (showToast toggles the `hidden` attribute to dismiss it). */
+body.is-editing #toast:not([hidden]) {
   top: calc(env(safe-area-inset-top, 0px) + 88px);
   bottom: auto;
   left: 16px;
@@ -278,7 +291,7 @@ body.is-editing #toast {
   padding: 13px 16px;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
 }
-body.is-editing #toast::before {
+body.is-editing #toast:not([hidden])::before {
   content: '⚠';
   color: var(--pr-error);
   font-size: 15px;
@@ -391,4 +404,130 @@ body.is-editing #toast::before {
   font-family: var(--pr-mono);
   font-size: 11px;
   color: var(--pr-ink-dim);
+}
+
+/* ── Draw-head cursor (design 3A): amber ring + dot follows the pointer while
+   drawing the loop. Canvas also renders it at the stroke head (view/render.ts)
+   so it shows under a finger on touch, where there is no OS cursor. ─────────── */
+body[data-edit-step='center'] #board {
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%23ffb454' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23ffb454'/%3E%3C/svg%3E")
+      16 16,
+    crosshair;
+}
+/* Panning still wins (grabbing hand). */
+body[data-edit-step='center'] #board.grabbing {
+  cursor: grabbing;
+}
+
+/* ── Wide-screen rail: step list (design "3A · Desktop"). Gated by screen width
+   (not hover) so tablets get it too; replaces the mobile top strip + coach. ─── */
+.pr-edit__rail {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 220px;
+  padding: calc(env(safe-area-inset-top, 0px) + 26px) 22px
+    calc(env(safe-area-inset-bottom, 0px) + 22px);
+  flex-direction: column;
+  gap: 22px;
+  background: var(--pr-panel);
+  border-right: 1px solid var(--pr-border-dim);
+  backdrop-filter: blur(6px);
+}
+.pr-edit__rail-title {
+  font-family: var(--pr-mono);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--pr-edge);
+}
+.pr-edit__rail-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.pr-edit__rail-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  opacity: 0.45;
+  transition: opacity 0.35s ease;
+}
+.pr-edit__rail-step--active,
+.pr-edit__rail-step--done {
+  opacity: 1;
+}
+.pr-edit__rail-num {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: var(--pr-mono);
+  font-weight: 700;
+  font-size: 11.5px;
+  border: 1px solid var(--pr-edge);
+  color: var(--pr-edge);
+}
+.pr-edit__rail-step--active .pr-edit__rail-num {
+  background: var(--pr-accent);
+  border-color: var(--pr-accent);
+  color: var(--pr-accent-ink);
+  font-weight: 800;
+}
+.pr-edit__rail-step--done .pr-edit__rail-num {
+  background: var(--pr-ink);
+  border-color: var(--pr-ink);
+  color: var(--pr-board);
+}
+.pr-edit__rail-label {
+  font-size: 13px;
+  color: var(--pr-ink-soft);
+}
+.pr-edit__rail-step--active .pr-edit__rail-label {
+  color: var(--pr-ink);
+  font-weight: 700;
+}
+.pr-edit__rail-coach {
+  margin-top: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 12px 13px;
+  border-radius: var(--pr-radius);
+  background: var(--pr-panel-solid);
+  border: 1px solid var(--pr-border);
+}
+.pr-edit__rail-coach-text {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--pr-ink);
+}
+
+@media (min-width: 700px) {
+  .pr-edit__top {
+    display: none;
+  }
+  .pr-edit .pr-coach {
+    display: none;
+  }
+  .pr-edit__rail {
+    display: flex;
+  }
+  /* Action bar: clear the rail and hug the right, buttons sized to content. */
+  .pr-edit__bar {
+    left: calc(220px + 24px);
+    justify-content: flex-end;
+  }
+  .pr-edit__bar #nextBtn {
+    flex: 0 0 auto;
+  }
+  .pr-edit__bar #joinByCode:not([hidden]) {
+    flex-basis: auto;
+  }
 }

@@ -81,8 +81,13 @@
 html,
 body {
   height: 100%;
+  /* Blueprint navy globally (all phases migrate to it): so any strip the board
+     doesn't cover — e.g. the iOS standalone home-indicator inset below the
+     dynamic viewport — reads as the board, not the old cream splash color. */
+  background: var(--pr-board);
 }
 body {
+  height: 100vh; /* fallback for browsers without dvh */
   height: 100dvh;
   /* Font is set on body, not just .app: the sheet overlay and the toast are
      siblings of .app, so they'd otherwise inherit the browser's default serif font. */

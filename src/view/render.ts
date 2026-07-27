@@ -489,16 +489,25 @@ function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): 
     drawTrackEdges(ctx, s, ed.outer, ed.inner);
   }
 
-  // Actively dragged edge point.
+  // Actively dragged edge point — a square handle (design 3B): board-navy fill,
+  // amber outline (not a solid amber dot).
   if (ed.step === 'adjust' && ed.dragEdge && ed.dragIndex !== null) {
     const edge = ed.dragEdge === 'outer' ? ed.outer : ed.inner;
     const pt = edge?.[ed.dragIndex];
     if (pt) {
+      const half = Math.max(5, s * 0.28);
+      const x = pt.x * s - half;
+      const y = pt.y * s - half;
+      const side = half * 2;
       ctx.save();
-      ctx.fillStyle = ACCENT;
+      ctx.fillStyle = BG;
+      ctx.strokeStyle = ACCENT;
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(pt.x * s, pt.y * s, Math.max(4, s * 0.22), 0, Math.PI * 2);
+      if (ctx.roundRect) ctx.roundRect(x, y, side, side, 2);
+      else ctx.rect(x, y, side, side);
       ctx.fill();
+      ctx.stroke();
       ctx.restore();
     }
   }
@@ -509,6 +518,24 @@ function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): 
     ctx.globalAlpha = 0.75;
     strokePoly(ctx, s, ed.stroke, false);
     ctx.globalAlpha = 1;
+  }
+
+  // Draw-head marker (design 3A): amber ring + dot at the live pen point. On
+  // touch there's no OS cursor, so this is what shows under the finger; on
+  // desktop it reinforces the ring+dot CSS cursor.
+  if (ed.drawing && ed.stroke.length > 0) {
+    const head = ed.stroke[ed.stroke.length - 1];
+    ctx.save();
+    ctx.strokeStyle = ACCENT;
+    ctx.fillStyle = ACCENT;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(head.x * s, head.y * s, Math.max(9, s * 0.55), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(head.x * s, head.y * s, Math.max(2.5, s * 0.16), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
   }
 
   if (ed.finish) drawFinishLine(ctx, s, ed.finish.a, ed.finish.b);

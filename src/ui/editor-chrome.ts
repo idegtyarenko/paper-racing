@@ -31,6 +31,8 @@ const STEP_NUM: Partial<Record<EditorStep, number>> = {
   direction: 4,
 };
 const STEP_TOTAL = 4;
+/** Wizard steps in order — for the wide-screen rail's numbered list. */
+const STEP_ORDER: EditorStep[] = ['center', 'adjust', 'finish', 'direction'];
 
 export interface ChromeHandlers {
   /** Open the Rules / How-to-play sheet. */
@@ -66,8 +68,8 @@ function icon(cls: string, inner: string, parent: HTMLElement): HTMLElement {
 
 const BURGER_SVG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>';
-const PEN_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+/** Coach-mark bullet — the amber ✎ glyph from the hi-fi (not a drawn pencil). */
+const PEN_GLYPH = '✎';
 
 function build(): void {
   root = el('div', 'pr-edit');
@@ -91,8 +93,23 @@ function build(): void {
 
   // ── Coach-mark (travels between steps) ─────────────────────────────────────
   coachEl = el('div', 'pr-coach', root);
-  icon('pr-coach__ico', PEN_SVG, coachEl);
+  el('span', 'pr-coach__ico', coachEl).textContent = PEN_GLYPH;
   coachTextEl = el('span', 'pr-coach__text', coachEl);
+
+  // ── Wide-screen rail: step list + coach (replaces the top strip ≥700px).
+  //    Static structure; renderRail() updates the active row + coach text. ─────
+  const rail = el('div', 'pr-edit__rail', root);
+  el('div', 'pr-edit__rail-title', rail);
+  const railSteps = el('div', 'pr-edit__rail-steps', rail);
+  STEP_ORDER.forEach((step, i) => {
+    const row = el('div', 'pr-edit__rail-step', railSteps);
+    el('span', 'pr-edit__rail-num', row).textContent = String(i + 1);
+    el('span', 'pr-edit__rail-label', row).textContent =
+      strings.editor.stepTitle[step] ?? '';
+  });
+  const railCoach = el('div', 'pr-edit__rail-coach', rail);
+  el('span', 'pr-coach__ico', railCoach).textContent = PEN_GLYPH;
+  el('span', 'pr-edit__rail-coach-text', railCoach);
 
   // ── Bottom action bar: re-home the existing wizard buttons ─────────────────
   const bar = el('div', 'pr-edit__bar', root);
@@ -187,6 +204,7 @@ export function renderEditorChrome(editor: EditorState, phase: Phase): void {
   document.body.classList.toggle('is-editing', editing);
   if (!editing) {
     lastErrorToast = '';
+    delete document.body.dataset.editStep;
     return;
   }
 
@@ -199,21 +217,40 @@ export function renderEditorChrome(editor: EditorState, phase: Phase): void {
     seg.classList.toggle('pr-edit__seg--active', n !== undefined && i + 1 === n);
   });
 
+  renderRail(step, n);
+
   // The coach anchors to the relevant zone per step (draw = bottom; the later
   // steps sit higher, toward the track feature being adjusted). The move itself
-  // is the attention cue (CSS transition on .pr-coach).
+  // is the attention cue (CSS transition on .pr-coach). `data-edit-step` on the
+  // body drives the per-step canvas cursor (draw = ring+dot).
   root.dataset.step = step;
+  document.body.dataset.editStep = step;
 
+  let coachText: string;
   if (editor.error) {
-    // Surface the failure as a toast once; keep the coach on the step's normal
-    // instruction (the board resets to a clean draw on a self-cross).
+    // Surface the failure as a toast (auto-dismisses; longer than the default so
+    // the longer RU/BE strings are readable) once; keep the coach on the step's
+    // normal instruction (the board resets to a clean draw on a self-cross).
     if (editor.message !== lastErrorToast) {
-      showToast(editor.message);
+      showToast(editor.message, 3200);
       lastErrorToast = editor.message;
     }
-    coachTextEl.textContent = strings.editor.step[step] ?? editor.message;
+    coachText = strings.editor.step[step] ?? editor.message;
   } else {
     lastErrorToast = '';
-    coachTextEl.textContent = editor.message;
+    coachText = editor.message;
   }
+  coachTextEl.textContent = coachText;
+  root.querySelector<HTMLElement>('.pr-edit__rail-coach-text')!.textContent = coachText;
+}
+
+/** Update the wide-screen rail's header + active/done rows. The rail is static
+ *  structure built once, so its nodes are queried here rather than cached. */
+function renderRail(step: EditorStep, n: number | undefined): void {
+  root.querySelector<HTMLElement>('.pr-edit__rail-title')!.textContent =
+    strings.editor.stepTitle[step] ?? '';
+  root.querySelectorAll<HTMLElement>('.pr-edit__rail-step').forEach((row, i) => {
+    row.classList.toggle('pr-edit__rail-step--done', n !== undefined && i + 1 < n);
+    row.classList.toggle('pr-edit__rail-step--active', n !== undefined && i + 1 === n);
+  });
 }

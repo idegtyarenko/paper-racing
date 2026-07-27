@@ -9,7 +9,7 @@
     <title>Paper Racing</title>
     <link rel="icon" href="/paper-racing/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/paper-racing/apple-touch-icon.png" />
-    <meta name="theme-color" content="#0a8a4f" />
+    <meta name="theme-color" content="#0d3252" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Paper Racing" />
@@ -82,12 +82,22 @@
           <button id="backBtn" class="button button--center" data-i18n="buttons.back">
             ← Back
           </button>
-          <button
-            id="joinByCode"
-            class="button button--center"
-            data-i18n="online.joinByCode"
-          >
-            🌐 Join by race code
+          <button id="joinByCode" class="button button--center" type="button">
+            <span class="join-ico" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="9" />
+                <ellipse cx="12" cy="12" rx="4" ry="9" />
+                <path d="M3 12h18M4.5 7.5h15M4.5 16.5h15" />
+              </svg>
+            </span>
+            <span data-i18n="online.joinByCode"></span>
           </button>
         </div>
         <div id="modeButtons" class="panel__group" hidden>

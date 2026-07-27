@@ -146,7 +146,7 @@ export const be: Strings = {
     namePrompt: 'Як\u00A0цябе зваць?',
     namePlaceholder: 'Імя гоншчыка',
     create: 'Стварыць гонку',
-    joinByCode: '🌐 Увайсці па\u00A0кодзе гонкі',
+    joinByCode: 'Увайсці ў анлайн-гульню',
     joinTitle: 'Увайсці ў\u00A0гонку',
     codePlaceholder: 'Код гонкі',
     joinSubmit: 'Увайсці',

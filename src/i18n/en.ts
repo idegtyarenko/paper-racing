@@ -192,7 +192,7 @@ export const en = {
     namePlaceholder: 'Racer name',
     create: 'Create race',
     // Join by code.
-    joinByCode: '🌐 Join by race code',
+    joinByCode: 'Join online game',
     joinTitle: 'Join a race',
     codePlaceholder: 'Race code',
     joinSubmit: 'Join',

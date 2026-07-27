@@ -145,7 +145,7 @@ export const ru: Strings = {
     namePrompt: 'Как тебя зовут?',
     namePlaceholder: 'Имя гонщика',
     create: 'Создать гонку',
-    joinByCode: '🌐 Войти по коду гонки',
+    joinByCode: 'Войти в онлайн-игру',
     joinTitle: 'Войти в гонку',
     codePlaceholder: 'Код гонки',
     joinSubmit: 'Войти',
