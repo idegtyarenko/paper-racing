@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Vec, Polyline, closedNormals, lerp } from '../geometry';
 import { WidthModel, autoFinishIndex } from './centerline';
+import { strings } from '../i18n';
 import {
   newEditor,
   pointerDown,
@@ -9,6 +10,7 @@ import {
   confirmEdges,
   confirmFinish,
   confirmDirection,
+  pointerCancel,
 } from './editor';
 
 /** A closed "stadium" centerline: two horizontal straights joined by semicircle
@@ -130,5 +132,25 @@ describe('editor auto-placed finish + pre-selected direction', () => {
     confirmDirection(st);
     expect(st.step).toBe('ready');
     expect(st.forward).not.toBeNull();
+  });
+});
+
+describe('editor errors vs. step hints', () => {
+  it('flags a cancelled gesture as an error (toast), not a step hint', () => {
+    const st = drawLoop(ellipseStroke());
+    confirmEdges(st);
+    pointerDown(st, { x: 60, y: 60 });
+    pointerCancel(st);
+    expect(st.error).toBe(true);
+    expect(st.message).toBe(strings.editor.gestureCancelled);
+  });
+
+  it('clears the error on the next gesture in every step, so it can re-toast', () => {
+    const st = drawLoop(ellipseStroke());
+    expect(st.step).toBe('adjust');
+    pointerCancel(st);
+    pointerDown(st, { x: 60, y: 60 });
+    expect(st.error).toBe(false);
+    expect(st.message).toBe(strings.editor.step.adjust);
   });
 });

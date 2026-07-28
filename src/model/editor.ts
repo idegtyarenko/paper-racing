@@ -94,13 +94,14 @@ function fail(st: EditorState, message: string): void {
 }
 
 export function pointerDown(st: EditorState, p: Vec, tol = 1.2): void {
+  // A fresh attempt clears the previous error/prompt (so, e.g., a second
+  // self-crossing draw or a second cancelled gesture re-shows the error toast
+  // rather than being deduped).
+  st.error = false;
+  st.message = MSG[st.step];
   if (st.step === 'center') {
     st.drawing = true;
     st.stroke = [p];
-    // A fresh attempt clears the previous error/prompt (so, e.g., a second
-    // self-crossing draw re-shows the error toast rather than being deduped).
-    st.error = false;
-    st.message = MSG.center;
   } else if (st.step === 'adjust' && st.width) {
     const pick = pickEdge(st.width, p, tol);
     if (pick) {
@@ -116,7 +117,6 @@ export function pointerDown(st: EditorState, p: Vec, tol = 1.2): void {
     for (const arrow of st.arrows) {
       if (distPointToSegment(p, arrow.from, arrow.tip) < tol) {
         st.forward = arrow.forward;
-        st.error = false;
         return;
       }
     }
@@ -236,8 +236,7 @@ export function pointerCancel(st: EditorState): void {
   st.dragEdge = null;
   st.dragIndex = null;
   if (st.step === 'finish') st.finish = null;
-  st.message = strings.editor.gestureCancelled;
-  st.error = false;
+  fail(st, strings.editor.gestureCancelled);
 }
 
 /**
