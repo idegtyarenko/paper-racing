@@ -219,6 +219,7 @@ class SwDebugImpl implements SwDebug {
     this.buildOverlay();
     this.render();
     this.logBootSnapshot();
+    this.wireViewportSignals();
     this.wireResumeSignals();
     this.wireControllerChange();
   }
@@ -269,6 +270,24 @@ class SwDebugImpl implements SwDebug {
       );
       this.refreshState();
     });
+  }
+
+  /** Viewport geometry: once at boot (after layout has settled) and on every
+   *  resize/orientation change. This is what tells us whether the navy strip
+   *  under the board on iOS standalone is inside the page (a CSS problem) or
+   *  below the web view (a viewport-fit/install problem). */
+  private wireViewportSignals(): void {
+    const snap = (tag: string) => this.log(`${tag} ${viewportSnapshot()}`);
+    // setTimeout, not rAF: rAF is starved in a background tab, and the boot
+    // snapshot must land even if the app was launched into the background.
+    setTimeout(() => snap('boot'), 400);
+    let t = 0;
+    const onResize = () => {
+      clearTimeout(t);
+      t = window.setTimeout(() => snap('resize'), 250);
+    };
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
   }
 
   /** Signals of returning to the foreground — logged only (the fix is phase 2). */
@@ -478,6 +497,51 @@ function mkBtn(label: string, onClick: () => void): HTMLButtonElement {
   b.textContent = label;
   b.addEventListener('click', onClick);
   return b;
+}
+
+/** Measured `env(safe-area-inset-*)` values, in CSS px. Read off a hidden probe
+ *  element: there's no JS API for the insets, and they're the only way to tell
+ *  whether `viewport-fit=cover` is actually in effect (all-zero insets on a
+ *  notched iPhone in standalone = it is NOT — the web view is inset by the
+ *  system, and no CSS inside the page can reach the strip below it). */
+function safeAreaInsets(): { t: number; r: number; b: number; l: number } {
+  const probe = document.createElement('div');
+  probe.style.cssText =
+    'position:fixed;top:0;left:0;visibility:hidden;pointer-events:none;' +
+    'padding:env(safe-area-inset-top) env(safe-area-inset-right) ' +
+    'env(safe-area-inset-bottom) env(safe-area-inset-left)';
+  document.body.appendChild(probe);
+  const cs = getComputedStyle(probe);
+  const px = (v: string): number => Math.round(parseFloat(v) || 0);
+  const out = {
+    t: px(cs.paddingTop),
+    r: px(cs.paddingRight),
+    b: px(cs.paddingBottom),
+    l: px(cs.paddingLeft),
+  };
+  probe.remove();
+  return out;
+}
+
+/** One-line snapshot of everything that decides whether the board reaches the
+ *  bottom edge on iOS standalone: the viewport heights, the safe-area insets
+ *  and where the canvas actually ends. */
+function viewportSnapshot(): string {
+  const vv = window.visualViewport;
+  const sa = safeAreaInsets();
+  const board = document.getElementById('board')?.getBoundingClientRect();
+  return (
+    `vp: inner=${window.innerWidth}x${window.innerHeight} ` +
+    `screen=${screen.width}x${screen.height} ` +
+    (vv
+      ? `vv=${Math.round(vv.width)}x${Math.round(vv.height)}@${Math.round(vv.offsetTop)} `
+      : '') +
+    `safe=t${sa.t}/r${sa.r}/b${sa.b}/l${sa.l} ` +
+    (board
+      ? `board=${Math.round(board.width)}x${Math.round(board.height)}@y${Math.round(board.top)} `
+      : 'board=none ') +
+    `dpr=${window.devicePixelRatio} standalone=${isStandalone()}`
+  );
 }
 
 /** Whether launched from a home-screen shortcut (iOS standalone / display-mode). */
