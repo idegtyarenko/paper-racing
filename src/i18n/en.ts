@@ -65,6 +65,22 @@ export const en = {
     gestureCancelled: "That didn't take\u00A0— try again.",
   },
 
+  // The step navigation shared by track drawing and race preparation
+  // (ui/wizard-nav.ts): the desktop rail's heading, short labels for the two
+  // steps that aren't editor steps, and the warning for a back-jump that would
+  // throw the drawing away.
+  wizard: {
+    /** Heading of the desktop step rail — what the whole six-step run is for. */
+    title: 'Race setup',
+    /** Step labels for mode select and race setup (the editor's four come from
+     *  `editor.stepTitle`). Short: they sit in a 220px rail. */
+    stepMode: 'Mode',
+    stepSetup: 'Settings',
+    /** Jumping back past the drawing steps discards the track — confirm first. */
+    resetWarn: 'Going back that far erases the track you drew.',
+    resetYes: 'Erase and go back',
+  },
+
   // Global (burger) menu — reachable from the editor's top-left menu button.
   menu: {
     title: 'Menu',

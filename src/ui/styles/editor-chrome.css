@@ -23,44 +23,6 @@ body.is-setup .app__board {
   inset: 0;
 }
 
-/* ── Top strip extras: the wizard's counter + 4-segment progress. The bar
-      itself, its icon button and the title are the shared .pr-topbar. ──────── */
-.pr-edit__titlerow {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-}
-.pr-edit__counter {
-  flex: 0 0 auto;
-  font-family: var(--pr-mono);
-  font-weight: 600;
-  font-size: 11px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--pr-accent);
-}
-.pr-edit__progress {
-  display: flex;
-  gap: 6px;
-}
-.pr-edit__seg {
-  flex: 1;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(127, 211, 255, 0.25);
-  transition:
-    background 0.35s ease,
-    opacity 0.35s ease;
-}
-.pr-edit__seg--done {
-  background: var(--pr-ink);
-  opacity: 0.5;
-}
-.pr-edit__seg--active {
-  background: var(--pr-accent);
-}
-
 /* ── Coach-mark: travels between steps (the motion is the attention cue) ────── */
 .pr-coach {
   position: absolute;
@@ -222,89 +184,11 @@ body[data-edit-step='center'] #board.grabbing {
   cursor: grabbing;
 }
 
-/* ── Wide-screen rail: step list (design "3A · Desktop"). Gated by screen width
-   (not hover) so tablets get it too; replaces the mobile top strip + coach. ─── */
-.pr-edit__rail {
-  display: none;
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  width: 220px;
-  padding: calc(env(safe-area-inset-top, 0px) + 26px) 22px
-    calc(env(safe-area-inset-bottom, 0px) + 22px);
-  flex-direction: column;
-  gap: 22px;
-  background: var(--pr-panel);
-  border-right: 1px solid var(--pr-border-dim);
-  backdrop-filter: blur(6px);
-}
-.pr-edit__rail-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-/* Smaller than the 48px top-bar burger — the rail is tight and pointer-driven. */
-.pr-edit__rail-burger {
-  width: 30px;
-  height: 30px;
-  border-radius: 7px;
-}
-.pr-edit__rail-burger .pr-btn__ico svg {
-  width: 16px;
-  height: 16px;
-}
-.pr-edit__rail-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.pr-edit__rail-step {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  opacity: 0.45;
-  transition: opacity 0.35s ease;
-}
-.pr-edit__rail-step--active,
-.pr-edit__rail-step--done {
-  opacity: 1;
-}
-.pr-edit__rail-num {
-  flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-family: var(--pr-mono);
-  font-weight: 700;
-  font-size: 11.5px;
-  border: 1px solid var(--pr-edge);
-  color: var(--pr-edge);
-}
-.pr-edit__rail-step--active .pr-edit__rail-num {
-  background: var(--pr-accent);
-  border-color: var(--pr-accent);
-  color: var(--pr-accent-ink);
-  font-weight: 800;
-}
-.pr-edit__rail-step--done .pr-edit__rail-num {
-  background: var(--pr-ink);
-  border-color: var(--pr-ink);
-  color: var(--pr-board);
-}
-.pr-edit__rail-label {
-  font-size: 13px;
-  color: var(--pr-ink-soft);
-}
-.pr-edit__rail-step--active .pr-edit__rail-label {
-  color: var(--pr-ink);
-  font-weight: 700;
-}
-.pr-edit__rail-coach {
-  margin-top: auto;
+/* ── The coach card the editor mounts into the rail's bottom slot (wide screens
+   only — the phone keeps the floating .pr-coach above). ─────────────────────── */
+/* Scoped to :not([hidden]) so the flex display never overrides the hidden
+   attribute that takes the card away past the drawing steps. */
+.pr-edit__rail-coach:not([hidden]) {
   display: flex;
   align-items: flex-start;
   gap: 9px;
@@ -317,18 +201,12 @@ body[data-edit-step='center'] #board.grabbing {
 }
 
 @media (min-width: 700px) {
-  .pr-edit__top {
-    display: none;
-  }
   .pr-edit .pr-coach {
     display: none;
   }
-  .pr-edit__rail {
-    display: flex;
-  }
   /* Action bar: clear the rail and hug the right, buttons sized to content. */
   .pr-edit__bar {
-    left: calc(220px + 24px);
+    left: calc(var(--pr-rail-w) + 24px);
     justify-content: flex-end;
   }
   .pr-edit__bar #nextBtn {

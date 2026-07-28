@@ -77,6 +77,8 @@
   --pr-error-ink: #ffe6e6;
   /* Shape. */
   --pr-gutter: 16px; /* side margin every full-width floating element aligns to */
+  --pr-nav-h: 48px; /* phone step strip — what floating content below it clears */
+  --pr-rail-w: 220px; /* wide-screen step rail — what the screens beside it clear */
   --pr-radius: 8px;
   --pr-radius-lg: 12px;
   --pr-radius-pill: 999px;

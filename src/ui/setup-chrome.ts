@@ -1,6 +1,9 @@
-// Mode select + race setup (Blueprint redesign): the floating screens shown
-// between the editor and the race. Built here (their owner module) and mounted
-// into .app__board on first show, rather than living statically in index.html.
+// Mode select + race setup (Blueprint redesign): steps 5 and 6 of the run-up to
+// a race, shown between the editor and the grid. Built here (their owner module)
+// and mounted into .app__board on first show, rather than living statically in
+// index.html. The step title, counter and progress come from the shared step
+// navigation (wizard-nav.ts), the same one the drawing steps use — this module
+// only owns the two screens' content and their actions.
 //
 // Mode select is a list of cards ("who's playing?"); race setup is one card with
 // three tabs — Lineup (humans/bots/difficulty, clamped to the starting grid),
@@ -14,16 +17,7 @@ import { Difficulty } from '../model/ai';
 import { strings } from '../i18n';
 import { bindTap } from './dom';
 import { mountRulesEditor, RulesEditor } from './rules-editor';
-import {
-  el,
-  button,
-  icon,
-  buildTopbar,
-  buildItem,
-  BACK_SVG,
-  ARROW_SVG,
-  GLOBE_SVG,
-} from './pr-chrome';
+import { el, button, icon, buildItem, ARROW_SVG, GLOBE_SVG } from './pr-chrome';
 
 const board = document.querySelector('.app__board')!;
 
@@ -63,7 +57,8 @@ export interface SetupHandlers {
 let handlers: SetupHandlers;
 let built = false;
 let root: HTMLElement;
-let title: HTMLElement;
+let modeScreen: HTMLElement;
+let setupScreen: HTMLElement;
 let onlineCard: HTMLButtonElement;
 let startBtn: HTMLButtonElement;
 let rulesEditor: RulesEditor;
@@ -141,18 +136,14 @@ function build(): void {
   root = el('div', 'pr-layer pr-setup');
   root.hidden = true;
 
-  const top = buildTopbar(root, {
-    iconSvg: BACK_SVG,
-    label: strings.buttons.back,
-    onTap: () =>
-      root.dataset.screen === 'mode' ? handlers.onModeBack() : handlers.onSetupBack(),
-  });
-  title = top.title;
-
   const body = el('div', 'pr-setup__body', root);
 
   // ── Mode select: the three cards ──────────────────────────────────────────
-  const modes = el('div', 'pr-setup__modes', body);
+  // Each screen is its own element in the column (rather than parts of one
+  // screen shown and hidden): they are the two steps a slide transition will
+  // move independently.
+  modeScreen = el('div', 'pr-setup__screen pr-setup__screen--mode', body);
+  const modes = el('div', 'pr-setup__modes', modeScreen);
   modeCard(modes, CHIP_SVG, strings.modeSelect.ai, strings.modeSelect.aiSub, () =>
     handlers.onModeAI(),
   );
@@ -168,7 +159,8 @@ function build(): void {
   );
 
   // ── Race setup: the tabbed card ───────────────────────────────────────────
-  const card = el('div', 'pr-card pr-card--lg pr-setup__card', body);
+  setupScreen = el('div', 'pr-setup__screen pr-setup__screen--setup', body);
+  const card = el('div', 'pr-card pr-card--lg pr-setup__card', setupScreen);
   const tabRow = el('div', 'pr-setup__tabs', card);
   const addTab = (key: SetupTab, label: string): void => {
     const b = button('pr-setup__tab', tabRow);
@@ -218,8 +210,9 @@ function build(): void {
 
   rulesEditor = mountRulesEditor({ drive: panes.drive!, rules: panes.rules! });
 
-  // ── Actions (aligned to the same gutter as everything else). On wide screens
-  //    the top bar gives way to the rail, so Back joins this row. ────────────
+  // ── Actions (aligned to the same gutter as everything else). Back lives here
+  //    on every width: the top strip is the wizard's now, and its leading button
+  //    is the burger. ─────────────────────────────────────────────────────────
   const actions = el('div', 'pr-setup__actions', body);
   const backBtn = button('pr-btn pr-setup__back', actions);
   backBtn.textContent = strings.buttons.back;
@@ -338,11 +331,13 @@ export function renderSetupChrome(phase: Phase, playersMax: number): void {
     return;
   }
 
-  const mode = phase === 'modeSelect' ? 'mode' : 'setup';
-  root.dataset.screen = mode;
+  const onMode = phase === 'modeSelect';
+  root.dataset.screen = onMode ? 'mode' : 'setup';
   root.dataset.mode = phase === 'ai' ? 'ai' : 'hotseat';
-  title.textContent =
-    phase === 'modeSelect' ? strings.modeSelect.title : strings.setup.title;
+  modeScreen.hidden = !onMode;
+  setupScreen.hidden = onMode;
+  // Mode select has nothing to start yet — its action row is just Back.
+  startBtn.hidden = onMode;
 
   if (phase !== 'modeSelect') {
     // Entering the setup screen: always open on Lineup, and hand the editor a

@@ -1,39 +1,42 @@
-/* Mode select + race setup (Blueprint redesign): floating screens over the
-   board, owned/built by ui/setup-chrome.ts. The shared pieces (top bar, cards,
-   buttons, segmented options, rules editor) come from pr-controls.css — only
-   these screens' layout lives here. Both screens align every full-width element
-   to --pr-gutter, like the top bar. */
+/* Mode select + race setup (Blueprint redesign): steps 5 and 6 of the wizard,
+   floating over the board, owned/built by ui/setup-chrome.ts. The shared pieces
+   (cards, buttons, segmented options, rules editor) come from pr-controls.css,
+   the step strip/rail from wizard-nav.css — only these screens' layout lives
+   here. Both align every full-width element to --pr-gutter, like the strip. */
 
-/* Everything below the top bar: the screen's content column, ending in the
-   pinned action button. */
+/* Everything below the step strip: the screen's content column, ending in the
+   pinned action row. */
 .pr-setup__body {
   position: absolute;
   left: var(--pr-gutter);
   right: var(--pr-gutter);
-  /* Clear the 48px top bar. */
-  top: calc(env(safe-area-inset-top, 0px) + var(--pr-gutter) + 48px + 12px);
+  top: calc(env(safe-area-inset-top, 0px) + var(--pr-gutter) + var(--pr-nav-h) + 12px);
   bottom: calc(env(safe-area-inset-bottom, 0px) + var(--pr-gutter));
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-/* Which parts belong to which screen. Mode select has nothing to start, so on
-   phones its action row disappears entirely (Back lives in the top bar). */
-.pr-setup[data-screen='mode'] .pr-setup__card,
-.pr-setup[data-screen='mode'] .pr-setup__actions,
-.pr-setup[data-screen='mode'] .pr-setup__start,
-.pr-setup[data-screen='setup'] .pr-setup__modes,
-.pr-setup__back {
-  display: none;
+/* One step's content. Scoped to :not([hidden]) so the flex display never
+   overrides the hidden attribute that switches steps (same for the start
+   button, which only step 6 has). */
+.pr-setup__screen:not([hidden]) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 .pr-setup__actions {
   flex: 0 0 auto;
   display: flex;
   gap: 10px;
 }
-.pr-setup__start {
+.pr-setup__back {
+  flex: 0 0 auto;
+}
+.pr-setup__start:not([hidden]) {
   flex: 1;
+  display: flex;
 }
 
 /* The board behind these screens is just a backdrop — no panning or zooming to
@@ -119,26 +122,24 @@ body.is-setup .zoom-ctl {
   transform: none;
 }
 
-/* ── Wide screens: the content becomes a right-hand rail beside the board,
-      mirroring the editor's desktop treatment (design "desktop shell"). ────── */
+/* ── Wide screens: the content becomes a panel that slides out of the step
+      rail — it starts where the rail ends, so the two read as one shell
+      (design "desktop shell"). ─────────────────────────────────────────────── */
 @media (min-width: 700px) {
-  .pr-setup .pr-topbar {
-    display: none;
-  }
   .pr-setup__body {
-    left: auto;
+    left: var(--pr-rail-w);
     top: 0;
-    right: 0;
+    right: auto;
     bottom: 0;
     width: min(400px, 42vw);
     padding: calc(env(safe-area-inset-top, 0px) + 22px) 22px
       calc(env(safe-area-inset-bottom, 0px) + 22px);
     gap: 14px;
     background: var(--pr-panel);
-    border-left: 1px solid var(--pr-border-dim);
+    border-right: 1px solid var(--pr-border-dim);
     backdrop-filter: blur(6px);
   }
-  /* Inside the rail the card is the rail — drop the doubled surface. */
+  /* Inside the panel the card *is* the panel — drop the doubled surface. */
   .pr-setup__card {
     background: none;
     border: none;
@@ -148,16 +149,7 @@ body.is-setup .zoom-ctl {
   .pr-setup__pane:not([hidden]) {
     padding: 20px 0 0;
   }
-  /* Back moves into the action row (there's no floating top bar here) — and
-     mode select gets an action row for exactly that reason. */
-  .pr-setup[data-screen='mode'] .pr-setup__actions {
-    display: flex;
-  }
   .pr-setup__actions {
     margin-top: auto;
-  }
-  .pr-setup__back {
-    display: flex;
-    flex: 0 0 auto;
   }
 }

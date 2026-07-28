@@ -38,6 +38,8 @@ import {
 } from './ui/panel';
 import { renderTurnQueue } from './ui/turn-queue';
 import { initEditorChrome, renderEditorChrome } from './ui/editor-chrome';
+import { initWizardNav, renderWizardNav, wizardSteps } from './ui/wizard-nav';
+import { openConfirm } from './ui/confirm';
 import { initMenu } from './ui/menu';
 import {
   initSetupChrome,
@@ -191,6 +193,7 @@ function updateUI(): void {
   renderStandings(S.phase === 'race' ? S.game : null, S.raceNav);
   renderEditorChrome(S.editor, S.phase);
   renderSetupChrome(S.phase, S.raceTrack?.startPoints.length ?? 6);
+  renderWizardNav(S.phase, S.editor.step, S.playersReturn);
 }
 
 /** Can this client move right now: in a local game, always (except during a
@@ -375,6 +378,37 @@ function backFromSetup(): void {
 }
 
 /**
+ * Jump back to an already-passed wizard step (a tap on the step rail): exactly
+ * as many "Back"s as the player would have pressed, through the same
+ * transitions. Reaching the drawing step resets the centerline (stepBack →
+ * resetCenter), so that one jump asks first — everything else is reversible
+ * enough to just happen.
+ */
+function goToWizardStep(target: number): void {
+  const at = (): number => wizardSteps(S.phase, S.editor.step, S.playersReturn).active;
+  if (target < 0 || at() < 0 || target >= at()) return;
+
+  const oneStepBack = (): void => {
+    if (S.phase === 'players' || S.phase === 'ai') S.phase = 'modeSelect';
+    else if (S.phase === 'modeSelect') backFromSetup();
+    else stepBack(S.editor);
+  };
+  const run = (): void => {
+    // Bounded: a transition that refuses to move must not spin the loop.
+    for (let guard = 0; guard < 10 && at() > target; guard++) oneStepBack();
+    commit();
+  };
+
+  // Step 1 exists only in a run that starts in the editor; coming from a race
+  // ("same track") there is nothing to erase.
+  if (target === 0 && S.playersReturn === 'edit') {
+    openConfirm(strings.wizard.resetWarn, strings.wizard.resetYes, run);
+  } else {
+    run();
+  }
+}
+
+/**
  * Start a local race on the prepared track: `humans` seats first, then
  * `bots` seats at the given difficulty. Bots sit in the trailing seats
  * (seat index), but starting cells are handed out by a random permutation
@@ -520,6 +554,10 @@ bindButtons({
   onRaceShare: () => online.share(),
   onRetire: () => retire(),
 });
+
+// Step navigation for all six wizard steps. Built before the editor chrome,
+// which mounts its coach card into the rail this owns.
+initWizardNav({ onJumpTo: (index) => goToWizardStep(index) });
 
 // Build the full-bleed editor chrome and re-home the wizard buttons into it.
 // Must run after bindButtons (which captured the button elements) — re-parenting
