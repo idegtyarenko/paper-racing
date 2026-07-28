@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { newGame } from './game';
 import { buildNavField } from './nav';
-import { computeStandings } from './standings';
+import { computeStandings, moveCount } from './standings';
 import { WIN_CROSSINGS } from '../config';
 import { ringTrack } from './test-fixtures';
 
@@ -45,5 +45,43 @@ describe('computeStandings', () => {
     // p1 has already crossed the finish the required number of times (place not yet assigned — round is still open).
     g.players[1].crossings = WIN_CROSSINGS;
     expect(computeStandings(g, nav)[0]).toBe(1);
+  });
+});
+
+describe('moveCount', () => {
+  /** A normal (driven) trail segment between two arbitrary points. */
+  const seg = (n: number) => ({
+    from: { x: n, y: 0 },
+    to: { x: n + 1, y: 0 },
+    jump: false,
+  });
+
+  it('counts one per driven segment', () => {
+    const { g } = setup();
+    g.players[0].trail = [seg(0), seg(1), seg(2)];
+    expect(moveCount(g.players[0])).toBe(3);
+  });
+
+  it('is zero before the first move', () => {
+    const { g } = setup();
+    expect(moveCount(g.players[0])).toBe(0);
+  });
+
+  it("doesn't count the teleport back onto the track after a crash", () => {
+    const { g } = setup();
+    // returnFromPenalty pushes a `jump` segment: the car is moved, but the
+    // player never spent a move on it.
+    g.players[0].trail = [seg(0), seg(1), { ...seg(2), jump: true }, seg(3)];
+    expect(moveCount(g.players[0])).toBe(3);
+  });
+
+  it('counts nothing for turns spent serving a penalty', () => {
+    const { g } = setup();
+    // A skipped pit turn pushes no segment at all, so a car sitting in the
+    // gravel keeps the count it had.
+    const p = g.players[0];
+    p.trail = [seg(0), seg(1)];
+    p.skipTurns = 2;
+    expect(moveCount(p)).toBe(2);
   });
 });
