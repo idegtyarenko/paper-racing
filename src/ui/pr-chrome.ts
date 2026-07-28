@@ -4,6 +4,8 @@
 // each screen's owner module (editor-chrome.ts, setup-chrome.ts) stays about its
 // own layout and state.
 
+import { Difficulty } from '../model/ai';
+
 /** Create an element with a class, optionally appending it to a parent. */
 export function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -45,6 +47,12 @@ export const RULES_SVG =
 /** Globe with meridians — the online mode card and "join by code". */
 export const GLOBE_SVG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18M4.5 7.5h15M4.5 16.5h15"/></svg>';
+/** Two offset sheets — "copy to clipboard", on the room-code button. */
+export const COPY_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+/** Three linked nodes — the share sheet / invite link. */
+export const SHARE_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>';
 export const LANG_SVG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg>';
 
@@ -93,6 +101,186 @@ export function buildBrand(
     );
   }
   return brand;
+}
+
+// ── Online-lobby components ─────────────────────────────────────────────────
+// Room code, roster and the waiting banner are the same three blocks on both
+// lobby screens — the host's (inside race setup) and the guest's — so they live
+// here rather than in either owner module.
+
+/** The room code with its two actions: tap the code to copy, the button to share. */
+export interface CodeBlock {
+  root: HTMLElement;
+  /** Show a code (the room's) — call on every render, it's cheap. */
+  set(code: string): void;
+}
+
+export function buildCode(
+  parent: HTMLElement,
+  opts: { onCopy: () => void; onShare: () => void },
+): CodeBlock {
+  const root = el('div', 'pr-code', parent);
+  const codeBtn = button('pr-code__value', root);
+  const text = el('span', 'pr-code__text', codeBtn);
+  icon('pr-code__ico', COPY_SVG, codeBtn);
+  codeBtn.addEventListener('click', opts.onCopy);
+  const shareBtn = button('pr-btn pr-btn--icon pr-code__share', root);
+  icon('pr-btn__ico', SHARE_SVG, shareBtn);
+  shareBtn.addEventListener('click', opts.onShare);
+  return { root, set: (code) => (text.textContent = code) };
+}
+
+/** One racer as the roster shows them. `name` may be empty — see renderRoster. */
+export interface RosterPlayer {
+  name: string;
+  color: string;
+  /** This client's own seat: its name is editable in place. */
+  you: boolean;
+  /** Marked with the HOST badge (the client that owns the track). */
+  host: boolean;
+  /** Not currently connected — the row dims and says so. */
+  offline: boolean;
+}
+
+export interface Roster {
+  root: HTMLElement;
+  /**
+   * Draw the roster. `emptyNote` (when given) is the dashed line shown under a
+   * roster of one — "share the code, nobody's here yet".
+   */
+  render(players: RosterPlayer[], emptyNote?: string | null): void;
+}
+
+/**
+ * The player list. Rows are reused across renders rather than rebuilt: your own
+ * row holds a live <input> for your name, and replacing it mid-render would
+ * drop the caret on every keystroke (each one echoes back through realtime).
+ *
+ * A player who hasn't typed a name yet reads as their car's colour to everyone
+ * else — the same fallback the race itself uses — while their own row stays an
+ * empty field with the placeholder, so it still invites a name.
+ */
+export function buildRoster(
+  parent: HTMLElement,
+  opts: { placeholder: string; hostBadge: string; youBadge: string; offline: string },
+  onRename?: (name: string) => void,
+): Roster {
+  const root = el('div', 'pr-roster', parent);
+  const list = el('div', 'pr-roster__list', root);
+  const empty = el('div', 'pr-roster__empty', root);
+  empty.hidden = true;
+
+  interface Row {
+    root: HTMLElement;
+    dot: HTMLElement;
+    name: HTMLElement;
+    input: HTMLInputElement;
+    badge: HTMLElement;
+  }
+  const rows: Row[] = [];
+
+  const addRow = (): Row => {
+    const row = el('div', 'pr-roster__row', list);
+    const dot = el('span', 'pr-roster__dot', row);
+    const name = el('span', 'pr-roster__name', row);
+    const input = el('input', 'pr-roster__input', row);
+    input.type = 'text';
+    input.maxLength = 20;
+    input.placeholder = opts.placeholder;
+    input.hidden = true;
+    if (onRename) {
+      input.addEventListener('input', () => onRename(input.value));
+      // Enter is "I'm done" on a phone keyboard — close it rather than submit
+      // anything (there's no form; the value is already on its way).
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') input.blur();
+      });
+    }
+    const badge = el('span', 'pr-roster__badge', row);
+    return { root: row, dot, name, input, badge };
+  };
+
+  const render = (players: RosterPlayer[], emptyNote?: string | null): void => {
+    while (rows.length > players.length) rows.pop()!.root.remove();
+    while (rows.length < players.length) rows.push(addRow());
+    players.forEach((p, i) => {
+      const row = rows[i];
+      row.root.classList.toggle('pr-roster__row--offline', p.offline);
+      row.root.classList.toggle('pr-roster__row--you', p.you);
+      row.dot.style.background = p.color;
+      row.name.hidden = p.you;
+      row.input.hidden = !p.you;
+      if (p.you) {
+        // Never write over what's being typed — the value is already ours, and
+        // the echo of our own rename would otherwise reset the caret.
+        if (document.activeElement !== row.input) row.input.value = p.name;
+      } else {
+        row.name.textContent = p.name;
+      }
+      const badge = p.host
+        ? opts.hostBadge
+        : p.offline
+          ? opts.offline
+          : p.you
+            ? opts.youBadge
+            : '';
+      row.badge.textContent = badge;
+      row.badge.hidden = !badge;
+      row.badge.classList.toggle('pr-roster__badge--host', p.host);
+    });
+    empty.textContent = emptyNote ?? '';
+    empty.hidden = !emptyNote;
+  };
+
+  return { root, render };
+}
+
+/**
+ * Everything a lobby screen draws. Assembled in one place (online/host-bots.ts)
+ * from the session, and rendered by whichever screen is showing: the host's
+ * lobby is the race-setup card's Lineup tab, the guest's is its own screen.
+ */
+export interface LobbyView {
+  code: string;
+  players: RosterPlayer[];
+  /** Seats on this track's starting grid — the roster's capacity. */
+  seats: number;
+  isHost: boolean;
+  /** Enough racers have joined for the host to start. */
+  canStart: boolean;
+  /** Our own name is still empty — the one thing holding the host back. */
+  needsName: boolean;
+  /** Host-local bot fill (only the host sets these). */
+  botCount: number;
+  maxBots: number;
+  botDifficulty: Difficulty;
+  /** Realtime channel is up — false puts the status banner into its error skin. */
+  connected: boolean;
+  /** The host's start write is in flight. */
+  starting: boolean;
+}
+
+/**
+ * Persistent state banner: a spinner and a line of text that stays put for as
+ * long as the state lasts ("waiting for the host", "reconnecting"). Deliberately
+ * NOT the toast — a toast auto-dismisses, and this has to survive the wait.
+ */
+export interface StatusBanner {
+  root: HTMLElement;
+  set(text: string, error?: boolean): void;
+}
+
+export function buildStatus(parent: HTMLElement): StatusBanner {
+  const root = el('div', 'pr-status', parent);
+  el('span', 'pr-status__spinner', root);
+  const text = el('span', 'pr-status__text', root);
+  return {
+    root,
+    set(t, error = false) {
+      text.textContent = t;
+      root.classList.toggle('pr-status--error', error);
+    },
+  };
 }
 
 export interface Topbar {

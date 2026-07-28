@@ -14,9 +14,7 @@
 import { GameState, Candidate, cloneState, isFinished } from '../model/game';
 import { applyMove, retireSeat } from '../model/turns';
 import { editorFromTrack } from '../model/editor';
-import { setLobbyStarting } from '../ui/lobby';
 import {
-  openNameDialog,
   openJoinDialog,
   showJoinError,
   showToast,
@@ -26,6 +24,7 @@ import {
 import { closeOverlay } from '../ui/dom';
 import { openConfirm } from '../ui/confirm';
 import { AppState } from '../app-state';
+import { RENAME_DEBOUNCE_MS } from '../config';
 import { setMoveSendState } from '../ui/panel';
 import { strings } from '../i18n';
 import * as session from './online';
@@ -266,7 +265,7 @@ const handlers: OnlineHandlers = {
   onLobby: () => {
     // We're in a live lobby — remember the code for resuming after a disconnect (idempotent).
     rememberSession(session.getCode()!);
-    if (deps.state.phase === 'lobby') hostBots.renderLobbyPanel();
+    if (deps.state.phase === 'lobby') deps.updateUI();
   },
   onGameState: (g) => {
     // An incoming authoritative state overrides our own unfinished/failed move: clear
@@ -306,7 +305,7 @@ const handlers: OnlineHandlers = {
     pendingCand = null;
     setMoveSendState('idle');
     setConnBanner(false);
-    setLobbyStarting(false);
+    hostBots.setLobbyStarting(false);
     showToast(strings.online.closed);
     deps.resetToEdit();
   },
@@ -320,7 +319,6 @@ const handlers: OnlineHandlers = {
     turnWatch.armTurnWatch();
     if (deps.state.phase === 'lobby') {
       turnWatch.pruneAbsentLobby();
-      hostBots.renderLobbyPanel();
     }
     deps.updateUI();
   },
@@ -336,7 +334,6 @@ function hostOnline(name: string): Promise<void> {
       await session.host(raceTrack, name, handlers);
       deps.state.phase = 'lobby';
       deps.updateUI();
-      hostBots.renderLobbyPanel();
       deps.redraw();
     } catch {
       showToast(strings.online.error);
@@ -368,15 +365,12 @@ function joinOnline(code: string, name: string, inJoinDialog: boolean): Promise<
       deps.fitToContent(); // center the host's track
       deps.redraw();
       deps.updateUI();
-      if (deps.state.phase === 'lobby') hostBots.renderLobbyPanel();
+      if (deps.state.phase === 'lobby') deps.updateUI();
     } catch (e) {
       if (inJoinDialog) {
         showJoinError(joinErrorText(e));
       } else {
-        openJoinDialog(name, code, (code2, name2) => {
-          rememberName(name2);
-          joinOnline(code2, name2, true);
-        });
+        openJoinDialog(code, (code2) => joinOnline(code2, name, true));
         showJoinError(joinErrorText(e));
       }
     } finally {
@@ -395,7 +389,7 @@ function startOnline(): Promise<void> {
     const raceTrack = deps.state.raceTrack;
     if (!raceTrack || !session.canStart()) return;
     const g = hostBots.buildStartState(raceTrack);
-    setLobbyStarting(true);
+    hostBots.setLobbyStarting(true);
     try {
       await session.start(g);
       if (deps.state.phase !== 'race') {
@@ -408,7 +402,7 @@ function startOnline(): Promise<void> {
     } catch {
       showToast(strings.online.startFailed);
     } finally {
-      setLobbyStarting(false);
+      hostBots.setLobbyStarting(false);
     }
   });
 }
@@ -458,7 +452,7 @@ function leaveLobby(): Promise<void> {
     pendingCand = null;
     setMoveSendState('idle');
     setConnBanner(false);
-    setLobbyStarting(false);
+    hostBots.setLobbyStarting(false);
     const wasHost = deps.state.raceTrack !== null;
     await session.leave();
     if (wasHost) {
@@ -506,39 +500,53 @@ async function copyCode(): Promise<void> {
 
 // ── Intents for panel buttons (bindButtons) and the invite link ─────────────────
 
-/** "Play online": ask for a name and create the game as host. */
+/**
+ * "Play online": create the room straight away, under whatever name we're remembered
+ * by (possibly none). Naming happens in the lobby now — the roster row is the field —
+ * so there's nothing to ask before the room exists.
+ */
 export function promptCreate(): void {
-  openNameDialog(strings.online.create, savedName(), (name) => {
-    rememberName(name);
-    hostOnline(name);
-  });
+  hostOnline(savedName());
 }
 
-/** "Join by code": code+name dialog, errors are shown right in the dialog. */
+/** "Join by code": the code dialog (the name is typed in the lobby), errors in place. */
 export function promptJoin(): void {
-  openJoinDialog(savedName(), '', (code, name) => {
-    rememberName(name);
-    joinOnline(code, name, true);
-  });
+  openJoinDialog('', (code) => joinOnline(code, savedName(), true));
+}
+
+// ── Renaming yourself in the lobby ──────────────────────────────────────────────
+// Called on every keystroke in the roster's name field, so the write is debounced:
+// one RPC per pause, not per character. The local roster is updated immediately
+// (session.rename), so our own row never lags behind the keyboard.
+
+let renameTimer: number | null = null;
+
+export function setName(name: string): void {
+  rememberName(name);
+  // Locally first: the roster row, and with it the gate on "Start race", follow the
+  // keyboard rather than the network.
+  session.setLocalName(name);
+  deps.updateUI();
+  if (renameTimer !== null) clearTimeout(renameTimer);
+  renameTimer = window.setTimeout(() => {
+    renameTimer = null;
+    session.rename(name).catch(() => {
+      // A dropped rename isn't worth interrupting anyone over: the next keystroke
+      // (or the resync on reconnect) writes it again.
+    });
+  }, RENAME_DEBOUNCE_MS);
 }
 
 /**
- * An invite link was opened (?join=CODE): connect to the game.
- * Re-joining a game we're already in the roster of (e.g. after a reload/reconnect) —
- * the name is already known, so skip asking and join right away. First-time joins
- * still ask for a name as before.
+ * An invite link was opened (?join=CODE): connect to the game straight away. Nothing
+ * is asked first — a seat in the lobby is the fastest thing we can give someone who
+ * followed an invite, and the name is typed there. Re-joining a game we're already in
+ * the roster of (a reload/reconnect) keeps the name we're already seated under.
  */
 export async function promptJoinByLink(code: string): Promise<void> {
   const known = await session.memberName(code);
-  if (known) {
-    rememberName(known);
-    joinOnline(code, known, false);
-    return;
-  }
-  openNameDialog(strings.online.joinSubmit, savedName(), (name) => {
-    rememberName(name);
-    joinOnline(code, name, false);
-  });
+  if (known) rememberName(known);
+  joinOnline(code, known ?? savedName(), false);
 }
 
 /** Whether there's a remembered online session we could offer to resume. */
@@ -592,4 +600,4 @@ export function copy(): void {
 // Public API of the sub-modules used by main.ts, exposed through the controller facade:
 // turn context/skip (turn-watch) and lobby bot management (host-bots).
 export { skip, netTurn } from './turn-watch';
-export { addBot, removeBot, setBotDifficulty } from './host-bots';
+export { lobbyView, setBotCount, setBotDifficulty } from './host-bots';

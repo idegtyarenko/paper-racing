@@ -100,76 +100,6 @@
             <span data-i18n="online.joinByCode"></span>
           </button>
         </div>
-        <div id="lobbyButtons" class="panel__group" hidden>
-          <div class="lobby__code">
-            <span class="lobby__code-label" data-i18n="online.codeLabel"></span>
-            <button
-              id="lobbyCode"
-              type="button"
-              class="lobby__code-value"
-              data-i18n-title="online.codeCopied"
-            >
-              —
-            </button>
-          </div>
-          <button
-            id="lobbyShare"
-            class="button button--center"
-            data-i18n="online.share"
-          ></button>
-          <ul id="lobbyRoster" class="lobby__roster"></ul>
-          <div id="lobbyBots" class="lobby__bots" hidden>
-            <span class="setup-row__label" data-i18n="online.botsLabel"></span>
-            <div class="lobby__bots-controls">
-              <button id="lobbyBotRemove" type="button" class="count-btn">−</button>
-              <span id="lobbyBotCount" class="lobby__bots-count">0</span>
-              <button id="lobbyBotAdd" type="button" class="count-btn">+</button>
-            </div>
-            <div id="lobbyBotDifficulty" class="players-select">
-              <button
-                type="button"
-                class="count-btn diff-btn"
-                data-difficulty="easy"
-                data-i18n-title="aiSelect.easy"
-              >
-                🟢
-              </button>
-              <button
-                type="button"
-                class="count-btn diff-btn"
-                data-difficulty="medium"
-                data-i18n-title="aiSelect.medium"
-              >
-                🟡
-              </button>
-              <button
-                type="button"
-                class="count-btn diff-btn"
-                data-difficulty="hard"
-                data-i18n-title="aiSelect.hard"
-              >
-                🔴
-              </button>
-            </div>
-          </div>
-          <button
-            id="lobbySettings"
-            class="button button--center"
-            data-i18n="settings.open"
-            hidden
-          ></button>
-          <button
-            id="lobbyStart"
-            class="button button--primary"
-            data-i18n="online.start"
-            hidden
-          ></button>
-          <button
-            id="lobbyLeave"
-            class="button button--center"
-            data-i18n="online.leave"
-          ></button>
-        </div>
         <div id="raceButtons" class="panel__group" hidden>
           <div class="winner">
             <div class="winner__trophy">🏆</div>
@@ -214,52 +144,6 @@
           data-close
         ></button>
       </div>
-      <div id="settingsSheet" class="sheet" hidden>
-        <h2 class="sheet__title" data-i18n="settings.title"></h2>
-        <div id="settingsTabs" class="seg seg--tabs">
-          <button
-            type="button"
-            class="seg__btn"
-            data-tab="drive"
-            data-i18n="settings.tabDrive"
-          ></button>
-          <button
-            type="button"
-            class="seg__btn"
-            data-tab="rules"
-            data-i18n="settings.tabRules"
-          ></button>
-        </div>
-        <!-- Controls are built by ui/rules-editor.ts into these two hosts. -->
-        <div id="driveTab"></div>
-        <div id="rulesTab" hidden></div>
-        <button
-          class="button button--center"
-          data-i18n="settings.done"
-          data-close
-        ></button>
-      </div>
-      <div id="nameDialog" class="sheet" hidden>
-        <h2 class="sheet__title" data-i18n="online.namePrompt"></h2>
-        <input
-          id="nameInput"
-          class="field"
-          type="text"
-          maxlength="16"
-          autocomplete="off"
-          data-i18n-placeholder="online.namePlaceholder"
-        />
-        <button
-          id="nameConfirm"
-          class="button button--primary"
-          data-i18n="online.create"
-        ></button>
-        <button
-          class="button button--center"
-          data-i18n="buttons.cancel"
-          data-close
-        ></button>
-      </div>
       <div id="joinDialog" class="sheet" hidden>
         <h2 class="sheet__title" data-i18n="online.joinTitle"></h2>
         <input
@@ -271,14 +155,6 @@
           autocapitalize="characters"
           spellcheck="false"
           data-i18n-placeholder="online.codePlaceholder"
-        />
-        <input
-          id="joinNameInput"
-          class="field"
-          type="text"
-          maxlength="16"
-          autocomplete="off"
-          data-i18n-placeholder="online.namePlaceholder"
         />
         <div id="joinError" class="dialog-error" hidden></div>
         <button

@@ -1,0 +1,100 @@
+/* The guest's online lobby (ui/online-lobby.ts): one card between the top bar
+   and the pinned footer. Same skeleton as the setup screen — gutter-aligned
+   column, card in the middle, actions at the bottom — but with no tabs and
+   nothing to configure, so the card is the content itself. Shared pieces (code
+   block, roster, status banner, buttons) come from pr-controls.css. */
+
+.pr-lobby__body {
+  position: absolute;
+  left: var(--pr-gutter);
+  right: var(--pr-gutter);
+  top: calc(env(safe-area-inset-top, 0px) + var(--pr-gutter) + var(--pr-nav-h) + 12px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--pr-gutter));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pr-lobby__card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+  overflow-y: auto;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+
+/* Fixed height: the thumbnail is an identifier, not a view of the race — it
+   shouldn't grow at the roster's expense as players join. */
+.pr-lobby__preview {
+  height: 140px;
+  flex: 0 0 auto;
+}
+
+.pr-lobby__foot {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pr-lobby__leave {
+  padding: 14px;
+  font-size: 12.5px;
+  letter-spacing: 1px;
+}
+.pr-lobby__leave .pr-btn__ico svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* The board behind is a backdrop here (the track is in the card) — same as on
+   the setup screens, the zoom pair steps aside until the race. */
+body.is-lobby .zoom-ctl {
+  display: none;
+}
+
+/* ── Wide screens: the same side panel the setup screen becomes, minus the step
+      rail (a guest isn't in the wizard), so it sits at the window's edge. ───── */
+@media (min-width: 700px) {
+  .pr-lobby__body {
+    left: 0;
+    top: 0;
+    right: auto;
+    bottom: 0;
+    width: min(400px, 42vw);
+    padding: calc(env(safe-area-inset-top, 0px) + 22px) 22px
+      calc(env(safe-area-inset-bottom, 0px) + 22px);
+    /* Clear the top bar, which floats above the panel's own top edge. */
+    padding-top: calc(env(safe-area-inset-top, 0px) + 22px + 48px + 14px);
+    gap: 14px;
+    background: var(--pr-panel);
+    border-right: 1px solid var(--pr-border-dim);
+    backdrop-filter: blur(6px);
+  }
+  /* The panel starts at the window's top edge and paints after the bar (later
+     sibling), so the bar has to be lifted over it — and kept inside the
+     panel's width, where it reads as the panel's header. */
+  .pr-lobby .pr-topbar {
+    z-index: 1;
+    top: calc(env(safe-area-inset-top, 0px) + 22px);
+    left: 22px;
+    right: auto;
+    width: calc(min(400px, 42vw) - 44px);
+  }
+  /* Inside the panel the card *is* the panel — drop the doubled surface. */
+  .pr-lobby__card {
+    background: none;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    /* 2px of left padding, cancelled by .pr-scroll-bleed's negative margin:
+       the content still starts at the panel's gutter, but the scroll box's
+       clip edge sits just outside it. */
+    padding: 0 0 0 2px;
+  }
+  .pr-lobby__foot {
+    margin-top: auto;
+  }
+}

@@ -269,6 +269,22 @@ export async function joinGame(code: string, name: string): Promise<GameRow> {
   return row;
 }
 
+/**
+ * Rename ourselves in the lobby (atomically, via RPC): rewrites just our own roster
+ * entry. Fired while the player types, so it's deliberately fire-and-forget — the
+ * authoritative name comes back through the realtime update like any other change.
+ */
+export async function renamePlayer(code: string, name: string): Promise<void> {
+  const { error } = await withTimeout(
+    db().rpc('rename_player', {
+      p_code: code,
+      p_client_id: clientId(),
+      p_name: name,
+    }),
+  );
+  if (error) throw error;
+}
+
 /** Fetch the game row by code (null if not found or the data is invalid). */
 export async function fetchGame(code: string): Promise<GameRow | null> {
   const { data, error } = await withTimeout(

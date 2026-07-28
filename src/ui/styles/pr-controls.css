@@ -9,6 +9,29 @@
    `.button`/`.seg` rules on elements that carry both (the wizard buttons in
    index.html are re-skinned that way). */
 
+/* ── Redesigned screens take the whole board ────────────────────────────────
+   Each phase whose chrome has been redesigned floats over a full-bleed board
+   and the cream side panel steps aside. One rule for all of them, so a new
+   screen only has to set its body class (is-editing / is-setup / is-lobby). */
+body.is-editing .panel,
+body.is-setup .panel,
+body.is-lobby .panel {
+  display: none;
+}
+body.is-editing .app__board,
+body.is-setup .app__board,
+body.is-lobby .app__board {
+  background: var(--pr-bg);
+}
+
+/* Both lobby screens report the connection themselves (the guest's status
+   banner, the host's hint line above Start), so the global banner would just
+   say it twice. It stays for the race, where nothing else does. */
+body.is-setup #connBanner,
+body.is-lobby #connBanner {
+  display: none;
+}
+
 /* ── Overlay layer: spans the board, only children capture pointer events ───── */
 .pr-layer {
   position: absolute;
@@ -36,6 +59,17 @@
 .pr-card--solid {
   background: var(--pr-panel-solid);
   backdrop-filter: none;
+}
+
+/* Scrolling content whose left edge is the panel's own gutter (no padding of
+   its own): `overflow-y: auto` makes the box clip horizontally too, which
+   shaves the ink of glyphs that overhang their advance width — a Cyrillic «Т»
+   loses the left arm of its bar and reads as «Г». Give the clip a couple of
+   pixels to play with, and take them back off the margin so the content still
+   lines up with everything else. */
+.pr-scroll-bleed {
+  padding-left: 2px;
+  margin-left: -2px;
 }
 
 /* ── Section / screen label: mono caps in blueprint cyan ────────────────────── */
@@ -388,6 +422,253 @@
 }
 .pr-seg__opt:active:not(:disabled) {
   transform: scale(0.98);
+}
+
+/* ── Room code: the code itself copies, the square button shares ───────────── */
+.pr-code {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.pr-code__value {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 8px;
+  border-radius: var(--pr-radius);
+  /* Dashed: the code is something to pass on, not a field to fill in. */
+  border: 1px dashed var(--pr-border);
+  background: rgba(9, 40, 63, 0.5);
+  color: var(--pr-ink);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.pr-code__text {
+  font-family: var(--pr-font);
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: 4px;
+  /* The code is read out loud and typed in by hand — keep the glyphs even. */
+  font-variant-numeric: tabular-nums;
+}
+.pr-code__ico {
+  flex: 0 0 auto;
+  color: var(--pr-edge);
+}
+.pr-code__ico svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
+@media (hover: hover) {
+  .pr-code__value:hover {
+    background: var(--pr-hover);
+    border-color: var(--pr-edge);
+  }
+}
+.pr-code__value:active {
+  transform: scale(0.99);
+  background: var(--pr-press);
+}
+.pr-code__share {
+  height: auto;
+}
+
+/* ── Roster: one row per racer, your own row editable ───────────────────────── */
+.pr-roster {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pr-roster__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pr-roster__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 12px;
+  border-radius: var(--pr-radius);
+  border: 1px solid var(--pr-border);
+  background: rgba(9, 40, 63, 0.5);
+}
+/* Gone from the channel: dimmed, but the seat is still theirs. */
+.pr-roster__row--offline {
+  border-color: var(--pr-border-dim);
+  opacity: 0.55;
+}
+.pr-roster__dot {
+  flex: 0 0 auto;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+}
+.pr-roster__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--pr-font);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--pr-ink);
+}
+.pr-roster__name[hidden] {
+  display: none;
+}
+.pr-roster__input {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 7px;
+  border: 1px solid var(--pr-edge);
+  background: rgba(234, 246, 255, 0.06);
+  outline: none;
+  font-family: var(--pr-font);
+  font-weight: 700;
+  font-size: 14.5px;
+  color: var(--pr-ink);
+}
+.pr-roster__input::placeholder {
+  font-weight: 600;
+  font-style: italic;
+  color: #7fa8c2;
+}
+/* Nothing typed yet: the field reads as an invitation, not as filled in. */
+.pr-roster__input:placeholder-shown {
+  border-color: var(--pr-border);
+}
+.pr-roster__badge {
+  flex: 0 0 auto;
+  font-family: var(--pr-font);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--pr-ink-dim);
+}
+.pr-roster__badge[hidden] {
+  display: none;
+}
+.pr-roster__badge--host {
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--pr-accent);
+  color: var(--pr-accent-ink);
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+/* Alone in the room: a dashed placeholder where the other racers will appear. */
+.pr-roster__empty {
+  padding: 12px 14px;
+  border-radius: var(--pr-radius);
+  border: 1px dashed var(--pr-border-dim);
+  text-align: center;
+  font-family: var(--pr-font);
+  font-weight: 600;
+  font-size: 12px;
+  color: #7fa8c2;
+}
+.pr-roster__empty[hidden] {
+  display: none;
+}
+
+/* ── Status banner: persistent state (waiting / reconnecting) ────────────────
+   Not a toast: it stays for as long as the state does and swaps to the error
+   skin in place, reusing the toast's error tokens. */
+.pr-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 13px 18px;
+  border-radius: var(--pr-radius);
+  border: 1px solid var(--pr-border-dim);
+  background: rgba(9, 40, 63, 0.7);
+  font-family: var(--pr-font);
+  font-weight: 600;
+  font-size: 12.5px;
+  line-height: 1.4;
+  text-align: center;
+  color: var(--pr-ink-soft);
+}
+.pr-status[hidden] {
+  display: none;
+}
+.pr-status--error {
+  background: var(--pr-error-bg);
+  border-color: var(--pr-error);
+  color: var(--pr-error-ink);
+}
+.pr-status__spinner {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 3px solid rgba(127, 211, 255, 0.3);
+  border-top-color: var(--pr-edge);
+  animation: pr-spin 1s linear infinite;
+}
+.pr-status--error .pr-status__spinner {
+  border-color: rgba(255, 93, 93, 0.3);
+  border-top-color: #ff8a8a;
+}
+@keyframes pr-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pr-status__spinner {
+    animation: none;
+  }
+}
+
+/* ── Toast: transient notice ("code copied", a failed send) ─────────────────
+   The counterpart to .pr-status — this one fades on its own, so it carries
+   things you may miss, never state you must be able to come back to. Lives in
+   the shared layer (it was the cream lobby's, and every screen fires it); the
+   editor overrides the skin for its error toast (editor-chrome.css). */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+  transform: translateX(-50%);
+  z-index: 20;
+  max-width: calc(100% - 2 * var(--pr-gutter));
+  padding: 12px 18px;
+  border-radius: var(--pr-radius-lg);
+  border: 1px solid var(--pr-border);
+  background: var(--pr-panel-solid);
+  color: var(--pr-ink);
+  font-family: var(--pr-font);
+  font-weight: 600;
+  font-size: 13.5px;
+  text-align: center;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  animation: toast-in 0.15s ease-out;
+}
+.toast[hidden] {
+  display: none;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 
 /* ── Setting row: label (+ "?" help) over its control ───────────────────────── */

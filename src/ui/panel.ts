@@ -1,13 +1,11 @@
 // Side panel: owns its DOM elements and refreshes them from game state.
-// Dialogs (name/code/toast) and the lobby screen live in sibling modules;
-// bindButtons is the single point where all handlers get wired up, composing
-// their setup.
+// Dialogs (join by code, toasts) live in a sibling module; bindButtons is the
+// single point where all handlers get wired up, composing their setup.
 
 import { KMH_PER_CELL } from '../config';
 import { Phase } from '../app-state';
 import { EditorState, EditorStep, canStepBack } from '../model/editor';
 import { GameState, Player } from '../model/game';
-import { Difficulty } from '../model/ai';
 import { msToClock } from './format';
 import { len } from '../geometry';
 import { strings } from '../i18n';
@@ -15,13 +13,10 @@ import { coarsePointer, bindTap, openSheet, closeOverlay, bindOverlayClose } fro
 import { openConfirm } from './confirm';
 import { div, renderStepStatus, statusElement } from './status';
 import { bindDialogs } from './dialogs';
-import { bindSettings } from './settings';
-import { bindLobby } from './lobby';
 
 const statusEl = statusElement();
 
 const editButtons = document.getElementById('editButtons')!;
-const lobbyButtons = document.getElementById('lobbyButtons')!;
 const raceButtons = document.getElementById('raceButtons')!;
 const backBtn = document.getElementById('backBtn') as HTMLButtonElement;
 const nextBtn = document.getElementById('nextBtn') as HTMLButtonElement;
@@ -63,24 +58,8 @@ export interface PanelHandlers {
   /** Whether an online session is currently active (the results dialog adjusts its buttons accordingly). */
   isOnline: () => boolean;
   onNewTrack: () => void;
-  /** Open the race-rules settings from the lobby (⚙ button, host only). */
-  onLobbySettings: () => void;
   /** Open the join-by-code dialog (from the drawing screen). */
   onJoinByCode: () => void;
-  /** Host starts the online race. */
-  onLobbyStart: () => void;
-  /** Share the race link. */
-  onLobbyShare: () => void;
-  /** Copy the race code. */
-  onLobbyCopyCode: () => void;
-  /** Host: add one more bot to an open lobby seat. */
-  onLobbyBotAdd: () => void;
-  /** Host: remove one bot. */
-  onLobbyBotRemove: () => void;
-  /** Host: difficulty of the bots being added. */
-  onLobbyBotDifficulty: (d: Difficulty) => void;
-  /** Leave the lobby. */
-  onLobbyLeave: () => void;
   /** Skip the turn of a player who's stalling (their car coasts on its momentum). */
   onSkip: () => void;
   /** Tap on the race-code chip above the map — share the race link. */
@@ -260,8 +239,6 @@ export function bindButtons(h: PanelHandlers): void {
     h.onNewTrack();
   });
   bindDialogs();
-  bindSettings();
-  bindLobby(h);
   bindOverlayClose();
 }
 
@@ -441,7 +418,6 @@ export interface PanelCtx {
 export function updatePanel(ctx: PanelCtx): void {
   const { phase, editor, game, net = null, aiTurn = false, canRetire = false } = ctx;
   editButtons.hidden = phase !== 'edit';
-  lobbyButtons.hidden = phase !== 'lobby';
   raceButtons.hidden = phase !== 'race';
   skipBtn.hidden = true; // shown below only during a race, when skipping is available
   retireBtn.hidden = !canRetire; // "Retire" in the header — only while the local player is still racing
@@ -470,14 +446,16 @@ export function updatePanel(ctx: PanelCtx): void {
     return;
   }
 
-  // Mode select and the two local setup screens are floating chrome now
-  // (ui/setup-chrome.ts) — the panel is hidden there (body.is-setup).
-  if (phase === 'modeSelect' || phase === 'ai' || phase === 'players') return;
-
-  if (phase === 'lobby') {
-    // Lobby content (code, roster, status) is rendered by renderLobby().
+  // Mode select, the two local setup screens and both lobby screens are
+  // floating chrome now (ui/setup-chrome.ts, ui/online-lobby.ts) — the panel is
+  // hidden there (body.is-setup / body.is-lobby).
+  if (
+    phase === 'modeSelect' ||
+    phase === 'ai' ||
+    phase === 'players' ||
+    phase === 'lobby'
+  )
     return;
-  }
 
   statusEl.className = 'status';
   raceStatusBase = null; // by default don't decorate the status with a timer (set in the net branch)

@@ -46,8 +46,8 @@ import {
   renderSetupChrome,
   setSetupOnlineEnabled,
 } from './ui/setup-chrome';
+import { initOnlineLobby, renderOnlineLobby } from './ui/online-lobby';
 import { renderStandings } from './ui/standings';
-import { openSettings } from './ui/settings';
 import { localizeDom } from './ui/localize';
 import { onlineAvailable } from './online/net';
 import * as session from './online/online';
@@ -197,8 +197,12 @@ function updateUI(): void {
   renderTurnQueue(S.phase === 'race' ? S.game : null);
   renderStandings(S.phase === 'race' ? S.game : null, S.raceNav);
   renderEditorChrome(S.editor, S.phase);
-  renderSetupChrome(S.phase, S.raceTrack?.startPoints.length ?? 6);
-  renderWizardNav(S.phase, S.editor.step, S.playersReturn);
+  // The lobby view drives three renderers: the host's lobby is the setup screen
+  // (so the wizard keeps its step), the guest's is a screen of its own.
+  const lobby = S.phase === 'lobby' ? online.lobbyView() : null;
+  renderSetupChrome(S.phase, S.raceTrack?.startPoints.length ?? 6, lobby);
+  renderOnlineLobby(lobby?.isHost ? null : lobby, S.editor);
+  renderWizardNav(S.phase, S.editor.step, S.playersReturn, !!lobby?.isHost);
 }
 
 /** Can this client move right now: in a local game, always (except during a
@@ -542,19 +546,8 @@ bindButtons({
   onSameTrackNewMode: () => goToMode('race'),
   canRematch: () => (!!S.game && !!S.lastLocalRace) || online.canRematch(),
   isOnline: () => session.active(),
-  onLobbySettings: () =>
-    openSettings(S.rules, true, (r) => {
-      S.rules = r;
-    }),
   onNewTrack: () => resetToEdit(),
   onJoinByCode: () => online.promptJoin(),
-  onLobbyStart: () => online.start(),
-  onLobbyShare: () => online.share(),
-  onLobbyCopyCode: () => online.copy(),
-  onLobbyBotAdd: () => online.addBot(),
-  onLobbyBotRemove: () => online.removeBot(),
-  onLobbyBotDifficulty: (d) => online.setBotDifficulty(d),
-  onLobbyLeave: () => online.leave(),
   onSkip: () => online.skip(),
   onRaceShare: () => online.share(),
   onRetire: () => retire(),
@@ -578,7 +571,17 @@ initMenu({
 
 // Mode select + race setup: their own floating chrome, built on first show.
 // The screens own the lineup (humans/bots/difficulty) and edit the race rules
-// in place, so the settings sheet is only the lobby's entry point now.
+// in place — including the host's lobby, which is one of these screens.
+// The room's own actions, shared by the two lobby screens (the host's is the
+// setup screen; the guest's is ui/online-lobby.ts).
+const lobbyHandlers = {
+  onLobbyStart: () => online.start(),
+  onLobbyCopyCode: () => online.copy(),
+  onLobbyShare: () => online.share(),
+  onLobbyLeave: () => online.leave(),
+  onRename: (name: string) => online.setName(name),
+};
+
 initSetupChrome({
   onModeLocal: () => {
     S.phase = 'players';
@@ -600,7 +603,13 @@ initSetupChrome({
   onRulesChange: (r) => {
     S.rules = r;
   },
+  ...lobbyHandlers,
+  onLobbyBotCount: (n) => online.setBotCount(n),
+  onLobbyBotDifficulty: (d) => online.setBotDifficulty(d),
 });
+
+// The guest's lobby: the same room, without anything to set up.
+initOnlineLobby(lobbyHandlers);
 
 /**
  * Save local game state so reloading/the back gesture/backgrounding the tab

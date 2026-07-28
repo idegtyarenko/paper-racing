@@ -50,6 +50,7 @@ export function wizardSteps(
   phase: Phase,
   step: EditorStep,
   playersReturn: 'edit' | 'race',
+  onlineHost = false,
 ): { labels: string[]; active: number } {
   const none = { labels: [] as string[], active: -1 };
   const tail = [strings.wizard.stepMode, strings.wizard.stepSetup];
@@ -68,6 +69,10 @@ export function wizardSteps(
   const base = labels.length - 2;
   if (phase === 'modeSelect') return { labels, active: base };
   if (phase === 'players' || phase === 'ai') return { labels, active: base + 1 };
+  // The host's lobby IS the setup step (setup-chrome.ts renders it as one), so
+  // the wizard doesn't disappear while they wait for friends. A guest's lobby is
+  // a screen of its own and has no wizard behind it.
+  if (phase === 'lobby' && onlineHost) return { labels, active: base + 1 };
   return none;
 }
 
@@ -150,9 +155,10 @@ export function renderWizardNav(
   phase: Phase,
   step: EditorStep,
   playersReturn: 'edit' | 'race',
+  onlineHost = false,
 ): void {
   if (!built) return;
-  const { labels, active } = wizardSteps(phase, step, playersReturn);
+  const { labels, active } = wizardSteps(phase, step, playersReturn, onlineHost);
   root.hidden = active < 0;
   if (active < 0) {
     lastActive = -1;
@@ -178,6 +184,8 @@ export function renderWizardNav(
     row.classList.toggle('pr-nav__rail-step--done', i < active);
     row.classList.toggle('pr-nav__rail-step--active', i === active);
     // Only passed steps are tappable — the wizard is never skipped forward.
-    (row as HTMLButtonElement).disabled = i >= active;
+    // From the lobby nothing is: stepping back there means tearing the room
+    // down, which is "Leave lobby", not a step.
+    (row as HTMLButtonElement).disabled = i >= active || phase === 'lobby';
   });
 }

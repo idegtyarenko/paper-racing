@@ -151,9 +151,9 @@ export const en = {
     botPrefix: '🤖',
   },
 
-  // Race settings sheet (bottom-sheet modal behind the ⚙ button).
+  // Race rules and car handling — the strings of the shared rules editor, shown
+  // in the setup screen's Behaviour/Rules tabs.
   settings: {
-    open: '⚙ Race settings',
     title: 'Race settings',
     // Aria label for the "?" help button next to each setting.
     helpLabel: 'Show explanation',
@@ -213,10 +213,8 @@ export const en = {
 
   // Online mode: lobby, name/code dialogs, statuses and errors.
   online: {
-    // Name dialog (create game / join by link).
-    namePrompt: "What's your name?",
-    namePlaceholder: 'Racer name',
-    create: 'Create race',
+    // Your own name — typed into your roster row in the lobby.
+    namePlaceholder: 'Type in your name',
     // Join by code.
     joinByCode: 'Join online game',
     joinTitle: 'Join a race',
@@ -224,21 +222,22 @@ export const en = {
     joinSubmit: 'Join',
     // Lobby.
     lobbyBadge: 'Lobby',
-    lobbyHost:
-      "Invite friends: share the link or read out the code. Once everyone's in, hit Start race.",
     lobbyGuest: 'Waiting for the track creator to start the race…',
-    codeLabel: 'Race code',
+    roomCode: 'Room code',
+    trackLabel: 'Track',
+    players: (n: number, max: number): string => `Players · ${n}/${max}`,
+    /** Badge on the racer who owns the track (and starts the race). */
+    hostBadge: 'Host',
+    /** Under the roster while nobody else has joined. */
+    noGuests: 'Share the room code — no one else has joined yet',
+    /** Why "Start race" is disabled: your own name is still empty. */
+    enterName: 'Enter your name to continue',
+    leaveLobby: 'Leave lobby',
     share: '🔗 Share link',
     copied: 'Link copied',
     codeCopied: 'Code copied',
-    start: '🏁 Start race',
     waiting: 'Waiting for at least one more racer…',
-    /** Label for the bot-filling block in the lobby (host only). */
-    botsLabel: '🤖 Bots',
-    leave: '← Leave',
     you: 'you',
-    roster: (n: number): string => `Racers: ${n} of 6`,
-    // Race.
     yourTurn: 'Your turn: pick a direction and hit Go!',
     turnOf: (name: string): string => `${name} is moving. Hold on…`,
     // Player is slow to move — can be skipped (the car coasts straight ahead).

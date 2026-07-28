@@ -105,7 +105,6 @@ export const be: Strings = {
   },
 
   settings: {
-    open: '⚙ Налады заезду',
     title: 'Налады заезду',
     helpLabel: 'Паказаць тлумачэнне',
     tabDrive: 'Паводзіны машыны',
@@ -156,27 +155,25 @@ export const be: Strings = {
   },
 
   online: {
-    namePrompt: 'Як\u00A0цябе зваць?',
-    namePlaceholder: 'Імя гоншчыка',
-    create: 'Стварыць гонку',
+    namePlaceholder: 'Увядзі сваё імя',
     joinByCode: 'Увайсці ў анлайн-гульню',
     joinTitle: 'Увайсці ў\u00A0гонку',
     codePlaceholder: 'Код гонкі',
     joinSubmit: 'Увайсці',
     lobbyBadge: 'Лобі',
-    lobbyHost:
-      'Пакліч сяброў: падзяліся спасылкай або прадыктуй код. Калі ўсе падключацца, націсні «Пачаць гонку».',
     lobbyGuest: 'Чакаем, пакуль стваральнік трасы пачне гонку…',
-    codeLabel: 'Код гонкі',
+    roomCode: 'Код пакоя',
+    trackLabel: 'Траса',
+    players: (n: number, max: number): string => `Гоншчыкі · ${n}/${max}`,
+    hostBadge: 'Стваральнік',
+    noGuests: 'Падзяліся кодам пакоя\u00A0— пакуль ніхто не\u00A0падключыўся',
+    enterName: 'Увядзі імя, каб працягнуць',
+    leaveLobby: 'Выйсці з\u00A0лобі',
     share: '🔗 Падзяліцца спасылкай',
     copied: 'Спасылка скапіявана',
     codeCopied: 'Код скапіяваны',
-    start: '🏁 Пачаць гонку',
     waiting: 'Чакаем яшчэ хаця б\u00A0аднаго гоншчыка…',
-    botsLabel: '🤖 Боты',
-    leave: '← Выйсці',
     you: 'ты',
-    roster: (n) => `Гоншчыкі: ${n} з\u00A06`,
     yourTurn: 'Твой ход: выберы напрамак і\u00A0націсні «Едзем!»',
     turnOf: (name) => `Ходзіць ${name}. Чакаем…`,
     skippable: (name) =>

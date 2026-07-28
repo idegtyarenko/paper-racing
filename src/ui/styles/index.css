@@ -10,8 +10,7 @@
 @import './panel.css';
 @import './button.css';
 @import './players-select.css';
-@import './settings.css';
-@import './lobby.css';
+@import './dialogs.css';
 @import './status.css';
 @import './player-card.css';
 @import './turn-queue.css';
@@ -30,3 +29,4 @@
 @import './wizard-nav.css';
 @import './editor-chrome.css';
 @import './setup-chrome.css';
+@import './online-lobby.css';

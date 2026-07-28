@@ -10,6 +10,13 @@
 // Behaviour and Rules (both from the shared rules-editor component) — plus the
 // pinned "Start race" action. The two local setup phases ('players' = hotseat,
 // 'ai' = vs computer) share the screen and differ only in the Lineup tab.
+//
+// The host's online lobby is a THIRD variant of the same screen, not a screen of
+// its own: waiting for friends is still setting a race up, so the room code and
+// the roster take the place of the seat counters in the Lineup tab and everything
+// else — tabs, rules, the Start action, the step it occupies in the wizard —
+// stays where it was. (The guest's lobby is its own screen, ui/online-lobby.ts:
+// a guest has nothing to set.)
 
 import { Phase } from '../app-state';
 import { Rules, MIN_PLAYERS } from '../model/game';
@@ -17,7 +24,20 @@ import { Difficulty } from '../model/ai';
 import { strings } from '../i18n';
 import { bindTap } from './dom';
 import { mountRulesEditor, RulesEditor } from './rules-editor';
-import { el, button, icon, buildItem, ARROW_SVG, GLOBE_SVG } from './pr-chrome';
+import {
+  el,
+  button,
+  icon,
+  buildItem,
+  buildCode,
+  buildRoster,
+  ARROW_SVG,
+  CLOSE_SVG,
+  GLOBE_SVG,
+  CodeBlock,
+  LobbyView,
+  Roster,
+} from './pr-chrome';
 
 const board = document.querySelector('.app__board')!;
 
@@ -52,6 +72,16 @@ export interface SetupHandlers {
   /** The rules the Behaviour/Rules tabs edit. */
   getRules: () => Rules;
   onRulesChange: (r: Rules) => void;
+  /** Online lobby (host): the room's own actions. */
+  onLobbyStart: () => void;
+  onLobbyCopyCode: () => void;
+  onLobbyShare: () => void;
+  onLobbyLeave: () => void;
+  /** Host-local bots filling the free seats. */
+  onLobbyBotCount: (n: number) => void;
+  onLobbyBotDifficulty: (d: Difficulty) => void;
+  /** Our own name, as typed into the roster row. */
+  onRename: (name: string) => void;
 }
 
 let handlers: SetupHandlers;
@@ -60,7 +90,9 @@ let root: HTMLElement;
 let modeScreen: HTMLElement;
 let setupScreen: HTMLElement;
 let onlineCard: HTMLButtonElement;
+let backBtn: HTMLButtonElement;
 let startBtn: HTMLButtonElement;
+let hintEl: HTMLElement;
 let rulesEditor: RulesEditor;
 
 // ── Lineup state ─────────────────────────────────────────────────────────────
@@ -76,9 +108,18 @@ let seatCapacity = 6;
 let tab: SetupTab = 'lineup';
 /** Phase of the previous render — to detect entering a screen. */
 let lastPhase: Phase | null = null;
+/** The room, when this screen is standing in for the host's lobby; null locally. */
+let lobbyView: LobbyView | null = null;
 
 /** Rows of the Lineup tab (each a label + a row of options). */
 interface Lineup {
+  /** Online only: the room code and who's in the room. */
+  codeRow: HTMLElement;
+  code: CodeBlock;
+  rosterRow: HTMLElement;
+  rosterLabel: HTMLElement;
+  roster: Roster;
+  leaveBtn: HTMLButtonElement;
   humansRow: HTMLElement;
   humansOpts: HTMLButtonElement[];
   botsRow: HTMLElement;
@@ -172,31 +213,74 @@ function build(): void {
   addTab('drive', strings.setup.tabBehaviour);
   addTab('rules', strings.setup.tabRules);
 
-  const paneBox = el('div', 'pr-setup__panes', card);
+  const paneBox = el('div', 'pr-setup__panes pr-scroll-bleed', card);
   for (const key of ['lineup', 'drive', 'rules'] as SetupTab[]) {
     panes[key] = el('div', 'pr-setup__pane', paneBox);
   }
 
   const lineupPane = panes.lineup!;
+  // Online lobby blocks first (hidden for a local race): the room is the thing
+  // you're waiting on, the bots below it are the filler.
+  const codeRow = el('div', 'pr-row', lineupPane);
+  el('span', 'pr-label', codeRow).textContent = strings.online.roomCode;
+  const code = buildCode(codeRow, {
+    onCopy: () => handlers.onLobbyCopyCode(),
+    onShare: () => handlers.onLobbyShare(),
+  });
+  const rosterRow = el('div', 'pr-row', lineupPane);
+  const rosterLabel = el('span', 'pr-label', rosterRow);
+  const roster = buildRoster(
+    rosterRow,
+    {
+      placeholder: strings.online.namePlaceholder,
+      hostBadge: strings.online.hostBadge,
+      youBadge: strings.online.you,
+      offline: strings.online.offline,
+    },
+    (name) => handlers.onRename(name),
+  );
+
   const humans = optionRow(lineupPane, HOTSEAT_HUMANS, (v) => {
     setupHumans = Number(v);
     renderLineup();
   });
   const bots = optionRow(lineupPane, HOTSEAT_BOTS, (v) => {
     // The hotseat screen offers 0..5 bots; "vs computer" reuses the same row
-    // with 1..5 (the option set is rebuilt per screen in renderLineup).
+    // with 1..5, and the lobby with however many seats are free (the option set
+    // is rebuilt per screen in renderLineup).
+    if (lobbyView) {
+      handlers.onLobbyBotCount(Number(v));
+      return; // the session owns the count — it re-renders us
+    }
     setupBots = Number(v);
     aiBots = Number(v);
     renderLineup();
   });
   const diff = optionRow(lineupPane, DIFFICULTIES, (v) => {
     difficulty = v as Difficulty;
+    if (lobbyView) {
+      handlers.onLobbyBotDifficulty(difficulty);
+      return;
+    }
     renderLineup();
   });
   DIFFICULTIES.forEach((d, i) => {
     diff.opts[i].textContent = strings.aiSelect[d];
   });
+  // Leaving is the lobby's way out — the action row's Back would be ambiguous
+  // (going back means giving up the room), so it sits at the end of the list.
+  const leaveBtn = button('pr-btn pr-btn--caps pr-setup__leave', lineupPane);
+  icon('pr-btn__ico', CLOSE_SVG, leaveBtn);
+  el('span', 'pr-setup__leave-label', leaveBtn).textContent = strings.online.leaveLobby;
+  bindTap(leaveBtn, () => handlers.onLobbyLeave());
+
   lineup = {
+    codeRow,
+    code,
+    rosterRow,
+    rosterLabel,
+    roster,
+    leaveBtn,
     humansRow: humans.row,
     humansOpts: humans.opts,
     botsRow: bots.row,
@@ -213,8 +297,13 @@ function build(): void {
   // ── Actions (aligned to the same gutter as everything else). Back lives here
   //    on every width: the top strip is the wizard's now, and its leading button
   //    is the burger. ─────────────────────────────────────────────────────────
+  // Why the primary action is held back, when it is (an empty name, too few
+  // racers). Sits right above the button it explains.
+  hintEl = el('div', 'pr-setup__hint', body);
+  hintEl.hidden = true;
+
   const actions = el('div', 'pr-setup__actions', body);
-  const backBtn = button('pr-btn pr-setup__back', actions);
+  backBtn = button('pr-btn pr-setup__back', actions);
   backBtn.textContent = strings.buttons.back;
   bindTap(backBtn, () =>
     root.dataset.screen === 'mode' ? handlers.onModeBack() : handlers.onSetupBack(),
@@ -222,13 +311,17 @@ function build(): void {
   startBtn = button('pr-btn pr-btn--primary pr-btn--caps pr-setup__start', actions);
   startBtn.textContent = strings.setup.start;
   icon('pr-btn__arrow', ARROW_SVG, startBtn);
-  bindTap(startBtn, () =>
+  bindTap(startBtn, () => {
+    if (lobbyView) {
+      handlers.onLobbyStart();
+      return;
+    }
     handlers.onStartLocal(
       isAi() ? 1 : setupHumans,
       isAi() ? aiBots : setupBots,
       difficulty,
-    ),
-  );
+    );
+  });
 
   board.append(root);
   built = true;
@@ -236,6 +329,13 @@ function build(): void {
 
 /** Whether the setup screen is currently showing the "vs computer" lineup. */
 const isAi = (): boolean => root.dataset.mode === 'ai';
+
+/** Label the primary action, keeping its trailing arrow. */
+function setStartLabel(text: string): void {
+  if (startBtn.firstChild?.textContent === text) return;
+  startBtn.textContent = text;
+  icon('pr-btn__arrow', ARROW_SVG, startBtn);
+}
 
 function showTab(next: SetupTab): void {
   tab = next;
@@ -255,7 +355,66 @@ function showTab(next: SetupTab): void {
  * starting grid's capacity are disabled rather than hidden — the limit reads as
  * a rule of the track, not an error.
  */
+/**
+ * Lineup tab, online lobby variant: the room code, who's in the room, and the
+ * bots the host tops the grid up with. The seat counters have nothing to say
+ * here — who's racing is whoever joins.
+ */
+function renderLobbyLineup(v: LobbyView): void {
+  lineup.code.set(v.code);
+  lineup.rosterLabel.textContent = strings.online.players(v.players.length, v.seats);
+  // Alone in the room: say so, rather than showing a roster of one and no reason.
+  lineup.roster.render(v.players, v.players.length < 2 ? strings.online.noGuests : null);
+
+  lineup.botsLabel.textContent = strings.players.botsWithSeats(v.maxBots);
+  lineup.botsOpts.forEach((b, i) => {
+    const n = HOTSEAT_BOTS[i];
+    b.hidden = false;
+    b.dataset.key = String(n);
+    b.textContent = String(n);
+    b.disabled = n > v.maxBots;
+    b.classList.toggle('pr-seg__opt--active', n === v.botCount);
+  });
+  lineup.difficultyRow.hidden = v.botCount === 0;
+  lineup.difficultyLabel.textContent = strings.players.difficultyLabel;
+  for (const b of lineup.difficultyOpts) {
+    b.classList.toggle('pr-seg__opt--active', b.dataset.key === v.botDifficulty);
+  }
+
+  startBtn.disabled = v.starting || !v.canStart || v.needsName || !v.connected;
+  setStartLabel(v.starting ? strings.online.starting : strings.setup.start);
+  // One reason at a time, most pressing first: with the channel down nothing
+  // else on this screen is trustworthy, so that outranks the rest. (This line is
+  // the host's connection indicator — the global banner steps aside in the
+  // lobby, and the guest's own status banner says the same thing.)
+  const hint = !v.connected
+    ? strings.online.reconnecting
+    : v.needsName
+      ? strings.online.enterName
+      : v.canStart
+        ? ''
+        : strings.online.waiting;
+  hintEl.textContent = hint;
+  hintEl.hidden = !hint;
+  hintEl.classList.toggle('pr-setup__hint--error', !v.connected);
+}
+
 function renderLineup(): void {
+  const online = lobbyView;
+  // Which blocks this variant of the tab is made of.
+  lineup.codeRow.hidden = !online;
+  lineup.rosterRow.hidden = !online;
+  lineup.leaveBtn.hidden = !online;
+  backBtn.hidden = !!online;
+  if (online) {
+    lineup.humansRow.hidden = true;
+    lineup.botsRow.hidden = false;
+    renderLobbyLineup(online);
+    return;
+  }
+  hintEl.hidden = true;
+  setStartLabel(strings.setup.start);
+
   const ai = isAi();
   lineup.humansRow.hidden = ai;
   if (ai) {
@@ -317,12 +476,19 @@ export function setSetupOnlineEnabled(enabled: boolean): void {
 
 /**
  * Render the setup chrome for the current phase: mode select, one of the two
- * local setup screens, or nothing (the panel takes over again in every other
- * phase, via body.is-setup).
+ * local setup screens, the host's online lobby (`lobby` non-null — same screen,
+ * room instead of seat counters), or nothing (the panel takes over again in
+ * every other phase, via body.is-setup).
  */
-export function renderSetupChrome(phase: Phase, playersMax: number): void {
+export function renderSetupChrome(
+  phase: Phase,
+  playersMax: number,
+  lobby: LobbyView | null = null,
+): void {
   if (!built) return;
-  const inSetup = phase === 'modeSelect' || phase === 'players' || phase === 'ai';
+  lobbyView = phase === 'lobby' && lobby?.isHost ? lobby : null;
+  const inSetup =
+    phase === 'modeSelect' || phase === 'players' || phase === 'ai' || !!lobbyView;
   root.hidden = !inSetup;
   document.body.classList.toggle('is-setup', inSetup);
   seatCapacity = playersMax;
@@ -333,7 +499,7 @@ export function renderSetupChrome(phase: Phase, playersMax: number): void {
 
   const onMode = phase === 'modeSelect';
   root.dataset.screen = onMode ? 'mode' : 'setup';
-  root.dataset.mode = phase === 'ai' ? 'ai' : 'hotseat';
+  root.dataset.mode = lobbyView ? 'online' : phase === 'ai' ? 'ai' : 'hotseat';
   modeScreen.hidden = !onMode;
   setupScreen.hidden = onMode;
   // Mode select has nothing to start yet — its action row is just Back.

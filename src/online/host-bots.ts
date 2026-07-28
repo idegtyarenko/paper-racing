@@ -15,10 +15,10 @@
 // confirm-first core and commitOnline live in the controller, clearTurnWatch in turn-watch).
 
 import { Track } from '../model/track';
-import { GameState, newGame, shuffledIndices, seatColor } from '../model/game';
+import { GameState, newGame, shuffledIndices, seatColor, seatName } from '../model/game';
 import { coastMove, applyMove } from '../model/turns';
 import { Difficulty, chooseMove } from '../model/ai';
-import { renderLobby } from '../ui/lobby';
+import type { LobbyView } from '../ui/pr-chrome';
 import { showToast } from '../ui/dialogs';
 import { strings } from '../i18n';
 import { AI_MOVE_DELAY_MS, SKIP_RETRY_MS } from '../config';
@@ -80,10 +80,15 @@ export function clearBotTimer(): void {
   }
 }
 
+/** Seats on the starting grid of the race's track — the roster's capacity. Read
+ *  from the session (the guest doesn't own the track, but has a copy of it). */
+function seatCapacity(): number {
+  return session.getTrack()?.startPoints.length ?? 0;
+}
+
 /** Free lobby seats available for bots: track capacity minus real players. */
 function freeSeats(): number {
-  const cap = deps.state.raceTrack?.startPoints.length ?? 0;
-  return Math.max(0, cap - session.getRoster().length);
+  return Math.max(0, seatCapacity() - session.getRoster().length);
 }
 
 /** Is this seat occupied by a bot (in a running race)? Bot-ness lives in the state (Player.bot). */
@@ -147,8 +152,22 @@ async function runBotMove(seat: number): Promise<void> {
   }
 }
 
-/** Redraw the lobby panel from the session's current roster. */
-export function renderLobbyPanel(): void {
+/** Whether the host's "start the race" write is in flight (the button is held
+ *  disabled meanwhile). Lives here so it survives the presence-driven re-renders
+ *  that happen during the await. */
+let starting = false;
+
+export function setLobbyStarting(b: boolean): void {
+  starting = b;
+}
+
+/**
+ * Everything the lobby screens draw, assembled from the session in one place —
+ * the host's variant of the setup screen and the guest's own screen render the
+ * same view. Null outside a live lobby.
+ */
+export function lobbyView(): LobbyView | null {
+  if (!session.active()) return null;
   const roster = session.getRoster();
   const mine = session.mySeat();
   const maxBots = freeSeats();
@@ -156,41 +175,41 @@ export function renderLobbyPanel(): void {
   // free seats — shrink the bot count to fit (if a player leaves, the max grows back,
   // but we don't restore the previous bot count — only the upper bound).
   if (lobbyBots > maxBots) lobbyBots = maxBots;
-  renderLobby({
+  return {
     code: session.getCode() ?? '',
     players: roster.map((r, i) => ({
-      name: r.name,
+      // Anyone who hasn't typed a name yet reads as their car's colour — the
+      // name they'd race under. Your own row is the field, so it stays empty.
+      name: r.name || (i === mine ? '' : seatName(i)),
       color: seatColor(i),
       you: i === mine,
+      host: r.clientId === session.hostId(),
       offline: !session.isPresent(i),
     })),
-    canStart: session.canStart(),
+    seats: seatCapacity(),
     isHost: session.isHost(),
+    canStart: session.canStart(),
+    needsName: mine >= 0 && !roster[mine]?.name,
     botCount: lobbyBots,
     maxBots,
     botDifficulty: lobbyBotDifficulty,
-  });
+    connected: session.isConnected(),
+    starting,
+  };
 }
 
-/** Host: add another bot to a free lobby seat (up to capacity). */
-export function addBot(): void {
-  if (!session.isHost() || lobbyBots >= freeSeats()) return;
-  lobbyBots++;
-  renderLobbyPanel();
-}
-
-/** Host: remove one bot. */
-export function removeBot(): void {
-  if (!session.isHost() || lobbyBots <= 0) return;
-  lobbyBots--;
-  renderLobbyPanel();
+/** Host: how many bots fill the free seats (the lobby offers an absolute count). */
+export function setBotCount(n: number): void {
+  if (!session.isHost()) return;
+  lobbyBots = Math.max(0, Math.min(n, freeSeats()));
+  deps.updateUI();
 }
 
 /** Host: change the difficulty of newly added bots. */
 export function setBotDifficulty(diff: Difficulty): void {
   if (!session.isHost()) return;
   lobbyBotDifficulty = diff;
-  renderLobbyPanel();
+  deps.updateUI();
 }
 
 /**
@@ -212,7 +231,9 @@ export function buildStartState(raceTrack: Track): GameState {
     shuffledIndices(humans + bots),
   );
   roster.forEach((r, i) => {
-    if (g.players[i]) g.players[i].name = r.name;
+    // A racer who never typed a name keeps the one newGame gave the seat — their
+    // car's colour. The host can start without waiting on anyone's typing.
+    if (g.players[i] && r.name) g.players[i].name = r.name;
   });
   // Add bots into the remaining free seats (after the real players): their
   // bot-ness travels in the state (Player.bot), guests get them through the regular

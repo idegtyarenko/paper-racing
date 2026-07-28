@@ -229,6 +229,16 @@ export function seatColor(i: number): string {
 }
 
 /**
+ * Car name by seat index — the fallback for anyone without one of their own: local
+ * racers, and online players who joined but never typed a name. Read from `strings`
+ * per call (not the module-level NAMES) so it follows the current language.
+ */
+export function seatName(i: number): string {
+  const names = strings.players.names;
+  return names[i % names.length];
+}
+
+/**
  * Why a move isn't allowed: another car sits on the target cell ('occupied'),
  * or one is in the way along the path to an otherwise free cell ('path'). The
  * two are indistinguishable to the player unless drawn differently — the car

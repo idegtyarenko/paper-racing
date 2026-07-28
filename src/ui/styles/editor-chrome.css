@@ -4,17 +4,6 @@
    layout and extras live here. Scoped to .pr-* so it doesn't touch the
    still-cream race panel. */
 
-/* In the edit phase the side panel steps aside and the board goes full-bleed;
-   the chrome floats over it. Same for the redesigned setup screens. */
-body.is-editing .panel,
-body.is-setup .panel {
-  display: none;
-}
-body.is-editing .app__board,
-body.is-setup .app__board {
-  background: var(--pr-bg);
-}
-
 /* ── Coach-mark: travels between steps (the motion is the attention cue) ────── */
 .pr-coach {
   position: absolute;
@@ -138,6 +127,10 @@ body.is-editing .zoom-ctl__btn:hover {
 body.is-editing #toast:not([hidden]) {
   top: calc(env(safe-area-inset-top, 0px) + 88px);
   bottom: auto;
+  /* The shared toast slides up from the bottom edge with a translateX(-50%) it
+     needs for centring; this one is centred by left/right, so the keyframes
+     would jerk it sideways. */
+  animation: none;
   left: var(--pr-gutter);
   right: var(--pr-gutter);
   transform: none;

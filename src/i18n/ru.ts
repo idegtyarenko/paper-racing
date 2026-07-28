@@ -104,7 +104,6 @@ export const ru: Strings = {
   },
 
   settings: {
-    open: '⚙ Настройки заезда',
     title: 'Настройки заезда',
     helpLabel: 'Показать пояснение',
     tabDrive: 'Поведение машины',
@@ -155,27 +154,25 @@ export const ru: Strings = {
   },
 
   online: {
-    namePrompt: 'Как тебя зовут?',
-    namePlaceholder: 'Имя гонщика',
-    create: 'Создать гонку',
+    namePlaceholder: 'Введи свое имя',
     joinByCode: 'Войти в онлайн-игру',
     joinTitle: 'Войти в гонку',
     codePlaceholder: 'Код гонки',
     joinSubmit: 'Войти',
     lobbyBadge: 'Лобби',
-    lobbyHost:
-      'Позови друзей: поделись ссылкой или продиктуй код. Когда все подключатся, жми «Начать гонку».',
     lobbyGuest: 'Ждем, пока создатель трассы начнет гонку…',
-    codeLabel: 'Код гонки',
+    roomCode: 'Код комнаты',
+    trackLabel: 'Трасса',
+    players: (n: number, max: number): string => `Гонщики · ${n}/${max}`,
+    hostBadge: 'Создатель',
+    noGuests: 'Поделись кодом комнаты\u00A0— пока никто не\u00A0подключился',
+    enterName: 'Введи имя, чтобы продолжить',
+    leaveLobby: 'Выйти из\u00A0лобби',
     share: '🔗 Поделиться ссылкой',
     copied: 'Ссылка скопирована',
     codeCopied: 'Код скопирован',
-    start: '🏁 Начать гонку',
     waiting: 'Ждем еще хотя бы одного гонщика…',
-    botsLabel: '🤖 Боты',
-    leave: '← Выйти',
     you: 'ты',
-    roster: (n) => `Гонщики: ${n} из 6`,
     yourTurn: 'Твой ход: выбери направление и жми «Едем!»',
     turnOf: (name) => `Ходит ${name}. Ждем…`,
     skippable: (name) =>

@@ -109,7 +109,38 @@ body.is-setup .zoom-ctl {
   padding: 18px;
 }
 
+/* Online lobby: leaving the room closes it out of the wizard, so it sits at the
+   end of the list rather than in the action row (where Back used to be). */
+.pr-setup__leave {
+  margin-top: 4px;
+  padding: 12px;
+  font-size: 12.5px;
+  letter-spacing: 1px;
+}
+.pr-setup__leave .pr-btn__ico svg {
+  width: 15px;
+  height: 15px;
+}
+
 /* ── Start action ─────────────────────────────────────────────────────────── */
+
+/* Why "Start race" is held back — sits directly above the button. */
+.pr-setup__hint {
+  flex: 0 0 auto;
+  text-align: center;
+  font-family: var(--pr-font);
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: #7fa8c2;
+}
+.pr-setup__hint[hidden] {
+  display: none;
+}
+/* Held back by the connection, not by the lineup. */
+.pr-setup__hint--error {
+  color: var(--pr-error);
+}
+
 .pr-setup__start {
   padding: 16px;
   font-size: 15px;
@@ -146,8 +177,10 @@ body.is-setup .zoom-ctl {
     box-shadow: none;
     backdrop-filter: none;
   }
+  /* Left padding of 2px, cancelled by .pr-scroll-bleed on the scrolling box:
+     content stays on the gutter, the clip edge sits just outside it. */
   .pr-setup__pane:not([hidden]) {
-    padding: 20px 0 0;
+    padding: 20px 0 0 2px;
   }
   .pr-setup__actions {
     margin-top: auto;

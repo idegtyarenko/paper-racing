@@ -15,6 +15,7 @@ import {
   leaveGame,
   pruneSeat,
   pushState,
+  renamePlayer,
   subscribeGame,
   unsubscribe,
   deserializeTrack,
@@ -38,6 +39,8 @@ let code: string | null = null;
 let channel: RealtimeChannel | null = null;
 let roster: RosterEntry[] = [];
 let hostFlag = false;
+/** clientId of the game's creator — marks the HOST badge in the roster. */
+let hostClient: string | null = null;
 let track: Track | null = null;
 let handlers: OnlineHandlers | null = null;
 /** clientIds whose tabs are currently online (Realtime Presence). */
@@ -67,6 +70,11 @@ export function getRoster(): RosterEntry[] {
 
 export function isHost(): boolean {
   return hostFlag;
+}
+
+/** clientId of the game's creator (null outside a session). */
+export function hostId(): string | null {
+  return hostClient;
 }
 
 export function getTrack(): Track | null {
@@ -162,6 +170,7 @@ export async function host(t: Track, name: string, h: OnlineHandlers): Promise<s
   handlers = h;
   code = row.id;
   hostFlag = true;
+  hostClient = row.host_id;
   track = t;
   connected = true;
   channel = subscribeGame(code, applyRow, handlePresence, handleStatus);
@@ -194,10 +203,26 @@ export async function join(
   handlers = h;
   code = row.id;
   hostFlag = row.host_id === clientId();
+  hostClient = row.host_id;
   track = deserializeTrack(row.track);
   connected = true;
   channel = subscribeGame(code, applyRow, handlePresence, handleStatus);
   applyRow(row);
+}
+
+/**
+ * Our own name, as typed — applied to the local roster right away so the screen never
+ * lags behind the keyboard (the write to the server is debounced, see setName in the
+ * controller, and its echo confirms the same value later).
+ */
+export function setLocalName(name: string): void {
+  const seat = mySeat();
+  if (seat >= 0) roster[seat] = { ...roster[seat], name };
+}
+
+/** Push our name to the lobby roster on the server. */
+export async function rename(name: string): Promise<void> {
+  if (code) await renamePlayer(code, name);
 }
 
 /** Start the race (host): write the first state. */
@@ -244,6 +269,7 @@ function close(): void {
   handlers = null;
   roster = [];
   hostFlag = false;
+  hostClient = null;
   track = null;
   present = new Set();
   leftAt = new Map();
