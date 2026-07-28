@@ -10,8 +10,10 @@
 // immediately instead of waiting for a safe moment — see `__PWA_EAGER_UPDATE__`.)
 //
 // We check for a new version at startup, on `pageshow` (Safari fires it on a
-// bfcache restore, where there's no visibilitychange) and every time the app
-// returns to the foreground (visibilitychange) — in production deliberately
+// bfcache restore, where there's no visibilitychange), on `focus` (in a
+// desktop tab, an app/window switch fires nothing else — the tab stays
+// `visible`) and every time the app returns to the foreground
+// (visibilitychange) — in production deliberately
 // not on a periodic timer, to avoid triggering a reload at an inconvenient
 // moment. Staging DOES poll (see `__PWA_EAGER_UPDATE__`): it's a preview env,
 // there's no cost to a reload, and it's how we see a deploy land. Every check
@@ -145,6 +147,13 @@ export function initPwa(isSafeToReload: () => boolean): void {
     });
     window.addEventListener('pageshow', (e) => {
       checkForUpdate(`pageshow(persisted=${e.persisted})`, registration);
+    });
+    // In a normal desktop tab, switching apps or windows leaves the tab
+    // `visible` (macOS Safari doesn't fire visibilitychange for it) — `focus`
+    // is the only signal that the page was come back to. Same reload guard as
+    // the others, so this isn't the periodic timer through the back door.
+    window.addEventListener('focus', () => {
+      checkForUpdate('focus', registration);
     });
     // Staging only: poll, so a deploy lands in an already-open tab without
     // having to touch it. Production stays event-driven on purpose.
