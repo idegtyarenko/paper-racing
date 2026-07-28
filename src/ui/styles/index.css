@@ -12,11 +12,6 @@
 @import './players-select.css';
 @import './dialogs.css';
 @import './status.css';
-@import './player-card.css';
-@import './turn-queue.css';
-@import './race-code.css';
-@import './standings.css';
-@import './winner.css';
 @import './rules.css';
 @import './overlay.css';
 @import './install-prompt.css';
@@ -28,5 +23,7 @@
 @import './menu.css';
 @import './wizard-nav.css';
 @import './editor-chrome.css';
+@import './race-chrome.css';
+@import './race-result.css';
 @import './setup-chrome.css';
 @import './online-lobby.css';

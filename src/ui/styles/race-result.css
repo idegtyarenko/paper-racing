@@ -1,0 +1,207 @@
+/* Result screen (Blueprint, hi-fi 5H·A/B/C): the full-bleed layer that takes
+   over once every car has finished or retired. Built by ui/race-result.ts.
+   Shares the classification row styles with the live HUD (race-chrome.css) —
+   this file only adds the scrim, the outcome block and the action stack. */
+
+/* The `display` below outranks the UA's `[hidden]`, same trap as `.pr-race`. */
+.pr-result[hidden] {
+  display: none;
+}
+.pr-result {
+  display: flex;
+  flex-direction: column;
+  /* The layer is a modal screen, not floating chrome: it takes every pointer
+     event so the board underneath can't be aimed at any more. */
+  pointer-events: auto;
+  overflow-y: auto;
+  font-family: var(--pr-mono);
+}
+
+/* Darkens toward the edges, so the track is still there — it's what everyone
+   just drove — but well behind the result. Heavier than the hi-fi's numbers
+   because there the board underneath was already knocked back to 30%; here it's
+   a live canvas at full strength, and a checkered finish line running through
+   the headline is exactly what this has to stop. */
+.pr-result__scrim {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    120% 90% at 50% 40%,
+    rgba(6, 26, 44, 0.86),
+    rgba(6, 26, 44, 0.97)
+  );
+}
+
+.pr-result__inner {
+  position: relative;
+  margin: auto;
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: calc(env(safe-area-inset-top, 0px) + 28px) var(--pr-gutter)
+    calc(env(safe-area-inset-bottom, 0px) + 28px);
+}
+
+/* ── Outcome ───────────────────────────────────────────────────────────────── */
+.pr-result__head {
+  text-align: center;
+  color: var(--pr-ink);
+}
+.pr-result__icon {
+  display: block;
+  color: var(--pr-accent);
+}
+.pr-result__icon[hidden] {
+  display: none;
+}
+.pr-result__iconsvg svg {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto;
+}
+.pr-result__label {
+  display: block;
+  margin-top: 8px;
+  font-family: var(--pr-font);
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--pr-edge);
+}
+/* The one big thing on the screen, in the winner's car colour (set inline). */
+.pr-result__headline {
+  margin-top: 6px;
+  font-family: var(--pr-font);
+  font-weight: 800;
+  font-size: 34px;
+  line-height: 1.1;
+  letter-spacing: 0.5px;
+}
+/* Nobody finished: no colour to celebrate with, so it steps down in size too. */
+.pr-result__headline--quiet {
+  font-size: 26px;
+  color: #c8d6e4;
+}
+.pr-result__subtitle {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #9fc4dd;
+}
+
+/* ── Final classification ──────────────────────────────────────────────────── */
+.pr-result__card {
+  overflow: hidden;
+}
+.pr-result__cardhead {
+  display: block;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--pr-border);
+}
+/* The winner's position gets the weight, the way the hi-fi's "1" does — it's
+   the one number on this screen anyone cares about. */
+.pr-result__card .pr-race__row--current .pr-race__pos,
+.pr-result__card .pr-race__row--mine .pr-race__pos {
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--pr-row-tint, var(--pr-accent));
+}
+/* A finisher is "out" everywhere else, which dims the row — but on the final
+   classification everyone is out, so dimming says nothing. */
+.pr-result__card .pr-race__row--out {
+  opacity: 1;
+}
+.pr-result__card
+  .pr-race__row--out:not(.pr-race__row--current):not(.pr-race__row--mine)
+  .pr-race__name {
+  color: var(--pr-ink-soft);
+}
+
+/* ── Ways on from here ─────────────────────────────────────────────────────── */
+.pr-result__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pr-result__actions[hidden] {
+  display: none;
+}
+.pr-result__actions > .pr-btn {
+  width: 100%;
+}
+/* The two secondary routes are quieter than the rematch above them. */
+.pr-result__actions > .pr-btn:not(.pr-btn--primary) {
+  padding: 13px 18px;
+  font-weight: 600;
+  font-size: 13.5px;
+  letter-spacing: 1px;
+}
+
+/* A guest can't start anything — dashed and inert, so it doesn't read as a
+   button someone forgot to enable. */
+.pr-result__wait {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 15px;
+  border-radius: var(--pr-radius);
+  border: 1px dashed rgba(127, 211, 255, 0.4);
+  background: rgba(9, 40, 63, 0.5);
+  font-family: var(--pr-font);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  line-height: 1.4;
+  color: var(--pr-ink-dim);
+}
+.pr-result__wait[hidden] {
+  display: none;
+}
+.pr-result__dots {
+  flex: 0 0 auto;
+  display: inline-flex;
+  gap: 3px;
+}
+.pr-result__dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--pr-ink-dim);
+  animation: pr-result-dot 1.4s infinite;
+}
+.pr-result__dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.pr-result__dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes pr-result-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pr-result__dot {
+    animation: none;
+  }
+}
+
+/* The result screen owns the board outright: the side panel steps aside like it
+   does for every other redesigned screen, and the zoom controls go with it —
+   there's nothing left to aim at. */
+body.is-result .panel,
+body.is-result .zoom-ctl {
+  display: none;
+}
+body.is-result .app__board {
+  background: var(--pr-bg);
+}

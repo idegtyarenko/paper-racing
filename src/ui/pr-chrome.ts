@@ -53,6 +53,15 @@ export const COPY_SVG =
 /** Three linked nodes — the share sheet / invite link. */
 export const SHARE_SVG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>';
+/** Flag on a pole — retiring from the race (the menu's mid-race entry). */
+export const FLAG_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v18"/><path d="M6 4h11l-2.4 4L17 12H6z"/></svg>';
+/** Stopwatch — turns still to sit out after a crash (the classification's pit slot). */
+export const CLOCK_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="7.5"/><path d="M12 9.5V13l2.5 1.6M9 3h6"/></svg>';
+/** Burst — how many times this car has been off into the gravel. */
+export const CRASH_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l2.2 4.2L19 5.6l-1.4 4.6 4.4 1.8-4.4 1.8L19 18.4l-4.8-1.6L12 21l-2.2-4.2L5 18.4l1.4-4.6L2 12l4.4-1.8L5 5.6l4.8 1.6z"/></svg>';
 export const LANG_SVG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg>';
 

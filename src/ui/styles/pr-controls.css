@@ -15,13 +15,35 @@
    screen only has to set its body class (is-editing / is-setup / is-lobby). */
 body.is-editing .panel,
 body.is-setup .panel,
-body.is-lobby .panel {
+body.is-lobby .panel,
+body.is-racing .panel {
   display: none;
 }
 body.is-editing .app__board,
 body.is-setup .app__board,
-body.is-lobby .app__board {
+body.is-lobby .app__board,
+body.is-racing .app__board {
   background: var(--pr-bg);
+}
+
+/* Zoom controls belong to the board, not to any one screen: every redesigned
+   phase gets the Blueprint skin (they used to be re-skinned inside the editor's
+   own stylesheet). Lifting them clear of the bottom action zone is still the
+   screen's business — each one sets its own `bottom`. */
+body.is-editing .zoom-ctl__btn,
+body.is-racing .zoom-ctl__btn {
+  background: var(--pr-panel);
+  border-color: var(--pr-border);
+  color: var(--pr-ink-soft);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+}
+@media (hover: hover) {
+  body.is-editing .zoom-ctl__btn:hover,
+  body.is-racing .zoom-ctl__btn:hover {
+    background: var(--pr-hover);
+    border-color: var(--pr-edge);
+  }
 }
 
 /* Both lobby screens report the connection themselves (the guest's status

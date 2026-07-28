@@ -29,14 +29,14 @@ import { AI_MOVE_DELAY_MS } from './config';
 import { render, AppView } from './view/render';
 import { Bounds, polylineBounds } from './view/camera';
 import * as vp from './view/viewport';
+import { bindButtons, updatePanel, setOnlineEnabled } from './ui/panel';
 import {
-  bindButtons,
-  updatePanel,
-  setOnlineEnabled,
+  initRaceChrome,
+  renderRaceChrome,
   setTurnCountdown,
   showConfirmMove,
-} from './ui/panel';
-import { renderTurnQueue } from './ui/turn-queue';
+} from './ui/race-chrome';
+import { initRaceResult, renderRaceResult } from './ui/race-result';
 import { initEditorChrome, renderEditorChrome } from './ui/editor-chrome';
 import { initWizardNav, renderWizardNav, wizardSteps } from './ui/wizard-nav';
 import { openConfirm } from './ui/confirm';
@@ -47,7 +47,6 @@ import {
   setSetupOnlineEnabled,
 } from './ui/setup-chrome';
 import { initOnlineLobby, renderOnlineLobby } from './ui/online-lobby';
-import { renderStandings } from './ui/standings';
 import { localizeDom } from './ui/localize';
 import { onlineAvailable } from './online/net';
 import * as session from './online/online';
@@ -186,16 +185,29 @@ function canRetire(): boolean {
 function updateUI(): void {
   const net = online.netTurn(S.game);
   const aiTurn = !!S.game && isBotSeat(S.game.current);
-  updatePanel({
+  updatePanel({ phase: S.phase, editor: S.editor });
+  renderRaceChrome({
     phase: S.phase,
-    editor: S.editor,
     game: S.game,
+    nav: S.raceNav,
     net,
     aiTurn,
-    canRetire: canRetire(),
+    // Whose row gets the amber "you're up" treatment: our own seat online, the
+    // human at the controls locally (hot-seat players share this client).
+    mySeat: localHumanSeat(),
+    connected: session.isConnected(),
   });
-  renderTurnQueue(S.phase === 'race' ? S.game : null);
-  renderStandings(S.phase === 'race' ? S.game : null, S.raceNav);
+  renderRaceResult({
+    game: S.game,
+    nav: S.raceNav,
+    over: S.phase === 'race' && S.game?.phase === 'over',
+    // Hot-seat has no single "you", so nothing gets the personal treatment
+    // there — online it's our own seat.
+    mySeat: session.active() ? session.mySeat() : -1,
+    onlineGuest: !!net && !net.isHost,
+    canRematch: (!!S.game && !!S.lastLocalRace) || online.canRematch(),
+    isOnline: session.active(),
+  });
   renderEditorChrome(S.editor, S.phase);
   // The lobby view drives three renderers: the host's lobby is the setup screen
   // (so the wizard keeps its step), the guest's is a screen of its own.
@@ -530,27 +542,8 @@ bindButtons({
     else if (S.pending && myTurn()) commitMove(S.pending);
     else online.retryMove(); // desktop: no stored selection — retry the last move instead
   },
-  // One-tap "Rematch": same lineup on the same track, no wizard. In online
-  // (as host) we replay the same room; locally we repeat the saved lineup.
-  // The button is only shown when canRematch, but we guard here too.
-  onChooseSameTrack: () => {
-    if (session.active()) {
-      online.rematch();
-      return;
-    }
-    if (!S.game || !S.lastLocalRace) return;
-    S.raceTrack = S.game.track;
-    startRace(S.lastLocalRace.humans, S.lastLocalRace.bots, S.lastLocalRace.difficulty);
-  },
-  // "Same track, different mode": keep the track, re-pick the mode/players.
-  onSameTrackNewMode: () => goToMode('race'),
-  canRematch: () => (!!S.game && !!S.lastLocalRace) || online.canRematch(),
-  isOnline: () => session.active(),
-  onNewTrack: () => resetToEdit(),
   onJoinByCode: () => online.promptJoin(),
   onSkip: () => online.skip(),
-  onRaceShare: () => online.share(),
-  onRetire: () => retire(),
 });
 
 // Step navigation for all six wizard steps. Built before the editor chrome,
@@ -562,11 +555,38 @@ initWizardNav({ onJumpTo: (index) => goToWizardStep(index) });
 // keeps their handlers.
 initEditorChrome();
 
+// Build the race chrome and re-home the confirm/skip buttons into it. Same
+// ordering rule as the editor: after bindButtons, which captured the elements.
+initRaceChrome({ onShare: () => online.share(), onCopy: () => online.copy() });
+
+// The result screen: outcome, final classification and the three ways on.
+initRaceResult({
+  // One-tap "Rematch": same lineup on the same track, no wizard. Online (as
+  // host) replays the same room; locally it repeats the saved lineup. The
+  // button is only shown when canRematch, but we guard here too.
+  onRematch: () => {
+    if (session.active()) {
+      online.rematch();
+      return;
+    }
+    if (!S.game || !S.lastLocalRace) return;
+    S.raceTrack = S.game.track;
+    startRace(S.lastLocalRace.humans, S.lastLocalRace.bots, S.lastLocalRace.difficulty);
+  },
+  // "Same track, new lineup": keep the track, re-pick the mode/players.
+  onSameTrack: () => goToMode('race'),
+  onNewTrack: () => resetToEdit(),
+});
+
 // The global menu's entries delegate to the existing Rules and Join controls
-// (still wired in the panel).
+// (still wired in the panel). "Retire" is the menu's own — it only appears
+// mid-race, and asks before dropping the player out.
 initMenu({
   onRules: () => document.getElementById('helpBtn')?.click(),
   onJoin: () => document.getElementById('joinByCode')?.click(),
+  canRetire,
+  onRetire: () =>
+    openConfirm(strings.race.retireConfirmTitle, strings.race.retireConfirmYes, retire),
 });
 
 // Mode select + race setup: their own floating chrome, built on first show.

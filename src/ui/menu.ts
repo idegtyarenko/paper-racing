@@ -15,6 +15,7 @@ import {
   buildItem,
   buildBrand,
   CLOSE_SVG,
+  FLAG_SVG,
   RULES_SVG,
   GLOBE_SVG,
   LANG_SVG,
@@ -25,6 +26,11 @@ export interface MenuHandlers {
   onRules: () => void;
   /** Open the join-by-code dialog. */
   onJoin: () => void;
+  /** Whether "Retire from race" applies right now: a race is running and this
+   *  client is still in it. Asked at open time, not at build time. */
+  canRetire: () => boolean;
+  /** Drop out of the race (asks for confirmation itself). */
+  onRetire: () => void;
 }
 
 /** Flags from the hi-fi, 20×14. Not the state flags — the design's choice. */
@@ -46,6 +52,7 @@ const CLOSE_MS = 180;
 let handlers: MenuHandlers;
 let root: HTMLElement | null = null;
 let footEl: HTMLElement;
+let retireItem: HTMLButtonElement;
 let closeTimer = 0;
 
 function build(): HTMLElement {
@@ -65,6 +72,17 @@ function build(): HTMLElement {
   el('div', 'pr-menu__rule', panel);
 
   const list = el('div', 'pr-menu__list', panel);
+  // Retire heads the list and only exists mid-race (hi-fi 5I). Destructive, so
+  // it's tinted red and goes through the confirmation sheet.
+  retireItem = buildItem(list, {
+    cls: 'pr-item--fill pr-menu__retire',
+    iconSvg: FLAG_SVG,
+    title: strings.race.retire,
+  });
+  retireItem.addEventListener('click', () => {
+    closeMenu();
+    handlers.onRetire();
+  });
   buildItem(list, {
     cls: 'pr-item--fill',
     iconSvg: RULES_SVG,
@@ -131,6 +149,7 @@ export function openMenu(): void {
   // Read at open time, not at build time: main.ts fills #appVersion on its own
   // schedule, so a value captured once could be the empty placeholder.
   footEl.textContent = document.getElementById('appVersion')?.textContent ?? '';
+  retireItem.hidden = !handlers.canRetire();
   root.hidden = false;
   document.addEventListener('keydown', onKeyDown);
 }

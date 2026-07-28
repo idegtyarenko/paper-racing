@@ -12,7 +12,7 @@ import { Candidate } from '../model/game';
 import { AppState } from '../app-state';
 import { worldToScreen, screenToWorld, clampScale } from './camera';
 import * as vp from './viewport';
-import { showConfirmMove } from '../ui/panel';
+import { showConfirmMove } from '../ui/race-chrome';
 import {
   TOUCH_LIFT,
   TOUCH_TOL_PX,
@@ -472,9 +472,17 @@ function endGesture(e: PointerEvent): void {
       break;
     }
     case 'move':
-      // Desktop click: on the opponent's turn it's a pre-pick, on ours it's a commit.
-      if (deps.isPreselect()) deps.setPending(g.cand);
-      else deps.commitMove(g.cand);
+      // Desktop click: on the opponent's turn it's a pre-pick; on ours it picks
+      // the target and "Go!" commits it — the same two-step as touch aiming.
+      // (It used to commit straight from the click, so desktop and touch
+      // disagreed about what a tap on the field meant.)
+      if (deps.isPreselect()) {
+        deps.setPending(g.cand);
+      } else {
+        selected = g.cand;
+        deps.state.pending = null; // a fresh pick on our turn clears any queued move
+        showConfirmMove(true, confirmAnchor());
+      }
       break;
     case 'aim': {
       // Release: pick the candidate. On our turn — preview + floating "Go!"

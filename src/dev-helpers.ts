@@ -108,6 +108,17 @@ export function installDevHelpers(deps: DevHelperDeps): void {
     pending: S.pending?.target ?? null,
     hover: input.getHover()?.target ?? null,
   });
+  /** Viewport coordinates of the candidate with acceleration (ax, ay). */
+  const candScreen = (ax: number, ay: number): { x: number; y: number } | null => {
+    const seat = candOwner();
+    if (seat < 0) return null;
+    const p = S.game!.players[seat];
+    const target = { x: p.pos.x + p.vel.x + ax, y: p.pos.y + p.vel.y + ay };
+    const scr = worldToScreen(vp.camera(), target);
+    const r = canvas.getBoundingClientRect();
+    return { x: r.left + scr.x, y: r.top + scr.y };
+  };
+
   (window as unknown as Record<string, unknown>).__pr = {
     /** Test language switcher: writes the choice to localStorage and reloads.
      *  For checking locales without going through the UI (same effect as
@@ -238,20 +249,21 @@ export function installDevHelpers(deps: DevHelperDeps): void {
       if (S.pending && myTurn()) commitMove(S.pending);
       return snap();
     },
+    /** Viewport coordinates of the candidate with acceleration (ax, ay) — so a
+     *  browser test can aim real pointer events at it (the two-step
+     *  pick-then-confirm flow can't be exercised through tapAccel, which
+     *  commits straight away on your own turn). */
+    candScreen,
     /** Synthetic mouse hover over the candidate with acceleration (ax, ay) —
      *  checks that the hover survives someone else's turn (reaimHover). */
     hoverAccel(ax: number, ay: number) {
-      const seat = candOwner();
-      if (seat < 0) return snap();
-      const p = S.game!.players[seat];
-      const target = { x: p.pos.x + p.vel.x + ax, y: p.pos.y + p.vel.y + ay };
-      const scr = worldToScreen(vp.camera(), target);
-      const r = canvas.getBoundingClientRect();
+      const at = candScreen(ax, ay);
+      if (!at) return snap();
       canvas.dispatchEvent(
         new PointerEvent('pointermove', {
           pointerType: 'mouse',
-          clientX: r.left + scr.x,
-          clientY: r.top + scr.y,
+          clientX: at.x,
+          clientY: at.y,
           bubbles: true,
         }),
       );

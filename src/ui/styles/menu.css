@@ -178,3 +178,23 @@
   font-size: 11px;
   color: #5f7a95;
 }
+
+/* ── Retire from race ───────────────────────────────────────────────────────
+   Only present while a race is running (hi-fi 5I), and the one destructive
+   entry in the drawer — tinted red so it doesn't read as another navigation
+   row. The confirmation sheet still stands between it and dropping out. */
+.pr-menu__retire {
+  color: #ff9a9a;
+  border-color: rgba(255, 93, 93, 0.45);
+}
+.pr-menu__retire .pr-item__ico {
+  color: var(--pr-error);
+  border-color: rgba(255, 93, 93, 0.45);
+}
+@media (hover: hover) {
+  .pr-menu__retire:hover {
+    background: rgba(255, 93, 93, 0.12);
+    border-color: var(--pr-error);
+    color: #ffb4b4;
+  }
+}

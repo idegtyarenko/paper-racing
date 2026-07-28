@@ -63,24 +63,6 @@
     align-items: center;
     justify-content: space-between;
   }
-
-  /* Player cards — two columns, to save vertical space. minmax(0,1fr)
-     lets columns shrink below their content's width — otherwise a long name
-     would stretch the grid and cause horizontal scrolling. */
-  #raceButtons {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    align-items: start;
-  }
-
-  #raceButtons > .winner,
-  #raceButtons > .button {
-    grid-column: 1 / -1;
-  }
-
-  #raceButtons[hidden] {
-    display: none;
-  }
 }
 
 /* Short landscape screens (phone in landscape orientation). */

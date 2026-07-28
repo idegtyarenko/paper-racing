@@ -34,45 +34,27 @@
     <div class="app">
       <div class="app__board">
         <canvas id="board"></canvas>
-        <div class="board-hud-top">
-          <div id="turnQueue" class="turn-queue" hidden>
-            <span class="turn-queue__label" data-i18n="race.queueLabel"></span>
-            <div
-              id="turnQueueDots"
-              class="turn-queue__dots"
-              data-i18n-aria-label="race.queueLabel"
-              role="img"
-            ></div>
-          </div>
-          <button
-            id="raceCode"
-            class="race-code"
-            type="button"
-            data-i18n-title="online.share"
-            hidden
-          ></button>
-        </div>
         <div class="zoom-ctl" aria-hidden="true">
           <button id="zoomIn" type="button" class="zoom-ctl__btn">＋</button>
           <button id="zoomOut" type="button" class="zoom-ctl__btn">－</button>
         </div>
+        <!-- Confirm-move and skip-turn: re-parented into the race chrome's action
+             zone on first show (ui/race-chrome.ts), which is also where they get
+             their look. They stay here so their handlers can be bound up front. -->
         <button
           id="confirmMove"
-          class="confirm-move"
+          type="button"
           data-i18n="buttons.confirmMove"
           hidden
         ></button>
+        <!-- Skip a stalling player's turn (online only): the race chrome sets the
+             text — online.skipTurnBtn plus the stuck player's name, in their colour. -->
+        <button id="skipTurn" type="button" hidden></button>
       </div>
       <aside class="panel">
         <header class="panel__header">
           <h1 class="panel__title" data-i18n="app.title">🏁 Paper Racing</h1>
           <div class="panel__header-actions">
-            <button
-              id="retireBtn"
-              class="header-btn"
-              data-i18n="race.retire"
-              hidden
-            ></button>
             <button
               id="helpBtn"
               class="header-btn"
@@ -85,9 +67,6 @@
           </div>
         </header>
         <div class="status"></div>
-        <!-- Skip-another-player's-turn button (online only): the panel sets its text
-             dynamically — online.skipTurnBtn + the stuck player's name, colored. -->
-        <button id="skipTurn" class="button button--center" hidden></button>
         <div id="editButtons" class="panel__group">
           <button
             id="nextBtn"
@@ -116,13 +95,6 @@
             <span data-i18n="online.joinByCode"></span>
           </button>
         </div>
-        <div id="raceButtons" class="panel__group" hidden>
-          <div class="winner">
-            <div class="winner__trophy">🏆</div>
-            <div class="winner__title"></div>
-          </div>
-          <button id="newRace" class="button" data-i18n="buttons.newRace"></button>
-        </div>
       </aside>
     </div>
     <div id="overlay" class="overlay" hidden>
@@ -136,29 +108,6 @@
           data-close
         ></button>
         <p id="appVersion" class="rules__version" aria-hidden="true"></p>
-      </div>
-      <div id="raceDialog" class="sheet" hidden>
-        <h2 class="sheet__title" data-i18n="buttons.newRaceDialogTitle"></h2>
-        <button
-          id="dlgSameTrack"
-          class="button button--center"
-          data-i18n="buttons.sameTrack"
-        ></button>
-        <button
-          id="dlgSameTrackNewMode"
-          class="button button--center"
-          data-i18n="buttons.sameTrackNewMode"
-        ></button>
-        <button
-          id="dlgNewTrack"
-          class="button button--center"
-          data-i18n="buttons.newTrack"
-        ></button>
-        <button
-          class="button button--center"
-          data-i18n="buttons.cancel"
-          data-close
-        ></button>
       </div>
       <div id="joinDialog" class="sheet" hidden>
         <h2 class="sheet__title" data-i18n="online.joinTitle"></h2>

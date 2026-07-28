@@ -265,6 +265,8 @@ export const en = {
       'The track creator can start a rematch\u00A0— everyone continues on the same track.',
     // Connection-state banner (realtime channel dropped).
     reconnecting: 'Connection lost. Reconnecting…',
+    /** Code on the reconnect banner: tap to copy, so the race can be rejoined. */
+    raceCode: (code: string): string => `Race code ${code}`,
     // Returning to the last online race after a disconnect/reload.
     resumeTitle: (code: string): string => `Return to race ${code}?`,
     resumeYes: 'Return to race',
@@ -273,28 +275,41 @@ export const en = {
 
   race: {
     driver: (name: string): string => `${name} is moving.`,
-    hintTouch: 'Pick a point and confirm with Go!',
-    hintMouse: 'Click where you want to drive.',
+    /** What to do on your turn. One hint for both input kinds: since the
+     *  redesign, a desktop click picks a target and Go! commits it, exactly as
+     *  on touch. */
+    hintPick: 'Pick a point and confirm with Go!',
     finalWarn: ' Try to finish further past the line than your rival.',
-    speed: (kmh: number): string => `⚡ ${kmh}`,
-    /** Speed unit — hidden on narrow (mobile) cards so it doesn't eat the name. */
+    /** Heading of the classification card. Rendered in caps by CSS. */
+    classification: 'Classification',
+    /** Label over the turn-order dots inside the card. Caps by CSS. */
+    upNext: 'Up next',
+    /** Speed unit in a classification row (caps by CSS). */
     speedUnit: 'km/h',
-    crashes: (n: number): string => `💥 ${n}`,
-    pit: (n: number): string => `⏳ ${n}`,
-    winnerFlag: 'Winner: ',
-    draw: "Too close to call\u00A0— the photo finish couldn't split them!",
-    /** Subtitle under the winner's name while the others are still racing. */
-    stillRacing: 'Race continues…',
-    /** Subtitle under the winner's name once the race is fully over. */
-    raceOver: 'Race over',
-    /** Banner when everyone retired and nobody finished. */
+    /** Right slot of a row whose driver is past the turn timer and can be skipped. */
+    stalled: 'Stalled',
+    /** Right slot of a finisher while the others are still driving. */
+    finished: (place: number): string => `Finished · ${ordinal(place)}`,
+    /** Right slot in the final classification: how many moves this car took. */
+    moves: (n: number): string => `${n} ${n === 1 ? 'move' : 'moves'}`,
+    /** Right slot of a car that dropped out. Caps by CSS. */
+    retired: 'Retired',
+
+    // ── Result screen (every car has finished or retired). ──────────────────
+    /** Small label above the outcome. Caps by CSS. */
+    raceComplete: 'Race complete',
+    /** Outcome headline + subtitle: you won / someone else did / nobody did. */
+    youWon: 'You won',
+    youWonSub: 'First place\u00A0— nice drive',
+    someoneWon: (name: string): string => `${name} wins`,
+    someoneWonSub: 'Better luck next time',
     allRetired: 'Everyone retired',
-    /** Place badge on a player card (1st, 2nd…). */
-    place: (n: number): string => `🏁 ${ordinal(n)} place`,
-    /** Retired-player badge on a card. */
-    retired: '🏳️ Retired',
-    /** "Retire" button in the panel header (next to "Rules"). */
-    retire: 'Retire',
+    allRetiredSub: 'No cars finished\u00A0— no result this time',
+    /** A dead heat for first place. */
+    drawTitle: 'Photo finish',
+    draw: "Too close to call\u00A0— the photo finish couldn't split them!",
+    /** "Retire from race" — a row in the global menu, shown only mid-race. */
+    retire: 'Retire from race',
     /** Retire-confirmation dialog title. */
     retireConfirmTitle: 'Retire from the race?',
     /** Confirm button in the retire dialog. */
@@ -314,15 +329,16 @@ export const en = {
     back: '← Back',
     redraw: '↺ Redraw',
     chooseMode: 'Choose mode →',
-    newRace: '🏁 New race',
     confirmMove: '✓ Go!',
-    sameTrack: '🔄 Rematch',
-    sameTrackNewMode: '⚙ Same track, new players',
-    newTrack: '✏️ Draw a new one',
+    // Result-screen actions. No emoji: the redesigned chrome uses inline SVG
+    // where it needs a glyph (the rematch button carries one), and these render
+    // in caps, where an emoji reads as a smudge.
+    sameTrack: 'Rematch',
+    sameTrackNewMode: 'Same track, new lineup',
+    newTrack: 'Draw a new track',
     cancel: 'Cancel',
     rulesTitle: 'Rules',
     toWheel: 'Got it',
-    newRaceDialogTitle: 'New race',
   },
 
   rules: {

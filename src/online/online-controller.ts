@@ -25,7 +25,7 @@ import { closeOverlay } from '../ui/dom';
 import { openConfirm } from '../ui/confirm';
 import { AppState } from '../app-state';
 import { RENAME_DEBOUNCE_MS } from '../config';
-import { setMoveSendState } from '../ui/panel';
+import { setMoveSendState } from '../ui/race-chrome';
 import { strings } from '../i18n';
 import * as session from './online';
 import { OnlineHandlers } from './online';

@@ -54,48 +54,6 @@
   background: var(--danger-strong);
 }
 
-/* Floating move-confirm button: at the bottom edge of the board, above the canvas. */
-.confirm-move {
-  position: absolute;
-  left: 50%;
-  bottom: 16px;
-  transform: translateX(-50%);
-  z-index: 5;
-  padding: 12px 28px;
-  min-height: 48px;
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--white);
-  background: var(--accent);
-  border: none;
-  border-radius: 999px;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-/* Candidate targets sit at the bottom of the board — move the button up, below
-   the turn-queue strip (turn-queue sits at top:10px), so it doesn't cover them. */
-.confirm-move--top {
-  top: calc(52px + env(safe-area-inset-top));
-  bottom: auto;
-}
-
-.confirm-move:active {
-  background: var(--accent-active);
-}
-/* "Timer-only" mode: no target picked yet — the button shows a countdown but isn't
-   clickable and passes clicks/taps through to the board (otherwise it would cover
-   a candidate underneath it). */
-.confirm-move--timer {
-  pointer-events: none;
-  background: var(--accent-translucent);
-  cursor: default;
-}
-.confirm-move[hidden] {
-  display: none;
-}
-
 /* Map zoom buttons above the board — desktop only (touchscreens zoom via pinch). */
 .zoom-ctl {
   position: absolute;
