@@ -13,6 +13,22 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Paper Racing" />
+    <!-- Boot guard against a flash of unstyled markup. The body below is static
+         HTML, so the browser can paint it before index.css applies — in dev the
+         stylesheet arrives as a <style> injected by main.ts, and on a slow network
+         it lands late in production too. Unstyled, that paints a white page with a
+         serif 🏁 heading and a viewBox-only <svg> blown up to its 300×150 default.
+         Hide the shell until the real stylesheet un-hides it: `.app` gets
+         `visibility: visible` back in layout.css, which always comes after this
+         inline rule in the head, so it wins at equal specificity. -->
+    <style>
+      html {
+        background: #0d3252; /* --pr-board, so the gap reads as the board */
+      }
+      .app {
+        visibility: hidden;
+      }
+    </style>
   </head>
   <body>
     <div class="app">

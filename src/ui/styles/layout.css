@@ -1,5 +1,8 @@
 /* Root layout: canvas on the left, panel on the right. */
 .app {
+  /* Undoes the boot guard in index.html (see the comment there): the shell stays
+     hidden until this stylesheet lands, so the markup never paints unstyled. */
+  visibility: visible;
   display: flex;
   height: 100%;
   font-family:
