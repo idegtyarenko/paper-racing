@@ -57,7 +57,12 @@ import { initInstallPrompt } from './ui/install-prompt';
 import { showToast } from './ui/dialogs';
 import { initPwa } from './pwa';
 import { toggleSwDebug } from './sw-debug';
+import { initAppHeight } from './ui/app-height';
 import * as persist from './persist';
+
+// Before anything measures the board: fixes the too-short viewport iOS hands a
+// standalone PWA at launch (see ui/app-height.ts).
+initAppHeight();
 
 const canvas = document.getElementById('board') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;

@@ -101,6 +101,10 @@ body {
 body {
   height: 100vh; /* fallback for browsers without dvh */
   height: 100dvh;
+  /* iOS standalone launches with a viewport one status bar too short and never
+     recomputes it — `ui/app-height.ts` measures the real screen height and
+     publishes it here. Unset everywhere else, so `100dvh` stands. */
+  height: var(--pr-app-h, 100dvh);
   /* Font is set on body, not just .app: the sheet overlay and the toast are
      siblings of .app, so they'd otherwise inherit the browser's default serif font. */
   font-family:
