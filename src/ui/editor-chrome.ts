@@ -1,23 +1,20 @@
 // Full-bleed editor chrome (Blueprint redesign): the floating overlays that sit
 // over the board while drawing a track — a coach-mark that travels between
-// steps and a bottom action bar. Built here (its owner module) and mounted into
-// .app__board on first show, rather than living statically in index.html.
+// steps and a bottom action bar with the wizard's Back / Next / Join buttons.
+// Built here (its owner module) and mounted into .app__board on first show,
+// rather than living statically in index.html.
 //
 // The step title, counter and progress are no longer the editor's business:
 // drawing is steps 1–4 of a six-step run-up to a race, so the top strip and the
 // wide-screen rail live in wizard-nav.ts, which spans all six. The editor only
 // hands that rail its coach card (the instruction for the current step).
-//
-// The existing wizard buttons (#editButtons: next/back/join) are re-parented
-// into the bottom bar — their handlers (wired in panel.ts via bindTap) and
-// their per-step visibility/labels (updatePanel's edit branch) keep working
-// unchanged; only their container and styling move here.
 
-import { EditorState } from '../model/editor';
+import { EditorState, canStepBack } from '../model/editor';
 import { Phase } from '../app-state';
 import { strings } from '../i18n';
 import { showToast } from './dialogs';
-import { el } from './pr-chrome';
+import { bindTap } from './dom';
+import { button, el, icon, GLOBE_SVG } from './pr-chrome';
 import { wizardNavFoot } from './wizard-nav';
 
 const board = document.querySelector('.app__board')!;
@@ -27,14 +24,29 @@ let coachEl: HTMLElement;
 let coachTextEl: HTMLElement;
 let railCoachEl: HTMLElement;
 let railCoachTextEl: HTMLElement;
+let backBtn: HTMLButtonElement;
+let nextBtn: HTMLButtonElement;
+let joinBtn: HTMLButtonElement;
 let built = false;
 /** Last error surfaced as a toast, so we don't re-toast on every re-render. */
 let lastErrorToast = '';
 
+/** Whether the online backend is configured: without it, "Join by code" never shows. */
+let onlineEnabled = false;
+
 /** Coach-mark bullet — the amber ✎ glyph from the hi-fi (not a drawn pencil). */
 const PEN_GLYPH = '✎';
 
-function build(): void {
+export interface EditorChromeHandlers {
+  /** Step back in the track editor (on step 2 this redraws from scratch). */
+  onBack: () => void;
+  /** Confirm the current step and move on; on the last one, leave for mode select. */
+  onNext: () => void;
+  /** Open the join-by-code dialog (offered on the drawing step only). */
+  onJoinByCode: () => void;
+}
+
+function build(h: EditorChromeHandlers): void {
   root = el('div', 'pr-layer pr-edit');
   root.hidden = true;
 
@@ -49,29 +61,48 @@ function build(): void {
   el('span', 'pr-coach__ico', railCoachEl).textContent = PEN_GLYPH;
   railCoachTextEl = el('span', 'pr-edit__rail-coach-text', railCoachEl);
 
-  // ── Bottom action bar: re-home the existing wizard buttons ─────────────────
-  // They keep their ids/handlers/visibility logic and only gain the shared
-  // Blueprint button classes (which outrank the cream `.button` rules).
+  // ── Bottom action bar: the wizard's three buttons ──────────────────────────
+  // Labels and per-step visibility are set by renderBar() on every render.
   const bar = el('div', 'pr-edit__bar', root);
-  const editButtons = document.getElementById('editButtons');
-  if (editButtons) {
-    bar.append(editButtons);
-    // Queried inside the wrapper, not by id: it has just been detached from the
-    // document (root is mounted at the end of build), so getElementById would
-    // find nothing.
-    const skin = (id: string, cls: string): void =>
-      editButtons.querySelector('#' + id)?.classList.add(...cls.split(' '));
-    skin('nextBtn', 'pr-btn pr-btn--primary');
-    skin('backBtn', 'pr-btn');
-    skin('joinByCode', 'pr-btn pr-btn--caps');
-  }
+  backBtn = button('pr-btn pr-edit__back', bar);
+  bindTap(backBtn, h.onBack);
+  nextBtn = button('pr-btn pr-btn--primary pr-edit__next', bar);
+  bindTap(nextBtn, h.onNext);
+  joinBtn = button('pr-btn pr-btn--caps pr-edit__join', bar);
+  // Plain wrapper, not .pr-btn__ico: this globe rides at the shared 16px inline
+  // size (.pr-btn svg), not the 22px of a standalone icon button.
+  icon('pr-edit__join-ico', GLOBE_SVG, joinBtn);
+  el('span', 'pr-edit__join-text', joinBtn).textContent = strings.online.joinByCode;
+  bindTap(joinBtn, h.onJoinByCode);
 
   board.append(root);
   built = true;
 }
 
-export function initEditorChrome(): void {
-  build();
+export function initEditorChrome(h: EditorChromeHandlers): void {
+  build(h);
+}
+
+/** Hide online entry points if the backend isn't configured (local play only). */
+export function setOnlineEnabled(enabled: boolean): void {
+  onlineEnabled = enabled;
+}
+
+/** The action bar for the current step: which buttons apply and what they say. */
+function renderBar(editor: EditorState): void {
+  // Step 1 has nothing to go back to — hide the button rather than showing a
+  // dead one. On step 2 "Back" erases the whole drawn track, so name it honestly.
+  backBtn.hidden = !canStepBack(editor);
+  backBtn.textContent =
+    editor.step === 'adjust' ? strings.buttons.redraw : strings.buttons.back;
+  // Next advances adjust → finish → direction; the finish and direction steps
+  // are auto-placed/pre-selected, so they confirm with an explicit button. On
+  // the last step it becomes "Choose mode" (leaves the editor for setup).
+  nextBtn.hidden = !['adjust', 'finish', 'direction'].includes(editor.step);
+  nextBtn.textContent =
+    editor.step === 'direction' ? strings.buttons.chooseMode : strings.buttons.next;
+  // "Join by code" only makes sense on the first step; later in the wizard it's just in the way.
+  joinBtn.hidden = !onlineEnabled || editor.step !== 'center';
 }
 
 /**
@@ -100,6 +131,7 @@ export function renderEditorChrome(editor: EditorState, phase: Phase): void {
   // body drives the per-step canvas cursor (draw = ring+dot).
   root.dataset.step = step;
   document.body.dataset.editStep = step;
+  renderBar(editor);
 
   let coachText: string;
   if (editor.error) {

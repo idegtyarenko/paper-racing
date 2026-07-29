@@ -29,7 +29,6 @@ import { AI_MOVE_DELAY_MS } from './config';
 import { render, AppView } from './view/render';
 import { Bounds, polylineBounds } from './view/camera';
 import * as vp from './view/viewport';
-import { bindButtons, updatePanel, setOnlineEnabled } from './ui/panel';
 import {
   initRaceChrome,
   renderRaceChrome,
@@ -37,7 +36,11 @@ import {
   showConfirmMove,
 } from './ui/race-chrome';
 import { initRaceResult, renderRaceResult } from './ui/race-result';
-import { initEditorChrome, renderEditorChrome } from './ui/editor-chrome';
+import {
+  initEditorChrome,
+  renderEditorChrome,
+  setOnlineEnabled,
+} from './ui/editor-chrome';
 import { initWizardNav, renderWizardNav, wizardSteps } from './ui/wizard-nav';
 import { openConfirm } from './ui/confirm';
 import { initMenu } from './ui/menu';
@@ -53,7 +56,8 @@ import * as session from './online/online';
 import * as online from './online/online-controller';
 import * as input from './view/input';
 import { initInstallPrompt } from './ui/install-prompt';
-import { showToast } from './ui/dialogs';
+import { bindDialogs, openRules, showToast } from './ui/dialogs';
+import { bindOverlayClose } from './ui/dom';
 import { initPwa } from './pwa';
 import { toggleSwDebug } from './sw-debug';
 import { initAppHeight } from './ui/app-height';
@@ -185,7 +189,6 @@ function canRetire(): boolean {
 function updateUI(): void {
   const net = online.netTurn(S.game);
   const aiTurn = !!S.game && isBotSeat(S.game.current);
-  updatePanel({ phase: S.phase, editor: S.editor });
   renderRaceChrome({
     phase: S.phase,
     game: S.game,
@@ -517,7 +520,16 @@ input.initInput({
   redraw,
 });
 
-bindButtons({
+// Overlay dismissal (backdrop / Escape) and the join dialog's own controls.
+bindOverlayClose();
+bindDialogs();
+
+// Step navigation for all six wizard steps. Built before the editor chrome,
+// which mounts its coach card into the rail this owns.
+initWizardNav({ onJumpTo: (index) => goToWizardStep(index) });
+
+// The full-bleed editor chrome: coach-mark plus the drawing wizard's action bar.
+initEditorChrome({
   onBack: () => {
     stepBack(S.editor);
     commit();
@@ -535,6 +547,13 @@ bindButtons({
     }
     commit();
   },
+  onJoinByCode: () => online.promptJoin(),
+});
+
+// The race HUD: classification card plus the action zone's confirm/skip buttons.
+initRaceChrome({
+  onShare: () => online.share(),
+  onCopy: () => online.copy(),
   onConfirmMove: () => {
     const sel = input.getSelected();
     if (sel) commitMove(sel);
@@ -542,22 +561,8 @@ bindButtons({
     else if (S.pending && myTurn()) commitMove(S.pending);
     else online.retryMove(); // desktop: no stored selection — retry the last move instead
   },
-  onJoinByCode: () => online.promptJoin(),
   onSkip: () => online.skip(),
 });
-
-// Step navigation for all six wizard steps. Built before the editor chrome,
-// which mounts its coach card into the rail this owns.
-initWizardNav({ onJumpTo: (index) => goToWizardStep(index) });
-
-// Build the full-bleed editor chrome and re-home the wizard buttons into it.
-// Must run after bindButtons (which captured the button elements) — re-parenting
-// keeps their handlers.
-initEditorChrome();
-
-// Build the race chrome and re-home the confirm/skip buttons into it. Same
-// ordering rule as the editor: after bindButtons, which captured the elements.
-initRaceChrome({ onShare: () => online.share(), onCopy: () => online.copy() });
 
 // The result screen: outcome, final classification and the three ways on.
 initRaceResult({
@@ -578,12 +583,12 @@ initRaceResult({
   onNewTrack: () => resetToEdit(),
 });
 
-// The global menu's entries delegate to the existing Rules and Join controls
-// (still wired in the panel). "Retire" is the menu's own — it only appears
-// mid-race, and asks before dropping the player out.
+// The global menu's entries call the same intents the screens' own controls do.
+// "Retire" is the menu's own — it only appears mid-race, and asks before
+// dropping the player out.
 initMenu({
-  onRules: () => document.getElementById('helpBtn')?.click(),
-  onJoin: () => document.getElementById('joinByCode')?.click(),
+  onRules: () => openRules(),
+  onJoin: () => online.promptJoin(),
   canRetire,
   onRetire: () =>
     openConfirm(strings.race.retireConfirmTitle, strings.race.retireConfirmYes, retire),

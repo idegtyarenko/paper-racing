@@ -56,29 +56,19 @@
   flex-wrap: wrap;
   gap: 10px;
 }
-/* The re-homed #editButtons wrapper dissolves so its buttons become direct flex
-   items of the bar (its `hidden` toggle from panel.ts still hides them). */
-.pr-edit__bar > #editButtons {
-  display: contents;
-}
-/* Look comes from .pr-btn (added in editor-chrome.ts); only the bar's own
-   ordering and sizing live here. Disabled = not applicable at this step (e.g.
-   Back on step 1) — hide it. */
-.pr-edit__bar .button:disabled {
-  display: none;
-}
-.pr-edit__bar #backBtn {
+/* Look comes from .pr-btn; only the bar's own ordering and sizing live here. */
+.pr-edit__back {
   order: 1;
   flex: 0 0 auto;
 }
-.pr-edit__bar #nextBtn {
+.pr-edit__next {
   order: 2;
   flex: 1;
 }
 /* Join online: full width, below the pair (only on step 1). Scoped to
-   :not([hidden]) so the flex display never overrides panel.ts hiding Join off
-   the draw step (same reasoning as the toast above). */
-.pr-edit__bar #joinByCode:not([hidden]) {
+   :not([hidden]) so the flex display never overrides the hidden attribute that
+   takes it away past the draw step (same reasoning as the toast below). */
+.pr-edit__join:not([hidden]) {
   order: 3;
   flex-basis: 100%;
   display: flex;
@@ -94,11 +84,11 @@
     box-shadow: 0 0 18px 2px rgba(255, 180, 84, 0.5);
   }
 }
-.pr-edit[data-step='direction'] .pr-edit__bar #nextBtn {
+.pr-edit[data-step='direction'] .pr-edit__next {
   animation: pr-pulse 1.8s ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
-  .pr-edit[data-step='direction'] .pr-edit__bar #nextBtn {
+  .pr-edit[data-step='direction'] .pr-edit__next {
     animation: none;
   }
 }
@@ -183,10 +173,10 @@ body[data-edit-step='center'] #board.grabbing {
     left: calc(var(--pr-rail-w) + 24px);
     justify-content: flex-end;
   }
-  .pr-edit__bar #nextBtn {
+  .pr-edit__next {
     flex: 0 0 auto;
   }
-  .pr-edit__bar #joinByCode:not([hidden]) {
+  .pr-edit__join:not([hidden]) {
     flex-basis: auto;
   }
 }

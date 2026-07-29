@@ -195,13 +195,8 @@
   }
 }
 
-/* The result screen owns the board outright: the side panel steps aside like it
-   does for every other redesigned screen, and the zoom controls go with it —
+/* The result screen owns the board outright, so the zoom controls go away —
    there's nothing left to aim at. */
-body.is-result .panel,
 body.is-result .zoom-ctl {
   display: none;
-}
-body.is-result .app__board {
-  background: var(--pr-bg);
 }

@@ -7,11 +7,8 @@
 @import '@fontsource-variable/jetbrains-mono/index.css';
 @import './base.css';
 @import './layout.css';
-@import './panel.css';
 @import './button.css';
-@import './players-select.css';
 @import './dialogs.css';
-@import './status.css';
 @import './rules.css';
 @import './overlay.css';
 @import './install-prompt.css';

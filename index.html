@@ -38,64 +38,7 @@
           <button id="zoomIn" type="button" class="zoom-ctl__btn">＋</button>
           <button id="zoomOut" type="button" class="zoom-ctl__btn">－</button>
         </div>
-        <!-- Confirm-move and skip-turn: re-parented into the race chrome's action
-             zone on first show (ui/race-chrome.ts), which is also where they get
-             their look. They stay here so their handlers can be bound up front. -->
-        <button
-          id="confirmMove"
-          type="button"
-          data-i18n="buttons.confirmMove"
-          hidden
-        ></button>
-        <!-- Skip a stalling player's turn (online only): the race chrome sets the
-             text — online.skipTurnBtn plus the stuck player's name, in their colour. -->
-        <button id="skipTurn" type="button" hidden></button>
       </div>
-      <aside class="panel">
-        <header class="panel__header">
-          <h1 class="panel__title" data-i18n="app.title">🏁 Paper Racing</h1>
-          <div class="panel__header-actions">
-            <button
-              id="helpBtn"
-              class="header-btn"
-              data-i18n="buttons.rulesTitle"
-              data-i18n-aria-label="buttons.rulesTitle"
-              data-i18n-title="buttons.rulesTitle"
-              aria-label="Rules"
-              title="Rules"
-            ></button>
-          </div>
-        </header>
-        <div class="status"></div>
-        <div id="editButtons" class="panel__group">
-          <button
-            id="nextBtn"
-            class="button button--center"
-            data-i18n="buttons.next"
-            hidden
-          ></button>
-          <button id="backBtn" class="button button--center" data-i18n="buttons.back">
-            ← Back
-          </button>
-          <button id="joinByCode" class="button button--center" type="button">
-            <span class="join-ico" aria-hidden="true">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <circle cx="12" cy="12" r="9" />
-                <ellipse cx="12" cy="12" rx="4" ry="9" />
-                <path d="M3 12h18M4.5 7.5h15M4.5 16.5h15" />
-              </svg>
-            </span>
-            <span data-i18n="online.joinByCode"></span>
-          </button>
-        </div>
-      </aside>
     </div>
     <div id="overlay" class="overlay" hidden>
       <div class="overlay__backdrop"></div>

@@ -1,11 +1,12 @@
-// Overlay modal dialogs: joining by code, plus short popup notifications
-// (toasts). The DOM sheets live in #overlay. Names are no longer asked for here —
+// Overlay modal dialogs: the rules sheet and joining by code, plus short popup
+// notifications (toasts). The DOM sheets live in #overlay. Names are no longer asked for here —
 // since the lobby redesign a racer types their name into their own roster row, so
 // nothing stands between "play online" and a room.
 
 import { bindTap, openSheet } from './dom';
 import { strings } from '../i18n';
 
+const rulesSheet = document.getElementById('rulesSheet')!;
 const joinDialog = document.getElementById('joinDialog')!;
 const joinCodeInput = document.getElementById('joinCodeInput') as HTMLInputElement;
 const joinError = document.getElementById('joinError')!;
@@ -15,6 +16,11 @@ const connBanner = document.getElementById('connBanner')!;
 
 // Confirm callback for the join dialog (set when the dialog is opened).
 let joinCb: ((code: string) => void) | null = null;
+
+/** "How to play" — reached from the global menu. */
+export function openRules(): void {
+  openSheet(rulesSheet);
+}
 
 /** Flag a field as empty-but-required (red outline) and focus it. The outline
  *  clears as soon as the user types. */

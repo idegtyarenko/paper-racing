@@ -10,9 +10,8 @@
 // slot carries whatever that car's state calls for (placing / retired / stalled
 // / pit penalty / speed + crashes), so there's a single place to read a racer.
 //
-// The confirm-move button and the skip button keep their elements (and so their
-// handlers, bound in panel.ts) and are re-parented into the action zone here;
-// the four inputs that decide how the confirm button looks moved here with it.
+// The confirm-move button and the skip button are built here too, in the action
+// zone, along with the four inputs that decide how the confirm button looks.
 
 import { Phase } from '../app-state';
 import { GameState } from '../model/game';
@@ -21,6 +20,7 @@ import { upcomingSlots } from '../model/turns';
 import { strings } from '../i18n';
 import { msToClock } from './format';
 import { renderRows, resetStandings } from './classification';
+import { bindTap } from './dom';
 import {
   el,
   button,
@@ -48,7 +48,7 @@ let chipEl: HTMLElement;
 let chipDot: HTMLElement;
 let chipText: HTMLElement;
 let confirmBtn: HTMLButtonElement;
-let skipBtn: HTMLElement | null = null;
+let skipBtn: HTMLButtonElement;
 let connEl: HTMLElement;
 let connStatus: StatusBanner;
 let connCodeBtn: HTMLButtonElement;
@@ -60,7 +60,7 @@ let onShare: () => void = () => {};
 /** Tap the code on the reconnect banner — copy it, so the race can be rejoined. */
 let onCopy: () => void = () => {};
 
-function build(): void {
+function build(h: RaceChromeHandlers): void {
   root = el('div', 'pr-layer pr-race');
   root.hidden = true;
 
@@ -93,8 +93,6 @@ function build(): void {
   rowsEl.setAttribute('aria-label', strings.race.standingsLabel);
 
   // ── Action zone: status chip over the confirm / skip buttons ───────────────
-  // The existing buttons are re-homed here; they keep their ids and handlers,
-  // and only gain the shared Blueprint button classes.
   actEl = el('div', 'pr-race__act', root);
 
   // Realtime dropped (hi-fi 5E): the persistent banner takes over the action
@@ -115,25 +113,35 @@ function build(): void {
   chipDot = el('span', 'pr-race__chipdot', chipEl);
   chipText = el('span', 'pr-race__chiptext', chipEl);
 
-  skipBtn = document.getElementById('skipTurn');
-  if (skipBtn) {
-    actEl.append(skipBtn);
-    skipBtn.classList.add('pr-btn', 'pr-btn--caps', 'pr-race__skip');
-  }
-  confirmBtn = document.getElementById('confirmMove') as HTMLButtonElement;
-  if (confirmBtn) {
-    actEl.append(confirmBtn);
-    confirmBtn.classList.add('pr-btn', 'pr-btn--primary', 'pr-btn--caps');
-  }
+  // Skip a stalling player's turn (online only): renderSkip sets the text —
+  // online.skipTurnBtn plus the stuck player's name, in their colour.
+  skipBtn = button('pr-btn pr-btn--caps pr-race__skip', actEl);
+  skipBtn.hidden = true;
+  bindTap(skipBtn, h.onSkip);
+
+  confirmBtn = button('pr-btn pr-btn--primary pr-btn--caps pr-race__confirm', actEl);
+  confirmBtn.hidden = true;
+  bindTap(confirmBtn, h.onConfirmMove);
 
   board.append(root);
   built = true;
 }
 
-export function initRaceChrome(h: { onShare: () => void; onCopy: () => void }): void {
+export interface RaceChromeHandlers {
+  /** Tap on the room code in the card header — share the race link. */
+  onShare: () => void;
+  /** Tap the code on the reconnect banner — copy it, so the race can be rejoined. */
+  onCopy: () => void;
+  /** Commit the selected move ("Go!"). */
+  onConfirmMove: () => void;
+  /** Skip the turn of a player who's stalling (their car coasts on its momentum). */
+  onSkip: () => void;
+}
+
+export function initRaceChrome(h: RaceChromeHandlers): void {
   onShare = h.onShare;
   onCopy = h.onCopy;
-  build();
+  build(h);
 }
 
 // ── Confirm-move button: a single render driven by four inputs ───────────────
@@ -223,10 +231,10 @@ export function showConfirmMove(
  * animation.
  */
 function applyWaitingChip(base: string, msLeft: number | null): void {
-  const dots = el('span', 'waiting-dots');
+  const dots = el('span', 'pr-dots');
   // Three separate dots: `content` can't be animated, so we fade each one's opacity instead.
   for (let i = 0; i < 3; i++) {
-    el('span', 'waiting-dots__dot', dots).textContent = '.';
+    el('span', 'pr-dots__dot', dots).textContent = '.';
   }
   const nodes: (Node | string)[] = [base.replace(/…$/, ''), dots];
   if (msLeft !== null) nodes.push(` · ${msToClock(msLeft)}`);
@@ -367,7 +375,6 @@ export function renderRaceChrome(ctx: RaceCtx): void {
  * skipping someone else's turn rather than your own.
  */
 function renderSkip(game: GameState, net: NetTurn | null): void {
-  if (!skipBtn) return;
   skipBtn.hidden = !net?.canSkip;
   if (!net?.canSkip) return;
   const cur = game.players[game.current];

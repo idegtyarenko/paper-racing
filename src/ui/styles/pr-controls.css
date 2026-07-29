@@ -6,25 +6,8 @@
    setup-chrome.css) only position these and add their own extras.
 
    Imported after the legacy cream components so a `.pr-*` class wins over the
-   `.button`/`.seg` rules on elements that carry both (the wizard buttons in
-   index.html are re-skinned that way). */
-
-/* ── Redesigned screens take the whole board ────────────────────────────────
-   Each phase whose chrome has been redesigned floats over a full-bleed board
-   and the cream side panel steps aside. One rule for all of them, so a new
-   screen only has to set its body class (is-editing / is-setup / is-lobby). */
-body.is-editing .panel,
-body.is-setup .panel,
-body.is-lobby .panel,
-body.is-racing .panel {
-  display: none;
-}
-body.is-editing .app__board,
-body.is-setup .app__board,
-body.is-lobby .app__board,
-body.is-racing .app__board {
-  background: var(--pr-bg);
-}
+   `.button` rules on elements that carry both (the overlay sheets, until they
+   move over too). */
 
 /* Zoom controls belong to the board, not to any one screen: every redesigned
    phase gets the Blueprint skin (they used to be re-skinned inside the editor's
@@ -654,6 +637,69 @@ body.is-lobby #connBanner {
   }
 }
 
+/* ── Animated ellipsis: waiting on someone else's online move ────────────────
+   Dots light up one by one, looping, so a non-interactive board reads as
+   "waiting" rather than "frozen" (m1). Three separate spans (`content` can't be
+   animated — we fade each dot's opacity with a phase offset). They always take
+   up space (inline-block), so the adjacent timer text doesn't jump around. */
+.pr-dots {
+  display: inline-block;
+  min-width: 1.2em;
+  text-align: left;
+}
+
+/* A shared 1.4s timeline for all dots (no delay), but different lighting thresholds —
+   so all three go dark in sync at the start of the cycle (reset "…" → ""), then light
+   up in sequence: 1st at 25%, 2nd at 50%, 3rd at 75%. Exactly replicates the old
+   frame sequence '', '.', '..', '...'. */
+.pr-dots__dot {
+  opacity: 0;
+  animation: 1.4s steps(1, end) infinite;
+}
+.pr-dots__dot:nth-child(1) {
+  animation-name: pr-dot-1;
+}
+.pr-dots__dot:nth-child(2) {
+  animation-name: pr-dot-2;
+}
+.pr-dots__dot:nth-child(3) {
+  animation-name: pr-dot-3;
+}
+@keyframes pr-dot-1 {
+  0% {
+    opacity: 0;
+  }
+  25%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes pr-dot-2 {
+  0% {
+    opacity: 0;
+  }
+  50%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes pr-dot-3 {
+  0% {
+    opacity: 0;
+  }
+  75%,
+  100% {
+    opacity: 1;
+  }
+}
+/* Respect "reduce motion": a static ellipsis, all three dots visible. */
+@media (prefers-reduced-motion: reduce) {
+  .pr-dots__dot {
+    animation: none;
+    opacity: 1;
+  }
+}
+
 /* ── Toast: transient notice ("code copied", a failed send) ─────────────────
    The counterpart to .pr-status — this one fades on its own, so it carries
    things you may miss, never state you must be able to come back to. Lives in
@@ -849,45 +895,6 @@ body.is-lobby #connBanner {
   display: block;
   width: 100%;
   height: 100%;
-}
-
-/* The settings sheet (still the lobby's host-settings entry) now holds
-   Blueprint controls, so its surface follows them — a minimal skin until the
-   lobby step of the redesign replaces the sheet outright. */
-#settingsSheet {
-  background: var(--pr-panel-solid);
-  border-color: var(--pr-border-dim);
-  color: var(--pr-ink);
-  font-family: var(--pr-font);
-  gap: 14px;
-}
-#settingsSheet .sheet__title {
-  color: var(--pr-ink);
-}
-#settingsSheet .seg__btn {
-  background: rgba(9, 40, 63, 0.5);
-  border-color: var(--pr-border);
-  color: var(--pr-ink-soft);
-}
-#settingsSheet .seg__btn--active {
-  background: var(--pr-accent);
-  border-color: var(--pr-accent);
-  color: var(--pr-accent-ink);
-}
-@media (hover: hover) {
-  #settingsSheet .seg__btn:hover:not(.seg__btn--active) {
-    background: var(--pr-hover);
-    border-color: var(--pr-edge);
-  }
-  #settingsSheet .seg__btn--active:hover {
-    background: var(--pr-accent-hover);
-    border-color: var(--pr-accent-hover);
-  }
-}
-#settingsSheet .button {
-  background: var(--pr-accent);
-  border-color: transparent;
-  color: var(--pr-accent-ink);
 }
 
 /* ── Slider ─────────────────────────────────────────────────────────────────── */

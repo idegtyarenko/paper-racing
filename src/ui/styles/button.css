@@ -94,38 +94,3 @@
 .zoom-ctl__btn:active {
   background: var(--surface-active);
 }
-
-/* Action buttons in the panel header ("Rules", "Retire") — compact pill shapes. */
-.panel__header-actions {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.header-btn {
-  flex: none;
-  padding: 6px 12px;
-  min-height: 34px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--white);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink-strong);
-  cursor: pointer;
-  white-space: nowrap;
-  touch-action: manipulation;
-}
-
-@media (hover: hover) {
-  .header-btn:hover {
-    background: var(--surface-hover);
-  }
-}
-.header-btn:active {
-  background: var(--surface-active);
-}
-.header-btn[hidden] {
-  display: none;
-}
