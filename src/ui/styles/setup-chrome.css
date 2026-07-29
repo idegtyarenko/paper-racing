@@ -133,9 +133,6 @@ body.is-setup .zoom-ctl {
   line-height: 1.4;
   color: #7fa8c2;
 }
-.pr-setup__hint[hidden] {
-  display: none;
-}
 /* Held back by the connection, not by the lineup. */
 .pr-setup__hint--error {
   color: var(--pr-error);

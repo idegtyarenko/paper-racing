@@ -103,7 +103,7 @@ body.is-editing .zoom-ctl {
    3E). In the edit phase the toast only ever carries an error. Scoped to
    :not([hidden]) so the flex display never overrides the element's own hidden
    state (showToast toggles the `hidden` attribute to dismiss it). */
-body.is-editing #toast:not([hidden]) {
+body.is-editing .pr-toast:not([hidden]) {
   top: calc(env(safe-area-inset-top, 0px) + 88px);
   bottom: auto;
   /* The shared toast slides up from the bottom edge with a translateX(-50%) it
@@ -128,7 +128,7 @@ body.is-editing #toast:not([hidden]) {
   padding: 13px 16px;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
 }
-body.is-editing #toast:not([hidden])::before {
+body.is-editing .pr-toast:not([hidden])::before {
   content: '⚠';
   color: var(--pr-error);
   font-size: 15px;

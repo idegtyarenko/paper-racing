@@ -6,7 +6,19 @@
    setup-chrome.css) only position these and add their own extras.
 
    Imported before the per-screen stylesheets, so a screen can position and
-   extend a component without fighting it. */
+   extend a component without fighting it.
+
+   CONVENTION — hiding. Screens hide things with the `hidden` attribute
+   (`el.hidden = …`), and the UA's `[hidden] { display: none }` is a plain
+   class-less rule, so any `display` a component declares would beat it and the
+   element would stay on screen. Scope the declaration instead:
+
+       .pr-thing:not([hidden]) { display: flex; }
+
+   NOT a base `display` plus a `.pr-thing[hidden] { display: none }` override —
+   that's two rules where one will do, and the next modifier added to the
+   component silently reintroduces the bug. A modifier that changes `display`
+   (see .pr-btn--icon) needs the same scope, or the base outranks it. */
 
 /* Map zoom controls: they belong to the board rather than to any one screen, so
    they live in the shared layer. Desktop only — touchscreens zoom via pinch.
@@ -138,7 +150,6 @@ body.is-lobby .pr-conn {
 
 /* ── Buttons ────────────────────────────────────────────────────────────────── */
 .pr-btn {
-  display: flex;
   align-items: center;
   justify-content: center;
   gap: 9px;
@@ -155,6 +166,9 @@ body.is-lobby .pr-conn {
   cursor: pointer;
   touch-action: manipulation;
   backdrop-filter: blur(6px);
+}
+.pr-btn:not([hidden]) {
+  display: flex;
 }
 .pr-btn:active {
   transform: scale(0.98);
@@ -178,11 +192,6 @@ body.is-lobby .pr-conn {
 }
 .pr-btn--primary:active:not(:disabled) {
   background: var(--pr-accent-hover);
-}
-/* The flex display above would otherwise beat the UA's [hidden] rule, so a
-   button hidden by its screen (Join off the draw step) would still show. */
-.pr-btn[hidden] {
-  display: none;
 }
 /* Primary action: amber fill. */
 .pr-btn--primary {
@@ -215,13 +224,16 @@ body.is-lobby .pr-conn {
   text-transform: uppercase;
   letter-spacing: 1.5px;
 }
-/* Square icon button (burger, back). */
+/* Square icon button (burger, back). Its `display` carries the same
+   :not([hidden]) scope as the base's, or the base would outrank it. */
 .pr-btn--icon {
   flex: 0 0 auto;
   width: 48px;
   padding: 0;
-  display: grid;
   place-items: center;
+}
+.pr-btn--icon:not([hidden]) {
+  display: grid;
 }
 .pr-btn--icon:active {
   transform: scale(0.96);
@@ -314,7 +326,6 @@ body.is-lobby .pr-conn {
    a row can sit on a `.pr-card` surface (mode select) or bring its own soft
    fill (`--fill`, the menu) without either fighting the other. */
 .pr-item {
-  display: flex;
   align-items: center;
   gap: 14px;
   padding: 13px 12px;
@@ -326,13 +337,11 @@ body.is-lobby .pr-conn {
   cursor: pointer;
   touch-action: manipulation;
 }
+.pr-item:not([hidden]) {
+  display: flex;
+}
 .pr-item:active {
   transform: scale(0.99);
-}
-/* Same as .pr-btn: keep `hidden` winning over the flex display (the online card
-   is hidden when no backend is configured). */
-.pr-item[hidden] {
-  display: none;
 }
 @media (hover: hover) {
   .pr-item:hover {
@@ -567,9 +576,6 @@ body.is-lobby .pr-conn {
   font-size: 13px;
   color: var(--pr-ink);
 }
-.pr-roster__name[hidden] {
-  display: none;
-}
 .pr-roster__input {
   flex: 1;
   min-width: 0;
@@ -602,9 +608,6 @@ body.is-lobby .pr-conn {
   text-transform: uppercase;
   color: var(--pr-ink-dim);
 }
-.pr-roster__badge[hidden] {
-  display: none;
-}
 .pr-roster__badge--host {
   padding: 2px 7px;
   border-radius: 4px;
@@ -624,15 +627,11 @@ body.is-lobby .pr-conn {
   font-size: 12px;
   color: #7fa8c2;
 }
-.pr-roster__empty[hidden] {
-  display: none;
-}
 
 /* ── Status banner: persistent state (waiting / reconnecting) ────────────────
    Not a toast: it stays for as long as the state does and swaps to the error
    skin in place, reusing the toast's error tokens. */
 .pr-status {
-  display: flex;
   align-items: center;
   justify-content: center;
   gap: 9px;
@@ -647,8 +646,8 @@ body.is-lobby .pr-conn {
   text-align: center;
   color: var(--pr-ink-soft);
 }
-.pr-status[hidden] {
-  display: none;
+.pr-status:not([hidden]) {
+  display: flex;
 }
 .pr-status--error {
   background: var(--pr-error-bg);
@@ -747,7 +746,7 @@ body.is-lobby .pr-conn {
    things you may miss, never state you must be able to come back to. Lives in
    the shared layer (it was the cream lobby's, and every screen fires it); the
    editor overrides the skin for its error toast (editor-chrome.css). */
-.toast {
+.pr-toast {
   position: fixed;
   left: 50%;
   bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
@@ -765,12 +764,9 @@ body.is-lobby .pr-conn {
   text-align: center;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
   pointer-events: none;
-  animation: toast-in 0.15s ease-out;
+  animation: pr-toast-in 0.15s ease-out;
 }
-.toast[hidden] {
-  display: none;
-}
-@keyframes toast-in {
+@keyframes pr-toast-in {
   from {
     opacity: 0;
     transform: translate(-50%, 8px);
@@ -902,12 +898,11 @@ body.is-lobby .pr-conn {
 
 /* ── Setting row: label (+ "?" help) over its control ───────────────────────── */
 .pr-row {
-  display: flex;
   flex-direction: column;
   gap: 10px;
 }
-.pr-row[hidden] {
-  display: none;
+.pr-row:not([hidden]) {
+  display: flex;
 }
 .pr-row__head {
   display: flex;
@@ -981,9 +976,6 @@ body.is-lobby .pr-conn {
   line-height: 1.5;
   color: #f0dcb8;
 }
-.pr-hint[hidden] {
-  display: none;
-}
 
 /* Neutral explanation card (e.g. what a handling preset feels like). */
 .pr-note {
@@ -994,9 +986,6 @@ body.is-lobby .pr-conn {
   font-size: 13px;
   line-height: 1.5;
   color: #cfe4f4;
-}
-.pr-note[hidden] {
-  display: none;
 }
 
 /* ── Rules editor (ui/rules-editor.ts): handling + rules control stacks ─────── */
@@ -1013,12 +1002,11 @@ body.is-lobby .pr-conn {
   gap: 22px;
 }
 .pr-rules__sliders {
-  display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.pr-rules__sliders[hidden] {
-  display: none;
+.pr-rules__sliders:not([hidden]) {
+  display: flex;
 }
 /* The four handling axes are compact rows: label and value on one line, and the
    label is plain text (not a section heading — the section is the tab itself). */

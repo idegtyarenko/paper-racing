@@ -8,9 +8,6 @@
   z-index: 30;
   font-family: var(--pr-font);
 }
-.pr-menu[hidden] {
-  display: none;
-}
 .pr-menu__backdrop {
   position: absolute;
   inset: 0;
@@ -107,15 +104,14 @@
   transform: rotate(-90deg);
 }
 .pr-menu__langs {
-  display: flex;
   flex-direction: column;
   gap: 3px;
   padding: 6px 10px 10px;
   border-radius: 0 0 10px 10px;
   background: rgba(127, 211, 255, 0.03);
 }
-.pr-menu__langs[hidden] {
-  display: none;
+.pr-menu__langs:not([hidden]) {
+  display: flex;
 }
 .pr-menu__lang {
   display: flex;

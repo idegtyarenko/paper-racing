@@ -4,20 +4,15 @@
    the same pieces become a left rail beside a full-height board, matching the
    wizard rail so the run-up and the race read as one screen. */
 
-/* The `display` below outranks the UA's `[hidden] { display: none }` (equal
-   specificity, later in the cascade), so without this the whole HUD would stay
-   on screen outside the race — covering the wizard's step rail in the editor.
-   Same trap as `.pr-btn[hidden]`. */
-.pr-race[hidden] {
-  display: none;
-}
 .pr-race {
-  display: flex;
   flex-direction: column;
   gap: 10px;
   padding: calc(env(safe-area-inset-top, 0px) + var(--pr-gutter)) var(--pr-gutter)
     calc(env(safe-area-inset-bottom, 0px) + var(--pr-gutter));
   font-family: var(--pr-mono);
+}
+.pr-race:not([hidden]) {
+  display: flex;
 }
 /* .pr-layer turns pointer events back on for its direct children, which here
    are full-width containers — they'd swallow taps meant for the board. Only the
@@ -77,9 +72,6 @@
   color: var(--pr-ink-dim);
   cursor: pointer;
   touch-action: manipulation;
-}
-.pr-race__code[hidden] {
-  display: none;
 }
 @media (hover: hover) {
   .pr-race__code:hover {
@@ -286,16 +278,10 @@
   margin-top: 0;
   margin-bottom: auto;
 }
-/* The flex display below would beat the UA's `[hidden]`, and the chip steps
-   aside for the reconnect banner. */
-.pr-race__chip[hidden] {
-  display: none;
-}
 /* Capped so a long line can't run under the zoom column at the board's right
    edge — the chip wraps instead. */
 .pr-race__chip {
   max-width: min(100%, 520px);
-  display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px 15px;
@@ -303,6 +289,9 @@
   letter-spacing: 0.3px;
   color: #dff0ff;
   text-align: center;
+}
+.pr-race__chip:not([hidden]) {
+  display: flex;
 }
 .pr-race__chip--error {
   background: var(--pr-error-bg);
@@ -313,9 +302,6 @@
   flex: 0 0 auto;
   width: 9px;
   height: 9px;
-}
-.pr-race__chipdot[hidden] {
-  display: none;
 }
 
 .pr-race__act > .pr-btn {
@@ -382,13 +368,12 @@ body.is-racing .pr-conn {
 /* ── Connection lost (5E): banner + the code to rejoin with ────────────────── */
 .pr-race__conn {
   width: 100%;
-  display: flex;
   flex-direction: column;
   gap: 10px;
   pointer-events: auto;
 }
-.pr-race__conn[hidden] {
-  display: none;
+.pr-race__conn:not([hidden]) {
+  display: flex;
 }
 /* Dashed, like the lobby's "nobody here yet" placeholder: this is a fallback
    route back into the race, not a primary action. */
@@ -424,8 +409,13 @@ body.is-racing .pr-conn {
 
 /* ── Wide screens: the card becomes a left rail ────────────────────────────── */
 @media (min-width: 700px) {
-  .pr-race {
+  /* :not([hidden]) per the hiding convention (pr-controls.css): this `display`
+     has to lose to the hidden attribute, or the HUD stays on screen outside the
+     race and covers the wizard's step rail. */
+  .pr-race:not([hidden]) {
     display: grid;
+  }
+  .pr-race {
     /* A touch wider than the wizard rail: these rows carry a name AND a speed,
        and at 220px six-character names were already ellipsing. */
     grid-template-columns: 240px 1fr;

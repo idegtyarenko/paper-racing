@@ -3,18 +3,16 @@
    Shares the classification row styles with the live HUD (race-chrome.css) —
    this file only adds the scrim, the outcome block and the action stack. */
 
-/* The `display` below outranks the UA's `[hidden]`, same trap as `.pr-race`. */
-.pr-result[hidden] {
-  display: none;
-}
 .pr-result {
-  display: flex;
   flex-direction: column;
   /* The layer is a modal screen, not floating chrome: it takes every pointer
      event so the board underneath can't be aimed at any more. */
   pointer-events: auto;
   overflow-y: auto;
   font-family: var(--pr-mono);
+}
+.pr-result:not([hidden]) {
+  display: flex;
 }
 
 /* Darkens toward the edges, so the track is still there — it's what everyone
@@ -50,11 +48,10 @@
   color: var(--pr-ink);
 }
 .pr-result__icon {
-  display: block;
   color: var(--pr-accent);
 }
-.pr-result__icon[hidden] {
-  display: none;
+.pr-result__icon:not([hidden]) {
+  display: block;
 }
 .pr-result__iconsvg svg {
   width: 40px;
@@ -122,12 +119,11 @@
 
 /* ── Ways on from here ─────────────────────────────────────────────────────── */
 .pr-result__actions {
-  display: flex;
   flex-direction: column;
   gap: 10px;
 }
-.pr-result__actions[hidden] {
-  display: none;
+.pr-result__actions:not([hidden]) {
+  display: flex;
 }
 .pr-result__actions > .pr-btn {
   width: 100%;
@@ -143,7 +139,6 @@
 /* A guest can't start anything — dashed and inert, so it doesn't read as a
    button someone forgot to enable. */
 .pr-result__wait {
-  display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
@@ -158,8 +153,8 @@
   line-height: 1.4;
   color: var(--pr-ink-dim);
 }
-.pr-result__wait[hidden] {
-  display: none;
+.pr-result__wait:not([hidden]) {
+  display: flex;
 }
 .pr-result__dots {
   flex: 0 0 auto;
