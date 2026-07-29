@@ -7,9 +7,6 @@
 @import '@fontsource-variable/jetbrains-mono/index.css';
 @import './base.css';
 @import './layout.css';
-/* The two cream-era floating globals, still to be redesigned. */
-@import './install-prompt.css';
-@import './conn-banner.css';
 /* Blueprint layer: shared components first, then the screens that compose them. */
 @import './pr-controls.css';
 @import './menu.css';
@@ -19,3 +16,6 @@
 @import './race-result.css';
 @import './setup-chrome.css';
 @import './online-lobby.css';
+/* Floating globals, not owned by any one screen. */
+@import './install-prompt.css';
+@import './conn-banner.css';

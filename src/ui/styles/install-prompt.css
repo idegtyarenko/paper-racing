@@ -1,19 +1,20 @@
-/* "Install on your phone" popup: a card at the bottom edge of the screen. */
-.install-prompt {
+/* "Install on your phone" popup: a card at the bottom edge of the screen.
+   Built by ui/install-prompt.ts. The surface is the shared solid card and the
+   action is the shared primary button — only the slide-in and this card's own
+   three-column layout live here. */
+.pr-install {
   position: fixed;
   left: 50%;
   bottom: max(12px, env(safe-area-inset-bottom));
   transform: translate(-50%, calc(100% + 24px));
-  z-index: 9; /* below the modal overlay (10), above the board and panel */
+  z-index: 9; /* below the modal overlay (10), above the board and its chrome */
   width: min(440px, calc(100vw - 20px));
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
-  background: var(--surface);
-  border: 1px solid var(--border-soft);
-  border-radius: 14px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22);
+  font-family: var(--pr-font);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
   opacity: 0;
   transition:
     transform 0.24s ease-out,
@@ -21,19 +22,19 @@
 }
 
 /* The class is added on the next frame — the card slides in from the bottom. */
-.install-prompt--in {
+.pr-install--in {
   transform: translate(-50%, 0);
   opacity: 1;
 }
 
-.install-prompt__icon {
+.pr-install__icon {
   flex: none;
   width: 44px;
   height: 44px;
   border-radius: 10px;
 }
 
-.install-prompt__text {
+.pr-install__text {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -41,43 +42,35 @@
   gap: 2px;
 }
 
-.install-prompt__title {
+.pr-install__title {
   font-size: 14px;
-  color: var(--ink);
+  font-weight: 700;
+  color: var(--pr-ink);
 }
 
-.install-prompt__body {
+.pr-install__body {
   font-size: 12px;
   line-height: 1.35;
-  color: #6b6658;
+  color: var(--pr-ink-dim);
 }
 
 /* "Share" icon inlined into the instruction line for iOS. */
-.install-prompt__share {
+.pr-install__share {
   display: inline-flex;
   vertical-align: -4px;
-  color: var(--accent);
+  color: var(--pr-accent);
 }
 
-.install-prompt__install {
+/* Sized down from the standard .pr-btn: this one shares a row with the icon and
+   two lines of copy, so full button padding would push the card too tall. */
+.pr-install__install {
   flex: none;
-  padding: 9px 16px;
-  min-height: 40px;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--white);
-  background: var(--accent);
-  border: none;
-  border-radius: 999px;
-  cursor: pointer;
-  touch-action: manipulation;
+  padding: 10px 16px;
+  border-radius: var(--pr-radius-pill);
+  font-size: 13px;
 }
 
-.install-prompt__install:active {
-  background: var(--accent-active);
-}
-
-.install-prompt__close {
+.pr-install__close {
   flex: none;
   align-self: flex-start;
   width: 26px;
@@ -85,7 +78,7 @@
   margin: -4px -4px 0 0;
   font-size: 20px;
   line-height: 1;
-  color: #8a8578;
+  color: var(--pr-ink-dim);
   background: none;
   border: none;
   border-radius: 50%;
@@ -93,6 +86,6 @@
   touch-action: manipulation;
 }
 
-.install-prompt__close:active {
-  background: rgba(0, 0, 0, 0.06);
+.pr-install__close:active {
+  background: var(--pr-press);
 }

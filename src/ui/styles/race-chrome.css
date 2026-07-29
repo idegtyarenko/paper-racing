@@ -375,7 +375,7 @@ body.is-racing .zoom-ctl {
 /* The global cream banner would say it twice, in the wrong place: the race has
    its own reconnect banner in the action zone (hi-fi 5E). Same reason the lobby
    screens suppress it. */
-body.is-racing #connBanner {
+body.is-racing .pr-conn {
   display: none;
 }
 

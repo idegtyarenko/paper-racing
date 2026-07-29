@@ -5,9 +5,8 @@
    per-screen copy. Screen-specific stylesheets (editor-chrome.css,
    setup-chrome.css) only position these and add their own extras.
 
-   Imported after the legacy cream components so a `.pr-*` class wins over the
-   `.button` rules on elements that carry both (the overlay sheets, until they
-   move over too). */
+   Imported before the per-screen stylesheets, so a screen can position and
+   extend a component without fighting it. */
 
 /* Map zoom controls: they belong to the board rather than to any one screen, so
    they live in the shared layer. Desktop only — touchscreens zoom via pinch.
@@ -57,8 +56,8 @@
 /* Both lobby screens report the connection themselves (the guest's status
    banner, the host's hint line above Start), so the global banner would just
    say it twice. It stays for the race, where nothing else does. */
-body.is-setup #connBanner,
-body.is-lobby #connBanner {
+body.is-setup .pr-conn,
+body.is-lobby .pr-conn {
   display: none;
 }
 
@@ -161,8 +160,7 @@ body.is-lobby #connBanner {
   transform: scale(0.98);
 }
 /* Hover — only on devices with a real pointer (on touch it "sticks" after a tap
-   and iOS eats the first click). These also override the cream `.button` hover
-   the re-skinned wizard buttons still carry, which washed them out. */
+   and iOS eats the first click). */
 @media (hover: hover) {
   .pr-btn:hover:not(:disabled) {
     background: var(--pr-hover);

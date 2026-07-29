@@ -2,17 +2,7 @@
    components). Component-local near-duplicate shades are still literals in a few
    places and get reconciled onto these scales separately. */
 :root {
-  /* What's left of the cream palette: the install prompt and the connection
-     banner are the last two components not yet redesigned. Everything else is
-     --pr-* below. */
-  --surface: #f4f1e8;
-  --white: #fff;
-  --border-soft: #d8d2c0;
-  --ink: #3a3a3a;
-  --accent: #0a8a4f;
-  --accent-active: #097843;
-
-  /* ── Blueprint tokens (the redesign, --pr-*). ────────────────────────────
+  /* ── Blueprint tokens (--pr-*). ─────────────────────────────────────────
      The DOM palette, matching the "Blueprint" hi-fi and the canvas, which
      carries the same values independently (render.ts — two sources of truth,
      a deliberate tradeoff; see the comment there). Fonts are Cyrillic-capable
