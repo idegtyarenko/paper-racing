@@ -7,6 +7,7 @@ import {
   coastMove,
   playerForTurn,
   upcomingTurns,
+  upcomingSlots,
   retireSeat,
   reachableTargets,
 } from './turns';
@@ -469,6 +470,42 @@ describe('upcomingTurns — queue of upcoming moves', () => {
     const before = JSON.stringify(g);
     upcomingTurns(g, 12);
     expect(JSON.stringify(g)).toBe(before);
+  });
+});
+
+describe('upcomingSlots — ignoreRoundCap (display-only full forecast)', () => {
+  it('by default the decisive round still caps the queue', () => {
+    const g = newGame(ringTrack(), 3);
+    g.finalTurnsLeft = 2;
+    expect(upcomingSlots(g, 9)).toHaveLength(2);
+  });
+
+  it('with ignoreRoundCap the queue keeps its full length past the round boundary', () => {
+    const g = newGame(ringTrack(), 3);
+    const free = upcomingSlots(g, 9, { ignoreRoundCap: true });
+    g.finalTurnsLeft = 2;
+    const capped = upcomingSlots(g, 9, { ignoreRoundCap: true });
+    expect(capped).toHaveLength(9);
+    // The rotation past the boundary is the plain forecast — as if no round were open.
+    expect(capped).toEqual(free);
+    expect(capped.map((s) => s.seat)).toEqual([0, 1, 2, 1, 2, 0, 2, 0, 1]);
+    expect(capped.map((s) => s.round)).toEqual([0, 0, 0, 1, 1, 1, 2, 2, 2]);
+  });
+
+  it('with ignoreRoundCap penalty skips are still honoured', () => {
+    const g = newGame(ringTrack(), 3);
+    g.finalTurnsLeft = 1;
+    g.players[1].skipTurns = 1; // Blue's next slot burns off
+    const q = upcomingSlots(g, 4, { ignoreRoundCap: true }).map((s) => s.seat);
+    expect(q).toEqual([0, 2, 1, 2]); // slot 1 (Blue) burns, Blue returns on the next lap
+  });
+
+  it('with ignoreRoundCap a finished field yields an empty queue instead of spinning', () => {
+    const g = newGame(ringTrack(), 3);
+    g.players[0].place = 1;
+    g.players[1].place = 2;
+    g.players[2].retired = true;
+    expect(upcomingSlots(g, 9, { ignoreRoundCap: true })).toEqual([]);
   });
 });
 

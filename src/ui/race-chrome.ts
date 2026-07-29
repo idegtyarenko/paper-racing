@@ -265,7 +265,8 @@ export function setTurnCountdown(msLeft: number | null, mine = false): void {
 
 /** The UP NEXT strip: who's moving now (first, outlined) and who follows. */
 function renderQueue(game: GameState): void {
-  const slots = upcomingSlots(game, QUEUE_LEN);
+  // ignoreRoundCap: the strip keeps a constant length — see upcomingSlots.
+  const slots = upcomingSlots(game, QUEUE_LEN, { ignoreRoundCap: true });
   const children: HTMLElement[] = [];
   let prevRound: number | null = null;
   slots.forEach((slot, i) => {
