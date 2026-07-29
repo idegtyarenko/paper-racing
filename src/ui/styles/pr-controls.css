@@ -9,24 +9,49 @@
    `.button` rules on elements that carry both (the overlay sheets, until they
    move over too). */
 
-/* Zoom controls belong to the board, not to any one screen: every redesigned
-   phase gets the Blueprint skin (they used to be re-skinned inside the editor's
-   own stylesheet). Lifting them clear of the bottom action zone is still the
-   screen's business — each one sets its own `bottom`. */
-body.is-editing .zoom-ctl__btn,
-body.is-racing .zoom-ctl__btn {
+/* Map zoom controls: they belong to the board rather than to any one screen, so
+   they live in the shared layer. Desktop only — touchscreens zoom via pinch.
+   Lifting them clear of a screen's bottom action zone is still that screen's
+   business (each one sets its own `bottom`). */
+.zoom-ctl {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 5;
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .zoom-ctl {
+    display: flex;
+  }
+}
+.zoom-ctl__btn {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--pr-radius);
+  border: 1px solid var(--pr-border);
   background: var(--pr-panel);
-  border-color: var(--pr-border);
   color: var(--pr-ink-soft);
+  font-size: 20px;
+  line-height: 1;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(6px);
 }
 @media (hover: hover) {
-  body.is-editing .zoom-ctl__btn:hover,
-  body.is-racing .zoom-ctl__btn:hover {
+  .zoom-ctl__btn:hover {
     background: var(--pr-hover);
     border-color: var(--pr-edge);
   }
+}
+.zoom-ctl__btn:active {
+  background: var(--pr-press);
 }
 
 /* Both lobby screens report the connection themselves (the guest's status
@@ -167,6 +192,25 @@ body.is-lobby #connBanner {
   border-color: transparent;
   color: var(--pr-accent-ink);
   font-weight: 800;
+}
+/* Destructive action (confirming a retirement). Outlined in the error colour
+   rather than filled: the amber primary is the way ON, and a second solid slab
+   beside it would read as an equal — this one has to look like the exit. */
+.pr-btn--danger {
+  background: rgba(255, 93, 93, 0.12);
+  border-color: var(--pr-error);
+  color: #ffb4b4;
+  font-weight: 800;
+}
+@media (hover: hover) {
+  .pr-btn--danger:hover:not(:disabled) {
+    background: rgba(255, 93, 93, 0.22);
+    border-color: var(--pr-error);
+    color: #ffd0d0;
+  }
+}
+.pr-btn--danger:active:not(:disabled) {
+  background: rgba(255, 93, 93, 0.28);
 }
 /* Uppercase call to action (START RACE, JOIN ONLINE GAME). */
 .pr-btn--caps {
@@ -737,6 +781,125 @@ body.is-lobby #connBanner {
     opacity: 1;
     transform: translate(-50%, 0);
   }
+}
+
+/* ── Overlay + sheet: the modal layer (rules, join by code, confirmations) ───
+   Not a .pr-layer child — the overlay is fixed to the viewport rather than to
+   the board, so it carries its own font. The sheet is a .pr-card--solid that
+   slides up from the bottom edge on a phone and centres on a wide screen.
+   Owners: ui/dialogs.ts (rules, join), ui/confirm.ts (confirmations). */
+.pr-overlay:not([hidden]) {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  font-family: var(--pr-font);
+  color: var(--pr-ink);
+}
+.pr-overlay__backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--pr-scrim);
+}
+.pr-sheet:not([hidden]) {
+  position: relative;
+  margin: auto;
+  z-index: 1;
+  padding: 18px;
+  width: min(360px, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /* A tall sheet shouldn't overflow the screen — scroll internally. */
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+}
+.pr-sheet__title {
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: 0.3px;
+}
+/* Body copy inside a sheet. Paragraphs are separated by \n\n — pre-line turns
+   those into breaks (single line breaks collapse, as in normal text flow). */
+.pr-sheet__text {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--pr-ink-soft);
+  white-space: pre-line;
+}
+/* Build label at the foot of the rules sheet — a subtle sign the PWA updated. */
+.pr-sheet__version {
+  margin-top: 4px;
+  text-align: center;
+  font-family: var(--pr-mono);
+  font-size: 11px;
+  color: var(--pr-ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+/* Phone: the sheet is a bottom sheet, full width, with a sliver of backdrop
+   left visible above it. */
+@media (max-width: 700px) {
+  .pr-overlay:not([hidden]) {
+    align-items: flex-end;
+  }
+  .pr-sheet:not([hidden]) {
+    margin: 0;
+    width: 100%;
+    border-radius: var(--pr-radius-lg) var(--pr-radius-lg) 0 0;
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+    animation: pr-sheet-up 0.18s ease-out;
+    max-height: 92dvh;
+  }
+}
+@keyframes pr-sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+/* ── Text field: the join code, and anything else a sheet asks for ──────────── */
+.pr-field {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--pr-radius);
+  border: 1px solid var(--pr-border);
+  background: rgba(9, 40, 63, 0.5);
+  color: var(--pr-ink);
+  font-family: var(--pr-font);
+  font-weight: 600;
+  font-size: 16px; /* iOS zooms a focused field below 16px */
+}
+.pr-field::placeholder {
+  color: var(--pr-ink-dim);
+}
+.pr-field:focus {
+  outline: 2px solid var(--pr-accent);
+  outline-offset: 1px;
+}
+/* An empty required field on submit — red outline, cleared once they type. */
+.pr-field--invalid,
+.pr-field--invalid:focus {
+  border-color: var(--pr-error);
+  outline-color: var(--pr-error);
+}
+/* A room code: wide-tracked mono caps, like the code shown in the lobby. */
+.pr-field--code {
+  font-family: var(--pr-mono);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 4px;
+  text-align: center;
+}
+/* Why the join attempt failed, under the field. */
+.pr-field-error:not([hidden]) {
+  display: block;
+  color: var(--pr-error);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 /* ── Setting row: label (+ "?" help) over its control ───────────────────────── */

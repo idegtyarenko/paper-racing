@@ -292,6 +292,20 @@ export function buildStatus(parent: HTMLElement): StatusBanner {
   };
 }
 
+/**
+ * A modal sheet, mounted into #overlay and hidden until its owner opens it.
+ * The surface is the shared solid card, so a sheet reads as the same material
+ * as the menu drawer and the coach-mark. Callers append their own content and
+ * buttons; `openSheet`/`closeOverlay` (ui/dom.ts) do the showing.
+ */
+export function buildSheet(title: string): HTMLElement {
+  const overlay = document.getElementById('overlay')!;
+  const sheet = el('div', 'pr-card pr-card--lg pr-card--solid pr-sheet', overlay);
+  sheet.hidden = true;
+  el('h2', 'pr-sheet__title', sheet).textContent = title;
+  return sheet;
+}
+
 export interface Topbar {
   root: HTMLElement;
   /** The 48px leading icon button (burger in the editor, back elsewhere). */

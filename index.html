@@ -40,45 +40,13 @@
         </div>
       </div>
     </div>
-    <div id="overlay" class="overlay" hidden>
-      <div class="overlay__backdrop"></div>
-      <div id="rulesSheet" class="sheet" hidden>
-        <h2 class="sheet__title" data-i18n="buttons.rulesTitle"></h2>
-        <p class="rules__text" data-i18n="rules.body"></p>
-        <button
-          class="button button--center"
-          data-i18n="buttons.toWheel"
-          data-close
-        ></button>
-        <p id="appVersion" class="rules__version" aria-hidden="true"></p>
-      </div>
-      <div id="joinDialog" class="sheet" hidden>
-        <h2 class="sheet__title" data-i18n="online.joinTitle"></h2>
-        <input
-          id="joinCodeInput"
-          class="field field--code"
-          type="text"
-          maxlength="5"
-          autocomplete="off"
-          autocapitalize="characters"
-          spellcheck="false"
-          data-i18n-placeholder="online.codePlaceholder"
-        />
-        <div id="joinError" class="dialog-error" hidden></div>
-        <button
-          id="joinConfirm"
-          class="button button--primary"
-          data-i18n="online.joinSubmit"
-        ></button>
-        <button
-          class="button button--center"
-          data-i18n="buttons.cancel"
-          data-close
-        ></button>
-      </div>
+    <!-- Empty mount point for the modal sheets: each one is built by its owner
+         module on first open (ui/dialogs.ts, ui/confirm.ts). -->
+    <div id="overlay" class="pr-overlay" hidden>
+      <div class="pr-overlay__backdrop"></div>
     </div>
     <div id="toast" class="toast" hidden></div>
-    <div id="connBanner" class="conn-banner" hidden data-i18n="online.reconnecting"></div>
+    <div id="connBanner" class="conn-banner" hidden></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -1,47 +1,22 @@
-/* Design tokens: single source of truth for the DOM palette (var(--…) in components).
-   Values are extracted as-is — a straight extraction with no visual change. For now this
-   only covers the shared semantic palette; component-local colors and near-duplicate
-   shades (gray/amber drift) are left as literals and will be reconciled by the redesign
-   once it settles on new values. The canvas keeps its own mirrored values in render.ts
-   (two sources of truth — a deliberate tradeoff, with drift risk; see the comment there). */
+/* Design tokens: the single source of truth for the DOM palette (var(--…) in
+   components). Component-local near-duplicate shades are still literals in a few
+   places and get reconciled onto these scales separately. */
 :root {
-  /* Surfaces (paper/cream). */
-  --paper: #fbfaf4; /* board background (mirrors canvas PAPER) */
-  --surface: #f4f1e8; /* panel */
-  --surface-hover: #f0ecdf;
-  --surface-active: #e6e0cf;
-  --surface-glass: rgba(255, 255, 255, 0.92); /* translucent floating buttons */
+  /* What's left of the cream palette: the install prompt and the connection
+     banner are the last two components not yet redesigned. Everything else is
+     --pr-* below. */
+  --surface: #f4f1e8;
   --white: #fff;
-  /* Borders. */
-  --border: #b7b0a0;
   --border-soft: #d8d2c0;
-  /* Text/ink. */
-  --ink: #3a3a3a; /* primary (mirrors canvas INK) */
-  --ink-strong: #33322e;
-  --text-muted: #55524a;
-  /* Accent (green). */
-  --accent: #0a8a4f; /* mirrors canvas ARROW_COLOR */
+  --ink: #3a3a3a;
+  --accent: #0a8a4f;
   --accent-active: #097843;
-  --accent-translucent: rgba(10, 138, 79, 0.55);
-  /* Danger action (red). */
-  --danger: #b3261e;
-  --danger-strong: #8f1a14;
-  --danger-hover: #9f211a;
-  --danger-bg: #fdecea;
-  --danger-border: #f3b7b0;
-  /* Warning / "Step N of 4" (amber). */
-  --warn: #e0a800;
-  --warn-bg: #fff3cd;
-  --warn-border: #f0d98c;
-  --warn-text: #4a3d00;
-  --warn-badge: #8a6d00;
 
   /* ── Blueprint tokens (the redesign, --pr-*). ────────────────────────────
-     The new DOM palette, matching the "Blueprint" hi-fi and the canvas, which
-     already carries these values (render.ts). Adopted editor-first: the editor
-     chrome uses these now; race/setup migrate off the cream --paper/--accent
-     tokens above incrementally. Fonts are Cyrillic-capable substitutes for the
-     hi-fi's Archivo / Spline Sans Mono (see index.css). */
+     The DOM palette, matching the "Blueprint" hi-fi and the canvas, which
+     carries the same values independently (render.ts — two sources of truth,
+     a deliberate tradeoff; see the comment there). Fonts are Cyrillic-capable
+     substitutes for the hi-fi's Archivo / Spline Sans Mono (see index.css). */
   --pr-font: 'Onest Variable', system-ui, sans-serif;
   --pr-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
   /* Surfaces (dark navy blueprint). */

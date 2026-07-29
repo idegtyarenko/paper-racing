@@ -50,13 +50,12 @@ import {
   setSetupOnlineEnabled,
 } from './ui/setup-chrome';
 import { initOnlineLobby, renderOnlineLobby } from './ui/online-lobby';
-import { localizeDom } from './ui/localize';
 import { onlineAvailable } from './online/net';
 import * as session from './online/online';
 import * as online from './online/online-controller';
 import * as input from './view/input';
 import { initInstallPrompt } from './ui/install-prompt';
-import { bindDialogs, openRules, showToast } from './ui/dialogs';
+import { openRules, setVersionLabel, showToast } from './ui/dialogs';
 import { bindOverlayClose } from './ui/dom';
 import { initPwa } from './pwa';
 import { toggleSwDebug } from './sw-debug';
@@ -520,9 +519,8 @@ input.initInput({
   redraw,
 });
 
-// Overlay dismissal (backdrop / Escape) and the join dialog's own controls.
+// Overlay dismissal (backdrop tap / Escape) for every sheet mounted into it.
 bindOverlayClose();
-bindDialogs();
 
 // Step navigation for all six wizard steps. Built before the editor chrome,
 // which mounts its coach card into the rail this owns.
@@ -682,10 +680,8 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') saveState();
 });
 
-// Fill in static markup text from strings before the panel is first shown,
-// and set the document language to the active locale (markup defaults to lang="en").
+// The document language follows the active locale (markup defaults to lang="en").
 document.documentElement.lang = localeTag;
-localizeDom();
 
 // Build label at the bottom of the "Rules" sheet — an honest indicator of
 // which code is actually running (the string is compiled into the bundle):
@@ -698,21 +694,11 @@ const buildLabel = new Date(__BUILD_TIME__).toLocaleString(dateLocale, {
   hour: '2-digit',
   minute: '2-digit',
 });
-const appVersionEl = document.getElementById('appVersion')!;
-appVersionEl.textContent = `${__COMMIT__} · ${buildLabel}`;
-
 // Hidden activation of SW debug from inside the app: a standalone PWA has
 // its own localStorage bucket (the `?swdebug` flag from Safari doesn't carry
 // over) and no address bar — toggle the overlay with 5 quick taps on the
 // build label in "Rules".
-let verTaps = 0;
-let verTapT = 0;
-appVersionEl.addEventListener('click', () => {
-  const now = performance.now();
-  verTaps = now - verTapT < 600 ? verTaps + 1 : 1;
-  verTapT = now;
-  if (verTaps < 5) return;
-  verTaps = 0;
+setVersionLabel(`${__COMMIT__} · ${buildLabel}`, () => {
   const on = toggleSwDebug();
   showToast(on ? 'SW debug ON' : 'SW debug OFF', 1500);
   setTimeout(() => location.reload(), 400);

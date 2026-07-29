@@ -7,15 +7,10 @@
 @import '@fontsource-variable/jetbrains-mono/index.css';
 @import './base.css';
 @import './layout.css';
-@import './button.css';
-@import './dialogs.css';
-@import './rules.css';
-@import './overlay.css';
+/* The two cream-era floating globals, still to be redesigned. */
 @import './install-prompt.css';
 @import './conn-banner.css';
-/* Blueprint redesign layer, last so its components win over the cream ones on
-   elements that carry both (the re-skinned wizard buttons): shared components
-   first, then the screens that compose them. */
+/* Blueprint layer: shared components first, then the screens that compose them. */
 @import './pr-controls.css';
 @import './menu.css';
 @import './wizard-nav.css';

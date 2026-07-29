@@ -8,6 +8,7 @@
 // the close × as a floating button outside the drawer, mirroring the burger.
 
 import { strings, setLocale, locale, LocaleCode } from '../i18n';
+import { versionLabel } from './dialogs';
 import {
   el,
   button,
@@ -146,9 +147,9 @@ export function openMenu(): void {
   if (!root) root = build();
   clearTimeout(closeTimer);
   root.classList.remove('pr-menu--closing');
-  // Read at open time, not at build time: main.ts fills #appVersion on its own
-  // schedule, so a value captured once could be the empty placeholder.
-  footEl.textContent = document.getElementById('appVersion')?.textContent ?? '';
+  // Read at open time, not at build time: main.ts publishes the label on its
+  // own schedule, so a value captured once could still be the empty default.
+  footEl.textContent = versionLabel();
   retireItem.hidden = !handlers.canRetire();
   root.hidden = false;
   document.addEventListener('keydown', onKeyDown);
