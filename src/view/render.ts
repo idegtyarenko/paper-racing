@@ -127,6 +127,16 @@ function shade(hex: string, t: number): string {
   return `rgb(${Math.round(f(r))}, ${Math.round(f(g))}, ${Math.round(f(b))})`;
 }
 
+/**
+ * `shade` amount for the pre-pick preview (waiting for someone else to move):
+ * the whole preview loses luminance while keeping its hue, so "your turn" and
+ * "planning ahead" never look alike. It must NOT be done with `globalAlpha` —
+ * fading into the navy field turns red marks brown-gray, the same mistake the
+ * trail ramp made before d9f0ae0. Same contrast floor as TRAIL_DIM_MIN: don't
+ * go past ≈−0.5, or cool marks sink into the background.
+ */
+const PRESELECT_DIM = -0.45;
+
 // Geometry for race markers. Radii scale with `s` (px per cell); line widths
 // are constant px, matching the design. Values are taken from the "Canvas
 // System" design (primary source) and "Design Exploration" (for states not
@@ -151,6 +161,10 @@ const BLOCK_LW = 1.8;
  *  an available move is the thing the eye should land on first. */
 const CRASH_CAND_LW = 2;
 const CRASH_CAND_ALPHA = 0.85;
+/** Traction zone fill under the candidate points. */
+const DRIVE_AREA_ALPHA = 0.1;
+/** Aim line from the car to the hovered candidate. */
+const AIM_LINE_ALPHA = 0.35;
 /** Pending pick (queued for a later turn): the selection ring, one step quieter. */
 const PENDING_LW = 2;
 const PENDING_DASH: [number, number] = [4, 3];
@@ -646,6 +660,7 @@ function drawDriveArea(
   vel: Vec,
   drive: Drive,
   color: string,
+  alpha: number,
 ): void {
   const { accel, brake, grip, downforce } = drive;
   const speed = Math.hypot(vel.x, vel.y);
@@ -654,7 +669,7 @@ function drawDriveArea(
   const gripEff = grip * aero;
   ctx.save();
   ctx.fillStyle = color;
-  ctx.globalAlpha = 0.1;
+  ctx.globalAlpha = alpha;
   ctx.beginPath();
   if (speed === 0) {
     ctx.arc(pos.x * s, pos.y * s, Math.max(accel, MIN_LAUNCH) * s, 0, Math.PI * 2);
@@ -948,16 +963,23 @@ function drawCandidates(
   // (pre-pick) it's our own seat. Position, color, and the traction zone are
   // all taken from here, not from game.current.
   const p = game.players[candSeat];
+  // Whose turn it actually is decides how loud the preview gets. The fan owner
+  // differs from the mover exactly when we are pre-picking for a later turn
+  // (bot or online opponent moving) — the same condition main.ts calls
+  // `isPreselect`. In hotseat the two never diverge, so nothing dims there.
+  // The preview recedes by losing luminance, never by fading into the field:
+  // `shade(c, 0)` is the identity, so the active turn is untouched.
+  const dim = candSeat === game.current ? 0 : PRESELECT_DIM;
   // Traction zone fill goes under the points; we skip it for isotropic
   // handling (like classic mode), where it's just an obvious square.
   const d = game.rules.drive;
   if (!(d.accel === d.brake && d.brake === d.grip && d.downforce === 0)) {
-    drawDriveArea(ctx, s, p.pos, p.vel, d, p.color);
+    drawDriveArea(ctx, s, p.pos, p.vel, d, shade(p.color, dim), DRIVE_AREA_ALPHA);
   }
   if (hover && !hover.blocked) {
     ctx.save();
-    ctx.strokeStyle = p.color;
-    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = shade(p.color, dim);
+    ctx.globalAlpha = AIM_LINE_ALPHA;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(p.pos.x * s, p.pos.y * s);
@@ -982,7 +1004,7 @@ function drawCandidates(
     if (kind === 'blocked') {
       // Another car stands somewhere along the way — gray cross.
       const br = Math.max(BLOCK_R_MIN, s * BLOCK_R);
-      ctx.strokeStyle = MUTED;
+      ctx.strokeStyle = shade(MUTED, dim);
       ctx.lineWidth = BLOCK_LW;
       crossPath(ctx, x, y, br);
       ctx.stroke();
@@ -991,7 +1013,7 @@ function drawCandidates(
       // when selected — and differ only in color, so selection reads the same
       // way everywhere. Blocked candidates have no selected state: they are
       // filtered out of hit-testing and can never be picked.
-      const color = kind === 'crash' ? CRASH : EDGE;
+      const color = shade(kind === 'crash' ? CRASH : EDGE, dim);
       ctx.strokeStyle = color;
       if (selected) {
         ctx.lineWidth = CAND_HOVER_LW;
