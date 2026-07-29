@@ -28,7 +28,7 @@
   flex: 1;
   height: 4px;
   border-radius: 2px;
-  background: rgba(127, 211, 255, 0.25);
+  background: rgba(var(--pr-edge-rgb), 0.25);
   transition:
     background 0.35s ease,
     opacity 0.35s ease;

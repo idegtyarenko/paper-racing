@@ -79,7 +79,6 @@ body.is-lobby .pr-conn {
   inset: 0;
   z-index: 5;
   pointer-events: none;
-  font-family: var(--pr-font);
   color: var(--pr-ink);
 }
 .pr-layer > * {
@@ -150,6 +149,7 @@ body.is-lobby .pr-conn {
 
 /* ── Buttons ────────────────────────────────────────────────────────────────── */
 .pr-btn {
+  font-family: var(--pr-font);
   align-items: center;
   justify-content: center;
   gap: 9px;
@@ -159,7 +159,6 @@ body.is-lobby .pr-conn {
   border: 1px solid var(--pr-border);
   background: var(--pr-panel);
   color: var(--pr-ink-soft);
-  font-family: var(--pr-font);
   font-weight: 700;
   font-size: 14px;
   letter-spacing: 0.5px;
@@ -204,20 +203,20 @@ body.is-lobby .pr-conn {
    rather than filled: the amber primary is the way ON, and a second solid slab
    beside it would read as an equal — this one has to look like the exit. */
 .pr-btn--danger {
-  background: rgba(255, 93, 93, 0.12);
+  background: var(--pr-error-wash);
   border-color: var(--pr-error);
-  color: #ffb4b4;
+  color: var(--pr-error-soft);
   font-weight: 800;
 }
 @media (hover: hover) {
   .pr-btn--danger:hover:not(:disabled) {
-    background: rgba(255, 93, 93, 0.22);
+    background: rgba(var(--pr-error-rgb), 0.22);
     border-color: var(--pr-error);
-    color: #ffd0d0;
+    color: var(--pr-error-ink);
   }
 }
 .pr-btn--danger:active:not(:disabled) {
-  background: rgba(255, 93, 93, 0.28);
+  background: rgba(var(--pr-error-rgb), 0.28);
 }
 /* Uppercase call to action (START RACE, JOIN ONLINE GAME). */
 .pr-btn--caps {
@@ -269,8 +268,8 @@ body.is-lobby .pr-conn {
   gap: 3px;
 }
 .pr-brand__wordmark {
-  display: inline-block;
   font-family: var(--pr-font);
+  display: inline-block;
   font-weight: 800;
   font-size: 15.5px;
   line-height: 1;
@@ -294,7 +293,7 @@ body.is-lobby .pr-conn {
 }
 .pr-brand__dash--hollow {
   background: transparent;
-  border: 1px solid rgba(234, 246, 255, 0.4);
+  border: 1px solid rgba(var(--pr-ink-rgb), 0.4);
 }
 /* Compact: the editor rail, where the brand shares its row with the burger. */
 .pr-brand--sm {
@@ -326,12 +325,12 @@ body.is-lobby .pr-conn {
    a row can sit on a `.pr-card` surface (mode select) or bring its own soft
    fill (`--fill`, the menu) without either fighting the other. */
 .pr-item {
+  font-family: var(--pr-font);
   align-items: center;
   gap: 14px;
   padding: 13px 12px;
   text-align: left;
   color: var(--pr-ink);
-  font-family: var(--pr-font);
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;
@@ -367,7 +366,7 @@ body.is-lobby .pr-conn {
   display: grid;
   place-items: center;
   border-radius: 9px;
-  background: rgba(127, 211, 255, 0.12);
+  background: rgba(var(--pr-edge-rgb), 0.12);
   color: var(--pr-edge);
 }
 .pr-item__ico svg {
@@ -403,11 +402,11 @@ body.is-lobby .pr-conn {
   font-family: var(--pr-font);
   font-weight: 400;
   font-size: 12px;
-  color: #9fc3dd;
+  color: var(--pr-ink-mute);
 }
 .pr-item__chev {
   flex: 0 0 auto;
-  color: #5f8ba8;
+  color: var(--pr-ink-faint);
 }
 .pr-item__chev svg {
   width: 14px;
@@ -439,6 +438,7 @@ body.is-lobby .pr-conn {
   flex-direction: column;
 }
 .pr-seg__opt {
+  font-family: var(--pr-font);
   flex: 1;
   min-width: 0;
   min-height: 44px;
@@ -446,9 +446,8 @@ body.is-lobby .pr-conn {
   text-align: center;
   border-radius: var(--pr-radius);
   border: 1px solid var(--pr-border);
-  background: rgba(9, 40, 63, 0.5);
+  background: var(--pr-sunken);
   color: var(--pr-ink-soft);
-  font-family: var(--pr-font);
   font-weight: 600;
   font-size: 13px;
   cursor: pointer;
@@ -497,7 +496,7 @@ body.is-lobby .pr-conn {
   border-radius: var(--pr-radius);
   /* Dashed: the code is something to pass on, not a field to fill in. */
   border: 1px dashed var(--pr-border);
-  background: rgba(9, 40, 63, 0.5);
+  background: var(--pr-sunken);
   color: var(--pr-ink);
   cursor: pointer;
   touch-action: manipulation;
@@ -552,7 +551,7 @@ body.is-lobby .pr-conn {
   padding: 6px 12px;
   border-radius: var(--pr-radius);
   border: 1px solid var(--pr-border);
-  background: rgba(9, 40, 63, 0.5);
+  background: var(--pr-sunken);
 }
 /* Gone from the channel: dimmed, but the seat is still theirs. */
 .pr-roster__row--offline {
@@ -566,26 +565,26 @@ body.is-lobby .pr-conn {
   border-radius: 50%;
 }
 .pr-roster__name {
+  font-family: var(--pr-font);
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--pr-font);
   font-weight: 600;
   font-size: 13px;
   color: var(--pr-ink);
 }
 .pr-roster__input {
+  font-family: var(--pr-font);
   flex: 1;
   min-width: 0;
   height: 40px;
   padding: 0 12px;
   border-radius: 7px;
   border: 1px solid var(--pr-edge);
-  background: rgba(234, 246, 255, 0.06);
+  background: rgba(var(--pr-ink-rgb), 0.06);
   outline: none;
-  font-family: var(--pr-font);
   font-weight: 700;
   font-size: 14.5px;
   color: var(--pr-ink);
@@ -593,15 +592,15 @@ body.is-lobby .pr-conn {
 .pr-roster__input::placeholder {
   font-weight: 600;
   font-style: italic;
-  color: #7fa8c2;
+  color: var(--pr-ink-dim);
 }
 /* Nothing typed yet: the field reads as an invitation, not as filled in. */
 .pr-roster__input:placeholder-shown {
   border-color: var(--pr-border);
 }
 .pr-roster__badge {
-  flex: 0 0 auto;
   font-family: var(--pr-font);
+  flex: 0 0 auto;
   font-weight: 600;
   font-size: 10px;
   letter-spacing: 0.5px;
@@ -618,28 +617,28 @@ body.is-lobby .pr-conn {
 }
 /* Alone in the room: a dashed placeholder where the other racers will appear. */
 .pr-roster__empty {
+  font-family: var(--pr-font);
   padding: 12px 14px;
   border-radius: var(--pr-radius);
   border: 1px dashed var(--pr-border-dim);
   text-align: center;
-  font-family: var(--pr-font);
   font-weight: 600;
   font-size: 12px;
-  color: #7fa8c2;
+  color: var(--pr-ink-dim);
 }
 
 /* ── Status banner: persistent state (waiting / reconnecting) ────────────────
    Not a toast: it stays for as long as the state does and swaps to the error
    skin in place, reusing the toast's error tokens. */
 .pr-status {
+  font-family: var(--pr-font);
   align-items: center;
   justify-content: center;
   gap: 9px;
   padding: 13px 18px;
   border-radius: var(--pr-radius);
   border: 1px solid var(--pr-border-dim);
-  background: rgba(9, 40, 63, 0.7);
-  font-family: var(--pr-font);
+  background: rgba(var(--pr-sunken-rgb), 0.7);
   font-weight: 600;
   font-size: 12.5px;
   line-height: 1.4;
@@ -659,13 +658,13 @@ body.is-lobby .pr-conn {
   width: 15px;
   height: 15px;
   border-radius: 50%;
-  border: 3px solid rgba(127, 211, 255, 0.3);
+  border: 3px solid rgba(var(--pr-edge-rgb), 0.3);
   border-top-color: var(--pr-edge);
   animation: pr-spin 1s linear infinite;
 }
 .pr-status--error .pr-status__spinner {
-  border-color: rgba(255, 93, 93, 0.3);
-  border-top-color: #ff8a8a;
+  border-color: rgba(var(--pr-error-rgb), 0.3);
+  border-top-color: var(--pr-error-soft);
 }
 @keyframes pr-spin {
   to {
@@ -747,6 +746,7 @@ body.is-lobby .pr-conn {
    the shared layer (it was the cream lobby's, and every screen fires it); the
    editor overrides the skin for its error toast (editor-chrome.css). */
 .pr-toast {
+  font-family: var(--pr-font);
   position: fixed;
   left: 50%;
   bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
@@ -758,11 +758,10 @@ body.is-lobby .pr-conn {
   border: 1px solid var(--pr-border);
   background: var(--pr-panel-solid);
   color: var(--pr-ink);
-  font-family: var(--pr-font);
   font-weight: 600;
   font-size: 13.5px;
   text-align: center;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--pr-shadow);
   pointer-events: none;
   animation: pr-toast-in 0.15s ease-out;
 }
@@ -787,7 +786,6 @@ body.is-lobby .pr-conn {
   inset: 0;
   z-index: 10;
   display: flex;
-  font-family: var(--pr-font);
   color: var(--pr-ink);
 }
 .pr-overlay__backdrop {
@@ -807,7 +805,7 @@ body.is-lobby .pr-conn {
   /* A tall sheet shouldn't overflow the screen — scroll internally. */
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--pr-shadow);
 }
 .pr-sheet__title {
   font-weight: 800;
@@ -857,13 +855,13 @@ body.is-lobby .pr-conn {
 
 /* ── Text field: the join code, and anything else a sheet asks for ──────────── */
 .pr-field {
+  font-family: var(--pr-font);
   width: 100%;
   padding: 12px 14px;
   border-radius: var(--pr-radius);
   border: 1px solid var(--pr-border);
-  background: rgba(9, 40, 63, 0.5);
+  background: var(--pr-sunken);
   color: var(--pr-ink);
-  font-family: var(--pr-font);
   font-weight: 600;
   font-size: 16px; /* iOS zooms a focused field below 16px */
 }
@@ -916,8 +914,8 @@ body.is-lobby .pr-conn {
 }
 /* Slider rows put the current value at the right end of the head. */
 .pr-row__value {
-  margin-left: auto;
   font-family: var(--pr-font);
+  margin-left: auto;
   font-size: 12px;
   font-weight: 700;
   color: var(--pr-accent);
@@ -926,6 +924,7 @@ body.is-lobby .pr-conn {
 
 /* Round "?" — expands the setting's explanation. */
 .pr-help {
+  font-family: var(--pr-font);
   position: relative;
   flex: none;
   display: grid;
@@ -937,7 +936,6 @@ body.is-lobby .pr-conn {
   border: 1px solid var(--pr-edge);
   background: none;
   color: var(--pr-edge);
-  font-family: var(--pr-font);
   font-weight: 700;
   font-size: 11px;
   line-height: 1;
@@ -970,22 +968,22 @@ body.is-lobby .pr-conn {
   margin: 0;
   padding: 11px 13px;
   border-radius: var(--pr-radius);
-  background: rgba(255, 180, 84, 0.08);
-  border: 1px solid rgba(255, 180, 84, 0.3);
+  background: var(--pr-accent-wash);
+  border: 1px solid rgba(var(--pr-accent-rgb), 0.3);
   font-size: 12px;
   line-height: 1.5;
-  color: #f0dcb8;
+  color: var(--pr-accent-soft);
 }
 
 /* Neutral explanation card (e.g. what a handling preset feels like). */
 .pr-note {
   padding: 13px 14px;
   border-radius: var(--pr-radius);
-  background: rgba(127, 211, 255, 0.06);
-  border: 1px solid rgba(127, 211, 255, 0.2);
+  background: rgba(var(--pr-edge-rgb), 0.06);
+  border: 1px solid var(--pr-edge-line);
   font-size: 13px;
   line-height: 1.5;
-  color: #cfe4f4;
+  color: var(--pr-ink-soft);
 }
 
 /* ── Rules editor (ui/rules-editor.ts): handling + rules control stacks ─────── */
@@ -1037,7 +1035,7 @@ body.is-lobby .pr-conn {
   min-height: 0;
   border-radius: var(--pr-radius);
   background: rgba(0, 0, 0, 0.18);
-  border: 1px solid rgba(127, 211, 255, 0.18);
+  border: 1px solid rgba(var(--pr-edge-rgb), 0.18);
   overflow: hidden;
 }
 .pr-preview__canvas {

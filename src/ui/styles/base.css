@@ -1,46 +1,82 @@
 /* Design tokens: the single source of truth for the DOM palette (var(--…) in
-   components). Component-local near-duplicate shades are still literals in a few
-   places and get reconciled onto these scales separately. */
+   components). The canvas carries the same values independently (view/render.ts
+   — two sources of truth, a deliberate tradeoff; see the comment there).
+   Fonts are Cyrillic-capable substitutes for the "Blueprint" hi-fi's Archivo /
+   Spline Sans Mono (see index.css).
+
+   Each hue is declared ONCE, as a bare `r, g, b` triple, and every tint of it is
+   an `rgba(var(--pr-…-rgb), α)` of that triple. The named tints below cover the
+   recurring roles; a component that needs a one-off alpha still spells it out,
+   but never re-types the colour — so changing the cyan is one edit, not
+   fourteen. */
 :root {
-  /* ── Blueprint tokens (--pr-*). ─────────────────────────────────────────
-     The DOM palette, matching the "Blueprint" hi-fi and the canvas, which
-     carries the same values independently (render.ts — two sources of truth,
-     a deliberate tradeoff; see the comment there). Fonts are Cyrillic-capable
-     substitutes for the hi-fi's Archivo / Spline Sans Mono (see index.css). */
   --pr-font: 'Onest Variable', system-ui, sans-serif;
   --pr-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
-  /* Surfaces (dark navy blueprint). */
+
+  /* ── Hues ─────────────────────────────────────────────────────────────── */
+  --pr-edge-rgb: 127, 211, 255; /* cyan: lines, washes, hairlines */
+  --pr-accent-rgb: 255, 180, 84; /* amber: the primary action */
+  --pr-error-rgb: 255, 93, 93; /* red: failures */
+  --pr-border-rgb: 79, 157, 208; /* the control outline, for its own tints */
+  --pr-ink-rgb: 234, 246, 255; /* near-white, for faint fills */
+  --pr-sunken-rgb: 9, 40, 63; /* the recessed navy of a well or a field */
+  --pr-scrim-rgb: 6, 20, 33; /* the near-black navy everything modal sits on */
+
+  /* ── Surfaces (dark navy blueprint) ───────────────────────────────────── */
   --pr-bg: #101218; /* page / letterbox */
   --pr-board: #0d3252; /* blueprint board + floating panels */
-  --pr-panel: rgba(9, 40, 63, 0.82); /* translucent chrome over the board */
+  --pr-panel: rgba(var(--pr-sunken-rgb), 0.82); /* translucent chrome over the board */
   --pr-panel-solid: #09283f; /* opaque chrome (menus, sheets) */
-  /* Lines / edges (cyan). */
-  --pr-edge: #7fd3ff; /* track edge, hairlines, quiet arrow */
-  --pr-grid: rgba(127, 211, 255, 0.07); /* blueprint grid */
-  /* Accent (amber) — primary action + selected direction. */
-  --pr-accent: #ffb454;
-  --pr-accent-hover: #ffc47a; /* amber lifted (pointer hover) */
-  --pr-accent-ink: #0d3252; /* text/icon on amber */
+  /* Recessed fill: anything that reads as cut INTO a surface rather than
+     sitting on it — text fields, roster rows, segmented options, code pills. */
+  --pr-sunken: rgba(var(--pr-sunken-rgb), 0.5);
+  /* Scrim behind modal chrome (the menu drawer, the sheets, the result screen). */
+  --pr-scrim: rgba(var(--pr-scrim-rgb), 0.6);
+
+  /* ── Lines / edges (cyan) ─────────────────────────────────────────────── */
+  --pr-edge: rgb(var(--pr-edge-rgb)); /* track edge, hairlines, quiet arrow */
   /* Hover wash for outlined/quiet controls — one cyan tint everywhere, so
      buttons, options, tabs and menu rows all light up the same way. */
-  --pr-hover: rgba(127, 211, 255, 0.14);
-  --pr-press: rgba(127, 211, 255, 0.22);
+  --pr-hover: rgba(var(--pr-edge-rgb), 0.14);
+  --pr-press: rgba(var(--pr-edge-rgb), 0.22);
   /* Resting fill for rows that sit straight on a surface (menu entries). */
-  --pr-fill-soft: rgba(127, 211, 255, 0.05);
-  /* Scrim behind modal chrome (the menu drawer). */
-  --pr-scrim: rgba(6, 20, 33, 0.6);
-  /* Borders. */
-  --pr-border: #4f9dd0; /* control outlines */
+  --pr-fill-soft: rgba(var(--pr-edge-rgb), 0.05);
+  /* Hairline inside a dark surface (dividers, inset panels). */
+  --pr-edge-line: rgba(var(--pr-edge-rgb), 0.2);
+  /* Dashed outline of a placeholder — "nothing here yet", "not your call". */
+  --pr-edge-dash: rgba(var(--pr-edge-rgb), 0.4);
+
+  /* ── Borders ──────────────────────────────────────────────────────────── */
+  --pr-border: rgb(var(--pr-border-rgb)); /* control outlines */
   --pr-border-dim: #1c4c73; /* panel/divider outlines */
-  /* Text/ink (on dark). */
-  --pr-ink: #eaf6ff; /* primary */
+
+  /* ── Accent (amber): primary action + selected direction ──────────────── */
+  --pr-accent: rgb(var(--pr-accent-rgb));
+  --pr-accent-hover: #ffc47a; /* amber lifted (pointer hover) */
+  --pr-accent-ink: var(--pr-board); /* text/icon on amber */
+  --pr-accent-soft: #ffd9a6; /* amber as text on a dark surface */
+  --pr-accent-wash: rgba(var(--pr-accent-rgb), 0.08); /* amber-tinted panel fill */
+  --pr-warn: #ffd166; /* the sharper amber of a countdown ("final lap") */
+
+  /* ── Text/ink on dark, lightest to faintest ───────────────────────────── */
+  --pr-ink: rgb(var(--pr-ink-rgb)); /* primary */
   --pr-ink-soft: #bfe6ff; /* secondary (cyan-tinted) */
-  --pr-ink-dim: #8fb8d6; /* muted */
-  /* Error toast. */
-  --pr-error: #ff5d5d;
-  --pr-error-bg: rgba(58, 20, 20, 0.94);
-  --pr-error-ink: #ffe6e6;
-  /* Shape. */
+  --pr-ink-mute: #9fc3dd; /* tertiary: subtitles, row sublines */
+  --pr-ink-dim: #8fb8d6; /* muted: units, disabled, placeholders */
+  --pr-ink-faint: #5f7a95; /* faintest: footers, chevrons */
+
+  /* ── Error ────────────────────────────────────────────────────────────── */
+  --pr-error: rgb(var(--pr-error-rgb));
+  --pr-error-bg: rgba(58, 20, 20, 0.94); /* the toast's opaque red-black */
+  --pr-error-wash: rgba(var(--pr-error-rgb), 0.12); /* red-tinted control fill */
+  --pr-error-ink: #ffe6e6; /* text on an error surface */
+  --pr-error-soft: #ffb4b4; /* red as text on a dark surface */
+
+  /* ── Elevation ────────────────────────────────────────────────────────── */
+  --pr-shadow: 0 12px 28px rgba(0, 0, 0, 0.4); /* floating chrome: sheets, toasts */
+  --pr-shadow-card: 0 20px 40px rgba(0, 0, 0, 0.3); /* a screen's main card */
+
+  /* ── Shape ────────────────────────────────────────────────────────────── */
   --pr-gutter: 16px; /* side margin every full-width floating element aligns to */
   --pr-nav-h: 48px; /* phone step strip — what floating content below it clears */
   --pr-rail-w: 220px; /* wide-screen step rail — what the screens beside it clear */
@@ -70,12 +106,11 @@ body {
      recomputes it — `ui/app-height.ts` measures the real screen height and
      publishes it here. Unset everywhere else, so `100dvh` stands. */
   height: var(--pr-app-h, 100dvh);
-  /* Font is set on body, not just .app: the sheet overlay and the toast are
-     siblings of .app, so they'd otherwise inherit the browser's default serif font. */
-  font-family:
-    system-ui,
-    -apple-system,
-    sans-serif;
+  /* Set on body rather than on .app: the overlay, the menu, the toast and the
+     install card are all siblings of .app, so they'd otherwise fall back to the
+     browser's default serif. With it here, a component only names a font when
+     it wants the OTHER one (--pr-mono). */
+  font-family: var(--pr-font);
   /* iOS: suppress the system selection/copy menu (long-press callout) and
      accidental text selection when tapping the board and UI chrome. Inputs are
      the exception below (otherwise you couldn't select/paste a code or name). */
@@ -83,6 +118,19 @@ body {
   -webkit-user-select: none;
   user-select: none;
 }
+/* Form controls don't inherit the page font — the UA gives them its own. This
+   makes them behave like everything else, so a screen's own rules can just
+   inherit. (Shared components in pr-controls.css still name --pr-font
+   explicitly: they get mounted inside the race and result screens, which set
+   --pr-mono on their root, and a component has to look the same wherever it
+   lands.) */
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
+}
+
 /* Input fields (name, code) stay selectable with callout enabled, for pasting. */
 input,
 textarea {

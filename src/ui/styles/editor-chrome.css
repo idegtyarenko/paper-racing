@@ -78,10 +78,10 @@
 @keyframes pr-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(255, 180, 84, 0);
+    box-shadow: 0 0 0 0 rgba(var(--pr-accent-rgb), 0);
   }
   50% {
-    box-shadow: 0 0 18px 2px rgba(255, 180, 84, 0.5);
+    box-shadow: 0 0 18px 2px rgba(var(--pr-accent-rgb), 0.5);
   }
 }
 .pr-edit[data-step='direction'] .pr-edit__next {
@@ -122,11 +122,10 @@ body.is-editing .pr-toast:not([hidden]) {
   border: 1px solid var(--pr-error);
   border-radius: var(--pr-radius-lg);
   color: var(--pr-error-ink);
-  font-family: var(--pr-font);
   font-weight: 600;
   text-align: left;
   padding: 13px 16px;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--pr-shadow);
 }
 body.is-editing .pr-toast:not([hidden])::before {
   content: '⚠';

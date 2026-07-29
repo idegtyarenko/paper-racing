@@ -86,7 +86,7 @@
   flex-direction: column;
   gap: 4px;
   padding: 7px 11px;
-  border-bottom: 1px solid rgba(79, 157, 208, 0.28);
+  border-bottom: 1px solid rgba(var(--pr-border-rgb), 0.28);
 }
 .pr-race__nextlabel {
   font-size: 9px;
@@ -120,7 +120,7 @@
   width: 1px;
   height: 16px;
   margin: 0 2px;
-  background: rgba(79, 157, 208, 0.5);
+  background: rgba(var(--pr-border-rgb), 0.5);
 }
 @keyframes pr-race-pulse {
   0%,
@@ -148,7 +148,7 @@
   align-items: center;
   gap: 9px;
   padding: 6px 11px;
-  border-bottom: 1px solid rgba(79, 157, 208, 0.18);
+  border-bottom: 1px solid rgba(var(--pr-border-rgb), 0.18);
 }
 .pr-race__row:last-child {
   border-bottom: 0;
@@ -167,7 +167,7 @@
    race). Deliberately not your car colour — "someone is up" and "you are up"
    must not look alike. */
 .pr-race__row--mine {
-  background: rgba(255, 180, 84, 0.14);
+  background: rgba(var(--pr-accent-rgb), 0.14);
   box-shadow: inset 3px 0 0 var(--pr-accent);
 }
 .pr-race__row--offline {
@@ -210,7 +210,7 @@
   gap: 6px;
   font-size: 13px;
   font-weight: 600;
-  color: #c8d6e4;
+  color: var(--pr-ink-soft);
 }
 .pr-race__row--mine .pr-race__stat {
   color: var(--pr-accent);
@@ -223,13 +223,13 @@
   text-transform: uppercase;
 }
 .pr-race__stat--done {
-  color: #ffd9a6;
+  color: var(--pr-accent-soft);
 }
 .pr-race__stat--out {
   color: var(--pr-ink-dim);
 }
 .pr-race__stat--warn {
-  color: #ffd166;
+  color: var(--pr-warn);
   font-size: 10.5px;
   letter-spacing: 1px;
   text-transform: uppercase;
@@ -287,7 +287,7 @@
   padding: 8px 15px;
   font-size: 12.5px;
   letter-spacing: 0.3px;
-  color: #dff0ff;
+  color: var(--pr-ink);
   text-align: center;
 }
 .pr-race__chip:not([hidden]) {
@@ -322,9 +322,9 @@
 /* A failed send: the retry is the only way on, so it carries the error colour
    rather than the accent. */
 .pr-race__act--error > .pr-btn--primary {
-  background: rgba(255, 93, 93, 0.14);
+  background: rgba(var(--pr-error-rgb), 0.14);
   border: 1.5px solid var(--pr-error);
-  color: #ffb4b4;
+  color: var(--pr-error-soft);
 }
 .pr-race__skip .pr-race__skipname {
   font-weight: 800;
@@ -342,7 +342,7 @@
   }
   50% {
     box-shadow:
-      0 0 20px 2px rgba(255, 180, 84, 0.5),
+      0 0 20px 2px rgba(var(--pr-accent-rgb), 0.5),
       0 8px 22px rgba(0, 0, 0, 0.4);
   }
 }
@@ -385,7 +385,7 @@ body.is-racing .pr-conn {
   padding: 13px 0;
   border-radius: var(--pr-radius);
   border: 1px dashed var(--pr-border);
-  background: rgba(9, 40, 63, 0.5);
+  background: var(--pr-sunken);
   color: var(--pr-ink-soft);
   font-family: var(--pr-font);
   font-weight: 700;
@@ -448,7 +448,7 @@ body.is-racing .pr-conn {
     justify-content: space-between;
     gap: 9px;
     padding-bottom: 12px;
-    border-bottom: 1px solid rgba(127, 211, 255, 0.3);
+    border-bottom: 1px solid rgba(var(--pr-edge-rgb), 0.3);
   }
   .pr-race__brand {
     display: flex;
@@ -472,9 +472,9 @@ body.is-racing .pr-conn {
      mover's highlight from bleeding across the whole rail. */
   .pr-race__row {
     padding: 8px 10px;
-    border: 1px solid rgba(79, 157, 208, 0.4);
+    border: 1px solid rgba(var(--pr-border-rgb), 0.4);
     border-radius: 7px;
-    background: rgba(9, 40, 63, 0.6);
+    background: rgba(var(--pr-sunken-rgb), 0.6);
   }
   .pr-race__row--current,
   .pr-race__row--mine {

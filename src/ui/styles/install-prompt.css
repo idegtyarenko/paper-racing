@@ -13,8 +13,7 @@
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
-  font-family: var(--pr-font);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--pr-shadow);
   opacity: 0;
   transition:
     transform 0.24s ease-out,

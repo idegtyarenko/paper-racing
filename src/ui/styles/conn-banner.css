@@ -17,10 +17,9 @@
   border: 1px solid var(--pr-error);
   background: var(--pr-error-bg);
   color: var(--pr-error-ink);
-  font-family: var(--pr-font);
   font-size: 13.5px;
   font-weight: 600;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--pr-shadow);
   pointer-events: none;
   animation: pr-conn-in 0.15s ease-out;
 }

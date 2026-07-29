@@ -25,8 +25,8 @@
   inset: 0;
   background: radial-gradient(
     120% 90% at 50% 40%,
-    rgba(6, 26, 44, 0.86),
-    rgba(6, 26, 44, 0.97)
+    rgba(var(--pr-scrim-rgb), 0.86),
+    rgba(var(--pr-scrim-rgb), 0.97)
   );
 }
 
@@ -80,13 +80,13 @@
 /* Nobody finished: no colour to celebrate with, so it steps down in size too. */
 .pr-result__headline--quiet {
   font-size: 26px;
-  color: #c8d6e4;
+  color: var(--pr-ink-soft);
 }
 .pr-result__subtitle {
   margin-top: 6px;
   font-size: 13px;
   line-height: 1.4;
-  color: #9fc4dd;
+  color: var(--pr-ink-mute);
 }
 
 /* ── Final classification ──────────────────────────────────────────────────── */
@@ -144,8 +144,8 @@
   gap: 8px;
   padding: 15px;
   border-radius: var(--pr-radius);
-  border: 1px dashed rgba(127, 211, 255, 0.4);
-  background: rgba(9, 40, 63, 0.5);
+  border: 1px dashed var(--pr-edge-dash);
+  background: var(--pr-sunken);
   font-family: var(--pr-font);
   font-weight: 700;
   font-size: 13px;

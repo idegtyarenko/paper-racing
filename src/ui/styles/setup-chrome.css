@@ -59,12 +59,12 @@ body.is-setup .zoom-ctl {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--pr-shadow-card);
 }
 .pr-setup__tabs {
   flex: 0 0 auto;
   display: flex;
-  border-bottom: 1px solid rgba(127, 211, 255, 0.2);
+  border-bottom: 1px solid var(--pr-edge-line);
 }
 .pr-setup__tab {
   flex: 1;
@@ -74,8 +74,7 @@ body.is-setup .zoom-ctl {
   /* The active tab is underlined by its own border, so every tab reserves the
      same space — otherwise the row would jump on switch. */
   border-bottom: 2.5px solid transparent;
-  color: #7fa8c2;
-  font-family: var(--pr-font);
+  color: var(--pr-ink-dim);
   font-weight: 600;
   font-size: 13px;
   cursor: pointer;
@@ -128,10 +127,9 @@ body.is-setup .zoom-ctl {
 .pr-setup__hint {
   flex: 0 0 auto;
   text-align: center;
-  font-family: var(--pr-font);
   font-size: 11.5px;
   line-height: 1.4;
-  color: #7fa8c2;
+  color: var(--pr-ink-dim);
 }
 /* Held back by the connection, not by the lineup. */
 .pr-setup__hint--error {

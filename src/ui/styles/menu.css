@@ -6,7 +6,6 @@
   position: fixed;
   inset: 0;
   z-index: 30;
-  font-family: var(--pr-font);
 }
 .pr-menu__backdrop {
   position: absolute;
@@ -31,7 +30,9 @@
   bottom: 0;
   width: min(308px, 84vw);
   padding-bottom: env(safe-area-inset-bottom, 0px);
-  background: linear-gradient(180deg, #0e3350, #0a2740);
+  /* Board navy at the top settling into panel navy at the foot — the drawer
+     reads as a slab lifted off the board, not a flat overlay. */
+  background: linear-gradient(180deg, var(--pr-board), var(--pr-panel-solid));
   border-right: 1px solid var(--pr-border);
   box-shadow: 28px 0 70px rgba(0, 0, 0, 0.55);
   display: flex;
@@ -76,7 +77,11 @@
 .pr-menu__rule {
   height: 1px;
   margin: 0 20px 6px;
-  background: linear-gradient(90deg, rgba(127, 211, 255, 0.3), rgba(127, 211, 255, 0));
+  background: linear-gradient(
+    90deg,
+    rgba(var(--pr-edge-rgb), 0.3),
+    rgba(var(--pr-edge-rgb), 0)
+  );
 }
 
 /* ── Entries ────────────────────────────────────────────────────────────────── */
@@ -108,7 +113,7 @@
   gap: 3px;
   padding: 6px 10px 10px;
   border-radius: 0 0 10px 10px;
-  background: rgba(127, 211, 255, 0.03);
+  background: rgba(var(--pr-edge-rgb), 0.03);
 }
 .pr-menu__langs:not([hidden]) {
   display: flex;
@@ -122,8 +127,7 @@
   border: 1px solid transparent;
   border-radius: 7px;
   background: none;
-  color: #9fc3dd;
-  font-family: var(--pr-font);
+  color: var(--pr-ink-mute);
   font-weight: 600;
   font-size: 13.5px;
   cursor: pointer;
@@ -131,7 +135,7 @@
 }
 .pr-menu__lang--active {
   border-color: var(--pr-border);
-  background: rgba(127, 211, 255, 0.09);
+  background: rgba(var(--pr-edge-rgb), 0.09);
   color: var(--pr-ink);
   font-weight: 700;
 }
@@ -169,10 +173,10 @@
 .pr-menu__foot {
   margin-top: auto;
   padding: 16px 24px 24px;
-  border-top: 1px solid rgba(127, 211, 255, 0.14);
+  border-top: 1px solid rgba(var(--pr-edge-rgb), 0.14);
   font-family: var(--pr-mono);
   font-size: 11px;
-  color: #5f7a95;
+  color: var(--pr-ink-faint);
 }
 
 /* ── Retire from race ───────────────────────────────────────────────────────
@@ -180,17 +184,17 @@
    entry in the drawer — tinted red so it doesn't read as another navigation
    row. The confirmation sheet still stands between it and dropping out. */
 .pr-menu__retire {
-  color: #ff9a9a;
-  border-color: rgba(255, 93, 93, 0.45);
+  color: var(--pr-error-soft);
+  border-color: rgba(var(--pr-error-rgb), 0.45);
 }
 .pr-menu__retire .pr-item__ico {
   color: var(--pr-error);
-  border-color: rgba(255, 93, 93, 0.45);
+  border-color: rgba(var(--pr-error-rgb), 0.45);
 }
 @media (hover: hover) {
   .pr-menu__retire:hover {
-    background: rgba(255, 93, 93, 0.12);
+    background: var(--pr-error-wash);
     border-color: var(--pr-error);
-    color: #ffb4b4;
+    color: var(--pr-error-soft);
   }
 }
