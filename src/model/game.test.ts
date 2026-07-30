@@ -8,6 +8,8 @@ import {
   cloneState,
   returnFromPenalty,
   isFinished,
+  humansAllDone,
+  hasLiveBots,
   WIN_CROSSINGS,
 } from './game';
 import { CRASH_PENALTY_MAX } from '../config';
@@ -141,6 +143,54 @@ describe('isFinished — the window between crossing the finish and getting a pl
     const g = newGame(ringTrack(), 2);
     g.players[0].place = 1;
     expect(isFinished(g.players[0])).toBe(true);
+  });
+});
+
+describe('humansAllDone / hasLiveBots — early-exit gate for retired humans', () => {
+  it('solo human vs a bot: not done while the human is still racing', () => {
+    const g = newGame(ringTrack(), 2);
+    g.players[1].bot = 'medium';
+    expect(humansAllDone(g)).toBe(false);
+    expect(hasLiveBots(g)).toBe(true);
+  });
+
+  it('solo human vs a bot: done once the human retires, bot still live', () => {
+    const g = newGame(ringTrack(), 2);
+    g.players[1].bot = 'medium';
+    g.players[0].retired = true;
+    expect(humansAllDone(g)).toBe(true);
+    expect(hasLiveBots(g)).toBe(true);
+  });
+
+  it('hotseat, two humans: not done while one is still active', () => {
+    const g = newGame(ringTrack(), 3);
+    g.players[2].bot = 'medium';
+    g.players[0].retired = true;
+    expect(humansAllDone(g)).toBe(false);
+  });
+
+  it('hotseat, two humans: done once both retire or finish, bot still live', () => {
+    const g = newGame(ringTrack(), 3);
+    g.players[2].bot = 'medium';
+    g.players[0].retired = true;
+    g.players[1].place = 1;
+    expect(humansAllDone(g)).toBe(true);
+    expect(hasLiveBots(g)).toBe(true);
+  });
+
+  it('no bots left: hasLiveBots is false once the bot retires or finishes', () => {
+    const g = newGame(ringTrack(), 2);
+    g.players[1].bot = 'medium';
+    g.players[1].retired = true;
+    expect(hasLiveBots(g)).toBe(false);
+  });
+
+  it('all-human race is trivially done once everyone has a place or retired', () => {
+    const g = newGame(ringTrack(), 2);
+    g.players[0].place = 1;
+    g.players[1].retired = true;
+    expect(humansAllDone(g)).toBe(true);
+    expect(hasLiveBots(g)).toBe(false);
   });
 });
 

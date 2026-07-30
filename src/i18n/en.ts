@@ -305,6 +305,11 @@ export const en = {
     someoneWonSub: 'Better luck next time',
     allRetired: 'Everyone retired',
     allRetiredSub: 'No cars finished\u00A0— no result this time',
+    earlyExitLabel: 'Your race is done',
+    earlyExitTitle: 'What next?',
+    earlyExitSub: 'No need to wait for the others\u00A0— start over whenever you like',
+    earlyExitHostWait:
+      'Wait for the bots to finish\u00A0— leaving now would stall the race for everyone else',
     /** A dead heat for first place. */
     drawTitle: 'Photo finish',
     draw: "Too close to call\u00A0— the photo finish couldn't split them!",

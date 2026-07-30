@@ -39,14 +39,17 @@ export interface ResultHandlers {
 }
 
 let root: HTMLElement;
+let labelEl: HTMLElement;
 let iconEl: HTMLElement;
 let headlineEl: HTMLElement;
 let subtitleEl: HTMLElement;
+let cardEl: HTMLElement;
 let rowsEl: HTMLElement;
 let actionsEl: HTMLElement;
 let rematchBtn: HTMLButtonElement;
 let sameTrackBtn: HTMLButtonElement;
 let newTrackBtn: HTMLButtonElement;
+let hostWaitHintEl: HTMLElement;
 let waitEl: HTMLElement;
 let built = false;
 
@@ -62,14 +65,14 @@ function build(h: ResultHandlers): void {
 
   const head = el('div', 'pr-result__head', inner);
   iconEl = el('span', 'pr-result__icon', head);
-  el('span', 'pr-result__label', head).textContent = strings.race.raceComplete;
+  labelEl = el('span', 'pr-result__label', head);
   headlineEl = el('div', 'pr-result__headline', head);
   subtitleEl = el('div', 'pr-result__subtitle', head);
 
-  const card = el('div', 'pr-card pr-result__card', inner);
-  el('span', 'pr-label pr-result__cardhead', card).textContent =
+  cardEl = el('div', 'pr-card pr-result__card', inner);
+  el('span', 'pr-label pr-result__cardhead', cardEl).textContent =
     strings.race.classification;
-  rowsEl = el('div', 'pr-race__rows', card);
+  rowsEl = el('div', 'pr-race__rows', cardEl);
   rowsEl.setAttribute('role', 'img');
   rowsEl.setAttribute('aria-label', strings.race.standingsLabel);
 
@@ -84,10 +87,16 @@ function build(h: ResultHandlers): void {
   newTrackBtn = button('pr-btn pr-btn--caps', actionsEl);
   newTrackBtn.textContent = strings.buttons.newTrack;
   newTrackBtn.addEventListener('click', h.onNewTrack);
+  // Shown only for a host stuck driving bots for the rest of the room — see
+  // hostMustStayForBots in renderRaceResult.
+  hostWaitHintEl = el('div', 'pr-result__subtitle', actionsEl);
+  hostWaitHintEl.textContent = strings.race.earlyExitHostWait;
 
   // A guest can't start anything — the track's creator owns the room, and the
   // guest is dropped straight into the new race when they do. So they get a
   // dashed "waiting" plate where the buttons would be, not disabled buttons.
+  // Only for the real end-of-race rematch wait — during an early exit the
+  // guest isn't waiting on anything, they can still just leave.
   waitEl = el('div', 'pr-result__wait', inner);
   const dots = el('span', 'pr-result__dots', waitEl);
   for (let i = 0; i < 3; i++) el('span', 'pr-result__dot', dots);
@@ -106,6 +115,12 @@ export interface ResultCtx {
   nav: NavField | null;
   /** True once the race is fully over — every car has a place or has retired. */
   over: boolean;
+  /**
+   * True once no human has anything left to do, but the race itself hasn't
+   * resolved yet (bots may still be racing it out) — same three buttons, shown
+   * early so a retired/finished human isn't stuck watching bots finish.
+   */
+  earlyExit: boolean;
   /** This client's seat, or −1 (hot-seat has no single "you"). */
   mySeat: number;
   /** In an online race and not the host: the rematch isn't ours to start. */
@@ -114,6 +129,12 @@ export interface ResultCtx {
   canRematch: boolean;
   /** Online: "same track, new lineup" runs the local wizard, which would desync the room. */
   isOnline: boolean;
+  /**
+   * Online host with bots still live in the room: leaving (session.leave())
+   * would strand them mid-race for everyone else, since only the host drives
+   * bot moves — "Draw a new track" is disabled until the bots are done.
+   */
+  hostMustStayForBots: boolean;
 }
 
 /**
@@ -154,27 +175,65 @@ function renderHead(game: GameState, mySeat: number): void {
 }
 
 /**
- * Show or hide the result screen. `over` is the whole gate: a decided winner is
- * not enough while others are still driving (5G).
+ * Headline for the early-exit case: no human has anything left to do, but the
+ * race isn't resolved yet (bots may still be finishing it), so there's no
+ * `winner` to read and no final classification to show — just the way out.
+ */
+function renderEarlyExitHead(): void {
+  iconEl.hidden = true;
+  headlineEl.classList.add('pr-result__headline--quiet');
+  headlineEl.style.removeProperty('color');
+  headlineEl.textContent = strings.race.earlyExitTitle;
+  subtitleEl.textContent = strings.race.earlyExitSub;
+}
+
+/**
+ * Show or hide the result screen. `over` is the main gate: a decided winner is
+ * not enough while others are still driving (5G). `earlyExit` is a second,
+ * narrower gate — no human has anything left to do, even though the race
+ * itself hasn't resolved (bots may still be racing) — same screen, no
+ * classification (there isn't a final one yet), and `over` wins if both are
+ * somehow true at once (the race legitimately finished while this was up).
  */
 export function renderRaceResult(ctx: ResultCtx): void {
   if (!built) return;
-  const { game, nav, over, mySeat, onlineGuest, canRematch, isOnline } = ctx;
-  const show = over && !!game && !!nav;
+  const {
+    game,
+    nav,
+    over,
+    earlyExit,
+    mySeat,
+    onlineGuest,
+    canRematch,
+    isOnline,
+    hostMustStayForBots,
+  } = ctx;
+  const show = (over || earlyExit) && !!game && !!nav;
   root.hidden = !show;
   document.body.classList.toggle('is-result', show);
   if (!show) return;
 
-  renderHead(game!, mySeat);
-  renderRows(rowsEl, game!, nav!, { mySeat, final: true });
+  labelEl.textContent = over ? strings.race.raceComplete : strings.race.earlyExitLabel;
+  cardEl.hidden = !over;
+  if (over) {
+    renderHead(game!, mySeat);
+    renderRows(rowsEl, game!, nav!, { mySeat, final: true });
+  } else {
+    renderEarlyExitHead();
+  }
 
-  // A guest waits for the host; everyone else gets the three ways on.
-  actionsEl.hidden = onlineGuest;
-  waitEl.hidden = !onlineGuest;
-  // Only offer a rematch when there's something to replay.
+  // A guest waits for the host only for the real end-of-race rematch — during
+  // an early exit there's nothing to wait for, they can just leave.
+  const guestWaiting = onlineGuest && over;
+  actionsEl.hidden = guestWaiting;
+  waitEl.hidden = !guestWaiting;
+  // Only offer a rematch when there's something to replay (online rematch
+  // also requires the room to actually be over — canRematch already covers that).
   rematchBtn.hidden = !canRematch;
   // "Same track, new lineup" walks back into the local wizard, which would
   // desync a live room — online that leaves "Rematch" and "Draw a new track"
   // (which, online, means leaving the session).
   sameTrackBtn.hidden = isOnline;
+  newTrackBtn.disabled = hostMustStayForBots;
+  hostWaitHintEl.hidden = !hostMustStayForBots;
 }

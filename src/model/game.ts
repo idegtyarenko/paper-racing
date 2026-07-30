@@ -507,6 +507,17 @@ export function isFinished(p: Player): boolean {
   return p.place !== null || p.finishOvershoot !== null;
 }
 
+/** True once every human seat has a place or has retired — the race may still be
+ *  live for bots, but no human has anything left to do in it. */
+export function humansAllDone(state: GameState): boolean {
+  return state.players.every((p) => !!p.bot || p.retired || isFinished(p));
+}
+
+/** True while at least one bot seat still has moves left to make. */
+export function hasLiveBots(state: GameState): boolean {
+  return state.players.some((p) => !!p.bot && !p.retired && !isFinished(p));
+}
+
 /**
  * Positions of every player except the given seat and anyone who can't block a
  * path: cars still serving a crash penalty (not yet back on the track), and cars

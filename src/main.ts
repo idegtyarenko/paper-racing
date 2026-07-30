@@ -20,6 +20,8 @@ import {
   newGame,
   shuffledIndices,
   isFinished,
+  humansAllDone,
+  hasLiveBots,
 } from './model/game';
 import { candidatesForSeat, applyMove, coastMove, retireSeat } from './model/turns';
 import { Difficulty, chooseMove } from './model/ai';
@@ -199,16 +201,34 @@ function updateUI(): void {
     mySeat: localHumanSeat(),
     connected: session.isConnected(),
   });
+  const over = S.phase === 'race' && S.game?.phase === 'over';
+  // No human has anything left to do, but the race hasn't resolved yet (bots
+  // may still be racing it out): online, that's judged per our own seat (every
+  // client has its own screen); locally (solo-vs-bots or hotseat) it's judged
+  // across every human seat, since they all share this one screen.
+  const earlyExit =
+    !over &&
+    !!S.game &&
+    (session.active()
+      ? session.mySeat() !== -1 &&
+        (S.game.players[session.mySeat()].retired ||
+          isFinished(S.game.players[session.mySeat()]))
+      : humansAllDone(S.game));
   renderRaceResult({
     game: S.game,
     nav: S.raceNav,
-    over: S.phase === 'race' && S.game?.phase === 'over',
+    over,
+    earlyExit,
     // Hot-seat has no single "you", so nothing gets the personal treatment
     // there — online it's our own seat.
     mySeat: session.active() ? session.mySeat() : -1,
     onlineGuest: !!net && !net.isHost,
     canRematch: (!!S.game && !!S.lastLocalRace) || online.canRematch(),
     isOnline: session.active(),
+    // Only the host drives bot moves online (host-bots.ts) — leaving while
+    // bots still have moves left would strand everyone else mid-race.
+    hostMustStayForBots:
+      session.active() && session.isHost() && !!S.game && hasLiveBots(S.game),
   });
   renderEditorChrome(S.editor, S.phase);
   // The lobby view drives three renderers: the host's lobby is the setup screen
@@ -465,6 +485,10 @@ function resetToEdit(): void {
   // race and yank us out of the editor.
   if (session.active()) session.leave();
   cancelAiMove();
+  // This is a real exit, not a rematch — without this, an abandoned race
+  // would come back on the next reload (persist.load() picks up any
+  // snapshot on disk regardless of how we got to the editor).
+  persist.clear();
   S.game = null;
   S.raceNav = null;
   S.raceTrack = null;
