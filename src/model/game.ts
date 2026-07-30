@@ -229,6 +229,16 @@ export function seatColor(i: number): string {
 }
 
 /**
+ * Car name by seat index — the fallback for anyone without one of their own: local
+ * racers, and online players who joined but never typed a name. Read from `strings`
+ * per call (not the module-level NAMES) so it follows the current language.
+ */
+export function seatName(i: number): string {
+  const names = strings.players.names;
+  return names[i % names.length];
+}
+
+/**
  * Why a move isn't allowed: another car sits on the target cell ('occupied'),
  * or one is in the way along the path to an otherwise free cell ('path'). The
  * two are indistinguishable to the player unless drawn differently — the car
@@ -495,6 +505,17 @@ export function applyOutcome(track: Track, p: Player, o: MoveOutcome): void {
  */
 export function isFinished(p: Player): boolean {
   return p.place !== null || p.finishOvershoot !== null;
+}
+
+/** True once every human seat has a place or has retired — the race may still be
+ *  live for bots, but no human has anything left to do in it. */
+export function humansAllDone(state: GameState): boolean {
+  return state.players.every((p) => !!p.bot || p.retired || isFinished(p));
+}
+
+/** True while at least one bot seat still has moves left to make. */
+export function hasLiveBots(state: GameState): boolean {
+  return state.players.some((p) => !!p.bot && !p.retired && !isFinished(p));
 }
 
 /**

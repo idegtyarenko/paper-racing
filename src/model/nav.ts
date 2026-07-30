@@ -12,7 +12,7 @@
 import { Vec, dist, lerp, segSegIntersection } from '../geometry';
 import { Track, key, unkey, sideOfFinish } from './track';
 import { offRoadDepth } from './game';
-import { OFFROAD_FORGIVE } from '../config';
+import { OFFROAD_FORGIVE, CRASH_SAMPLE_STEP } from '../config';
 
 /** Field of distances to the finish over road nodes. */
 export interface NavField {
@@ -39,15 +39,21 @@ function crossDir(track: Track, u: Vec, v: Vec): number {
 }
 
 /**
- * Whether an edge is traversable: its midpoint doesn't stray past the edge
- * tolerance. Rules out diagonals and edges that "tunnel" through a thin grass
- * strip between two passes of the track (otherwise the field would steer bots
- * into an impossible shortcut).
+ * Whether an edge is traversable: it doesn't stray past the edge tolerance
+ * anywhere along its length. Rules out diagonals and edges that "tunnel"
+ * through a thin grass strip between two passes of the track (otherwise the
+ * field would steer bots into an impossible shortcut).
+ *
+ * Sampled at the engine's own step. Checking the midpoint alone was too coarse:
+ * an edge can clip a thin wall off-centre while its midpoint sits squarely on
+ * the road (a real case: (141,122)->(142,123) has midpoint depth 0.000 but goes
+ * 0.195 past the edge a third of the way along, at a tolerance of 0.05). The
+ * field then leaks into a neighbouring pass of the track, and the bot follows
+ * that phantom gradient into a pinch it physically can't drive through and
+ * parks there.
  */
 function edgeOk(track: Track, u: Vec, v: Vec): boolean {
-  return (
-    offRoadDepth(track, { x: (u.x + v.x) / 2, y: (u.y + v.y) / 2 }) <= OFFROAD_FORGIVE
-  );
+  return segOnRoad(track, u, v);
 }
 
 /** Build the field of distances to the finish. Computed once per race. */
@@ -99,12 +105,14 @@ export function buildNavField(track: Track): NavField {
 
 /**
  * Whether segment a->b lies entirely on the road (within tolerance). Same
- * criterion the engine uses in scanMove: sample midpoints don't stray past
- * OFFROAD_FORGIVE beyond the edge. A step of ~0.5 cells catches a thin grass
- * strip (>= ~1 cell) between passes.
+ * criterion — and the same sampling step — the engine uses in scanMove: samples
+ * don't stray past OFFROAD_FORGIVE beyond the edge. The step used to be 0.5,
+ * which only caught grass strips a full cell or so wide; a wall that the ray
+ * clips for a few tenths of a cell slipped between samples, and navAt then
+ * reported a neighbouring pass's distance (8.6 instead of the honest 26).
  */
 function segOnRoad(track: Track, a: Vec, b: Vec): boolean {
-  const steps = Math.max(1, Math.ceil(dist(a, b) / 0.5));
+  const steps = Math.max(1, Math.ceil(dist(a, b) / CRASH_SAMPLE_STEP));
   for (let i = 1; i < steps; i++) {
     if (offRoadDepth(track, lerp(a, b, i / steps)) > OFFROAD_FORGIVE) return false;
   }
@@ -122,26 +130,33 @@ function segOnRoad(track: Track, a: Vec, b: Vec): boolean {
 export function navAt(field: NavField, p: Vec): number {
   const cx = Math.round(p.x);
   const cy = Math.round(p.y);
-  let best = Infinity;
+  // Collect the window's cells with their estimates, then validate them in
+  // increasing order of estimate and take the first one that survives. Same
+  // answer as scanning the whole window (the minimum over valid cells), but the
+  // expensive ray checks below usually run once instead of up to 49 times.
+  const cands: { c: Vec; est: number }[] = [];
   for (let dy = -3; dy <= 3; dy++) {
     for (let dx = -3; dx <= 3; dx++) {
       const c = { x: cx + dx, y: cy + dy };
       const v = field.dist.get(key(c.x, c.y));
       if (v === undefined) continue;
-      const est = v + dist(p, c);
-      if (est >= best) continue;
-      // A cell on the other side of the finish line doesn't count: its distance
-      // reflects a different number of crossings remaining (otherwise the
-      // potential collapses right at the line, and the bot "sticks" to it
-      // instead of running an honest lap).
-      if (crossDir(field.track, p, c) !== 0) continue;
-      // The ray p->c must not cut through a wall: otherwise the field "leaks"
-      // into a neighboring pass of the track through a thin strip, and the bot
-      // drives straight into it. Checked lazily — only for candidates that
-      // would actually improve the minimum.
-      if (!segOnRoad(field.track, p, c)) continue;
-      best = est;
+      cands.push({ c, est: v + dist(p, c) });
     }
   }
-  return best === Infinity ? field.lap : best;
+  cands.sort((a, b) => a.est - b.est);
+  for (const { c, est } of cands) {
+    // A cell on the other side of the finish line doesn't count: its distance
+    // reflects a different number of crossings remaining (otherwise the
+    // potential collapses right at the line, and the bot "sticks" to it
+    // instead of running an honest lap).
+    if (crossDir(field.track, p, c) !== 0) continue;
+    // The ray p->c must not cut through a wall: otherwise the field "leaks"
+    // into a neighboring pass of the track through a thin strip, and the bot
+    // drives straight into it.
+    if (!segOnRoad(field.track, p, c)) continue;
+    return est;
+  }
+  // Nothing valid in the window at all (deep in the gravel) — conservatively a
+  // full lap length.
+  return field.lap;
 }

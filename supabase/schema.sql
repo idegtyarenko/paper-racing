@@ -95,6 +95,47 @@ $$;
 
 grant execute on function public.join_game(text, text, text) to anon, authenticated;
 
+-- ── Renaming yourself in the lobby ─────────────────────────────────────────────────
+-- Players type their name straight into their roster row, so the name arrives after the
+-- seat does (and can change while others watch). Rewrites just this client's entry under
+-- a row lock, leaving the rest of the roster — and the seat order — untouched. Only in
+-- the lobby: once the race starts, names live in the state, not here. Unknown client or
+-- missing game is a no-op (returns the row as it is).
+create or replace function public.rename_player(p_code text, p_client_id text, p_name text)
+returns public.games
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  g public.games;
+begin
+  select * into g from public.games where id = p_code for update;
+  if not found then
+    raise exception 'game_not_found';
+  end if;
+  if g.status <> 'lobby' then
+    return g;
+  end if;
+  update public.games
+     set lobby = (
+           select coalesce(jsonb_agg(
+             case when e->>'clientId' = p_client_id
+                  then jsonb_set(e, '{name}', to_jsonb(p_name))
+                  else e end
+             order by ord
+           ), '[]'::jsonb)
+           from jsonb_array_elements(lobby) with ordinality t(e, ord)
+         ),
+         updated_at = now()
+   where id = p_code
+   returning * into g;
+  return g;
+end;
+$$;
+
+grant execute on function public.rename_player(text, text, text) to anon, authenticated;
+
 -- ── Leaving the lobby ──────────────────────────────────────────────────────────────
 -- Removes a slot from the lobby. If the lobby ends up empty afterward, or the host
 -- left, deletes the game entirely (during a race we don't remove the slot, to avoid

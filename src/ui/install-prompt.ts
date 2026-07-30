@@ -101,7 +101,7 @@ function markSoftDismissed(): void {
 /** iOS Share-button icon (square with an up arrow) — for the instructions. */
 function shareIcon(): HTMLElement {
   const span = document.createElement('span');
-  span.className = 'install-prompt__share';
+  span.className = 'pr-install__share';
   span.setAttribute('aria-hidden', 'true');
   span.innerHTML =
     '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" ' +
@@ -120,22 +120,22 @@ function build(
   onClose: () => void,
 ): HTMLElement {
   const box = document.createElement('div');
-  box.className = 'install-prompt';
+  box.className = 'pr-card pr-card--lg pr-card--solid pr-install';
   box.setAttribute('role', 'dialog');
   box.setAttribute('aria-label', strings.install.title);
 
   const icon = document.createElement('img');
-  icon.className = 'install-prompt__icon';
+  icon.className = 'pr-install__icon';
   icon.src = `${import.meta.env.BASE_URL}pwa-192x192.png`;
   icon.alt = '';
 
   const text = document.createElement('div');
-  text.className = 'install-prompt__text';
+  text.className = 'pr-install__text';
   const title = document.createElement('b');
-  title.className = 'install-prompt__title';
+  title.className = 'pr-install__title';
   title.textContent = strings.install.title;
   const body = document.createElement('span');
-  body.className = 'install-prompt__body';
+  body.className = 'pr-install__body';
   if (kind === 'ios') {
     body.append(strings.install.iosBefore, shareIcon(), strings.install.iosAfter);
   } else {
@@ -144,7 +144,7 @@ function build(
   text.append(title, body);
 
   const close = document.createElement('button');
-  close.className = 'install-prompt__close';
+  close.className = 'pr-install__close';
   close.setAttribute('aria-label', strings.install.close);
   close.textContent = '×';
   close.addEventListener('click', onClose);
@@ -152,7 +152,7 @@ function build(
   box.append(icon, text);
   if (kind === 'android') {
     const install = document.createElement('button');
-    install.className = 'install-prompt__install';
+    install.className = 'pr-btn pr-btn--primary pr-install__install';
     install.textContent = strings.install.action;
     install.addEventListener('click', onInstall);
     box.append(install);
@@ -195,7 +195,7 @@ export function initInstallPrompt(): void {
       },
     );
     document.body.append(el);
-    requestAnimationFrame(() => el?.classList.add('install-prompt--in'));
+    requestAnimationFrame(() => el?.classList.add('pr-install--in'));
 
     // The user started playing — move the prompt out of the way and go
     // "softly" quiet with progressive backoff, so it doesn't pop up every

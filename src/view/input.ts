@@ -12,7 +12,7 @@ import { Candidate } from '../model/game';
 import { AppState } from '../app-state';
 import { worldToScreen, screenToWorld, clampScale } from './camera';
 import * as vp from './viewport';
-import { showConfirmMove } from '../ui/panel';
+import { showConfirmMove } from '../ui/race-chrome';
 import {
   TOUCH_LIFT,
   TOUCH_TOL_PX,
@@ -42,8 +42,6 @@ export interface InputDeps {
   isPreselect(): boolean;
   /** Pre-pick a move (queued for our next turn) instead of committing/highlighting the button. */
   setPending(cand: Candidate): void;
-  /** Leave the editor and go to race setup (tap on the direction arrow). */
-  goToMode(from: 'edit' | 'race'): void;
   updateUI(): void;
   redraw(): void;
 }
@@ -382,12 +380,11 @@ function handleEditDown(e: PointerEvent, scr: Vec, touch: boolean): void {
       activeId = e.pointerId;
       break;
     case 'direction':
-      pointerDown(editor, w, tol); // tapping the arrow immediately advances to ready
-      if (editor.step === 'ready') {
-        deps.goToMode('edit');
-        return;
-      }
-      beginPan(scr.x, scr.y, e.pointerId); // missed the arrow → pan
+      // Tapping an arrow flips the (pre-selected) direction; it no longer
+      // advances — the primary button does that. A tap that misses simply pans,
+      // and a tap that hits leaves a harmless zero-length pan.
+      pointerDown(editor, w, tol);
+      beginPan(scr.x, scr.y, e.pointerId);
       break;
     default:
       beginPan(scr.x, scr.y, e.pointerId);
@@ -475,9 +472,17 @@ function endGesture(e: PointerEvent): void {
       break;
     }
     case 'move':
-      // Desktop click: on the opponent's turn it's a pre-pick, on ours it's a commit.
-      if (deps.isPreselect()) deps.setPending(g.cand);
-      else deps.commitMove(g.cand);
+      // Desktop click: on the opponent's turn it's a pre-pick; on ours it picks
+      // the target and "Go!" commits it — the same two-step as touch aiming.
+      // (It used to commit straight from the click, so desktop and touch
+      // disagreed about what a tap on the field meant.)
+      if (deps.isPreselect()) {
+        deps.setPending(g.cand);
+      } else {
+        selected = g.cand;
+        deps.state.pending = null; // a fresh pick on our turn clears any queued move
+        showConfirmMove(true, confirmAnchor());
+      }
       break;
     case 'aim': {
       // Release: pick the candidate. On our turn — preview + floating "Go!"

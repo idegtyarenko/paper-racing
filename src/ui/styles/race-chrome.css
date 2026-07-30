@@ -1,0 +1,489 @@
+/* Race chrome (Blueprint): the floating HUD over the board while racing.
+   Built by ui/race-chrome.ts. Two layouts off one DOM — a phone stacks the
+   classification card at the top and the action zone at the bottom; from 700px
+   the same pieces become a left rail beside a full-height board, matching the
+   wizard rail so the run-up and the race read as one screen. */
+
+.pr-race {
+  flex-direction: column;
+  gap: 10px;
+  padding: calc(env(safe-area-inset-top, 0px) + var(--pr-gutter)) var(--pr-gutter)
+    calc(env(safe-area-inset-bottom, 0px) + var(--pr-gutter));
+  font-family: var(--pr-mono);
+}
+.pr-race:not([hidden]) {
+  display: flex;
+}
+/* .pr-layer turns pointer events back on for its direct children, which here
+   are full-width containers — they'd swallow taps meant for the board. Only the
+   controls themselves take input. */
+.pr-race > * {
+  pointer-events: none;
+}
+.pr-race__bar,
+.pr-race__card,
+.pr-race__act > .pr-btn {
+  pointer-events: auto;
+}
+
+/* ── Top: burger + classification card ─────────────────────────────────────── */
+.pr-race__top {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  min-height: 0;
+}
+.pr-race__burger {
+  height: 48px;
+}
+/* Phone: the bar is just the burger — the brand would only crowd the board, and
+   the app's identity isn't in question mid-race. It appears in the rail below. */
+.pr-race__brand {
+  display: none;
+}
+.pr-race__card {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.pr-race__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 11px;
+  border-bottom: 1px solid var(--pr-border);
+}
+/* Room code: tapping it shares the link, so a player who dropped can be let
+   back in. Quiet by default — it's a reference, not an action to take now. */
+.pr-race__code {
+  margin: 0;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font-family: var(--pr-mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--pr-ink-dim);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+@media (hover: hover) {
+  .pr-race__code:hover {
+    background: var(--pr-hover);
+    color: var(--pr-ink-soft);
+  }
+}
+
+/* ── UP NEXT: the turn order as coloured squares ───────────────────────────── */
+.pr-race__next {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 7px 11px;
+  border-bottom: 1px solid rgba(var(--pr-border-rgb), 0.28);
+}
+.pr-race__nextlabel {
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--pr-ink-dim);
+}
+.pr-race__dots {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+}
+.pr-race__dot {
+  flex: 0 0 auto;
+  width: 11px;
+  height: 11px;
+}
+/* Whoever is moving: bigger, ringed in the accent and breathing, so the head of
+   the queue is findable without counting from the left. */
+.pr-race__dot--current {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--pr-accent);
+  animation: pr-race-pulse 1.2s ease-in-out infinite;
+}
+/* Lap boundary. With two players the starting-player shift can put the same
+   colour on both sides (…□│□…) — without this it reads as one car moving twice. */
+.pr-race__sep {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 16px;
+  margin: 0 2px;
+  background: rgba(var(--pr-border-rgb), 0.5);
+}
+@keyframes pr-race-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pr-race__dot--current {
+    animation: none;
+  }
+}
+
+/* ── Classification rows ───────────────────────────────────────────────────── */
+.pr-race__rows {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.pr-race__row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 11px;
+  border-bottom: 1px solid rgba(var(--pr-border-rgb), 0.18);
+}
+.pr-race__row:last-child {
+  border-bottom: 0;
+}
+/* Finished or retired — done with, so they recede. */
+.pr-race__row--out {
+  opacity: 0.7;
+}
+/* Someone else is moving: their own car colour, tinted down to a wash. Purely
+   informational — "this is who we're waiting on". */
+.pr-race__row--current {
+  background: color-mix(in srgb, var(--pr-row-tint) 16%, transparent);
+  box-shadow: inset 3px 0 0 var(--pr-row-tint);
+}
+/* YOU are moving: amber, the app's single "act now" colour (Confirm move, Start
+   race). Deliberately not your car colour — "someone is up" and "you are up"
+   must not look alike. */
+.pr-race__row--mine {
+  background: rgba(var(--pr-accent-rgb), 0.14);
+  box-shadow: inset 3px 0 0 var(--pr-accent);
+}
+.pr-race__row--offline {
+  opacity: 0.45;
+}
+.pr-race__pos {
+  flex: 0 0 18px;
+  font-size: 12px;
+  color: var(--pr-ink-dim);
+}
+.pr-race__row--mine .pr-race__pos {
+  color: var(--pr-accent);
+  font-weight: 700;
+}
+.pr-race__swatch {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+}
+.pr-race__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--pr-font);
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--pr-ink);
+}
+.pr-race__row--mine .pr-race__name {
+  font-weight: 700;
+}
+
+/* Right slot: speed, or whatever supersedes it (placing, retired, stalled, pit). */
+.pr-race__stat {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pr-ink-soft);
+}
+.pr-race__row--mine .pr-race__stat {
+  color: var(--pr-accent);
+  font-weight: 700;
+}
+.pr-race__stat--done,
+.pr-race__stat--out {
+  font-size: 10.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.pr-race__stat--done {
+  color: var(--pr-accent-soft);
+}
+.pr-race__stat--out {
+  color: var(--pr-ink-dim);
+}
+.pr-race__stat--warn {
+  color: var(--pr-warn);
+  font-size: 10.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.pr-race__unit {
+  margin-left: 2px;
+  font-size: 8px;
+  text-transform: uppercase;
+  opacity: 0.5;
+}
+/* Glyph + count. The pit countdown inherits the slot's warning colour; the crash
+   tally stays dim in every state — it's a running total, not the live reading. */
+.pr-race__pit,
+.pr-race__crashes {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+}
+.pr-race__crashes {
+  color: var(--pr-ink-dim);
+}
+.pr-race__ico {
+  display: block;
+}
+.pr-race__ico svg {
+  display: block;
+  width: 12px;
+  height: 12px;
+}
+.pr-race__statnum {
+  font-size: 11px;
+}
+
+/* ── Action zone: status chip over the confirm / skip buttons ──────────────── */
+/* Bottom of the board by default; `--act-top` flips it to just under the card,
+   for when the candidate cells sit low and the button would cover them. */
+.pr-race__act {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.pr-race--act-top .pr-race__act {
+  margin-top: 0;
+  margin-bottom: auto;
+}
+/* Capped so a long line can't run under the zoom column at the board's right
+   edge — the chip wraps instead. */
+.pr-race__chip {
+  max-width: min(100%, 520px);
+  align-items: center;
+  gap: 8px;
+  padding: 8px 15px;
+  font-size: 12.5px;
+  letter-spacing: 0.3px;
+  color: var(--pr-ink);
+  text-align: center;
+}
+.pr-race__chip:not([hidden]) {
+  display: flex;
+}
+.pr-race__chip--error {
+  background: var(--pr-error-bg);
+  border-color: var(--pr-error);
+  color: var(--pr-error-ink);
+}
+.pr-race__chipdot {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+}
+
+.pr-race__act > .pr-btn {
+  padding: 15px 30px;
+  font-size: 16px;
+}
+/* No target picked yet: the button is a countdown placeholder, not an action.
+   Outlined rather than a dimmed amber slab — a translucent fill over navy goes
+   muddy, and it would still read as "a primary button you can't press". It must
+   not swallow taps either: a candidate may well be underneath it. */
+.pr-race__confirm--timer {
+  pointer-events: none;
+  background: var(--pr-panel);
+  border: 1px solid var(--pr-accent);
+  color: var(--pr-accent);
+  font-variant-numeric: tabular-nums;
+}
+/* A failed send: the retry is the only way on, so it carries the error colour
+   rather than the accent. */
+.pr-race__act--error > .pr-btn--primary {
+  background: rgba(var(--pr-error-rgb), 0.14);
+  border: 1.5px solid var(--pr-error);
+  color: var(--pr-error-soft);
+}
+.pr-race__skip .pr-race__skipname {
+  font-weight: 800;
+}
+/* The confirm button breathes while it's waiting to be pressed — the one moving
+   thing on a board that's otherwise still. Not while it's a countdown
+   placeholder or mid-send: there's nothing to press yet. */
+.pr-race__act:not(.pr-race__act--error) > .pr-btn--primary:not(:disabled) {
+  animation: pr-race-glow 1.8s ease-in-out infinite;
+}
+@keyframes pr-race-glow {
+  0%,
+  100% {
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+  }
+  50% {
+    box-shadow:
+      0 0 20px 2px rgba(var(--pr-accent-rgb), 0.5),
+      0 8px 22px rgba(0, 0, 0, 0.4);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pr-race__act > .pr-btn--primary:not(:disabled) {
+    animation: none;
+  }
+}
+
+/* Zoom controls clear the action zone, which on a narrow window is a stack of
+   status chip + confirm button running the full width. */
+body.is-racing .zoom-ctl {
+  bottom: 140px;
+}
+
+/* The global cream banner would say it twice, in the wrong place: the race has
+   its own reconnect banner in the action zone (hi-fi 5E). Same reason the lobby
+   screens suppress it. */
+body.is-racing .pr-conn {
+  display: none;
+}
+
+/* ── Connection lost (5E): banner + the code to rejoin with ────────────────── */
+.pr-race__conn {
+  width: 100%;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: auto;
+}
+.pr-race__conn:not([hidden]) {
+  display: flex;
+}
+/* Dashed, like the lobby's "nobody here yet" placeholder: this is a fallback
+   route back into the race, not a primary action. */
+.pr-race__conncode {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 13px 0;
+  border-radius: var(--pr-radius);
+  border: 1px dashed var(--pr-border);
+  background: var(--pr-sunken);
+  color: var(--pr-ink-soft);
+  font-family: var(--pr-font);
+  font-weight: 700;
+  font-size: 12.5px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+@media (hover: hover) {
+  .pr-race__conncode:hover {
+    background: var(--pr-hover);
+    border-color: var(--pr-edge);
+    color: var(--pr-ink);
+  }
+}
+.pr-race__conncode-ico svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+}
+
+/* ── Wide screens: the card becomes a left rail ────────────────────────────── */
+@media (min-width: 700px) {
+  /* :not([hidden]) per the hiding convention (pr-controls.css): this `display`
+     has to lose to the hidden attribute, or the HUD stays on screen outside the
+     race and covers the wizard's step rail. */
+  .pr-race:not([hidden]) {
+    display: grid;
+  }
+  .pr-race {
+    /* A touch wider than the wizard rail: these rows carry a name AND a speed,
+       and at 220px six-character names were already ellipsing. */
+    grid-template-columns: 240px 1fr;
+    grid-template-rows: 1fr;
+    gap: 0;
+    padding: 0;
+  }
+  .pr-race__top {
+    grid-column: 1;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 16px;
+    background: var(--pr-panel);
+    border-right: 1px solid var(--pr-border-dim);
+    backdrop-filter: blur(6px);
+    pointer-events: auto;
+    overflow-y: auto;
+  }
+  /* The rail is the surface now, so the card stops being one of its own. */
+  .pr-race__card {
+    background: none;
+    border: 0;
+    backdrop-filter: none;
+    overflow: visible;
+  }
+  .pr-race__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 9px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(var(--pr-edge-rgb), 0.3);
+  }
+  .pr-race__brand {
+    display: flex;
+  }
+  .pr-race__burger {
+    height: 36px;
+    width: 36px;
+  }
+  .pr-race__head {
+    padding: 0 0 10px;
+  }
+  .pr-race__next {
+    padding: 10px 0;
+    border-bottom: 0;
+  }
+  .pr-race__rows {
+    gap: 6px;
+    overflow: visible;
+  }
+  /* The action zone stays over the board, never over the rail. */
+  .pr-race__act {
+    grid-column: 2;
+    grid-row: 1;
+    margin: 0;
+    justify-content: flex-end;
+    /* Symmetric side padding wide enough to clear the zoom column at the right
+       edge — the chip wraps rather than sliding under the buttons, and staying
+       symmetric keeps it centred over the board. */
+    padding: 24px 76px 32px;
+  }
+  .pr-race--act-top .pr-race__act {
+    margin: 0;
+    justify-content: flex-start;
+  }
+  body.is-racing .zoom-ctl {
+    bottom: 100px;
+  }
+}

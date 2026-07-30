@@ -1,0 +1,183 @@
+/* Mode select + race setup (Blueprint redesign): steps 5 and 6 of the wizard,
+   floating over the board, owned/built by ui/setup-chrome.ts. The shared pieces
+   (cards, buttons, segmented options, rules editor) come from pr-controls.css,
+   the step strip/rail from wizard-nav.css — only these screens' layout lives
+   here. Both align every full-width element to --pr-gutter, like the strip. */
+
+/* Everything below the step strip: the screen's content column, ending in the
+   pinned action row. */
+.pr-setup__body {
+  position: absolute;
+  left: var(--pr-gutter);
+  right: var(--pr-gutter);
+  top: calc(env(safe-area-inset-top, 0px) + var(--pr-gutter) + var(--pr-nav-h) + 12px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--pr-gutter));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* One step's content. Scoped to :not([hidden]) so the flex display never
+   overrides the hidden attribute that switches steps (same for the start
+   button, which only step 6 has). */
+.pr-setup__screen:not([hidden]) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pr-setup__actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 10px;
+}
+.pr-setup__back {
+  flex: 0 0 auto;
+}
+.pr-setup__start:not([hidden]) {
+  flex: 1;
+  display: flex;
+}
+
+/* The board behind these screens is just a backdrop — no panning or zooming to
+   do, so the zoom pair steps aside (it returns for the race). */
+body.is-setup .zoom-ctl {
+  display: none;
+}
+
+/* ── Mode select: a card per way to play ───────────────────────────────────── */
+.pr-setup__modes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── Race setup: one card, three tabs, scrolling panes ─────────────────────── */
+.pr-setup__card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: var(--pr-shadow-card);
+}
+.pr-setup__tabs {
+  flex: 0 0 auto;
+  display: flex;
+  border-bottom: 1px solid var(--pr-edge-line);
+}
+.pr-setup__tab {
+  flex: 1;
+  padding: 13px 4px;
+  background: none;
+  border: none;
+  /* The active tab is underlined by its own border, so every tab reserves the
+     same space — otherwise the row would jump on switch. */
+  border-bottom: 2.5px solid transparent;
+  color: var(--pr-ink-dim);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+@media (hover: hover) {
+  .pr-setup__tab:hover:not(.pr-setup__tab--active) {
+    color: var(--pr-ink);
+    background: var(--pr-hover);
+  }
+}
+.pr-setup__tab--active {
+  color: var(--pr-accent);
+  border-bottom-color: var(--pr-accent);
+  font-weight: 700;
+}
+.pr-setup__panes {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow-y: auto;
+}
+/* Scoped to :not([hidden]) so the flex display never overrides the hidden
+   attribute that switches tabs. */
+.pr-setup__pane:not([hidden]) {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 18px;
+}
+
+/* Online lobby: leaving the room closes it out of the wizard, so it sits at the
+   end of the list rather than in the action row (where Back used to be). */
+.pr-setup__leave {
+  margin-top: 4px;
+  padding: 12px;
+  font-size: 12.5px;
+  letter-spacing: 1px;
+}
+.pr-setup__leave .pr-btn__ico svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* ── Start action ─────────────────────────────────────────────────────────── */
+
+/* Why "Start race" is held back — sits directly above the button. */
+.pr-setup__hint {
+  flex: 0 0 auto;
+  text-align: center;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--pr-ink-dim);
+}
+/* Held back by the connection, not by the lineup. */
+.pr-setup__hint--error {
+  color: var(--pr-error);
+}
+
+.pr-setup__start {
+  padding: 16px;
+  font-size: 15px;
+}
+.pr-setup__start:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.pr-setup__start:disabled:active {
+  transform: none;
+}
+
+/* ── Wide screens: the content becomes a panel that slides out of the step
+      rail — it starts where the rail ends, so the two read as one shell
+      (design "desktop shell"). ─────────────────────────────────────────────── */
+@media (min-width: 700px) {
+  .pr-setup__body {
+    left: var(--pr-rail-w);
+    top: 0;
+    right: auto;
+    bottom: 0;
+    width: min(400px, 42vw);
+    padding: calc(env(safe-area-inset-top, 0px) + 22px) 22px
+      calc(env(safe-area-inset-bottom, 0px) + 22px);
+    gap: 14px;
+    background: var(--pr-panel);
+    border-right: 1px solid var(--pr-border-dim);
+    backdrop-filter: blur(6px);
+  }
+  /* Inside the panel the card *is* the panel — drop the doubled surface. */
+  .pr-setup__card {
+    background: none;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+  /* Left padding of 2px, cancelled by .pr-scroll-bleed on the scrolling box:
+     content stays on the gutter, the clip edge sits just outside it. */
+  .pr-setup__pane:not([hidden]) {
+    padding: 20px 0 0 2px;
+  }
+  .pr-setup__actions {
+    margin-top: auto;
+  }
+}

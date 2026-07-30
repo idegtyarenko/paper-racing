@@ -1,0 +1,164 @@
+/* Wizard step navigation (Blueprint redesign): the phone's top strip and the
+   wide-screen left rail, owned/built by ui/wizard-nav.ts. Both moved here from
+   the editor chrome unchanged in look — they now carry all six steps (drawing,
+   mode, race setup) instead of the editor's four. The bar, its icon button and
+   the title come from the shared .pr-topbar in pr-controls.css. */
+
+/* ── Phone: top strip extras (counter + progress segments) ─────────────────── */
+.pr-nav__titlerow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.pr-nav__counter {
+  flex: 0 0 auto;
+  font-family: var(--pr-mono);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--pr-accent);
+}
+.pr-nav__progress {
+  display: flex;
+  gap: 6px;
+}
+.pr-nav__seg {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(var(--pr-edge-rgb), 0.25);
+  transition:
+    background 0.35s ease,
+    opacity 0.35s ease;
+}
+.pr-nav__seg--done {
+  background: var(--pr-ink);
+  opacity: 0.5;
+}
+.pr-nav__seg--active {
+  background: var(--pr-accent);
+}
+
+/* ── Wide screens: the step rail (design "3A · Desktop"). Gated by screen width
+   (not hover) so tablets get it too; replaces the phone strip. ─────────────── */
+.pr-nav__rail {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--pr-rail-w);
+  padding: calc(env(safe-area-inset-top, 0px) + 26px) 22px
+    calc(env(safe-area-inset-bottom, 0px) + 22px);
+  flex-direction: column;
+  gap: 22px;
+  background: var(--pr-panel);
+  border-right: 1px solid var(--pr-border-dim);
+  backdrop-filter: blur(6px);
+}
+.pr-nav__rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+/* Smaller than the 48px top-bar burger — the rail is tight and pointer-driven. */
+.pr-nav__rail-burger {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+}
+.pr-nav__rail-burger .pr-btn__ico svg {
+  width: 16px;
+  height: 16px;
+}
+.pr-nav__rail-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+/* Rows are buttons (passed steps jump back), so they reset the control look. */
+.pr-nav__rail-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  opacity: 0.45;
+  transition: opacity 0.35s ease;
+}
+.pr-nav__rail-step:disabled {
+  cursor: default;
+}
+.pr-nav__rail-step:not(:disabled) {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.pr-nav__rail-step--active,
+.pr-nav__rail-step--done {
+  opacity: 1;
+}
+.pr-nav__rail-num {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: var(--pr-mono);
+  font-weight: 700;
+  font-size: 11.5px;
+  border: 1px solid var(--pr-edge);
+  color: var(--pr-edge);
+}
+.pr-nav__rail-step--active .pr-nav__rail-num {
+  background: var(--pr-accent);
+  border-color: var(--pr-accent);
+  color: var(--pr-accent-ink);
+  font-weight: 800;
+}
+.pr-nav__rail-step--done .pr-nav__rail-num {
+  background: var(--pr-ink);
+  border-color: var(--pr-ink);
+  color: var(--pr-board);
+}
+.pr-nav__rail-label {
+  font-size: 13px;
+  color: var(--pr-ink-soft);
+}
+.pr-nav__rail-step--active .pr-nav__rail-label {
+  color: var(--pr-ink);
+  font-weight: 700;
+}
+/* A passed step invites the tap back to it. */
+@media (hover: hover) {
+  .pr-nav__rail-step--done:hover .pr-nav__rail-num {
+    background: var(--pr-accent);
+    border-color: var(--pr-accent);
+    color: var(--pr-accent-ink);
+  }
+  .pr-nav__rail-step--done:hover .pr-nav__rail-label {
+    color: var(--pr-ink);
+  }
+}
+
+/* The rail's bottom slot (the editor mounts its coach-mark card here). */
+.pr-nav__foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 700px) {
+  .pr-nav__top {
+    display: none;
+  }
+  .pr-nav__rail {
+    display: flex;
+  }
+}

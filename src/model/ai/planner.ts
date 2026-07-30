@@ -271,11 +271,18 @@ export function scoreByPlan(
       const cd = crossDelta(track, cur.pos, target);
       if (cd === -1) continue; // never drive backward through the finish
       const g = cur.g + 1 + overspeed(cur.pos, target);
+      // The clearance check comes BEFORE the goal branch: a finish crossing is
+      // only a goal if the move to it actually stays on the road. Otherwise the
+      // planner "wins" by cutting through a wall — on a track where another pass
+      // runs close to the finish line, the car sees a phantom 3-move plan across
+      // the gravel, drives at it, has the crossing move rejected at the root (roots
+      // go through the exact engine), re-plans the same phantom, and loops forever
+      // a few cells from the line instead of driving the legitimate way around.
+      if (!segClear(cl, cur.pos, target)) continue;
       if (cd === 1) {
         push(target, { x: 0, y: 0 }, g, cur.first, true);
         continue;
       }
-      if (!segClear(cl, cur.pos, target)) continue;
       const vel = { x: target.x - cur.pos.x, y: target.y - cur.pos.y };
       const key = sk(target, vel);
       const prev = closed.get(key);

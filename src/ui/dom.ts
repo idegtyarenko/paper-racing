@@ -1,6 +1,6 @@
 // Shared low-level UI primitives: pointer type detection, reliable button
 // activation, and the sheet overlay. Knows nothing about game state — used by
-// the panel, dialogs, and lobby.
+// dialogs and the confirmation sheet.
 
 /** Primary input is touch (phone/tablet). */
 export const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
@@ -9,7 +9,7 @@ const overlay = document.getElementById('overlay')!;
 
 /** Show one overlay sheet, hiding the rest. */
 export function openSheet(sheet: HTMLElement): void {
-  overlay.querySelectorAll<HTMLElement>('.sheet').forEach((s) => (s.hidden = true));
+  overlay.querySelectorAll<HTMLElement>('.pr-sheet').forEach((s) => (s.hidden = true));
   sheet.hidden = false;
   overlay.hidden = false;
 }
@@ -19,14 +19,16 @@ export function closeOverlay(): void {
   overlay.hidden = true;
 }
 
-/** Wire up overlay dismissal via the backdrop, `[data-close]` buttons, and Escape. */
+/** Wire up overlay dismissal via the backdrop and Escape. Sheets are built by
+ *  their owners on first open, so this can't hold references to their contents —
+ *  it listens on the overlay itself, which is there from the first frame. */
 export function bindOverlayClose(): void {
   // Only close on a backdrop tap if the press also started on the backdrop.
   // Otherwise on iOS the synthetic `click` that follows a tap which collapsed
   // a bottom-sheet hint (the sheet anchors to the bottom and slides down, so
   // the click coordinates end up above its top edge — over the backdrop)
   // would land on the backdrop and falsely close the overlay.
-  const backdrop = overlay.querySelector<HTMLElement>('.overlay__backdrop')!;
+  const backdrop = overlay.querySelector<HTMLElement>('.pr-overlay__backdrop')!;
   let pressedBackdrop = false;
   overlay.addEventListener('pointerdown', (e) => {
     pressedBackdrop = e.target === backdrop;
@@ -34,9 +36,6 @@ export function bindOverlayClose(): void {
   backdrop.addEventListener('click', () => {
     if (pressedBackdrop) closeOverlay();
   });
-  overlay
-    .querySelectorAll<HTMLElement>('[data-close]')
-    .forEach((b) => bindTap(b, closeOverlay));
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeOverlay();
   });

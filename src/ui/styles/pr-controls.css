@@ -1,0 +1,1061 @@
+/* Shared Blueprint components (redesign). The pieces every redesigned screen
+   needs — top bar, card surface, section label, buttons, segmented options,
+   help/hint, sliders — extracted here so the editor, the setup screens and
+   (later) the lobby/race/results all render the same component instead of a
+   per-screen copy. Screen-specific stylesheets (editor-chrome.css,
+   setup-chrome.css) only position these and add their own extras.
+
+   Imported before the per-screen stylesheets, so a screen can position and
+   extend a component without fighting it.
+
+   CONVENTION — hiding. Screens hide things with the `hidden` attribute
+   (`el.hidden = …`), and the UA's `[hidden] { display: none }` is a plain
+   class-less rule, so any `display` a component declares would beat it and the
+   element would stay on screen. Scope the declaration instead:
+
+       .pr-thing:not([hidden]) { display: flex; }
+
+   NOT a base `display` plus a `.pr-thing[hidden] { display: none }` override —
+   that's two rules where one will do, and the next modifier added to the
+   component silently reintroduces the bug. A modifier that changes `display`
+   (see .pr-btn--icon) needs the same scope, or the base outranks it. */
+
+/* Map zoom controls: they belong to the board rather than to any one screen, so
+   they live in the shared layer. Desktop only — touchscreens zoom via pinch.
+   Lifting them clear of a screen's bottom action zone is still that screen's
+   business (each one sets its own `bottom`). */
+.zoom-ctl {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 5;
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .zoom-ctl {
+    display: flex;
+  }
+}
+.zoom-ctl__btn {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--pr-radius);
+  border: 1px solid var(--pr-border);
+  background: var(--pr-panel);
+  color: var(--pr-ink-soft);
+  font-size: 20px;
+  line-height: 1;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+}
+@media (hover: hover) {
+  .zoom-ctl__btn:hover {
+    background: var(--pr-hover);
+    border-color: var(--pr-edge);
+  }
+}
+.zoom-ctl__btn:active {
+  background: var(--pr-press);
+}
+
+/* Both lobby screens report the connection themselves (the guest's status
+   banner, the host's hint line above Start), so the global banner would just
+   say it twice. It stays for the race, where nothing else does. */
+body.is-setup .pr-conn,
+body.is-lobby .pr-conn {
+  display: none;
+}
+
+/* ── Overlay layer: spans the board, only children capture pointer events ───── */
+.pr-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  color: var(--pr-ink);
+}
+.pr-layer > * {
+  pointer-events: auto;
+}
+
+/* ── Card: the floating panel surface (translucent over the board) ──────────── */
+.pr-card {
+  border-radius: var(--pr-radius);
+  background: var(--pr-panel);
+  border: 1px solid var(--pr-border);
+  backdrop-filter: blur(6px);
+}
+.pr-card--lg {
+  border-radius: var(--pr-radius-lg);
+}
+/* Opaque surface for elevated chrome (menus, coach-marks, sheets). */
+.pr-card--solid {
+  background: var(--pr-panel-solid);
+  backdrop-filter: none;
+}
+
+/* Scrolling content whose left edge is the panel's own gutter (no padding of
+   its own): `overflow-y: auto` makes the box clip horizontally too, which
+   shaves the ink of glyphs that overhang their advance width — a Cyrillic «Т»
+   loses the left arm of its bar and reads as «Г». Give the clip a couple of
+   pixels to play with, and take them back off the margin so the content still
+   lines up with everything else. */
+.pr-scroll-bleed {
+  padding-left: 2px;
+  margin-left: -2px;
+}
+
+/* ── Section / screen label: mono caps in blueprint cyan ────────────────────── */
+.pr-label {
+  font-family: var(--pr-mono);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--pr-edge);
+}
+
+/* ── Top bar: 48px leading icon button + title card, aligned to the gutter ──── */
+.pr-topbar {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + var(--pr-gutter));
+  left: var(--pr-gutter);
+  right: var(--pr-gutter);
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+.pr-topbar__head {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+}
+.pr-topbar__title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────────── */
+.pr-btn {
+  font-family: var(--pr-font);
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin: 0;
+  padding: 15px 18px;
+  border-radius: var(--pr-radius);
+  border: 1px solid var(--pr-border);
+  background: var(--pr-panel);
+  color: var(--pr-ink-soft);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  touch-action: manipulation;
+  backdrop-filter: blur(6px);
+}
+.pr-btn:not([hidden]) {
+  display: flex;
+}
+.pr-btn:active {
+  transform: scale(0.98);
+}
+/* Hover — only on devices with a real pointer (on touch it "sticks" after a tap
+   and iOS eats the first click). */
+@media (hover: hover) {
+  .pr-btn:hover:not(:disabled) {
+    background: var(--pr-hover);
+    border-color: var(--pr-edge);
+    color: var(--pr-ink);
+  }
+  .pr-btn--primary:hover:not(:disabled) {
+    background: var(--pr-accent-hover);
+    border-color: transparent;
+    color: var(--pr-accent-ink);
+  }
+}
+.pr-btn:active:not(:disabled) {
+  background: var(--pr-press);
+}
+.pr-btn--primary:active:not(:disabled) {
+  background: var(--pr-accent-hover);
+}
+/* Primary action: amber fill. */
+.pr-btn--primary {
+  background: var(--pr-accent);
+  border-color: transparent;
+  color: var(--pr-accent-ink);
+  font-weight: 800;
+}
+/* Destructive action (confirming a retirement). Outlined in the error colour
+   rather than filled: the amber primary is the way ON, and a second solid slab
+   beside it would read as an equal — this one has to look like the exit. */
+.pr-btn--danger {
+  background: var(--pr-error-wash);
+  border-color: var(--pr-error);
+  color: var(--pr-error-soft);
+  font-weight: 800;
+}
+@media (hover: hover) {
+  .pr-btn--danger:hover:not(:disabled) {
+    background: rgba(var(--pr-error-rgb), 0.22);
+    border-color: var(--pr-error);
+    color: var(--pr-error-ink);
+  }
+}
+.pr-btn--danger:active:not(:disabled) {
+  background: rgba(var(--pr-error-rgb), 0.28);
+}
+/* Uppercase call to action (START RACE, JOIN ONLINE GAME). */
+.pr-btn--caps {
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+}
+/* Square icon button (burger, back). Its `display` carries the same
+   :not([hidden]) scope as the base's, or the base would outrank it. */
+.pr-btn--icon {
+  flex: 0 0 auto;
+  width: 48px;
+  padding: 0;
+  place-items: center;
+}
+.pr-btn--icon:not([hidden]) {
+  display: grid;
+}
+.pr-btn--icon:active {
+  transform: scale(0.96);
+}
+.pr-btn--icon svg,
+.pr-btn__ico svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+.pr-btn svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+/* ── Brand mark: app icon + skewed wordmark over a checkered rule ───────────
+   Heads the menu drawer and the editor's wide-screen rail (`--sm`). */
+.pr-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pr-brand__logo {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+}
+.pr-brand__text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.pr-brand__wordmark {
+  font-family: var(--pr-font);
+  display: inline-block;
+  font-weight: 800;
+  font-size: 15.5px;
+  line-height: 1;
+  letter-spacing: -0.3px;
+  transform: skew(-6deg);
+}
+.pr-brand__word {
+  color: var(--pr-ink);
+}
+.pr-brand__word--accent {
+  color: var(--pr-accent);
+}
+.pr-brand__dashes {
+  display: flex;
+  gap: 2px;
+}
+.pr-brand__dash {
+  width: 7px;
+  height: 3px;
+  background: var(--pr-ink);
+}
+.pr-brand__dash--hollow {
+  background: transparent;
+  border: 1px solid rgba(var(--pr-ink-rgb), 0.4);
+}
+/* Compact: the editor rail, where the brand shares its row with the burger. */
+.pr-brand--sm {
+  gap: 9px;
+}
+.pr-brand--sm .pr-brand__logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+}
+.pr-brand--sm .pr-brand__text {
+  gap: 2px;
+}
+.pr-brand--sm .pr-brand__wordmark {
+  font-size: 13px;
+  letter-spacing: -0.2px;
+}
+.pr-brand--sm .pr-brand__dashes {
+  gap: 1.5px;
+}
+.pr-brand--sm .pr-brand__dash {
+  width: 5px;
+  height: 2.5px;
+}
+
+/* ── List item: icon tile + text + chevron ──────────────────────────────────
+   One shape for every "tap this row" element — the mode-select cards and the
+   global menu's entries. The base is the menu size and carries layout only, so
+   a row can sit on a `.pr-card` surface (mode select) or bring its own soft
+   fill (`--fill`, the menu) without either fighting the other. */
+.pr-item {
+  font-family: var(--pr-font);
+  align-items: center;
+  gap: 14px;
+  padding: 13px 12px;
+  text-align: left;
+  color: var(--pr-ink);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.pr-item:not([hidden]) {
+  display: flex;
+}
+.pr-item:active {
+  transform: scale(0.99);
+}
+@media (hover: hover) {
+  .pr-item:hover {
+    background: var(--pr-hover);
+    border-color: var(--pr-edge);
+  }
+}
+/* Soft-filled row, used where there is no card underneath (menu entries). */
+.pr-item--fill {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--pr-fill-soft);
+}
+/* Card-sized row: the mode-select cards. */
+.pr-item--lg {
+  gap: 16px;
+  padding: 20px 18px;
+}
+.pr-item__ico {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: rgba(var(--pr-edge-rgb), 0.12);
+  color: var(--pr-edge);
+}
+.pr-item__ico svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+.pr-item--lg .pr-item__ico {
+  width: 44px;
+  height: 44px;
+}
+.pr-item--lg .pr-item__ico svg {
+  width: 22px;
+  height: 22px;
+}
+.pr-item__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pr-item__title {
+  font-family: var(--pr-font);
+  font-weight: 600;
+  font-size: 14px;
+}
+.pr-item--lg .pr-item__title {
+  font-weight: 700;
+  font-size: 15px;
+}
+.pr-item__sub {
+  font-family: var(--pr-font);
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--pr-ink-mute);
+}
+.pr-item__chev {
+  flex: 0 0 auto;
+  color: var(--pr-ink-faint);
+}
+.pr-item__chev svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+.pr-item--lg .pr-item__chev {
+  color: var(--pr-edge);
+}
+.pr-item--lg .pr-item__chev svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ── Segmented options: a row/grid of choices with one active ───────────────── */
+.pr-seg {
+  display: flex;
+  gap: 6px;
+}
+.pr-seg--grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
+.pr-seg--grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+.pr-seg--stack {
+  flex-direction: column;
+}
+.pr-seg__opt {
+  font-family: var(--pr-font);
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 11px 6px;
+  text-align: center;
+  border-radius: var(--pr-radius);
+  border: 1px solid var(--pr-border);
+  background: var(--pr-sunken);
+  color: var(--pr-ink-soft);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.pr-seg__opt--active {
+  background: var(--pr-accent);
+  border-color: var(--pr-accent);
+  color: var(--pr-accent-ink);
+  font-weight: 800;
+}
+/* Beyond the starting grid's capacity: offered but plainly unavailable. */
+.pr-seg__opt:disabled {
+  opacity: 0.32;
+  cursor: default;
+}
+@media (hover: hover) {
+  .pr-seg__opt:hover:not(:disabled):not(.pr-seg__opt--active) {
+    background: var(--pr-hover);
+    border-color: var(--pr-edge);
+    color: var(--pr-ink);
+  }
+  .pr-seg__opt--active:hover:not(:disabled) {
+    background: var(--pr-accent-hover);
+    border-color: var(--pr-accent-hover);
+  }
+}
+.pr-seg__opt:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* ── Room code: the code itself copies, the square button shares ───────────── */
+.pr-code {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.pr-code__value {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 8px;
+  border-radius: var(--pr-radius);
+  /* Dashed: the code is something to pass on, not a field to fill in. */
+  border: 1px dashed var(--pr-border);
+  background: var(--pr-sunken);
+  color: var(--pr-ink);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.pr-code__text {
+  font-family: var(--pr-font);
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: 4px;
+  /* The code is read out loud and typed in by hand — keep the glyphs even. */
+  font-variant-numeric: tabular-nums;
+}
+.pr-code__ico {
+  flex: 0 0 auto;
+  color: var(--pr-edge);
+}
+.pr-code__ico svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
+@media (hover: hover) {
+  .pr-code__value:hover {
+    background: var(--pr-hover);
+    border-color: var(--pr-edge);
+  }
+}
+.pr-code__value:active {
+  transform: scale(0.99);
+  background: var(--pr-press);
+}
+.pr-code__share {
+  height: auto;
+}
+
+/* ── Roster: one row per racer, your own row editable ───────────────────────── */
+.pr-roster {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pr-roster__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pr-roster__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 12px;
+  border-radius: var(--pr-radius);
+  border: 1px solid var(--pr-border);
+  background: var(--pr-sunken);
+}
+/* Gone from the channel: dimmed, but the seat is still theirs. */
+.pr-roster__row--offline {
+  border-color: var(--pr-border-dim);
+  opacity: 0.55;
+}
+.pr-roster__dot {
+  flex: 0 0 auto;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+}
+.pr-roster__name {
+  font-family: var(--pr-font);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--pr-ink);
+}
+.pr-roster__input {
+  font-family: var(--pr-font);
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 7px;
+  border: 1px solid var(--pr-edge);
+  background: rgba(var(--pr-ink-rgb), 0.06);
+  outline: none;
+  font-weight: 700;
+  font-size: 14.5px;
+  color: var(--pr-ink);
+}
+.pr-roster__input::placeholder {
+  font-weight: 600;
+  font-style: italic;
+  color: var(--pr-ink-dim);
+}
+/* Nothing typed yet: the field reads as an invitation, not as filled in. */
+.pr-roster__input:placeholder-shown {
+  border-color: var(--pr-border);
+}
+.pr-roster__badge {
+  font-family: var(--pr-font);
+  flex: 0 0 auto;
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--pr-ink-dim);
+}
+.pr-roster__badge--host {
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--pr-accent);
+  color: var(--pr-accent-ink);
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+/* Alone in the room: a dashed placeholder where the other racers will appear. */
+.pr-roster__empty {
+  font-family: var(--pr-font);
+  padding: 12px 14px;
+  border-radius: var(--pr-radius);
+  border: 1px dashed var(--pr-border-dim);
+  text-align: center;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--pr-ink-dim);
+}
+
+/* ── Status banner: persistent state (waiting / reconnecting) ────────────────
+   Not a toast: it stays for as long as the state does and swaps to the error
+   skin in place, reusing the toast's error tokens. */
+.pr-status {
+  font-family: var(--pr-font);
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 13px 18px;
+  border-radius: var(--pr-radius);
+  border: 1px solid var(--pr-border-dim);
+  background: rgba(var(--pr-sunken-rgb), 0.7);
+  font-weight: 600;
+  font-size: 12.5px;
+  line-height: 1.4;
+  text-align: center;
+  color: var(--pr-ink-soft);
+}
+.pr-status:not([hidden]) {
+  display: flex;
+}
+.pr-status--error {
+  background: var(--pr-error-bg);
+  border-color: var(--pr-error);
+  color: var(--pr-error-ink);
+}
+.pr-status__spinner {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 3px solid rgba(var(--pr-edge-rgb), 0.3);
+  border-top-color: var(--pr-edge);
+  animation: pr-spin 1s linear infinite;
+}
+.pr-status--error .pr-status__spinner {
+  border-color: rgba(var(--pr-error-rgb), 0.3);
+  border-top-color: var(--pr-error-soft);
+}
+@keyframes pr-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pr-status__spinner {
+    animation: none;
+  }
+}
+
+/* ── Animated ellipsis: waiting on someone else's online move ────────────────
+   Dots light up one by one, looping, so a non-interactive board reads as
+   "waiting" rather than "frozen" (m1). Three separate spans (`content` can't be
+   animated — we fade each dot's opacity with a phase offset). They always take
+   up space (inline-block), so the adjacent timer text doesn't jump around. */
+.pr-dots {
+  display: inline-block;
+  min-width: 1.2em;
+  text-align: left;
+}
+
+/* A shared 1.4s timeline for all dots (no delay), but different lighting thresholds —
+   so all three go dark in sync at the start of the cycle (reset "…" → ""), then light
+   up in sequence: 1st at 25%, 2nd at 50%, 3rd at 75%. Exactly replicates the old
+   frame sequence '', '.', '..', '...'. */
+.pr-dots__dot {
+  opacity: 0;
+  animation: 1.4s steps(1, end) infinite;
+}
+.pr-dots__dot:nth-child(1) {
+  animation-name: pr-dot-1;
+}
+.pr-dots__dot:nth-child(2) {
+  animation-name: pr-dot-2;
+}
+.pr-dots__dot:nth-child(3) {
+  animation-name: pr-dot-3;
+}
+@keyframes pr-dot-1 {
+  0% {
+    opacity: 0;
+  }
+  25%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes pr-dot-2 {
+  0% {
+    opacity: 0;
+  }
+  50%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes pr-dot-3 {
+  0% {
+    opacity: 0;
+  }
+  75%,
+  100% {
+    opacity: 1;
+  }
+}
+/* Respect "reduce motion": a static ellipsis, all three dots visible. */
+@media (prefers-reduced-motion: reduce) {
+  .pr-dots__dot {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* ── Toast: transient notice ("code copied", a failed send) ─────────────────
+   The counterpart to .pr-status — this one fades on its own, so it carries
+   things you may miss, never state you must be able to come back to. Lives in
+   the shared layer (it was the cream lobby's, and every screen fires it); the
+   editor overrides the skin for its error toast (editor-chrome.css). */
+.pr-toast {
+  font-family: var(--pr-font);
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+  transform: translateX(-50%);
+  z-index: 20;
+  max-width: calc(100% - 2 * var(--pr-gutter));
+  padding: 12px 18px;
+  border-radius: var(--pr-radius-lg);
+  border: 1px solid var(--pr-border);
+  background: var(--pr-panel-solid);
+  color: var(--pr-ink);
+  font-weight: 600;
+  font-size: 13.5px;
+  text-align: center;
+  box-shadow: var(--pr-shadow);
+  pointer-events: none;
+  animation: pr-toast-in 0.15s ease-out;
+}
+@keyframes pr-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* ── Overlay + sheet: the modal layer (rules, join by code, confirmations) ───
+   Not a .pr-layer child — the overlay is fixed to the viewport rather than to
+   the board, so it carries its own font. The sheet is a .pr-card--solid that
+   slides up from the bottom edge on a phone and centres on a wide screen.
+   Owners: ui/dialogs.ts (rules, join), ui/confirm.ts (confirmations). */
+.pr-overlay:not([hidden]) {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  color: var(--pr-ink);
+}
+.pr-overlay__backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--pr-scrim);
+}
+.pr-sheet:not([hidden]) {
+  position: relative;
+  margin: auto;
+  z-index: 1;
+  padding: 18px;
+  width: min(360px, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /* A tall sheet shouldn't overflow the screen — scroll internally. */
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  box-shadow: var(--pr-shadow);
+}
+.pr-sheet__title {
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: 0.3px;
+}
+/* Body copy inside a sheet. Paragraphs are separated by \n\n — pre-line turns
+   those into breaks (single line breaks collapse, as in normal text flow). */
+.pr-sheet__text {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--pr-ink-soft);
+  white-space: pre-line;
+}
+/* Build label at the foot of the rules sheet — a subtle sign the PWA updated. */
+.pr-sheet__version {
+  margin-top: 4px;
+  text-align: center;
+  font-family: var(--pr-mono);
+  font-size: 11px;
+  color: var(--pr-ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+/* Phone: the sheet is a bottom sheet, full width, with a sliver of backdrop
+   left visible above it. */
+@media (max-width: 700px) {
+  .pr-overlay:not([hidden]) {
+    align-items: flex-end;
+  }
+  .pr-sheet:not([hidden]) {
+    margin: 0;
+    width: 100%;
+    border-radius: var(--pr-radius-lg) var(--pr-radius-lg) 0 0;
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+    animation: pr-sheet-up 0.18s ease-out;
+    max-height: 92dvh;
+  }
+}
+@keyframes pr-sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+/* ── Text field: the join code, and anything else a sheet asks for ──────────── */
+.pr-field {
+  font-family: var(--pr-font);
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--pr-radius);
+  border: 1px solid var(--pr-border);
+  background: var(--pr-sunken);
+  color: var(--pr-ink);
+  font-weight: 600;
+  font-size: 16px; /* iOS zooms a focused field below 16px */
+}
+.pr-field::placeholder {
+  color: var(--pr-ink-dim);
+}
+.pr-field:focus {
+  outline: 2px solid var(--pr-accent);
+  outline-offset: 1px;
+}
+/* An empty required field on submit — red outline, cleared once they type. */
+.pr-field--invalid,
+.pr-field--invalid:focus {
+  border-color: var(--pr-error);
+  outline-color: var(--pr-error);
+}
+/* A room code: wide-tracked mono caps, like the code shown in the lobby. */
+.pr-field--code {
+  font-family: var(--pr-mono);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 4px;
+  text-align: center;
+}
+/* Why the join attempt failed, under the field. */
+.pr-field-error:not([hidden]) {
+  display: block;
+  color: var(--pr-error);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ── Setting row: label (+ "?" help) over its control ───────────────────────── */
+.pr-row {
+  flex-direction: column;
+  gap: 10px;
+}
+.pr-row:not([hidden]) {
+  display: flex;
+}
+.pr-row__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pr-row__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+/* Slider rows put the current value at the right end of the head. */
+.pr-row__value {
+  font-family: var(--pr-font);
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--pr-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Round "?" — expands the setting's explanation. */
+.pr-help {
+  font-family: var(--pr-font);
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--pr-edge);
+  background: none;
+  color: var(--pr-edge);
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+/* ≥44px touch target without bloating the layout (a11y). */
+.pr-help::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+}
+@media (hover: hover) {
+  .pr-help:hover:not([aria-expanded='true']) {
+    background: var(--pr-hover);
+  }
+}
+.pr-help[aria-expanded='true'] {
+  background: var(--pr-accent);
+  border-color: var(--pr-accent);
+  color: var(--pr-accent-ink);
+}
+
+/* The explanation itself: an amber note under the control. */
+.pr-hint {
+  margin: 0;
+  padding: 11px 13px;
+  border-radius: var(--pr-radius);
+  background: var(--pr-accent-wash);
+  border: 1px solid rgba(var(--pr-accent-rgb), 0.3);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--pr-accent-soft);
+}
+
+/* Neutral explanation card (e.g. what a handling preset feels like). */
+.pr-note {
+  padding: 13px 14px;
+  border-radius: var(--pr-radius);
+  background: rgba(var(--pr-edge-rgb), 0.06);
+  border: 1px solid var(--pr-edge-line);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--pr-ink-soft);
+}
+
+/* ── Rules editor (ui/rules-editor.ts): handling + rules control stacks ─────── */
+.pr-rules {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.pr-rules--drive {
+  gap: 12px;
+  flex: 1;
+}
+.pr-rules--rules {
+  gap: 22px;
+}
+.pr-rules__sliders {
+  flex-direction: column;
+  gap: 8px;
+}
+.pr-rules__sliders:not([hidden]) {
+  display: flex;
+}
+/* The four handling axes are compact rows: label and value on one line, and the
+   label is plain text (not a section heading — the section is the tab itself). */
+.pr-rules__sliders .pr-row {
+  gap: 2px;
+}
+.pr-rules__sliders .pr-label {
+  font-family: var(--pr-font);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--pr-ink-soft);
+}
+/* Preview fills whatever height the tab has left. */
+/* Preview takes what the tab has left, within a band that keeps the cloud
+   readable (too tall and the cells balloon; too short and they collide). */
+.pr-rules__preview {
+  flex: 1;
+  min-height: 140px;
+  max-height: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pr-preview {
+  flex: 1;
+  min-height: 0;
+  border-radius: var(--pr-radius);
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(var(--pr-edge-rgb), 0.18);
+  overflow: hidden;
+}
+.pr-preview__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ── Slider ─────────────────────────────────────────────────────────────────── */
+.pr-slider {
+  width: 100%;
+  accent-color: var(--pr-accent);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.pr-slider__scale {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--pr-mono);
+  font-size: 11px;
+  color: var(--pr-ink-dim);
+  font-variant-numeric: tabular-nums;
+}

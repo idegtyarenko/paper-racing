@@ -351,6 +351,78 @@ export function rebuildEdges(m: WidthModel): { outer: Polyline; inner: Polyline 
   return offsetEdges(m.center, m.outNormal, m.outW, m.inW);
 }
 
+/** Per-vertex turn angle (radians): ~0 on a straight, larger through corners. */
+const STRAIGHT_TURN = 0.05;
+
+/**
+ * Default start/finish position: the centerline vertex on a **wide** part of the
+ * track, **near the end of a long straight**. Each vertex is scored by the arc
+ * length of the straight run ending at it (a run of low-turn vertices) times the
+ * local track width, so the exit of the longest, widest straight wins. The
+ * result is pulled back a little from the corner so the line sits on the straight
+ * rather than at the apex. Falls back to the single widest vertex when the loop
+ * has no straights at all (e.g. a near-circle).
+ */
+export function autoFinishIndex(m: WidthModel): number {
+  const c = m.center;
+  const n = c.length;
+  const width = (i: number): number => m.outW[i] + m.inW[i];
+
+  // Turn angle at each vertex (0 = straight).
+  const turn = new Array<number>(n);
+  for (let i = 0; i < n; i++) {
+    const din = sub(c[i], c[(i - 1 + n) % n]);
+    const dout = sub(c[(i + 1) % n], c[i]);
+    const li = len(din);
+    const lo = len(dout);
+    turn[i] =
+      li > 1e-6 && lo > 1e-6 ? Math.atan2(Math.abs(cross(din, dout)), dot(din, dout)) : 0;
+  }
+
+  // Arc length of the straight run ending at each vertex. Scan twice around so
+  // a run that wraps past index 0 settles to its true length on the second pass.
+  const runLen = new Array<number>(n).fill(0);
+  let acc = 0;
+  for (let k = 0; k < 2 * n; k++) {
+    const i = k % n;
+    if (turn[i] < STRAIGHT_TURN) {
+      acc += dist(c[(i - 1 + n) % n], c[i]);
+      runLen[i] = acc;
+    } else {
+      acc = 0;
+      runLen[i] = 0;
+    }
+  }
+
+  // Best = widest, longest straight's end.
+  let best = 0;
+  let bestScore = -1;
+  for (let i = 0; i < n; i++) {
+    const score = runLen[i] * width(i);
+    if (score > bestScore) {
+      bestScore = score;
+      best = i;
+    }
+  }
+
+  // No straights anywhere — fall back to the single widest vertex.
+  if (runLen[best] === 0) {
+    let wi = 0;
+    for (let i = 1; i < n; i++) if (width(i) > width(wi)) wi = i;
+    return wi;
+  }
+
+  // Pull back from the corner onto the straight (small, capped fraction of it).
+  let pull = Math.min(3, runLen[best] * 0.15);
+  let i = best;
+  while (pull > 0) {
+    const prev = (i - 1 + n) % n;
+    pull -= dist(c[prev], c[i]);
+    i = prev;
+  }
+  return i;
+}
+
 /**
  * Index of the centerline vertex closest to point p, and which side
  * (outer/inner) its edge belongs to, if p falls within tolerance. Otherwise null.

@@ -71,8 +71,8 @@ export default defineConfig({
         orientation: 'any',
         start_url: '.',
         scope: '.',
-        background_color: '#fbfaf4',
-        theme_color: '#0a8a4f',
+        background_color: '#0d3252',
+        theme_color: '#0d3252',
         // prettier-ignore
         icons: [
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },

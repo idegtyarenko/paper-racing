@@ -24,6 +24,7 @@ import { Track, key, unkey, finalizeTrack } from '../track';
 import { DRIVE_PRESETS } from '../../config';
 import { Vec, dist } from '../../geometry';
 import { OUTER, INNER, gameOn } from '../test-fixtures';
+import { pinchTrack } from '../pinch-track.fixture';
 
 const FIN_X = 20;
 
@@ -538,5 +539,64 @@ describe('difficulty levels (unified A*)', () => {
     expect(r.won).toBe(true);
     expect(r.crashes).toBe(0);
     expect(r.moves).toBeLessThanOrEqual(70); // measured ~42; threshold with margin
+  });
+});
+
+// Regression, from a real race: on a player-drawn track (pinchTrack) every bot got
+// stuck a few cells short of the finish line and shuffled back and forth — five
+// medium bots had spent ~70 moves each on a lap the human did in ~19. Two separate
+// leaks fed each other, and both are covered here.
+describe('pinch track: bots must not get stuck short of the line', () => {
+  const pTrack = pinchTrack();
+  const pNav = buildNavField(pTrack);
+  const f1: Rules = { ...DEFAULT_RULES, drive: { ...DRIVE_PRESETS.f1 } };
+  // Where the pack was jammed, on the pass before the one that leads to the line.
+  const JAM: Vec = { x: 140, y: 120 };
+
+  // Leak 1 — the nav BFS. edgeOk only sampled the edge's MIDPOINT, and the wall by
+  // (141,122) passes close enough to the diagonal that the midpoint lands on the
+  // road while a third of the way along the edge is 0.195 past the boundary (the
+  // tolerance is 0.05). The field walked through it and reported 6 steps to the
+  // finish from a cell that is really most of a lap away, so the bot descended a
+  // gradient into a pinch it cannot physically drive through and parked there.
+  it('the distance field does not step through a wall the edge midpoint misses', () => {
+    const from = { x: 141, y: 122 };
+    const to = { x: 142, y: 123 };
+    // The engine says that step is a crash…
+    expect(computeOutcome(pTrack, f1, from, to).crash).toBe(true);
+    // …so the field must not have routed through it. Honest value is ~24; the leak
+    // collapsed it to 6.
+    expect(pNav.dist.get(key(from.x, from.y))!).toBeGreaterThan(20);
+  });
+
+  // Leak 2 — the A* planner. A finish crossing was accepted as a goal without
+  // checking that the move to it stays on the road, so the bot "won" by cutting
+  // across the gravel: a phantom 3-move plan (139,120)->(138,122)->(137,125) whose
+  // last leg goes through a wall. Root moves are checked by the exact engine, so
+  // the crossing was rejected the moment it became the actual move — and the bot
+  // re-planned the same phantom forever, looping with period 5.
+  it('the planner does not plan a finish crossing through a wall', () => {
+    const state = gameOn(pTrack, 2, f1);
+    state.players[1].retired = true;
+    state.players[0].pos = { ...JAM };
+    state.players[0].vel = { x: 0, y: 0 };
+
+    const seen = new Set<string>();
+    let crossed = false;
+    let moves = 0;
+    for (let i = 0; i < 40 && !crossed; i++) {
+      const cand = chooseMove(state, pNav, 'medium', rngConst(0.99));
+      expect(cand, 'the bot must always have a move here').not.toBeNull();
+      const before = state.players[0].crossings;
+      applyMove(state, cand!);
+      moves += 1;
+      if (state.players[0].crossings > before) crossed = true;
+      seen.add(`${state.players[0].pos.x},${state.players[0].pos.y}`);
+    }
+    expect(crossed, 'the bot never reached the finish line').toBe(true);
+    // It got there by driving, not by milling around: every move landed on a fresh
+    // cell. The looping bot cycled through five cells and never left them.
+    expect(seen.size).toBe(moves);
+    expect(state.players[0].crashes).toHaveLength(0);
   });
 });

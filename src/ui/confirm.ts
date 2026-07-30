@@ -1,8 +1,9 @@
 // Generic confirmation dialog (e.g. for retiring from a race). Owns its own
-// DOM: builds a .sheet and mounts it into #overlay on first call — there's no
-// markup for it in index.html (we keep index.html lean, see roadmap).
+// DOM: builds a shared .pr-sheet and mounts it into #overlay on first call —
+// there's no markup for it in index.html (we keep index.html lean, see roadmap).
 
 import { bindTap, openSheet, closeOverlay } from './dom';
+import { button, buildSheet } from './pr-chrome';
 import { strings } from '../i18n';
 
 let sheet: HTMLElement | null = null;
@@ -12,29 +13,17 @@ let onYes: () => void = () => {};
 
 /** Build the confirmation sheet and mount it into the overlay (once). */
 function build(): HTMLElement {
-  const overlay = document.getElementById('overlay')!;
-  const s = document.createElement('div');
-  s.className = 'sheet';
-  s.hidden = true;
+  const s = buildSheet('');
+  titleEl = s.querySelector('.pr-sheet__title')!;
 
-  titleEl = document.createElement('h2');
-  titleEl.className = 'sheet__title';
-
-  yesBtn = document.createElement('button');
-  yesBtn.type = 'button';
-  yesBtn.className = 'button button--center';
-
-  const cancel = document.createElement('button');
-  cancel.type = 'button';
-  cancel.className = 'button button--center';
-  cancel.textContent = strings.buttons.cancel;
-
-  s.append(titleEl, yesBtn, cancel);
-  overlay.append(s);
+  yesBtn = button('pr-btn pr-btn--caps', s);
   bindTap(yesBtn, () => {
     closeOverlay();
     onYes();
   });
+
+  const cancel = button('pr-btn', s);
+  cancel.textContent = strings.buttons.cancel;
   bindTap(cancel, closeOverlay);
   return s;
 }
@@ -42,7 +31,7 @@ function build(): HTMLElement {
 /** Open the dialog: title, confirm-button label, and the "yes" callback.
  *  The confirm button defaults to the dangerous (red) style, for destructive
  *  actions like retiring; pass danger:false for positive actions (e.g.
- *  "Back to the race"). */
+ *  "Back to the race"), which get the normal amber primary instead. */
 export function openConfirm(
   title: string,
   confirmLabel: string,
@@ -50,9 +39,11 @@ export function openConfirm(
   opts: { danger?: boolean } = {},
 ): void {
   if (!sheet) sheet = build();
+  const danger = opts.danger !== false;
   titleEl.textContent = title;
   yesBtn.textContent = confirmLabel;
-  yesBtn.classList.toggle('button--danger', opts.danger !== false);
+  yesBtn.classList.toggle('pr-btn--danger', danger);
+  yesBtn.classList.toggle('pr-btn--primary', !danger);
   onYes = onConfirm;
   openSheet(sheet);
 }

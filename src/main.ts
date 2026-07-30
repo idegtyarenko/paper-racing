@@ -7,13 +7,21 @@
 import './ui/styles/index.css';
 import { newAppState, Phase } from './app-state';
 import { finalizeTrack } from './model/track';
-import { newEditor, stepBack, confirmEdges } from './model/editor';
+import {
+  newEditor,
+  stepBack,
+  confirmEdges,
+  confirmFinish,
+  confirmDirection,
+} from './model/editor';
 import {
   Candidate,
   normalizeRules,
   newGame,
   shuffledIndices,
   isFinished,
+  humansAllDone,
+  hasLiveBots,
 } from './model/game';
 import { candidatesForSeat, applyMove, coastMove, retireSeat } from './model/turns';
 import { Difficulty, chooseMove } from './model/ai';
@@ -24,25 +32,41 @@ import { render, AppView } from './view/render';
 import { Bounds, polylineBounds } from './view/camera';
 import * as vp from './view/viewport';
 import {
-  bindButtons,
-  updatePanel,
-  setOnlineEnabled,
+  initRaceChrome,
+  renderRaceChrome,
   setTurnCountdown,
   showConfirmMove,
-} from './ui/panel';
-import { renderTurnQueue } from './ui/turn-queue';
-import { renderStandings } from './ui/standings';
-import { openSettings } from './ui/settings';
-import { localizeDom } from './ui/localize';
+} from './ui/race-chrome';
+import { initRaceResult, renderRaceResult } from './ui/race-result';
+import {
+  initEditorChrome,
+  renderEditorChrome,
+  setOnlineEnabled,
+} from './ui/editor-chrome';
+import { initWizardNav, renderWizardNav, wizardSteps } from './ui/wizard-nav';
+import { openConfirm } from './ui/confirm';
+import { initMenu } from './ui/menu';
+import {
+  initSetupChrome,
+  renderSetupChrome,
+  setSetupOnlineEnabled,
+} from './ui/setup-chrome';
+import { initOnlineLobby, renderOnlineLobby } from './ui/online-lobby';
 import { onlineAvailable } from './online/net';
 import * as session from './online/online';
 import * as online from './online/online-controller';
 import * as input from './view/input';
 import { initInstallPrompt } from './ui/install-prompt';
-import { showToast } from './ui/dialogs';
+import { openRules, setVersionLabel, showToast } from './ui/dialogs';
+import { bindOverlayClose } from './ui/dom';
 import { initPwa } from './pwa';
 import { toggleSwDebug } from './sw-debug';
+import { initAppHeight } from './ui/app-height';
 import * as persist from './persist';
+
+// Before anything measures the board: fixes the too-short viewport iOS hands a
+// standalone PWA at launch (see ui/app-height.ts).
+initAppHeight();
 
 const canvas = document.getElementById('board') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -166,17 +190,53 @@ function canRetire(): boolean {
 function updateUI(): void {
   const net = online.netTurn(S.game);
   const aiTurn = !!S.game && isBotSeat(S.game.current);
-  updatePanel({
+  renderRaceChrome({
     phase: S.phase,
-    editor: S.editor,
     game: S.game,
-    playersMax: S.raceTrack?.startPoints.length ?? 6,
+    nav: S.raceNav,
     net,
     aiTurn,
-    canRetire: canRetire(),
+    // Whose row gets the amber "you're up" treatment: our own seat online, the
+    // human at the controls locally (hot-seat players share this client).
+    mySeat: localHumanSeat(),
+    connected: session.isConnected(),
   });
-  renderTurnQueue(S.phase === 'race' ? S.game : null);
-  renderStandings(S.phase === 'race' ? S.game : null, S.raceNav);
+  const over = S.phase === 'race' && S.game?.phase === 'over';
+  // No human has anything left to do, but the race hasn't resolved yet (bots
+  // may still be racing it out): online, that's judged per our own seat (every
+  // client has its own screen); locally (solo-vs-bots or hotseat) it's judged
+  // across every human seat, since they all share this one screen.
+  const earlyExit =
+    !over &&
+    !!S.game &&
+    (session.active()
+      ? session.mySeat() !== -1 &&
+        (S.game.players[session.mySeat()].retired ||
+          isFinished(S.game.players[session.mySeat()]))
+      : humansAllDone(S.game));
+  renderRaceResult({
+    game: S.game,
+    nav: S.raceNav,
+    over,
+    earlyExit,
+    // Hot-seat has no single "you", so nothing gets the personal treatment
+    // there — online it's our own seat.
+    mySeat: session.active() ? session.mySeat() : -1,
+    onlineGuest: !!net && !net.isHost,
+    canRematch: (!!S.game && !!S.lastLocalRace) || online.canRematch(),
+    isOnline: session.active(),
+    // Only the host drives bot moves online (host-bots.ts) — leaving while
+    // bots still have moves left would strand everyone else mid-race.
+    hostMustStayForBots:
+      session.active() && session.isHost() && !!S.game && hasLiveBots(S.game),
+  });
+  renderEditorChrome(S.editor, S.phase);
+  // The lobby view drives three renderers: the host's lobby is the setup screen
+  // (so the wizard keeps its step), the guest's is a screen of its own.
+  const lobby = S.phase === 'lobby' ? online.lobbyView() : null;
+  renderSetupChrome(S.phase, S.raceTrack?.startPoints.length ?? 6, lobby);
+  renderOnlineLobby(lobby?.isHost ? null : lobby, S.editor);
+  renderWizardNav(S.phase, S.editor.step, S.playersReturn, !!lobby?.isHost);
 }
 
 /** Can this client move right now: in a local game, always (except during a
@@ -361,6 +421,37 @@ function backFromSetup(): void {
 }
 
 /**
+ * Jump back to an already-passed wizard step (a tap on the step rail): exactly
+ * as many "Back"s as the player would have pressed, through the same
+ * transitions. Reaching the drawing step resets the centerline (stepBack →
+ * resetCenter), so that one jump asks first — everything else is reversible
+ * enough to just happen.
+ */
+function goToWizardStep(target: number): void {
+  const at = (): number => wizardSteps(S.phase, S.editor.step, S.playersReturn).active;
+  if (target < 0 || at() < 0 || target >= at()) return;
+
+  const oneStepBack = (): void => {
+    if (S.phase === 'players' || S.phase === 'ai') S.phase = 'modeSelect';
+    else if (S.phase === 'modeSelect') backFromSetup();
+    else stepBack(S.editor);
+  };
+  const run = (): void => {
+    // Bounded: a transition that refuses to move must not spin the loop.
+    for (let guard = 0; guard < 10 && at() > target; guard++) oneStepBack();
+    commit();
+  };
+
+  // Step 1 exists only in a run that starts in the editor; coming from a race
+  // ("same track") there is nothing to erase.
+  if (target === 0 && S.playersReturn === 'edit') {
+    openConfirm(strings.wizard.resetWarn, strings.wizard.resetYes, run);
+  } else {
+    run();
+  }
+}
+
+/**
  * Start a local race on the prepared track: `humans` seats first, then
  * `bots` seats at the given difficulty. Bots sit in the trailing seats
  * (seat index), but starting cells are handed out by a random permutation
@@ -394,6 +485,10 @@ function resetToEdit(): void {
   // race and yank us out of the editor.
   if (session.active()) session.leave();
   cancelAiMove();
+  // This is a real exit, not a rematch — without this, an abandoned race
+  // would come back on the next reload (persist.load() picks up any
+  // snapshot on disk regardless of how we got to the editor).
+  persist.clear();
   S.game = null;
   S.raceNav = null;
   S.raceTrack = null;
@@ -444,20 +539,43 @@ input.initInput({
     showConfirmMove(false); // not our turn — don't show the button, the pending pick is visible on the field
     redraw();
   },
-  goToMode,
   updateUI,
   redraw,
 });
 
-bindButtons({
+// Overlay dismissal (backdrop tap / Escape) for every sheet mounted into it.
+bindOverlayClose();
+
+// Step navigation for all six wizard steps. Built before the editor chrome,
+// which mounts its coach card into the rail this owns.
+initWizardNav({ onJumpTo: (index) => goToWizardStep(index) });
+
+// The full-bleed editor chrome: coach-mark plus the drawing wizard's action bar.
+initEditorChrome({
   onBack: () => {
     stepBack(S.editor);
     commit();
   },
+  // Editor "Next" / "Choose mode": advance the drawing wizard one step. On the
+  // final (direction) step this leaves the editor for mode selection.
   onNext: () => {
-    confirmEdges(S.editor);
+    const st = S.editor;
+    if (st.step === 'adjust') confirmEdges(st);
+    else if (st.step === 'finish') confirmFinish(st);
+    else if (st.step === 'direction') {
+      confirmDirection(st); // → transient 'ready'
+      goToMode('edit'); // finalizes the track and opens mode selection (commits)
+      return;
+    }
     commit();
   },
+  onJoinByCode: () => online.promptJoin(),
+});
+
+// The race HUD: classification card plus the action zone's confirm/skip buttons.
+initRaceChrome({
+  onShare: () => online.share(),
+  onCopy: () => online.copy(),
   onConfirmMove: () => {
     const sel = input.getSelected();
     if (sel) commitMove(sel);
@@ -465,10 +583,15 @@ bindButtons({
     else if (S.pending && myTurn()) commitMove(S.pending);
     else online.retryMove(); // desktop: no stored selection — retry the last move instead
   },
-  // One-tap "Rematch": same lineup on the same track, no wizard. In online
-  // (as host) we replay the same room; locally we repeat the saved lineup.
-  // The button is only shown when canRematch, but we guard here too.
-  onChooseSameTrack: () => {
+  onSkip: () => online.skip(),
+});
+
+// The result screen: outcome, final classification and the three ways on.
+initRaceResult({
+  // One-tap "Rematch": same lineup on the same track, no wizard. Online (as
+  // host) replays the same room; locally it repeats the saved lineup. The
+  // button is only shown when canRematch, but we guard here too.
+  onRematch: () => {
     if (session.active()) {
       online.rematch();
       return;
@@ -477,25 +600,36 @@ bindButtons({
     S.raceTrack = S.game.track;
     startRace(S.lastLocalRace.humans, S.lastLocalRace.bots, S.lastLocalRace.difficulty);
   },
-  // "Same track, different mode": keep the track, re-pick the mode/players.
-  onSameTrackNewMode: () => goToMode('race'),
-  canRematch: () => (!!S.game && !!S.lastLocalRace) || online.canRematch(),
-  isOnline: () => session.active(),
-  onPlayersBack: () => {
-    // From the player-count screen, "back" goes to mode selection (it's always present now).
-    S.phase = 'modeSelect';
-    commit();
-  },
-  onStartLocal: (humans, bots, difficulty) => startRace(humans, bots, difficulty),
-  onOpenSettings: () =>
-    openSettings(S.rules, false, (r) => {
-      S.rules = r;
-    }),
-  onLobbySettings: () =>
-    openSettings(S.rules, true, (r) => {
-      S.rules = r;
-    }),
+  // "Same track, new lineup": keep the track, re-pick the mode/players.
+  onSameTrack: () => goToMode('race'),
   onNewTrack: () => resetToEdit(),
+});
+
+// The global menu's entries call the same intents the screens' own controls do.
+// "Retire" is the menu's own — it only appears mid-race, and asks before
+// dropping the player out.
+initMenu({
+  onRules: () => openRules(),
+  onJoin: () => online.promptJoin(),
+  canRetire,
+  onRetire: () =>
+    openConfirm(strings.race.retireConfirmTitle, strings.race.retireConfirmYes, retire),
+});
+
+// Mode select + race setup: their own floating chrome, built on first show.
+// The screens own the lineup (humans/bots/difficulty) and edit the race rules
+// in place — including the host's lobby, which is one of these screens.
+// The room's own actions, shared by the two lobby screens (the host's is the
+// setup screen; the guest's is ui/online-lobby.ts).
+const lobbyHandlers = {
+  onLobbyStart: () => online.start(),
+  onLobbyCopyCode: () => online.copy(),
+  onLobbyShare: () => online.share(),
+  onLobbyLeave: () => online.leave(),
+  onRename: (name: string) => online.setName(name),
+};
+
+initSetupChrome({
   onModeLocal: () => {
     S.phase = 'players';
     commit();
@@ -505,23 +639,24 @@ bindButtons({
     S.phase = 'ai';
     commit();
   },
-  onAiBack: () => {
+  onModeBack: () => backFromSetup(),
+  // From either setup screen, "back" goes to mode selection (always present now).
+  onSetupBack: () => {
     S.phase = 'modeSelect';
     commit();
   },
-  onModeBack: () => backFromSetup(),
-  onJoinByCode: () => online.promptJoin(),
-  onLobbyStart: () => online.start(),
-  onLobbyShare: () => online.share(),
-  onLobbyCopyCode: () => online.copy(),
-  onLobbyBotAdd: () => online.addBot(),
-  onLobbyBotRemove: () => online.removeBot(),
+  onStartLocal: (humans, bots, difficulty) => startRace(humans, bots, difficulty),
+  getRules: () => S.rules,
+  onRulesChange: (r) => {
+    S.rules = r;
+  },
+  ...lobbyHandlers,
+  onLobbyBotCount: (n) => online.setBotCount(n),
   onLobbyBotDifficulty: (d) => online.setBotDifficulty(d),
-  onLobbyLeave: () => online.leave(),
-  onSkip: () => online.skip(),
-  onRaceShare: () => online.share(),
-  onRetire: () => retire(),
 });
+
+// The guest's lobby: the same room, without anything to set up.
+initOnlineLobby(lobbyHandlers);
 
 /**
  * Save local game state so reloading/the back gesture/backgrounding the tab
@@ -569,10 +704,8 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') saveState();
 });
 
-// Fill in static markup text from strings before the panel is first shown,
-// and set the document language to the active locale (markup defaults to lang="en").
+// The document language follows the active locale (markup defaults to lang="en").
 document.documentElement.lang = localeTag;
-localizeDom();
 
 // Build label at the bottom of the "Rules" sheet — an honest indicator of
 // which code is actually running (the string is compiled into the bundle):
@@ -585,21 +718,11 @@ const buildLabel = new Date(__BUILD_TIME__).toLocaleString(dateLocale, {
   hour: '2-digit',
   minute: '2-digit',
 });
-const appVersionEl = document.getElementById('appVersion')!;
-appVersionEl.textContent = `${__COMMIT__} · ${buildLabel}`;
-
 // Hidden activation of SW debug from inside the app: a standalone PWA has
 // its own localStorage bucket (the `?swdebug` flag from Safari doesn't carry
 // over) and no address bar — toggle the overlay with 5 quick taps on the
 // build label in "Rules".
-let verTaps = 0;
-let verTapT = 0;
-appVersionEl.addEventListener('click', () => {
-  const now = performance.now();
-  verTaps = now - verTapT < 600 ? verTaps + 1 : 1;
-  verTapT = now;
-  if (verTaps < 5) return;
-  verTaps = 0;
+setVersionLabel(`${__COMMIT__} · ${buildLabel}`, () => {
   const on = toggleSwDebug();
   showToast(on ? 'SW debug ON' : 'SW debug OFF', 1500);
   setTimeout(() => location.reload(), 400);
@@ -620,6 +743,7 @@ try {
 
 // Only show online entry points if the backend is configured (otherwise, local play only).
 setOnlineEnabled(onlineAvailable());
+setSetupOnlineEnabled(onlineAvailable());
 
 // Camera: wire the viewport to the canvas/wrapper and the content bounds provider.
 vp.initViewport(canvas, wrap, contentBounds);

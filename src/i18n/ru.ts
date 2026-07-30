@@ -15,11 +15,21 @@ export const ru: Strings = {
       adjust:
         'Потяни за\u00A0край дороги, чтобы поправить форму. ' +
         'Когда всё готово\u00A0— нажимай «Вперед».',
-      finish: 'Нажми, где будет старт, он\u00A0же\u00A0финиш.',
-      direction: 'Выбери направление движения.',
+      finish:
+        'Старт/финиш поставлен автоматически\u00A0— коснись трассы, чтобы передвинуть.',
+      direction:
+        'Направление выбрано\u00A0— коснись другой стрелки, чтобы развернуть, или продолжай.',
       ready: 'Трасса готова! Выбери режим гонки.',
     },
+    stepTitle: {
+      center: 'Трасса',
+      adjust: 'Ширина',
+      finish: 'Старт/финиш',
+      direction: 'Направление',
+      ready: 'Готово',
+    },
     stepBadge: (n, total) => `Трасса: шаг ${n} из ${total}`,
+    stepCounter: (n, total) => `Шаг ${n}/${total}`,
     errors: {
       selfCross: 'Трасса не должна пересекаться сама с собой — нарисуй снова.',
       tooSmall: 'Слишком короткая трасса — нарисуй круг побольше.',
@@ -28,6 +38,22 @@ export const ru: Strings = {
       finishMiss: 'Старт не может быть вне трассы.',
     },
     gestureCancelled: 'Сорвалось, попробуй еще раз.',
+  },
+
+  wizard: {
+    title: 'Подготовка к гонке',
+    stepMode: 'Режим',
+    stepSetup: 'Настройки',
+    resetWarn: 'Возврат на этот шаг сотрёт нарисованную трассу.',
+    resetYes: 'Стереть и вернуться',
+  },
+
+  // Общее (бургер) меню — открывается из левого верхнего угла редактора.
+  menu: {
+    title: 'Меню',
+    rules: 'Правила',
+    join: 'Войти по\u00A0коду',
+    language: 'Язык',
   },
 
   track: {
@@ -44,36 +70,40 @@ export const ru: Strings = {
 
   players: {
     names: ['Красный', 'Синий', 'Зеленый', 'Оранжевый', 'Фиолетовый', 'Бирюзовый'],
-    promptBadge: 'Состав',
-    prompt: 'Выбери, сколько людей и ботов участвуют — и поехали!',
     humansLabel: 'Люди',
     botsLabel: 'Боты',
+    botsWithSeats: (seats: number): string => `Боты · свободно ${seats}`,
     difficultyLabel: 'Сложность ботов',
-    start: '🏁 Поехали!',
   },
 
   modeSelect: {
-    promptBadge: 'Режим гонки',
-    prompt: 'Выбери, с кем играть.',
-    local: '📱 На одном устройстве',
-    online: '🌐 Онлайн с друзьями',
-    ai: '🤖 С компьютером',
+    title: 'С\u00A0кем играем?',
+    local: 'С\u00A0друзьями на\u00A0одном устройстве',
+    localSub: 'Передавайте телефон друг другу',
+    online: 'С\u00A0друзьями онлайн',
+    onlineSub: 'Создать гонку или войти по\u00A0коду',
+    ai: 'Против компьютера',
+    aiSub: 'Гонка с\u00A0ботами: до\u00A0пяти соперников',
+  },
+
+  setup: {
+    title: 'Настройка гонки',
+    tabLineup: 'Состав',
+    tabBehaviour: 'Поведение',
+    tabRules: 'Правила',
+    start: 'Поехали',
   },
 
   aiSelect: {
-    promptBadge: 'Соперники',
-    prompt: 'Выбери количество и сложность ботов — и поехали!',
-    easy: '🟢 Новички',
-    medium: '🟡 Любители',
-    hard: '🔴 Профи',
-    botsLabel: 'Боты',
+    easy: 'Новичок',
+    medium: 'Любитель',
+    hard: 'Профи',
+    botsLabel: 'Количество ботов',
     difficultyLabel: 'Сложность',
-    start: '🏁 Поехали!',
     botPrefix: '🤖',
   },
 
   settings: {
-    open: '⚙ Настройки заезда',
     title: 'Настройки заезда',
     helpLabel: 'Показать пояснение',
     tabDrive: 'Поведение машины',
@@ -111,6 +141,7 @@ export const ru: Strings = {
     exponentStrict: 'Высокая',
     staticTurnsLabel: 'Число ходов штрафа',
     staticTurnsHint: 'Сколько ходов болид простаивает в гравии после вылета.',
+    reachableCells: 'Доступные клетки',
     turnLimitLabel: 'Время на ход',
     turnLimitHint:
       'Сколько дается на ход. Если игрок думает дольше лимита — остальные получают ' +
@@ -123,27 +154,25 @@ export const ru: Strings = {
   },
 
   online: {
-    namePrompt: 'Как тебя зовут?',
-    namePlaceholder: 'Имя гонщика',
-    create: 'Создать гонку',
-    joinByCode: '🌐 Войти по коду гонки',
+    namePlaceholder: 'Введи свое имя',
+    joinByCode: 'Войти в онлайн-игру',
     joinTitle: 'Войти в гонку',
     codePlaceholder: 'Код гонки',
     joinSubmit: 'Войти',
     lobbyBadge: 'Лобби',
-    lobbyHost:
-      'Позови друзей: поделись ссылкой или продиктуй код. Когда все подключатся, жми «Начать гонку».',
     lobbyGuest: 'Ждем, пока создатель трассы начнет гонку…',
-    codeLabel: 'Код гонки',
+    roomCode: 'Код комнаты',
+    trackLabel: 'Трасса',
+    players: (n: number, max: number): string => `Гонщики · ${n}/${max}`,
+    hostBadge: 'Создатель',
+    noGuests: 'Поделись кодом комнаты\u00A0— пока никто не\u00A0подключился',
+    enterName: 'Введи имя, чтобы продолжить',
+    leaveLobby: 'Выйти из\u00A0лобби',
     share: '🔗 Поделиться ссылкой',
     copied: 'Ссылка скопирована',
     codeCopied: 'Код скопирован',
-    start: '🏁 Начать гонку',
     waiting: 'Ждем еще хотя бы одного гонщика…',
-    botsLabel: '🤖 Боты',
-    leave: '← Выйти',
     you: 'ты',
-    roster: (n) => `Гонщики: ${n} из 6`,
     yourTurn: 'Твой ход: выбери направление и жми «Едем!»',
     turnOf: (name) => `Ходит ${name}. Ждем…`,
     skippable: (name) =>
@@ -164,6 +193,7 @@ export const ru: Strings = {
     rematchWaiting:
       'Создатель трассы может запустить рематч — тогда все продолжат на этой же трассе.',
     reconnecting: 'Нет связи. Переподключаемся…',
+    raceCode: (code) => `Код гонки ${code}`,
     resumeTitle: (code) => `Вернуться в гонку ${code}?`,
     resumeYes: 'Вернуться в гонку',
     gameGone: 'Гонка больше недоступна.',
@@ -171,21 +201,34 @@ export const ru: Strings = {
 
   race: {
     driver: (name) => `Ходит ${name}.`,
-    hintTouch: 'Выбери точку и подтверди, нажав «Едем!»',
-    hintMouse: 'Нажми на точку, куда ехать.',
+    hintPick: 'Выбери точку и подтверди, нажав «Едем!»',
     finalWarn: ' Попробуй успеть финишировать и заехать дальше соперника.',
-    speed: (kmh) => `⚡ ${kmh}`,
+    classification: 'Классификация',
+    upNext: 'Очередь',
     speedUnit: 'км/ч',
-    crashes: (n) => `💥 ${n}`,
-    pit: (n) => `⏳ ${n}`,
-    winnerFlag: 'Победитель: ',
+    stalled: 'Не ходит',
+    finished: (place) => `Финиш · ${place}-й`,
+    moves: (n) => {
+      const t = n % 100 > 10 && n % 100 < 20 ? 0 : n % 10;
+      return `${n} ${t === 1 ? 'ход' : t > 1 && t < 5 ? 'хода' : 'ходов'}`;
+    },
+    retired: 'Сошел',
+    raceComplete: 'Гонка завершена',
+    youWon: 'Ты\u00A0победил',
+    youWonSub: 'Первое место — отличный заезд',
+    someoneWon: (name) => `Победа: ${name}`,
+    someoneWonSub: 'В следующий раз повезет',
+    allRetired: 'Все сошли',
+    allRetiredSub: 'Никто не финишировал — результата нет',
+    earlyExitLabel: 'Ваша гонка завершена',
+    earlyExitTitle: 'Что дальше?',
+    earlyExitSub:
+      'Не\u00A0обязательно ждать остальных\u00A0— можно начать заново прямо сейчас',
+    earlyExitHostWait:
+      'Подождите, пока доедут боты\u00A0— иначе гонка прервётся для остальных',
+    drawTitle: 'Фотофиниш',
     draw: 'Ого, фотофиниш не смог выявить победителя!',
-    stillRacing: 'Гонка продолжается…',
-    raceOver: 'Гонка завершена',
-    allRetired: 'Все гонщики сошли',
-    place: (n) => `🏁 ${n}-е место`,
-    retired: '🏳️ Сошел',
-    retire: 'Сойти',
+    retire: 'Сойти с дистанции',
     retireConfirmTitle: 'Сойти с дистанции?',
     retireConfirmYes: 'Сойти',
     standingsLabel: 'Текущие места',
@@ -198,15 +241,14 @@ export const ru: Strings = {
     next: 'Вперед →',
     back: '← Назад',
     redraw: '↺ Перерисовать',
-    newRace: '🏁 Новая гонка',
+    chooseMode: 'Выбрать режим →',
     confirmMove: '✓ Едем!',
-    sameTrack: '🔄 Рематч',
-    sameTrackNewMode: '⚙ Та же трасса, другие участники',
-    newTrack: '✏️ Начертить новую',
+    sameTrack: 'Рематч',
+    sameTrackNewMode: 'Та же трасса, другой состав',
+    newTrack: 'Начертить новую',
     cancel: 'Отмена',
     rulesTitle: 'Правила',
     toWheel: 'Всё понятно',
-    newRaceDialogTitle: 'Новая гонка',
   },
 
   rules: {

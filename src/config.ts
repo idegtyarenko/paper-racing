@@ -131,6 +131,9 @@ export const LOBBY_PRUNE_MS = 10_000;
 export const NET_TIMEOUT_MS = 10_000;
 /** Delay before a silent retry of auto-skip after a failed write, ms. */
 export const SKIP_RETRY_MS = 5_000;
+/** How long typing in the lobby has to pause before the name is written to the
+ *  server, ms — one request per pause instead of one per character. */
+export const RENAME_DEBOUNCE_MS = 400;
 
 // ── vs. Computer ─────────────────────────────────────────
 /** Delay before a bot's move, ms — gives the human time to follow other

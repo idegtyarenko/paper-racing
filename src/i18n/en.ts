@@ -38,12 +38,23 @@ export const en = {
     step: {
       center: 'Draw a full loop track without lifting your finger.',
       adjust: 'Drag the road edges to reshape it. ' + 'When it looks right, tap Next.',
-      finish: 'Tap where the start/finish line should be.',
-      direction: 'Choose the racing direction.',
+      finish: 'Start/finish placed automatically — tap the track to move it.',
+      direction: 'Direction is set — tap the other arrow to flip it, or continue.',
       ready: 'Track ready! Choose a game mode.',
+    },
+    /** Short step title for the editor's top strip (the coach-mark carries the
+     *  full instruction). Rendered in caps by CSS. */
+    stepTitle: {
+      center: 'Draw track',
+      adjust: 'Adjust width',
+      finish: 'Start/finish',
+      direction: 'Direction',
+      ready: 'Ready',
     },
     /** Badge for a wizard step, e.g. "Track: step 2 of 4". */
     stepBadge: (n: number, total: number): string => `Track: step ${n} of ${total}`,
+    /** Compact step counter for the top strip, e.g. "Step 2/4" (rendered caps). */
+    stepCounter: (n: number, total: number): string => `Step ${n}/${total}`,
     errors: {
       selfCross: "The track can't cross itself\u00A0— draw it again.",
       tooSmall: "That loop's too small\u00A0— draw a bigger one.",
@@ -52,6 +63,30 @@ export const en = {
       finishMiss: 'The start line has to sit on the track.',
     },
     gestureCancelled: "That didn't take\u00A0— try again.",
+  },
+
+  // The step navigation shared by track drawing and race preparation
+  // (ui/wizard-nav.ts): the desktop rail's heading, short labels for the two
+  // steps that aren't editor steps, and the warning for a back-jump that would
+  // throw the drawing away.
+  wizard: {
+    /** Heading of the desktop step rail — what the whole six-step run is for. */
+    title: 'Race setup',
+    /** Step labels for mode select and race setup (the editor's four come from
+     *  `editor.stepTitle`). Short: they sit in a 220px rail. */
+    stepMode: 'Mode',
+    stepSetup: 'Settings',
+    /** Jumping back past the drawing steps discards the track — confirm first. */
+    resetWarn: 'Going back that far erases the track you drew.',
+    resetYes: 'Erase and go back',
+  },
+
+  // Global (burger) menu — reachable from the editor's top-left menu button.
+  menu: {
+    title: 'Menu',
+    rules: 'Rules / How to play',
+    join: 'Join online game',
+    language: 'Language',
   },
 
   track: {
@@ -69,47 +104,56 @@ export const en = {
   players: {
     /** Bolide names by player index — strictly in color order (see COLORS in game.ts). */
     names: ['Red', 'Blue', 'Green', 'Orange', 'Purple', 'Teal'],
-    /** Badge + body of the lineup step (humans + bots). */
-    promptBadge: 'Lineup',
-    prompt: 'Pick how many humans and bots are racing\u00A0— and go!',
-    /** Row labels on the lineup screen. */
+    /** Row labels on the lineup tab. */
     humansLabel: 'Humans',
     botsLabel: 'Bots',
+    /** Bots row on the hotseat screen: how many grid seats the humans left free. */
+    botsWithSeats: (seats: number): string => `Bots · ${seats} seats left`,
     difficultyLabel: 'Bot difficulty',
-    /** Local-race start button. */
-    start: '🏁 Go!',
   },
 
   // Game-mode step (after the track is ready).
   modeSelect: {
-    promptBadge: 'Game mode',
-    prompt: 'Who are you playing with?',
-    local: '📱 On one device',
-    online: '🌐 Online with friends',
-    ai: '🤖 Against the computer',
+    /** Screen title. */
+    title: "Who's playing?",
+    /** The three ways to play — title + what it means. */
+    local: 'With friends on one device',
+    localSub: 'Pass the phone between racers',
+    online: 'With friends online',
+    onlineSub: 'Host or join a room',
+    ai: 'You versus the computer',
+    aiSub: 'Race with up to 5\u00A0bots',
+  },
+
+  // The race-setup screen shared by the hotseat and vs-computer flows.
+  setup: {
+    /** Screen title. */
+    title: 'Race setup',
+    /** Tabs: who's racing / how the cars behave / the rules of the race. */
+    tabLineup: 'Lineup',
+    tabBehaviour: 'Behaviour',
+    tabRules: 'Rules',
+    /** The screen's primary action. */
+    start: 'Start race',
   },
 
   // Setup for a game against the computer: number of bots and their skill (there's
   // always exactly one human, on pole).
   aiSelect: {
-    /** Badge + body of the step. */
-    promptBadge: 'Opponents',
-    prompt: 'Pick the number and skill of the bots\u00A0— and go!',
-    easy: '🟢 Rookies',
-    medium: '🟡 Amateurs',
-    hard: '🔴 Pros',
+    /** Bot skill levels. */
+    easy: 'Rookie',
+    medium: 'Amateur',
+    hard: 'Pro',
     /** Row labels. */
-    botsLabel: 'Bots',
+    botsLabel: 'Number of bots',
     difficultyLabel: 'Difficulty',
-    /** Start button. */
-    start: '🏁 Go!',
     /** Bot name prefix — marks a bot in cards, status and the finish. */
     botPrefix: '🤖',
   },
 
-  // Race settings sheet (bottom-sheet modal behind the ⚙ button).
+  // Race rules and car handling — the strings of the shared rules editor, shown
+  // in the setup screen's Behaviour/Rules tabs.
   settings: {
-    open: '⚙ Race settings',
     title: 'Race settings',
     // Aria label for the "?" help button next to each setting.
     helpLabel: 'Show explanation',
@@ -154,6 +198,8 @@ export const en = {
     staticTurnsLabel: 'Penalty turns',
     staticTurnsHint: 'How many turns the car sits in the gravel after flying off.',
     // Per-turn time limit (online only).
+    /** Label above the reachable-cells preview. */
+    reachableCells: 'Reachable cells',
     turnLimitLabel: 'Time per turn',
     turnLimitHint:
       'How long each turn gets. If a player takes longer than the limit, the others ' +
@@ -167,32 +213,31 @@ export const en = {
 
   // Online mode: lobby, name/code dialogs, statuses and errors.
   online: {
-    // Name dialog (create game / join by link).
-    namePrompt: "What's your name?",
-    namePlaceholder: 'Racer name',
-    create: 'Create race',
+    // Your own name — typed into your roster row in the lobby.
+    namePlaceholder: 'Type in your name',
     // Join by code.
-    joinByCode: '🌐 Join by race code',
+    joinByCode: 'Join online game',
     joinTitle: 'Join a race',
     codePlaceholder: 'Race code',
     joinSubmit: 'Join',
     // Lobby.
     lobbyBadge: 'Lobby',
-    lobbyHost:
-      "Invite friends: share the link or read out the code. Once everyone's in, hit Start race.",
     lobbyGuest: 'Waiting for the track creator to start the race…',
-    codeLabel: 'Race code',
+    roomCode: 'Room code',
+    trackLabel: 'Track',
+    players: (n: number, max: number): string => `Players · ${n}/${max}`,
+    /** Badge on the racer who owns the track (and starts the race). */
+    hostBadge: 'Host',
+    /** Under the roster while nobody else has joined. */
+    noGuests: 'Share the room code — no one else has joined yet',
+    /** Why "Start race" is disabled: your own name is still empty. */
+    enterName: 'Enter your name to continue',
+    leaveLobby: 'Leave lobby',
     share: '🔗 Share link',
     copied: 'Link copied',
     codeCopied: 'Code copied',
-    start: '🏁 Start race',
     waiting: 'Waiting for at least one more racer…',
-    /** Label for the bot-filling block in the lobby (host only). */
-    botsLabel: '🤖 Bots',
-    leave: '← Leave',
     you: 'you',
-    roster: (n: number): string => `Racers: ${n} of 6`,
-    // Race.
     yourTurn: 'Your turn: pick a direction and hit Go!',
     turnOf: (name: string): string => `${name} is moving. Hold on…`,
     // Player is slow to move — can be skipped (the car coasts straight ahead).
@@ -220,6 +265,8 @@ export const en = {
       'The track creator can start a rematch\u00A0— everyone continues on the same track.',
     // Connection-state banner (realtime channel dropped).
     reconnecting: 'Connection lost. Reconnecting…',
+    /** Code on the reconnect banner: tap to copy, so the race can be rejoined. */
+    raceCode: (code: string): string => `Race code ${code}`,
     // Returning to the last online race after a disconnect/reload.
     resumeTitle: (code: string): string => `Return to race ${code}?`,
     resumeYes: 'Return to race',
@@ -228,28 +275,46 @@ export const en = {
 
   race: {
     driver: (name: string): string => `${name} is moving.`,
-    hintTouch: 'Pick a point and confirm with Go!',
-    hintMouse: 'Click where you want to drive.',
+    /** What to do on your turn. One hint for both input kinds: since the
+     *  redesign, a desktop click picks a target and Go! commits it, exactly as
+     *  on touch. */
+    hintPick: 'Pick a point and confirm with Go!',
     finalWarn: ' Try to finish further past the line than your rival.',
-    speed: (kmh: number): string => `⚡ ${kmh}`,
-    /** Speed unit — hidden on narrow (mobile) cards so it doesn't eat the name. */
+    /** Heading of the classification card. Rendered in caps by CSS. */
+    classification: 'Classification',
+    /** Label over the turn-order dots inside the card. Caps by CSS. */
+    upNext: 'Up next',
+    /** Speed unit in a classification row (caps by CSS). */
     speedUnit: 'km/h',
-    crashes: (n: number): string => `💥 ${n}`,
-    pit: (n: number): string => `⏳ ${n}`,
-    winnerFlag: 'Winner: ',
-    draw: "Too close to call\u00A0— the photo finish couldn't split them!",
-    /** Subtitle under the winner's name while the others are still racing. */
-    stillRacing: 'Race continues…',
-    /** Subtitle under the winner's name once the race is fully over. */
-    raceOver: 'Race over',
-    /** Banner when everyone retired and nobody finished. */
+    /** Right slot of a row whose driver is past the turn timer and can be skipped. */
+    stalled: 'Stalled',
+    /** Right slot of a finisher while the others are still driving. */
+    finished: (place: number): string => `Finished · ${ordinal(place)}`,
+    /** Right slot in the final classification: how many moves this car took. */
+    moves: (n: number): string => `${n} ${n === 1 ? 'move' : 'moves'}`,
+    /** Right slot of a car that dropped out. Caps by CSS. */
+    retired: 'Retired',
+
+    // ── Result screen (every car has finished or retired). ──────────────────
+    /** Small label above the outcome. Caps by CSS. */
+    raceComplete: 'Race complete',
+    /** Outcome headline + subtitle: you won / someone else did / nobody did. */
+    youWon: 'You won',
+    youWonSub: 'First place\u00A0— nice drive',
+    someoneWon: (name: string): string => `${name} wins`,
+    someoneWonSub: 'Better luck next time',
     allRetired: 'Everyone retired',
-    /** Place badge on a player card (1st, 2nd…). */
-    place: (n: number): string => `🏁 ${ordinal(n)} place`,
-    /** Retired-player badge on a card. */
-    retired: '🏳️ Retired',
-    /** "Retire" button in the panel header (next to "Rules"). */
-    retire: 'Retire',
+    allRetiredSub: 'No cars finished\u00A0— no result this time',
+    earlyExitLabel: 'Your race is done',
+    earlyExitTitle: 'What next?',
+    earlyExitSub: 'No need to wait for the others\u00A0— start over whenever you like',
+    earlyExitHostWait:
+      'Wait for the bots to finish\u00A0— leaving now would stall the race for everyone else',
+    /** A dead heat for first place. */
+    drawTitle: 'Photo finish',
+    draw: "Too close to call\u00A0— the photo finish couldn't split them!",
+    /** "Retire from race" — a row in the global menu, shown only mid-race. */
+    retire: 'Retire from race',
     /** Retire-confirmation dialog title. */
     retireConfirmTitle: 'Retire from the race?',
     /** Confirm button in the retire dialog. */
@@ -268,15 +333,17 @@ export const en = {
     next: 'Next →',
     back: '← Back',
     redraw: '↺ Redraw',
-    newRace: '🏁 New race',
+    chooseMode: 'Choose mode →',
     confirmMove: '✓ Go!',
-    sameTrack: '🔄 Rematch',
-    sameTrackNewMode: '⚙ Same track, new players',
-    newTrack: '✏️ Draw a new one',
+    // Result-screen actions. No emoji: the redesigned chrome uses inline SVG
+    // where it needs a glyph (the rematch button carries one), and these render
+    // in caps, where an emoji reads as a smudge.
+    sameTrack: 'Rematch',
+    sameTrackNewMode: 'Same track, new lineup',
+    newTrack: 'Draw a new track',
     cancel: 'Cancel',
     rulesTitle: 'Rules',
     toWheel: 'Got it',
-    newRaceDialogTitle: 'New race',
   },
 
   rules: {

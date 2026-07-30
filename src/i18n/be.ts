@@ -15,13 +15,22 @@ export const be: Strings = {
       adjust:
         'Пацягні за\u00A0край дарогі, каб паправіць форму. ' +
         'Калі ўсё гатова\u00A0— націскай «Далей».',
-      finish: 'Націсні, дзе будзе старт, ён\u00A0жа\u00A0фініш.',
-      direction: 'Выберы напрамак руху.',
+      finish: 'Старт/фініш пастаўлены аўтаматычна\u00A0— крані трасу, каб перасунуць.',
+      direction:
+        'Напрамак выбраны\u00A0— крані другую стрэлку, каб развярнуць, або працягвай.',
       ready: 'Траса гатова! Выберы рэжым гонкі.',
     },
     // Бейдж рендерится капсом (.status__badge, text-transform: uppercase), а вялікая
     // «З» паміж лічбамі чытаецца як тройка («1 З 4» → «1 3 4») — таму слэш, без «з».
+    stepTitle: {
+      center: 'Траса',
+      adjust: 'Шырыня',
+      finish: 'Старт/фініш',
+      direction: 'Напрамак',
+      ready: 'Гатова',
+    },
     stepBadge: (n, total) => `Траса: крок ${n}/${total}`,
+    stepCounter: (n, total) => `Крок ${n}/${total}`,
     errors: {
       selfCross: 'Траса не\u00A0павінна перасякаць сама сябе\u00A0— намалюй зноў.',
       tooSmall: 'Занадта кароткая траса\u00A0— намалюй кола большае.',
@@ -30,6 +39,22 @@ export const be: Strings = {
       finishMiss: 'Старт не\u00A0можа быць па-за трасай.',
     },
     gestureCancelled: 'Не\u00A0выйшла, паспрабуй яшчэ раз.',
+  },
+
+  wizard: {
+    title: 'Падрыхтоўка да\u00A0гонкі',
+    stepMode: 'Рэжым',
+    stepSetup: 'Налады',
+    resetWarn: 'Вяртанне на\u00A0гэты крок сатрэ намаляваную трасу.',
+    resetYes: 'Сцерці і\u00A0вярнуцца',
+  },
+
+  // Агульнае (бургер) меню — адкрываецца з левага верхняга кута рэдактара.
+  menu: {
+    title: 'Меню',
+    rules: 'Правілы',
+    join: 'Увайсці па\u00A0кодзе',
+    language: 'Мова',
   },
 
   track: {
@@ -46,36 +71,40 @@ export const be: Strings = {
 
   players: {
     names: ['Чырвоны', 'Сіні', 'Зялёны', 'Аранжавы', 'Фіялетавы', 'Бірузовы'],
-    promptBadge: 'Склад',
-    prompt: 'Выберы, колькі людзей і\u00A0ботаў удзельнічаюць\u00A0— і\u00A0паехалі!',
     humansLabel: 'Людзі',
     botsLabel: 'Боты',
+    botsWithSeats: (seats: number): string => `Боты · вольна ${seats}`,
     difficultyLabel: 'Складанасць ботаў',
-    start: '🏁 Паехалі!',
   },
 
   modeSelect: {
-    promptBadge: 'Рэжым гонкі',
-    prompt: 'Выберы, з\u00A0кім гуляць.',
-    local: '📱 На\u00A0адной прыладзе',
-    online: '🌐 Анлайн з\u00A0сябрамі',
-    ai: '🤖 З\u00A0камп’ютарам',
+    title: 'З\u00A0кім гуляем?',
+    local: 'З\u00A0сябрамі на\u00A0адной прыладзе',
+    localSub: 'Перадавайце тэлефон адзін аднаму',
+    online: 'З\u00A0сябрамі анлайн',
+    onlineSub: 'Стварыць гонку або ўвайсці па\u00A0кодзе',
+    ai: 'Супраць камп’ютара',
+    aiSub: 'Гонка з\u00A0ботамі: да\u00A0пяці сапернікаў',
+  },
+
+  setup: {
+    title: 'Наладка гонкі',
+    tabLineup: 'Склад',
+    tabBehaviour: 'Паводзіны',
+    tabRules: 'Правілы',
+    start: 'Паехалі',
   },
 
   aiSelect: {
-    promptBadge: 'Сапернікі',
-    prompt: 'Выберы колькасць і\u00A0складанасць ботаў\u00A0— і\u00A0паехалі!',
-    easy: '🟢 Навічкі',
-    medium: '🟡 Аматары',
-    hard: '🔴 Профі',
-    botsLabel: 'Боты',
+    easy: 'Навічок',
+    medium: 'Аматар',
+    hard: 'Профі',
+    botsLabel: 'Колькасць ботаў',
     difficultyLabel: 'Складанасць',
-    start: '🏁 Паехалі!',
     botPrefix: '🤖',
   },
 
   settings: {
-    open: '⚙ Налады заезду',
     title: 'Налады заезду',
     helpLabel: 'Паказаць тлумачэнне',
     tabDrive: 'Паводзіны машыны',
@@ -113,6 +142,7 @@ export const be: Strings = {
     exponentStrict: 'Высокая',
     staticTurnsLabel: 'Колькасць хадоў штрафу',
     staticTurnsHint: 'Колькі хадоў балід прастойвае ў\u00A0жвіры пасля вылету.',
+    reachableCells: 'Даступныя клеткі',
     turnLimitLabel: 'Час на\u00A0ход',
     turnLimitHint:
       'Колькі даецца на\u00A0ход. Калі гулец думае даўжэй за\u00A0ліміт\u00A0— астатнія атрымліваюць ' +
@@ -125,27 +155,25 @@ export const be: Strings = {
   },
 
   online: {
-    namePrompt: 'Як\u00A0цябе зваць?',
-    namePlaceholder: 'Імя гоншчыка',
-    create: 'Стварыць гонку',
-    joinByCode: '🌐 Увайсці па\u00A0кодзе гонкі',
+    namePlaceholder: 'Увядзі сваё імя',
+    joinByCode: 'Увайсці ў анлайн-гульню',
     joinTitle: 'Увайсці ў\u00A0гонку',
     codePlaceholder: 'Код гонкі',
     joinSubmit: 'Увайсці',
     lobbyBadge: 'Лобі',
-    lobbyHost:
-      'Пакліч сяброў: падзяліся спасылкай або прадыктуй код. Калі ўсе падключацца, націсні «Пачаць гонку».',
     lobbyGuest: 'Чакаем, пакуль стваральнік трасы пачне гонку…',
-    codeLabel: 'Код гонкі',
+    roomCode: 'Код пакоя',
+    trackLabel: 'Траса',
+    players: (n: number, max: number): string => `Гоншчыкі · ${n}/${max}`,
+    hostBadge: 'Стваральнік',
+    noGuests: 'Падзяліся кодам пакоя\u00A0— пакуль ніхто не\u00A0падключыўся',
+    enterName: 'Увядзі імя, каб працягнуць',
+    leaveLobby: 'Выйсці з\u00A0лобі',
     share: '🔗 Падзяліцца спасылкай',
     copied: 'Спасылка скапіявана',
     codeCopied: 'Код скапіяваны',
-    start: '🏁 Пачаць гонку',
     waiting: 'Чакаем яшчэ хаця б\u00A0аднаго гоншчыка…',
-    botsLabel: '🤖 Боты',
-    leave: '← Выйсці',
     you: 'ты',
-    roster: (n) => `Гоншчыкі: ${n} з\u00A06`,
     yourTurn: 'Твой ход: выберы напрамак і\u00A0націсні «Едзем!»',
     turnOf: (name) => `Ходзіць ${name}. Чакаем…`,
     skippable: (name) =>
@@ -166,6 +194,7 @@ export const be: Strings = {
     rematchWaiting:
       'Стваральнік трасы можа запусціць паўтор\u00A0— тады ўсе працягнуць на\u00A0гэтай жа\u00A0трасе.',
     reconnecting: 'Няма сувязі. Перападключаемся…',
+    raceCode: (code) => `Код гонкі ${code}`,
     resumeTitle: (code) => `Вярнуцца ў\u00A0гонку ${code}?`,
     resumeYes: 'Вярнуцца ў\u00A0гонку',
     gameGone: 'Гонка больш недаступна.',
@@ -173,21 +202,34 @@ export const be: Strings = {
 
   race: {
     driver: (name) => `Ходзіць ${name}.`,
-    hintTouch: 'Выберы кропку і\u00A0пацвердзі, націснуўшы «Едзем!»',
-    hintMouse: 'Націсні на\u00A0кропку, куды ехаць.',
-    finalWarn: ' Паспрабуй паспець фінішаваць і\u00A0заехаць далей за\u00A0саперніка.',
-    speed: (kmh) => `⚡ ${kmh}`,
+    hintPick: 'Выберы кропку і пацвердзі, націснуўшы «Едзем!»',
+    finalWarn: ' Паспрабуй паспець фінішаваць і заехаць далей за саперніка.',
+    classification: 'Класіфікацыя',
+    upNext: 'Чарга',
     speedUnit: 'км/г',
-    crashes: (n) => `💥 ${n}`,
-    pit: (n) => `⏳ ${n}`,
-    winnerFlag: 'Пераможца: ',
+    stalled: 'Не ходзіць',
+    finished: (place) => `Фініш · ${place}-і`,
+    moves: (n) => {
+      const t = n % 100 > 10 && n % 100 < 20 ? 0 : n % 10;
+      return `${n} ${t === 1 ? 'ход' : t > 1 && t < 5 ? 'ходы' : 'хадоў'}`;
+    },
+    retired: 'Сышоў',
+    raceComplete: 'Гонка завершана',
+    youWon: 'Ты\u00A0перамог',
+    youWonSub: 'Першае месца\u00A0— выдатны заезд',
+    someoneWon: (name) => `Перамога: ${name}`,
+    someoneWonSub: 'Наступным разам пашанцуе',
+    allRetired: 'Усе сышлі',
+    allRetiredSub: 'Ніхто не\u00A0фінішаваў\u00A0— выніку няма',
+    earlyExitLabel: 'Ваша гонка завершана',
+    earlyExitTitle: 'Што далей?',
+    earlyExitSub:
+      'Не\u00A0абавязкова чакаць астатніх\u00A0— можна пачаць нанова прама зараз',
+    earlyExitHostWait:
+      'Пачакайце, пакуль даедуць боты\u00A0— інакш гонка спыніцца для астатніх',
+    drawTitle: 'Фотафініш',
     draw: 'Ого, фотафініш не\u00A0змог вызначыць пераможцу!',
-    stillRacing: 'Гонка працягваецца…',
-    raceOver: 'Гонка завершана',
-    allRetired: 'Усе гоншчыкі сышлі',
-    place: (n) => `🏁 ${n}-е месца`,
-    retired: '🏳️ Сышоў',
-    retire: 'Сысці',
+    retire: 'Сысці з дыстанцыі',
     retireConfirmTitle: 'Сысці з\u00A0дыстанцыі?',
     retireConfirmYes: 'Сысці',
     standingsLabel: 'Бягучыя месцы',
@@ -200,15 +242,14 @@ export const be: Strings = {
     next: 'Далей →',
     back: '← Назад',
     redraw: '↺ Перамаляваць',
-    newRace: '🏁 Новая гонка',
+    chooseMode: 'Выбраць рэжым →',
     confirmMove: '✓ Едзем!',
-    sameTrack: '🔄 Паўтор',
-    sameTrackNewMode: '⚙ Тая ж\u00A0траса, іншыя ўдзельнікі',
-    newTrack: '✏️ Накрэсліць новую',
+    sameTrack: 'Паўтор',
+    sameTrackNewMode: 'Тая ж траса, іншы склад',
+    newTrack: 'Накрэсліць новую',
     cancel: 'Адмена',
     rulesTitle: 'Правілы',
     toWheel: 'Усё зразумела',
-    newRaceDialogTitle: 'Новая гонка',
   },
 
   rules: {

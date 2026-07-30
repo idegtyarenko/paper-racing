@@ -1,0 +1,200 @@
+/* Global (burger) menu — the left drawer over a scrim (hi-fi M2). Rows are the
+   shared .pr-item; this file only holds the drawer, its brand header, the
+   language sublist and the build stamp. */
+
+.pr-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+}
+.pr-menu__backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--pr-scrim);
+  backdrop-filter: blur(2px);
+  animation: pr-fade 0.15s ease-out;
+}
+/* The × mirrors the burger: same 48px square, opposite gutter, over the scrim. */
+.pr-menu__close {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + var(--pr-gutter));
+  right: var(--pr-gutter);
+  /* .pr-btn--icon only sets a width: in the top bar the flex row stretches it
+     to the title card's height, but here it is on its own. */
+  height: 48px;
+}
+.pr-menu__panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(308px, 84vw);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  /* Board navy at the top settling into panel navy at the foot — the drawer
+     reads as a slab lifted off the board, not a flat overlay. */
+  background: linear-gradient(180deg, var(--pr-board), var(--pr-panel-solid));
+  border-right: 1px solid var(--pr-border);
+  box-shadow: 28px 0 70px rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+  animation: pr-slide-in 0.22s cubic-bezier(0.34, 1.1, 0.64, 1);
+}
+/* Closing: play the reverse, then the module flips `hidden` (which would cut an
+   animation short if it happened straight away). */
+.pr-menu--closing .pr-menu__panel {
+  animation: pr-slide-out 0.18s ease-in forwards;
+}
+.pr-menu--closing .pr-menu__backdrop,
+.pr-menu--closing .pr-menu__close {
+  animation: pr-fade-out 0.18s ease-in forwards;
+}
+@keyframes pr-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes pr-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes pr-slide-in {
+  from {
+    transform: translateX(-100%);
+  }
+}
+@keyframes pr-slide-out {
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+/* ── Brand header (replaces the old "Menu" title); the mark itself is the
+   shared .pr-brand — this only places it. ─────────────────────────────────── */
+.pr-menu__brand {
+  padding: calc(env(safe-area-inset-top, 0px) + 28px) 20px 20px;
+}
+.pr-menu__rule {
+  height: 1px;
+  margin: 0 20px 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(var(--pr-edge-rgb), 0.3),
+    rgba(var(--pr-edge-rgb), 0)
+  );
+}
+
+/* ── Entries ────────────────────────────────────────────────────────────────── */
+.pr-menu__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px;
+}
+.pr-menu__group {
+  display: flex;
+  flex-direction: column;
+}
+/* Open language row + its sublist read as one block. */
+.pr-menu__group--open .pr-menu__langbtn {
+  border-radius: 10px 10px 0 0;
+}
+/* This row expands rather than navigates, so its chevron points down, and flips
+   up while the sublist is open (the shared chevron points right). */
+.pr-menu__langbtn .pr-item__chev {
+  transform: rotate(90deg);
+  transition: transform 0.2s ease;
+}
+.pr-menu__group--open .pr-menu__langbtn .pr-item__chev {
+  transform: rotate(-90deg);
+}
+.pr-menu__langs {
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 10px 10px;
+  border-radius: 0 0 10px 10px;
+  background: rgba(var(--pr-edge-rgb), 0.03);
+}
+.pr-menu__langs:not([hidden]) {
+  display: flex;
+}
+.pr-menu__lang {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: none;
+  color: var(--pr-ink-mute);
+  font-weight: 600;
+  font-size: 13.5px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.pr-menu__lang--active {
+  border-color: var(--pr-border);
+  background: rgba(var(--pr-edge-rgb), 0.09);
+  color: var(--pr-ink);
+  font-weight: 700;
+}
+@media (hover: hover) {
+  .pr-menu__lang:hover:not(.pr-menu__lang--active) {
+    background: var(--pr-hover);
+    color: var(--pr-ink);
+  }
+}
+.pr-menu__lang:active {
+  transform: scale(0.99);
+}
+.pr-menu__flag {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 14px;
+  border-radius: 2px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+.pr-menu__flag svg {
+  width: 20px;
+  height: 14px;
+  display: block;
+}
+.pr-menu__langname {
+  flex: 1;
+  min-width: 0;
+}
+.pr-menu__check {
+  flex: 0 0 auto;
+}
+
+/* ── Build stamp ────────────────────────────────────────────────────────────── */
+.pr-menu__foot {
+  margin-top: auto;
+  padding: 16px 24px 24px;
+  border-top: 1px solid rgba(var(--pr-edge-rgb), 0.14);
+  font-family: var(--pr-mono);
+  font-size: 11px;
+  color: var(--pr-ink-faint);
+}
+
+/* ── Retire from race ───────────────────────────────────────────────────────
+   Only present while a race is running (hi-fi 5I), and the one destructive
+   entry in the drawer — tinted red so it doesn't read as another navigation
+   row. The confirmation sheet still stands between it and dropping out. */
+.pr-menu__retire {
+  color: var(--pr-error-soft);
+  border-color: rgba(var(--pr-error-rgb), 0.45);
+}
+.pr-menu__retire .pr-item__ico {
+  color: var(--pr-error);
+  border-color: rgba(var(--pr-error-rgb), 0.45);
+}
+@media (hover: hover) {
+  .pr-menu__retire:hover {
+    background: var(--pr-error-wash);
+    border-color: var(--pr-error);
+    color: var(--pr-error-soft);
+  }
+}

@@ -2,7 +2,7 @@
 // F1-style standings bar. Pure logic, no DOM; reuses the bot navigation field
 // (buildNavField/navAt) as an estimate of "how far is there still left to the finish".
 
-import { GameState, WIN_CROSSINGS } from './game';
+import { GameState, Player, WIN_CROSSINGS } from './game';
 import { NavField, navAt } from './nav';
 
 /**
@@ -37,4 +37,16 @@ export function computeStandings(state: GameState, nav: NavField): number[] {
     const [gb, vb] = rank(b);
     return ga !== gb ? ga - gb : va - vb;
   });
+}
+
+/**
+ * How many moves this car has actually driven — the score of a paper race, and
+ * what the final classification shows instead of a placing (the placing is
+ * already the row's position). Derived from the trail rather than counted
+ * separately: every applied move pushes exactly one segment, the teleport back
+ * onto the track after a crash is a `jump` (the player didn't spend a move on
+ * it), and a turn spent serving a penalty pushes nothing at all.
+ */
+export function moveCount(p: Player): number {
+  return p.trail.filter((s) => !s.jump).length;
 }

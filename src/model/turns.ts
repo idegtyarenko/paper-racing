@@ -169,24 +169,45 @@ export interface UpcomingSlot {
   round: number;
 }
 
+/** Options for upcomingSlots. */
+export interface UpcomingOptions {
+  /**
+   * Ignore the finalTurnsLeft cap and always look ahead the full count. For
+   * display only: the queue strip must keep a stable length, and in the endgame
+   * rounds open and close on the opponents' turns — capping there collapses the
+   * strip to the current lap and then stretches it back (flicker). Model callers
+   * leave this off so the forecast matches afterAction exactly.
+   */
+  ignoreRoundCap?: boolean;
+}
+
 /**
  * Queue of upcoming turns with slots (seat + lap number), starting from the
  * current one (the first element is state.current). count is how many turns to
  * return. Accounts for penalty skips (a car sitting in the gravel doesn't show up
  * in the queue until its penalty is served) and for the decisive lap's remaining
  * turns (finalTurnsLeft caps how many slots are left) — exactly as afterAction
- * does. The forecast is deterministic and correct under the assumption that no
- * new crashes happen: every slot advances turn by 1, and a car serving a penalty
- * "burns" its slot without taking a turn. Past turns aren't reconstructed (there's
- * no turn log) — the queue only looks forward.
+ * does, unless opts.ignoreRoundCap says otherwise. The forecast is deterministic
+ * and correct under the assumption that no new crashes happen: every slot advances
+ * turn by 1, and a car serving a penalty "burns" its slot without taking a turn.
+ * Past turns aren't reconstructed (there's no turn log) — the queue only looks
+ * forward.
  */
-export function upcomingSlots(state: GameState, count: number): UpcomingSlot[] {
+export function upcomingSlots(
+  state: GameState,
+  count: number,
+  opts: UpcomingOptions = {},
+): UpcomingSlot[] {
   const n = state.players.length;
   const skips = state.players.map((p) => p.skipTurns);
   const out: UpcomingSlot[] = [];
   let turn = state.turn;
-  let slotsLeft = state.finalTurnsLeft; // null means no round is in progress, no slot limit
-  while (out.length < count && (slotsLeft === null || slotsLeft > 0)) {
+  // null means no cap: either no round is in progress, or the caller asked for the full forecast.
+  let slotsLeft = opts.ignoreRoundCap ? null : state.finalTurnsLeft;
+  // Nobody left to move (everyone placed or retired) — without this the uncapped
+  // walk below would spin forever looking for a slot it can fill.
+  const racing = state.players.some((p) => p.place === null && !p.retired);
+  while (racing && out.length < count && (slotsLeft === null || slotsLeft > 0)) {
     const seat = playerForTurn(turn, n, state.startGridOrder);
     const p = state.players[seat];
     if (p.place !== null || p.retired) {
