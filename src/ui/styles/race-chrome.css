@@ -468,21 +468,6 @@ body.is-racing .pr-conn {
     gap: 6px;
     overflow: visible;
   }
-  /* Rows detach into cards of their own — there's room for it, and it keeps the
-     mover's highlight from bleeding across the whole rail. */
-  .pr-race__row {
-    padding: 8px 10px;
-    border: 1px solid rgba(var(--pr-border-rgb), 0.4);
-    border-radius: 7px;
-    background: rgba(var(--pr-sunken-rgb), 0.6);
-  }
-  .pr-race__row--current,
-  .pr-race__row--mine {
-    border-color: transparent;
-  }
-  .pr-race__pos {
-    display: none; /* the rail's rows are already in order, top to bottom */
-  }
   /* The action zone stays over the board, never over the rail. */
   .pr-race__act {
     grid-column: 2;
