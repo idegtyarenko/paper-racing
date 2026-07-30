@@ -507,9 +507,10 @@ export function renderSetupChrome(
 
   if (phase !== 'modeSelect') {
     // Entering the setup screen: always open on Lineup, and hand the editor a
-    // fresh copy of the current rules (local race — no turn limit).
+    // fresh copy of the current rules (turn limit only shown in a host's
+    // online lobby, per rules-editor.ts).
     if (lastPhase !== phase) {
-      rulesEditor.open(handlers.getRules(), false, handlers.onRulesChange);
+      rulesEditor.open(handlers.getRules(), !!lobbyView, handlers.onRulesChange);
       showTab('lineup');
     }
     renderLineup();
