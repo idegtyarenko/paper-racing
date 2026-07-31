@@ -204,7 +204,7 @@ export const ru: Strings = {
     hintPick: 'Выбери точку и подтверди, нажав «Едем!»',
     finalWarn: ' Попробуй успеть финишировать и заехать дальше соперника.',
     classification: 'Классификация',
-    upNext: 'Очередь',
+    upNext: 'Очередь ходов',
     speedUnit: 'км/ч',
     stalled: 'Не ходит',
     finished: (place) => `Финиш · ${place}-й`,
