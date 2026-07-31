@@ -40,13 +40,15 @@ export function computeStandings(state: GameState, nav: NavField): number[] {
 }
 
 /**
- * How many moves this car has actually driven — the score of a paper race, and
- * what the final classification shows instead of a placing (the placing is
- * already the row's position). Derived from the trail rather than counted
- * separately: every applied move pushes exactly one segment, the teleport back
- * onto the track after a crash is a `jump` (the player didn't spend a move on
- * it), and a turn spent serving a penalty pushes nothing at all.
+ * The car's total time in turns — the score of a paper race, and what the final
+ * classification shows instead of a placing (the placing is already the row's
+ * position). Two terms, because a turn doesn't always leave a mark: driven moves
+ * come from the trail (every applied move pushes exactly one segment; the
+ * teleport back onto the track after a crash is a `jump` and costs no move),
+ * while turns burned in the gravel push nothing at all and are counted on the
+ * player as they burn. Counting only the first term would make a crash free by
+ * the final number, though in time it's the heaviest penalty there is.
  */
-export function moveCount(p: Player): number {
-  return p.trail.filter((s) => !s.jump).length;
+export function turnsTaken(p: Player): number {
+  return p.trail.filter((s) => !s.jump).length + p.penaltyTurns;
 }
