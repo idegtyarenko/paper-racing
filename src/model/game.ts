@@ -32,6 +32,14 @@ export interface Player {
   trail: TrailSeg[];
   crashes: Vec[];
   skipTurns: number;
+  /**
+   * How many turns this car has already burned sitting in the gravel — counted
+   * as they burn (see afterAction), never derived from the penalties handed out,
+   * so a car that retired mid-penalty still reports the truth. Together with the
+   * driven trail this is the car's total time in turns, which is what the final
+   * classification shows (turnsTaken in standings).
+   */
+  penaltyTurns: number;
   /** Signed count of finish-line crossings: +1 going forward, -1 going backward. */
   crossings: number;
   finishOvershoot: number | null;
@@ -294,6 +302,7 @@ export function newGame(
     trail: [],
     crashes: [],
     skipTurns: 0,
+    penaltyTurns: 0,
     crossings: 0,
     finishOvershoot: null,
     place: null,

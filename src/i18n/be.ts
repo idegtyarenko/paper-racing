@@ -205,7 +205,7 @@ export const be: Strings = {
     hintPick: 'Выберы кропку і пацвердзі, націснуўшы «Едзем!»',
     finalWarn: ' Паспрабуй паспець фінішаваць і заехаць далей за саперніка.',
     classification: 'Класіфікацыя',
-    upNext: 'Чарга',
+    upNext: 'Чарга хадоў',
     speedUnit: 'км/г',
     stalled: 'Не ходзіць',
     finished: (place) => `Фініш · ${place}-і`,

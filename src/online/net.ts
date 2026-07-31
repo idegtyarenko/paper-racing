@@ -84,6 +84,10 @@ export function deserializeState(s: SerializedState, track: Track): GameState {
     // permutation (previous behavior — turn order by seat index).
     startGridOrder:
       s.startGridOrder ?? Array.from({ length: s.players.length }, (_, i) => i),
+    // Gravel turns served: absent on rows written before the counter existed —
+    // those races just under-report a crash by its penalty, which is exactly the
+    // old behavior, so zero is the right backfill.
+    players: s.players.map((p) => ({ ...p, penaltyTurns: p.penaltyTurns ?? 0 })),
     track,
   };
 }

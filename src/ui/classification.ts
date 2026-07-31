@@ -7,7 +7,7 @@
 import { KMH_PER_CELL } from '../config';
 import { GameState, Player } from '../model/game';
 import { NavField } from '../model/nav';
-import { computeStandings, moveCount } from '../model/standings';
+import { computeStandings, turnsTaken } from '../model/standings';
 import { len } from '../geometry';
 import { strings } from '../i18n';
 import { el, icon, CLOCK_SVG, CRASH_SVG } from './pr-chrome';
@@ -69,7 +69,7 @@ function rowStatus(p: Player, opts: { stalled: boolean; final: boolean }): HTMLE
   if (p.place !== null) {
     slot.classList.add('pr-race__stat--done');
     slot.textContent = opts.final
-      ? strings.race.moves(moveCount(p))
+      ? strings.race.moves(turnsTaken(p))
       : strings.race.finished(p.place);
     return slot;
   }

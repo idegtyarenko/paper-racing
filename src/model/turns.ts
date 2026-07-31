@@ -280,6 +280,9 @@ function afterAction(state: GameState): void {
   const next = state.players[state.current];
   if (next.skipTurns > 0) {
     next.skipTurns -= 1;
+    // The slot is gone even though nothing was driven: count it, so the crash
+    // costs what it really costs in the final classification (turnsTaken).
+    next.penaltyTurns += 1;
     // Penalty served — only now do we return the car to the track.
     if (next.skipTurns === 0) returnFromPenalty(state, state.current);
     afterAction(state);

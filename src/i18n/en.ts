@@ -280,9 +280,9 @@ export const en = {
      *  on touch. */
     hintPick: 'Pick a point and confirm with Go!',
     finalWarn: ' Try to finish further past the line than your rival.',
-    /** Heading of the classification card. Rendered in caps by CSS. */
+    /** Heading of the final classification card on the result screen. Caps by CSS. */
     classification: 'Classification',
-    /** Label over the turn-order dots inside the card. Caps by CSS. */
+    /** Label over the turn-order dots, opening the HUD card. Caps by CSS. */
     upNext: 'Up next',
     /** Speed unit in a classification row (caps by CSS). */
     speedUnit: 'km/h',

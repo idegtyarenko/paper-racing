@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { newGame } from './game';
 import { buildNavField } from './nav';
-import { computeStandings, moveCount } from './standings';
+import { computeStandings, turnsTaken } from './standings';
 import { WIN_CROSSINGS } from '../config';
 import { ringTrack } from './test-fixtures';
 
@@ -48,7 +48,7 @@ describe('computeStandings', () => {
   });
 });
 
-describe('moveCount', () => {
+describe('turnsTaken', () => {
   /** A normal (driven) trail segment between two arbitrary points. */
   const seg = (n: number) => ({
     from: { x: n, y: 0 },
@@ -59,12 +59,12 @@ describe('moveCount', () => {
   it('counts one per driven segment', () => {
     const { g } = setup();
     g.players[0].trail = [seg(0), seg(1), seg(2)];
-    expect(moveCount(g.players[0])).toBe(3);
+    expect(turnsTaken(g.players[0])).toBe(3);
   });
 
   it('is zero before the first move', () => {
     const { g } = setup();
-    expect(moveCount(g.players[0])).toBe(0);
+    expect(turnsTaken(g.players[0])).toBe(0);
   });
 
   it("doesn't count the teleport back onto the track after a crash", () => {
@@ -72,16 +72,25 @@ describe('moveCount', () => {
     // returnFromPenalty pushes a `jump` segment: the car is moved, but the
     // player never spent a move on it.
     g.players[0].trail = [seg(0), seg(1), { ...seg(2), jump: true }, seg(3)];
-    expect(moveCount(g.players[0])).toBe(3);
+    expect(turnsTaken(g.players[0])).toBe(3);
   });
 
-  it('counts nothing for turns spent serving a penalty', () => {
+  it('counts turns already served in the gravel — a crash is not free', () => {
     const { g } = setup();
-    // A skipped pit turn pushes no segment at all, so a car sitting in the
-    // gravel keeps the count it had.
+    // A pit turn pushes no segment at all, so without penaltyTurns a crash
+    // would cost nothing in the final classification.
+    const p = g.players[0];
+    p.trail = [seg(0), seg(1)];
+    p.penaltyTurns = 3;
+    expect(turnsTaken(p)).toBe(5);
+  });
+
+  it("doesn't count a penalty that hasn't been served yet", () => {
+    const { g } = setup();
+    // skipTurns is what's still owed; only turns actually burned add up.
     const p = g.players[0];
     p.trail = [seg(0), seg(1)];
     p.skipTurns = 2;
-    expect(moveCount(p)).toBe(2);
+    expect(turnsTaken(p)).toBe(2);
   });
 });

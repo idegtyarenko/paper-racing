@@ -50,16 +50,9 @@
   flex-direction: column;
 }
 
-.pr-race__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 11px;
-  border-bottom: 1px solid var(--pr-border);
-}
 /* Room code: tapping it shares the link, so a player who dropped can be let
-   back in. Quiet by default — it's a reference, not an action to take now. */
+   back in. Quiet by default — it's a reference, not an action to take now.
+   It shares the queue's label line; hidden outright when the race is local. */
 .pr-race__code {
   margin: 0;
   padding: 2px 6px;
@@ -73,6 +66,16 @@
   cursor: pointer;
   touch-action: manipulation;
 }
+.pr-race__code:not([hidden]) {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.pr-race__code-ico svg {
+  display: block;
+  width: 12px;
+  height: 12px;
+}
 @media (hover: hover) {
   .pr-race__code:hover {
     background: var(--pr-hover);
@@ -85,8 +88,18 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 7px 11px;
+  padding: 8px 11px;
   border-bottom: 1px solid rgba(var(--pr-border-rgb), 0.28);
+}
+/* Label left, room code right. The dots keep the full width of the row below:
+   at nine slots they'd collide with the code near the finish, and clipping the
+   tail of the queue is exactly what the constant-length strip exists to avoid. */
+.pr-race__nexthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 18px;
 }
 .pr-race__nextlabel {
   font-size: 9px;
@@ -457,11 +470,8 @@ body.is-racing .pr-conn {
     height: 36px;
     width: 36px;
   }
-  .pr-race__head {
-    padding: 0 0 10px;
-  }
   .pr-race__next {
-    padding: 10px 0;
+    padding: 0 0 12px;
     border-bottom: 0;
   }
   .pr-race__rows {

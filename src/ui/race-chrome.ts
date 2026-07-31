@@ -6,9 +6,10 @@
 // racing and whose turn is it" in three places — the standings strip above the
 // map, the turn-queue dot strip next to it, and a grid of player cards down in
 // the side panel — and the hi-fi folds all three into one classification card:
-// header (+ room code), an UP NEXT strip, and one row per car. The row's right
-// slot carries whatever that car's state calls for (placing / retired / stalled
-// / pit penalty / speed + crashes), so there's a single place to read a racer.
+// an UP NEXT strip (+ room code on its label line) and one row per car. The
+// row's right slot carries whatever that car's state calls for (placing /
+// retired / stalled / pit penalty / speed + crashes), so there's a single place
+// to read a racer.
 //
 // The confirm-move button and the skip button are built here too, in the action
 // zone, along with the four inputs that decide how the confirm button looks.
@@ -30,6 +31,7 @@ import {
   StatusBanner,
   BURGER_SVG,
   COPY_SVG,
+  SHARE_SVG,
 } from './pr-chrome';
 import { openMenu } from './menu';
 
@@ -40,6 +42,7 @@ const board = document.querySelector('.app__board')!;
 
 let root: HTMLElement;
 let codeBtn: HTMLButtonElement;
+let codeText: HTMLElement;
 let nextEl: HTMLElement;
 let dotsEl: HTMLElement;
 let rowsEl: HTMLElement;
@@ -76,14 +79,20 @@ function build(h: RaceChromeHandlers): void {
   icon('pr-btn__ico', BURGER_SVG, burger);
   burger.addEventListener('click', openMenu);
 
+  // The card used to open with a "Classification" heading; it said nothing the
+  // list of placings below doesn't say by itself, so the queue strip is the
+  // card's first row now and the room code moved down into its label line.
   const card = el('div', 'pr-card pr-race__card', top);
-  const head = el('div', 'pr-race__head', card);
-  el('span', 'pr-label', head).textContent = strings.race.classification;
-  codeBtn = button('pr-race__code', head);
-  codeBtn.addEventListener('click', () => onShare());
-
   nextEl = el('div', 'pr-race__next', card);
-  el('span', 'pr-race__nextlabel', nextEl).textContent = strings.race.upNext;
+  const nextHead = el('div', 'pr-race__nexthead', nextEl);
+  el('span', 'pr-race__nextlabel', nextHead).textContent = strings.race.upNext;
+  // A share glyph, not the lobby's copy one: this button opens the share sheet
+  // (onShare) rather than copying — the reconnect banner below is the one that
+  // copies, and the two must not promise the same thing.
+  codeBtn = button('pr-race__code', nextHead);
+  codeText = el('span', 'pr-race__code-text', codeBtn);
+  icon('pr-race__code-ico', SHARE_SVG, codeBtn);
+  codeBtn.addEventListener('click', () => onShare());
   dotsEl = el('div', 'pr-race__dots', nextEl);
   dotsEl.setAttribute('role', 'img');
   dotsEl.setAttribute('aria-label', strings.race.queueLabel);
@@ -348,7 +357,7 @@ export function renderRaceChrome(ctx: RaceCtx): void {
 
   // Room code: online only, so a disconnected player can be handed the link.
   codeBtn.hidden = !net;
-  if (net) codeBtn.textContent = net.code;
+  if (net) codeText.textContent = net.code;
 
   renderQueue(game!);
 

@@ -366,6 +366,23 @@ describe('turn order and serving a penalty', () => {
     expect(g.track.inside.has(key(crashed.pos.x, crashed.pos.y))).toBe(true);
     expect(crashed.trail.some((s) => s.jump)).toBe(true);
   });
+
+  it('every turn burned in the gravel is counted, so the final score shows the cost', () => {
+    const g = newGame(ringTrack(), 2);
+    place(g.players[0], [10, 1]);
+    expect(g.players[0].penaltyTurns).toBe(0);
+    applyMove(g, cand(10, -2)); // p0 in the gravel, skip=3
+    const crashed = g.players[0];
+    expect(crashed.penaltyTurns).toBe(0); // assigned, not yet served
+
+    let guard = 0;
+    while (crashed.skipTurns > 0 && guard++ < 20) {
+      place(g.players[g.current], [20, 4], [0, 0]);
+      applyMove(g, cand(20, 4));
+    }
+    // Three slots burned in the gravel — none of them pushed a trail segment.
+    expect(crashed.penaltyTurns).toBe(3);
+  });
 });
 
 describe('fair turn rotation', () => {
