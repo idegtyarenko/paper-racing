@@ -15,6 +15,7 @@ import { GameState } from '../model/game';
 import { NavField } from '../model/nav';
 import { strings } from '../i18n';
 import { renderRows } from './classification';
+import { raceActionSlot } from './race-chrome';
 import { el, button, icon } from './pr-chrome';
 
 /** Laurel cup — you won. */
@@ -43,8 +44,9 @@ let labelEl: HTMLElement;
 let iconEl: HTMLElement;
 let headlineEl: HTMLElement;
 let subtitleEl: HTMLElement;
-let cardEl: HTMLElement;
 let rowsEl: HTMLElement;
+let innerEl: HTMLElement;
+let dockEl: HTMLElement;
 let actionsEl: HTMLElement;
 let rematchBtn: HTMLButtonElement;
 let sameTrackBtn: HTMLButtonElement;
@@ -61,7 +63,8 @@ function build(h: ResultHandlers): void {
   // what everyone just drove) but stops competing with the result.
   el('div', 'pr-result__scrim', root);
 
-  const inner = el('div', 'pr-result__inner', root);
+  innerEl = el('div', 'pr-result__inner', root);
+  const inner = innerEl;
 
   const head = el('div', 'pr-result__head', inner);
   iconEl = el('span', 'pr-result__icon', head);
@@ -69,14 +72,22 @@ function build(h: ResultHandlers): void {
   headlineEl = el('div', 'pr-result__headline', head);
   subtitleEl = el('div', 'pr-result__subtitle', head);
 
-  cardEl = el('div', 'pr-card pr-result__card', inner);
+  // Only the full screen has a classification — the dock appears while the race
+  // is still being decided, so there is no final one to show.
+  const cardEl = el('div', 'pr-card pr-result__card', inner);
   el('span', 'pr-label pr-result__cardhead', cardEl).textContent =
     strings.race.classification;
   rowsEl = el('div', 'pr-race__rows', cardEl);
   rowsEl.setAttribute('role', 'img');
   rowsEl.setAttribute('aria-label', strings.race.standingsLabel);
 
-  actionsEl = el('div', 'pr-result__actions', inner);
+  // The buttons live in a wrapper, because they have two homes: inside this
+  // layer when the race is over, and docked into the live race's bottom stack
+  // while the others are still driving (see renderRaceResult). Moving one
+  // wrapper keeps that a re-parent rather than a rebuild — the buttons, their
+  // listeners and their state are the same either way.
+  dockEl = el('div', 'pr-result__dock', inner);
+  actionsEl = el('div', 'pr-result__actions', dockEl);
   rematchBtn = button('pr-btn pr-btn--primary pr-btn--caps', actionsEl);
   icon('pr-btn__ico', REMATCH_SVG, rematchBtn);
   el('span', 'pr-result__btntext', rematchBtn).textContent = strings.buttons.sameTrack;
@@ -175,25 +186,23 @@ function renderHead(game: GameState, mySeat: number): void {
 }
 
 /**
- * Headline for the early-exit case: no human has anything left to do, but the
- * race isn't resolved yet (bots may still be finishing it), so there's no
- * `winner` to read and no final classification to show — just the way out.
- */
-function renderEarlyExitHead(): void {
-  iconEl.hidden = true;
-  headlineEl.classList.add('pr-result__headline--quiet');
-  headlineEl.style.removeProperty('color');
-  headlineEl.textContent = strings.race.earlyExitTitle;
-  subtitleEl.textContent = strings.race.earlyExitSub;
-}
-
-/**
- * Show or hide the result screen. `over` is the main gate: a decided winner is
- * not enough while others are still driving (5G). `earlyExit` is a second,
- * narrower gate — no human has anything left to do, even though the race
- * itself hasn't resolved (bots may still be racing) — same screen, no
- * classification (there isn't a final one yet), and `over` wins if both are
- * somehow true at once (the race legitimately finished while this was up).
+ * Show the ways on from here, in one of two shapes.
+ *
+ * `over` — the race is resolved — is the full-screen layer: outcome, final
+ * classification, three buttons. A decided winner is not enough while others
+ * are still driving (5G).
+ *
+ * `earlyExit` — this human has retired or finished, but the race hasn't
+ * resolved (bots or other players are still driving) — is the same three
+ * buttons docked into the live race's bottom stack instead. The board stays
+ * visible and drivable-looking so you can watch the rest of the field come
+ * home, which is the whole point: finishing first used to blank the race out.
+ * There's no headline and no classification down there — the buttons are the
+ * only thing this player still has to decide, and a final classification
+ * doesn't exist yet.
+ *
+ * `over` wins if both are somehow true at once (the race resolved while the
+ * dock was up), which is also how the dock gives way to the full screen.
  */
 export function renderRaceResult(ctx: ResultCtx): void {
   if (!built) return;
@@ -208,18 +217,37 @@ export function renderRaceResult(ctx: ResultCtx): void {
     isOnline,
     hostMustStayForBots,
   } = ctx;
-  const show = (over || earlyExit) && !!game && !!nav;
-  root.hidden = !show;
-  document.body.classList.toggle('is-result', show);
-  if (!show) return;
+  const ready = !!game && !!nav;
+  const fullscreen = over && ready;
+  const docked = !over && earlyExit && ready;
 
-  labelEl.textContent = over ? strings.race.raceComplete : strings.race.earlyExitLabel;
-  cardEl.hidden = !over;
-  if (over) {
+  root.hidden = !fullscreen;
+  // Not for the dock: `is-result` says the layer owns the board, and it takes
+  // the zoom controls away with it (race-result.css). The dock leaves the race
+  // to be watched, so the board keeps its controls.
+  document.body.classList.toggle('is-result', fullscreen);
+  // The chip talks to whoever is on the clock — whose turn it is, what to tap.
+  // This player has finished driving; the buttons say everything left to say,
+  // so the chip steps aside rather than stacking above them (race-chrome.css).
+  document.body.classList.toggle('is-early-exit', docked);
+
+  dockEl.hidden = !fullscreen && !docked;
+  // Re-parent only on a change of home: this runs on every render, and moving a
+  // live node would otherwise churn layout (and restart the button's glow) many
+  // times a second while the bots drive.
+  const home = docked ? raceActionSlot() : innerEl;
+  if (dockEl.parentElement !== home) {
+    if (docked) home.append(dockEl);
+    else innerEl.insertBefore(dockEl, waitEl);
+  }
+  dockEl.classList.toggle('pr-result__dock--live', docked);
+
+  if (!fullscreen && !docked) return;
+
+  if (fullscreen) {
+    labelEl.textContent = strings.race.raceComplete;
     renderHead(game!, mySeat);
     renderRows(rowsEl, game!, nav!, { mySeat, final: true });
-  } else {
-    renderEarlyExitHead();
   }
 
   // A guest waits for the host only for the real end-of-race rematch — during

@@ -118,6 +118,22 @@
 }
 
 /* ── Ways on from here ─────────────────────────────────────────────────────── */
+/* The buttons' wrapper. On the full screen it is a plain pass-through row of the
+   centred column; `--live` is the other home, docked into the live race's action
+   stack while the rest of the field is still driving. */
+.pr-result__dock:not([hidden]) {
+  display: block;
+}
+.pr-result__dock--live {
+  width: 100%;
+  /* Matches the chip's cap above it, so the stack reads as one column and a long
+     button can't run under the zoom controls at the board's right edge. */
+  max-width: min(100%, 460px);
+  /* .pr-race hands pointer events only to its own controls (race-chrome.css);
+     a guest of the action stack has to opt in for itself. */
+  pointer-events: auto;
+}
+
 .pr-result__actions {
   flex-direction: column;
   gap: 10px;

@@ -153,6 +153,19 @@ export function initRaceChrome(h: RaceChromeHandlers): void {
   build(h);
 }
 
+/**
+ * The bottom action stack, for another module to dock a control into.
+ *
+ * Only race-result uses it: a player who has retired or finished while the
+ * others drive on gets their three ways out here rather than under a
+ * full-screen layer, and the bottom of the board is already this stack's job —
+ * safe-area insets, the desktop grid column and the zoom controls' clearance
+ * are all solved here and would only be re-derived, badly, by a second bar.
+ */
+export function raceActionSlot(): HTMLElement {
+  return actEl;
+}
+
 // ── Confirm-move button: a single render driven by four inputs ───────────────
 // Its appearance (text/disabled/hidden) depends on the send state
 // (setMoveSendState), candidate selection (showConfirmMove), and, online, also

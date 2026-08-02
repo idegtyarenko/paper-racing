@@ -221,10 +221,6 @@ export const ru: Strings = {
     someoneWonSub: 'В следующий раз повезет',
     allRetired: 'Все сошли',
     allRetiredSub: 'Никто не финишировал — результата нет',
-    earlyExitLabel: 'Ваша гонка завершена',
-    earlyExitTitle: 'Что дальше?',
-    earlyExitSub:
-      'Не\u00A0обязательно ждать остальных\u00A0— можно начать заново прямо сейчас',
     earlyExitHostWait:
       'Подождите, пока доедут боты\u00A0— иначе гонка прервётся для остальных',
     drawTitle: 'Фотофиниш',

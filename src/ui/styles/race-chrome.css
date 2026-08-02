@@ -308,6 +308,12 @@
 .pr-race__chip:not([hidden]) {
   display: flex;
 }
+/* Retired or finished while the others drive on: the result buttons are docked
+   in this stack (race-result.css) and the chip has nothing left to tell this
+   player — it addresses whoever is on the clock, and that isn't them any more. */
+body.is-early-exit .pr-race__chip:not([hidden]) {
+  display: none;
+}
 .pr-race__chip--error {
   background: var(--pr-error-bg);
   border-color: var(--pr-error);
@@ -372,6 +378,13 @@
    status chip + confirm button running the full width. */
 body.is-racing .zoom-ctl {
   bottom: 140px;
+}
+/* The early-exit dock is the tallest thing this stack ever holds — three
+   full-width buttons instead of a chip and one — so it needs more clearance
+   than the racing default above, or the zoom column lands on the top button.
+   Sized for the full set; a shorter dock (online hides one) just sits lower. */
+body.is-early-exit .zoom-ctl {
+  bottom: 200px;
 }
 
 /* The global cream banner would say it twice, in the wrong place: the race has

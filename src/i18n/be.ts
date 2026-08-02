@@ -222,10 +222,6 @@ export const be: Strings = {
     someoneWonSub: 'Наступным разам пашанцуе',
     allRetired: 'Усе сышлі',
     allRetiredSub: 'Ніхто не\u00A0фінішаваў\u00A0— выніку няма',
-    earlyExitLabel: 'Ваша гонка завершана',
-    earlyExitTitle: 'Што далей?',
-    earlyExitSub:
-      'Не\u00A0абавязкова чакаць астатніх\u00A0— можна пачаць нанова прама зараз',
     earlyExitHostWait:
       'Пачакайце, пакуль даедуць боты\u00A0— інакш гонка спыніцца для астатніх',
     drawTitle: 'Фотафініш',
