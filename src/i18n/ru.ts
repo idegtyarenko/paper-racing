@@ -192,6 +192,7 @@ export const ru: Strings = {
     startFailed: 'Не получилось начать гонку. Попробуй еще раз.',
     rematchWaiting:
       'Создатель трассы может запустить рематч — тогда все продолжат на этой же трассе.',
+    leaveRace: 'Выйти из\u00A0гонки',
     reconnecting: 'Нет связи. Переподключаемся…',
     raceCode: (code) => `Код гонки ${code}`,
     resumeTitle: (code) => `Вернуться в гонку ${code}?`,

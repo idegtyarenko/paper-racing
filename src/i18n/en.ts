@@ -263,6 +263,9 @@ export const en = {
     // Guest hint on the online results screen: a rematch is started by the track creator.
     rematchWaiting:
       'The track creator can start a rematch\u00A0— everyone continues on the same track.',
+    /** The guest's own way on from that wait: frees their seat for good, while
+     *  the rematch still runs for everyone else. */
+    leaveRace: 'Leave the race',
     // Connection-state banner (realtime channel dropped).
     reconnecting: 'Connection lost. Reconnecting…',
     /** Code on the reconnect banner: tap to copy, so the race can be rejoined. */

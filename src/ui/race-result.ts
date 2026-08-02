@@ -37,6 +37,8 @@ export interface ResultHandlers {
   onSameTrack: () => void;
   /** "Draw a new track" — back to the editor (online: leaves the session). */
   onNewTrack: () => void;
+  /** Online guest's exit from the rematch wait — frees the seat, leaves the room running. */
+  onGuestLeave: () => void;
 }
 
 let root: HTMLElement;
@@ -52,7 +54,7 @@ let rematchBtn: HTMLButtonElement;
 let sameTrackBtn: HTMLButtonElement;
 let newTrackBtn: HTMLButtonElement;
 let hostWaitHintEl: HTMLElement;
-let waitEl: HTMLElement;
+let guestEl: HTMLElement;
 let built = false;
 
 function build(h: ResultHandlers): void {
@@ -108,10 +110,17 @@ function build(h: ResultHandlers): void {
   // dashed "waiting" plate where the buttons would be, not disabled buttons.
   // Only for the real end-of-race rematch wait — during an early exit the
   // guest isn't waiting on anything, they can still just leave.
-  waitEl = el('div', 'pr-result__wait', inner);
+  guestEl = el('div', 'pr-result__guest', inner);
+  const waitEl = el('div', 'pr-result__wait', guestEl);
   const dots = el('span', 'pr-result__dots', waitEl);
   for (let i = 0; i < 3; i++) el('span', 'pr-result__dot', dots);
   el('span', 'pr-result__waittext', waitEl).textContent = strings.online.rematchWaiting;
+  // ...but waiting is not the only thing they can do. Without this the screen is
+  // a dead end: no buttons, and a reload just restores the finished race from
+  // the snapshot. Leaving frees the seat; the rematch still runs without us.
+  const guestLeaveBtn = button('pr-btn pr-btn--caps', guestEl);
+  guestLeaveBtn.textContent = strings.online.leaveRace;
+  guestLeaveBtn.addEventListener('click', h.onGuestLeave);
 
   board.append(root);
   built = true;
@@ -238,7 +247,7 @@ export function renderRaceResult(ctx: ResultCtx): void {
   const home = docked ? raceActionSlot() : innerEl;
   if (dockEl.parentElement !== home) {
     if (docked) home.append(dockEl);
-    else innerEl.insertBefore(dockEl, waitEl);
+    else innerEl.insertBefore(dockEl, guestEl);
   }
   dockEl.classList.toggle('pr-result__dock--live', docked);
 
@@ -254,7 +263,7 @@ export function renderRaceResult(ctx: ResultCtx): void {
   // an early exit there's nothing to wait for, they can just leave.
   const guestWaiting = onlineGuest && over;
   actionsEl.hidden = guestWaiting;
-  waitEl.hidden = !guestWaiting;
+  guestEl.hidden = !guestWaiting;
   // Only offer a rematch when there's something to replay (online rematch
   // also requires the room to actually be over — canRematch already covers that).
   rematchBtn.hidden = !canRematch;

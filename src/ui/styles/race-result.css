@@ -152,6 +152,24 @@
   letter-spacing: 1px;
 }
 
+/* The guest's end-of-race block: the inert wait plate plus their own way out.
+   Same column rhythm as .pr-result__actions, which it stands in for. */
+.pr-result__guest {
+  flex-direction: column;
+  gap: 10px;
+}
+.pr-result__guest:not([hidden]) {
+  display: flex;
+}
+/* Quiet, like the secondary routes on the host's side of this screen. */
+.pr-result__guest > .pr-btn {
+  width: 100%;
+  padding: 13px 18px;
+  font-weight: 600;
+  font-size: 13.5px;
+  letter-spacing: 1px;
+}
+
 /* A guest can't start anything — dashed and inert, so it doesn't read as a
    button someone forgot to enable. */
 .pr-result__wait {

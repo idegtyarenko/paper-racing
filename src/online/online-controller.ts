@@ -445,8 +445,17 @@ function rematchOnline(): Promise<void> {
   });
 }
 
-/** Leave the lobby: free the seat on the server and go back (host goes to mode select). */
-function leaveLobby(): Promise<void> {
+/**
+ * Leave the session for good: free the seat on the server and go back. Reached
+ * from the lobby, and from the results screen when a guest doesn't want to wait
+ * on the track creator's rematch — the room lives on either way, the rematch
+ * just starts without us.
+ *
+ * Where "back" is follows who we are: the host still owns the drawn track
+ * (`raceTrack`), so they land on mode select with it; a guest never had one
+ * (nulled on join) and goes to a clean editor.
+ */
+function leaveSession(): Promise<void> {
   return guarded(async () => {
     turnWatch.clearWatches();
     forgetSession(); // deliberate leave — nothing to come back to
@@ -589,7 +598,7 @@ export function rematch(): void {
   rematchOnline();
 }
 export function leave(): void {
-  leaveLobby();
+  leaveSession();
 }
 export function share(): void {
   shareLink();

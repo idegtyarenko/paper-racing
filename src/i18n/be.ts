@@ -193,6 +193,7 @@ export const be: Strings = {
     startFailed: 'Не\u00A0выйшла пачаць гонку. Паспрабуй яшчэ раз.',
     rematchWaiting:
       'Стваральнік трасы можа запусціць паўтор\u00A0— тады ўсе працягнуць на\u00A0гэтай жа\u00A0трасе.',
+    leaveRace: 'Выйсці з\u00A0гонкі',
     reconnecting: 'Няма сувязі. Перападключаемся…',
     raceCode: (code) => `Код гонкі ${code}`,
     resumeTitle: (code) => `Вярнуцца ў\u00A0гонку ${code}?`,

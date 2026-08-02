@@ -603,6 +603,10 @@ initRaceResult({
   // "Same track, new lineup": keep the track, re-pick the mode/players.
   onSameTrack: () => goToMode('race'),
   onNewTrack: () => resetToEdit(),
+  // A guest done waiting on the track creator's rematch: free the seat and go
+  // draw something. online.leave() lands a guest in the editor by itself, and
+  // clears the resume breadcrumb so a reload doesn't drag us back in.
+  onGuestLeave: () => online.leave(),
 });
 
 // The global menu's entries call the same intents the screens' own controls do.
