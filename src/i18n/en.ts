@@ -275,6 +275,10 @@ export const en = {
 
   race: {
     driver: (name: string): string => `${name} is moving.`,
+    /** Local game, bots on the clock: one stable line for their whole run of
+     *  turns, instead of naming each bot as it moves. The animated ellipsis is
+     *  added by the chip itself. */
+    rivalsMoving: 'Rivals are moving…',
     /** What to do on your turn. One hint for both input kinds: since the
      *  redesign, a desktop click picks a target and Go! commits it, exactly as
      *  on touch. */

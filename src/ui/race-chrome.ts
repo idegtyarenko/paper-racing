@@ -179,6 +179,12 @@ let chipBase: string | null = null;
 // skippable/my-turn states, which have their own UI.
 let chipWaiting = false;
 
+// Local game, bots on the clock: the chip already holds the stable "rivals are
+// moving" line. Bot turns re-render the chrome several times a second, and
+// rebuilding the same line would restart the ellipsis animation on every one of
+// them — so we only touch the DOM when entering the state.
+let chipAiWaiting = false;
+
 /** Build the confirm-move button's appearance from the current state. */
 function refreshConfirmBtn(): void {
   if (!built) return;
@@ -352,6 +358,7 @@ export function renderRaceChrome(ctx: RaceCtx): void {
     resetStandings(); // leaving the race — a new one recomputes from scratch
     chipBase = null;
     chipWaiting = false;
+    chipAiWaiting = false;
     return;
   }
 
@@ -401,6 +408,8 @@ function renderSkip(game: GameState, net: NetTurn | null): void {
 function renderChip(game: GameState, net: NetTurn | null, aiTurn: boolean): void {
   chipBase = null; // by default don't decorate the chip with a timer (set in the net branch)
   chipWaiting = false; // the animated ellipsis is only armed for "someone else's turn"
+  const wasAiWaiting = chipAiWaiting; // every branch below but the bots' one leaves the state
+  chipAiWaiting = false;
   const cur = game.players[game.current];
 
   if (net) {
@@ -428,8 +437,17 @@ function renderChip(game: GameState, net: NetTurn | null, aiTurn: boolean): void
 
   const warn = game.finalTurnsLeft !== null ? strings.race.finalWarn : '';
   if (aiTurn) {
-    // A bot is moving: the "tap a point" hint doesn't apply — the human waits.
-    setChip(`${strings.race.driver(cur.name)}${warn}`, cur.color);
+    // Bots are moving: ONE line for their whole run rather than each bot's name
+    // in turn — naming them rewrote the chip several times a second, which is
+    // unreadable and useless, since the human has nothing to do until it's their
+    // turn again. Same waiting ellipsis as the online branch, and no dot: the
+    // line is about the field, not about one car. finalWarn is left off too —
+    // it's advice on the human's own driving, and it comes back with the hint.
+    if (!wasAiWaiting) {
+      setChip('', null);
+      applyWaitingChip(strings.race.rivalsMoving, null);
+    }
+    chipAiWaiting = true;
     return;
   }
   setChip(`${strings.race.driver(cur.name)} ${strings.race.hintPick}${warn}`, cur.color);
