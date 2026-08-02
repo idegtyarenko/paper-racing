@@ -117,6 +117,7 @@
   flex: 0 0 auto;
   width: 11px;
   height: 11px;
+  border-radius: 50%;
 }
 /* Whoever is moving: bigger, ringed in the accent and breathing, so the head of
    the queue is findable without counting from the left. */
@@ -199,6 +200,7 @@
   flex: 0 0 auto;
   width: 13px;
   height: 13px;
+  border-radius: 50%;
 }
 .pr-race__name {
   flex: 1;
@@ -315,6 +317,7 @@
   flex: 0 0 auto;
   width: 9px;
   height: 9px;
+  border-radius: 50%;
 }
 
 .pr-race__act > .pr-btn {
