@@ -17,6 +17,7 @@ import { editorFromTrack } from '../model/editor';
 import {
   openJoinDialog,
   showJoinError,
+  showErrorToast,
   showToast,
   setJoinBusy,
   setConnBanner,
@@ -204,7 +205,7 @@ export async function sendRetire(): Promise<void> {
   } catch {
     sending = false;
     setMoveSendState('idle');
-    showToast(strings.online.error);
+    showErrorToast(strings.online.error);
   }
 }
 
@@ -306,7 +307,7 @@ const handlers: OnlineHandlers = {
     setMoveSendState('idle');
     setConnBanner(false);
     hostBots.setLobbyStarting(false);
-    showToast(strings.online.closed);
+    showErrorToast(strings.online.closed);
     deps.resetToEdit();
   },
   onConnection: (ok) => {
@@ -336,7 +337,7 @@ function hostOnline(name: string): Promise<void> {
       deps.updateUI();
       deps.redraw();
     } catch {
-      showToast(strings.online.error);
+      showErrorToast(strings.online.error);
     }
   });
 }
@@ -400,7 +401,7 @@ function startOnline(): Promise<void> {
         commitOnline();
       }
     } catch {
-      showToast(strings.online.startFailed);
+      showErrorToast(strings.online.startFailed);
     } finally {
       hostBots.setLobbyStarting(false);
     }
@@ -439,7 +440,7 @@ function rematchOnline(): Promise<void> {
         commitOnline();
       }
     } catch {
-      showToast(strings.online.startFailed);
+      showErrorToast(strings.online.startFailed);
     }
   });
 }
@@ -571,7 +572,7 @@ export function promptResume(): void {
     async () => {
       const known = await session.memberName(code);
       if (!known) {
-        showToast(strings.online.gameGone);
+        showErrorToast(strings.online.gameGone);
         return;
       }
       rememberName(known);

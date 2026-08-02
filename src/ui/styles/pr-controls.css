@@ -744,7 +744,9 @@ body.is-lobby .pr-conn {
    The counterpart to .pr-status — this one fades on its own, so it carries
    things you may miss, never state you must be able to come back to. Lives in
    the shared layer (it was the cream lobby's, and every screen fires it); the
-   editor overrides the skin for its error toast (editor-chrome.css). */
+   editor only moves it clear of its top strip (editor-chrome.css). Whether a
+   toast looks like a failure is the --error modifier's business, set from the
+   call site (showToast) — not the screen's. */
 .pr-toast {
   font-family: var(--pr-font);
   position: fixed;
@@ -774,6 +776,26 @@ body.is-lobby .pr-conn {
     opacity: 1;
     transform: translate(-50%, 0);
   }
+}
+/* Failure skin (design 3E): red surface with a ⚠, on every screen — a dropped
+   connection reads the same in the editor and in a race. Declares only what
+   differs from the base toast, so a screen's positional override (which is more
+   specific) can never fight it. :not([hidden]) per the convention above — the
+   flex display would otherwise outrank the UA's [hidden] rule. */
+.pr-toast--error:not([hidden]) {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 13px 16px;
+  background: var(--pr-error-bg);
+  border-color: var(--pr-error);
+  color: var(--pr-error-ink);
+  text-align: left;
+}
+.pr-toast--error::before {
+  content: '⚠';
+  color: var(--pr-error);
+  font-size: 15px;
 }
 
 /* ── Overlay + sheet: the modal layer (rules, join by code, confirmations) ───

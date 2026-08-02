@@ -99,10 +99,11 @@ body.is-editing .zoom-ctl {
   bottom: 92px;
 }
 
-/* Editor errors surface as a red Blueprint toast under the top strip (design
-   3E). In the edit phase the toast only ever carries an error. Scoped to
-   :not([hidden]) so the flex display never overrides the element's own hidden
-   state (showToast toggles the `hidden` attribute to dismiss it). */
+/* The editor's toast hangs under the top strip instead of at the bottom edge,
+   where the step rail and the action bar already sit. Position only — how the
+   toast looks is the tone modifier's job (.pr-toast--error, pr-controls.css),
+   so a plain notice like "the app updated" keeps the normal Blueprint skin
+   here. Scoped to :not([hidden]) per the convention in pr-controls.css. */
 body.is-editing .pr-toast:not([hidden]) {
   top: calc(env(safe-area-inset-top, 0px) + 88px);
   bottom: auto;
@@ -115,22 +116,6 @@ body.is-editing .pr-toast:not([hidden]) {
   transform: none;
   max-width: 480px;
   margin: 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  background: var(--pr-error-bg);
-  border: 1px solid var(--pr-error);
-  border-radius: var(--pr-radius-lg);
-  color: var(--pr-error-ink);
-  font-weight: 600;
-  text-align: left;
-  padding: 13px 16px;
-  box-shadow: var(--pr-shadow);
-}
-body.is-editing .pr-toast:not([hidden])::before {
-  content: '⚠';
-  color: var(--pr-error);
-  font-size: 15px;
 }
 
 /* ── Draw-head cursor (design 3A): amber ring + dot follows the pointer while

@@ -12,7 +12,7 @@
 import { EditorState, canStepBack } from '../model/editor';
 import { Phase } from '../app-state';
 import { strings } from '../i18n';
-import { showToast } from './dialogs';
+import { showErrorToast } from './dialogs';
 import { bindTap } from './dom';
 import { button, el, icon, GLOBE_SVG } from './pr-chrome';
 import { wizardNavFoot } from './wizard-nav';
@@ -139,7 +139,7 @@ export function renderEditorChrome(editor: EditorState, phase: Phase): void {
     // the longer RU/BE strings are readable) once; keep the coach on the step's
     // normal instruction (the board resets to a clean draw on a self-cross).
     if (editor.message !== lastErrorToast) {
-      showToast(editor.message, 3200);
+      showErrorToast(editor.message, 3200);
       lastErrorToast = editor.message;
     }
     coachText = strings.editor.step[step] ?? editor.message;

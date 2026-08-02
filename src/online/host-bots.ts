@@ -19,7 +19,7 @@ import { GameState, newGame, shuffledIndices, seatColor, seatName } from '../mod
 import { coastMove, applyMove } from '../model/turns';
 import { Difficulty, chooseMove } from '../model/ai';
 import type { LobbyView } from '../ui/pr-chrome';
-import { showToast } from '../ui/dialogs';
+import { showErrorToast } from '../ui/dialogs';
 import { strings } from '../i18n';
 import { AI_MOVE_DELAY_MS, SKIP_RETRY_MS } from '../config';
 import * as session from './online';
@@ -141,7 +141,7 @@ async function runBotMove(seat: number): Promise<void> {
       commitOnline();
     }
   } catch {
-    showToast(strings.online.error);
+    showErrorToast(strings.online.error);
     // Silent retry: it's still the bot's turn and we're still host — runBotMove will re-check.
     botTimer = window.setTimeout(() => {
       botTimer = null;
