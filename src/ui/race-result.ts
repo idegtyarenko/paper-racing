@@ -15,6 +15,7 @@ import { GameState } from '../model/game';
 import { NavField } from '../model/nav';
 import { strings } from '../i18n';
 import { renderRows } from './classification';
+import { bindTap } from './dom';
 import { raceActionSlot } from './race-chrome';
 import { el, button, icon } from './pr-chrome';
 import { isPodium } from './format';
@@ -85,13 +86,16 @@ function build(h: ResultHandlers): void {
   rematchBtn = button('pr-btn pr-btn--primary pr-btn--caps', actionsEl);
   icon('pr-btn__ico', REMATCH_SVG, rematchBtn);
   el('span', 'pr-result__btntext', rematchBtn).textContent = strings.buttons.sameTrack;
-  rematchBtn.addEventListener('click', h.onRematch);
+  // bindTap, not a bare click: this screen arrives straight after a gesture on the
+  // canvas, and that's exactly when iOS drops the first synthetic click on a button
+  // that just appeared — "Rematch" would need a second tap (see ui/dom.ts).
+  bindTap(rematchBtn, h.onRematch);
   sameTrackBtn = button('pr-btn pr-btn--caps', actionsEl);
   sameTrackBtn.textContent = strings.buttons.sameTrackNewMode;
-  sameTrackBtn.addEventListener('click', h.onSameTrack);
+  bindTap(sameTrackBtn, h.onSameTrack);
   newTrackBtn = button('pr-btn pr-btn--caps', actionsEl);
   newTrackBtn.textContent = strings.buttons.newTrack;
-  newTrackBtn.addEventListener('click', h.onNewTrack);
+  bindTap(newTrackBtn, h.onNewTrack);
   // Shown only for a host stuck driving bots for the rest of the room — see
   // hostMustStayForBots in renderRaceResult.
   hostWaitHintEl = el('div', 'pr-result__subtitle', actionsEl);
@@ -112,7 +116,7 @@ function build(h: ResultHandlers): void {
   // the snapshot. Leaving frees the seat; the rematch still runs without us.
   const guestLeaveBtn = button('pr-btn pr-btn--caps', guestEl);
   guestLeaveBtn.textContent = strings.online.leaveRace;
-  guestLeaveBtn.addEventListener('click', h.onGuestLeave);
+  bindTap(guestLeaveBtn, h.onGuestLeave);
 
   board.append(root);
   built = true;

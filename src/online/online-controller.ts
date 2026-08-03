@@ -467,7 +467,13 @@ export function canRematch(): boolean {
 function rematchOnline(): Promise<void> {
   return guarded(async () => {
     const raceTrack = deps.state.raceTrack;
-    if (!raceTrack || !canRematch()) return;
+    // The button is only shown when a rematch is on, so landing here means the room
+    // moved under us (the last guest left, someone's state arrived late). Say so —
+    // a visible button that silently does nothing is the worst of both.
+    if (!raceTrack || !canRematch()) {
+      showErrorToast(strings.online.startFailed);
+      return;
+    }
     const g = hostBots.buildStartState(raceTrack);
     try {
       await session.start(g);
