@@ -140,6 +140,12 @@ export const RENAME_DEBOUNCE_MS = 400;
  *  players' moves. */
 export const AI_MOVE_DELAY_MS = 600;
 
+/** How much that pause shrinks with every next bot in an unbroken run, and the
+ *  floor it never goes below (see `bot-pacing.ts`). With 4–5 bots a full pause
+ *  each would leave the human waiting through five of them in a row. */
+export const AI_STREAK_DECAY = 0.6;
+export const AI_MOVE_DELAY_MIN_MS = 180;
+
 // ── World / grid ─────────────────────────────────────────
 /**
  * Side length of the square "effectively infinite" field, in cells. The grid

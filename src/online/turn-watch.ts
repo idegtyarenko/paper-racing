@@ -19,7 +19,7 @@ import type { NetTurn } from '../ui/race-chrome';
 import { strings } from '../i18n';
 import { TURN_TIMEOUT_MS, LOBBY_PRUNE_MS, SKIP_RETRY_MS } from '../config';
 import * as session from './online';
-import { isBotSeat, scheduleBotMove, clearBotTimer } from './host-bots';
+import { isBotSeat, scheduleBotMove, clearBotTimer, resetBotStreak } from './host-bots';
 import type { OnlineDeps } from './online-controller';
 
 /** Result of confirm-first (see the controller): either we applied our copy
@@ -131,8 +131,15 @@ export function armTurnWatch(): void {
   // armTurnWatch, but a previous race might still be sitting in state.game with phase
   // 'race' (creating a new lobby doesn't clear it) — without this check we'd show a
   // turn-timer button for someone else's/our own turn while in the lobby.
-  if (!session.active() || !game || game.phase !== 'race' || deps.state.phase !== 'race')
+  if (
+    !session.active() ||
+    !game ||
+    game.phase !== 'race' ||
+    deps.state.phase !== 'race'
+  ) {
+    resetBotStreak(); // no running race — the next one starts with a full pause
     return;
+  }
   const cur = game.current;
 
   // Only the host computes and commits bot moves; guests just wait for its pushMove
@@ -142,6 +149,7 @@ export function armTurnWatch(): void {
     if (session.isHost()) scheduleBotMove(cur);
     return;
   }
+  resetBotStreak(); // a human's turn ends the bot run — the next bot waits the full pause
 
   // Turn limit comes from the race rules (set by the host in settings); old states
   // without the field fall back to a default.

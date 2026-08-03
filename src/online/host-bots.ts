@@ -21,7 +21,8 @@ import { Difficulty, chooseMove } from '../model/ai';
 import type { LobbyView } from '../ui/pr-chrome';
 import { showErrorToast } from '../ui/dialogs';
 import { strings } from '../i18n';
-import { AI_MOVE_DELAY_MS, SKIP_RETRY_MS } from '../config';
+import { SKIP_RETRY_MS } from '../config';
+import { botMoveDelayMs } from '../bot-pacing';
 import * as session from './online';
 import type { OnlineDeps } from './online-controller';
 
@@ -66,6 +67,13 @@ let lobbyBotDifficulty: Difficulty = 'medium';
 let botTimer: number | null = null;
 /** Whether a bot move write is in flight (host-only) — guards against duplicates, like skipSending. */
 let botSending = false;
+/** How many bots have already moved in the current unbroken run — the pause shrinks with
+ *  each one. Not cleared by clearBotTimer: that fires on every re-arm of turn watching,
+ *  including between two bot moves. Only a human's turn ends the run. */
+let botStreak = 0;
+/** Turn number the streak was last counted for — a presence event re-arms turn watching
+ *  mid-pause, and rescheduling the *same* turn must not count as another bot in the run. */
+let botStreakTurn = -1;
 
 /** Clear added bots (a fresh host lobby starts with none). Difficulty setting is kept. */
 export function resetBots(): void {
@@ -97,17 +105,33 @@ export function isBotSeat(game: GameState, seat: number): boolean {
   return !!game.players[seat]?.bot;
 }
 
+/** The bot run is over — the next bot waits the full pause again. Called from
+ *  turn-watch when the turn belongs to a human. */
+export function resetBotStreak(): void {
+  botStreak = 0;
+  botStreakTurn = -1;
+}
+
 /**
- * Schedule a bot move (host-only): wait AI_MOVE_DELAY_MS so a human has a chance to
- * follow the bot's move, same as in local play. Only one timer at a time
+ * Schedule a bot move (host-only): wait a beat so a human has a chance to follow
+ * the bot's move, same as in local play — and, same as there, shrink that pause with
+ * every next bot in an unbroken run (botMoveDelayMs). Only one timer at a time
  * (clearTurnWatch cancels it on every re-arm of turn watching).
  */
 export function scheduleBotMove(seat: number): void {
   if (botTimer !== null) return;
-  botTimer = window.setTimeout(() => {
-    botTimer = null;
-    runBotMove(seat);
-  }, AI_MOVE_DELAY_MS);
+  const turn = deps.state.game?.turn ?? -1;
+  if (turn !== botStreakTurn) {
+    botStreakTurn = turn;
+    botStreak += 1;
+  }
+  botTimer = window.setTimeout(
+    () => {
+      botTimer = null;
+      runBotMove(seat);
+    },
+    botMoveDelayMs(botStreak - 1),
+  );
 }
 
 /**

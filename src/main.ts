@@ -27,7 +27,7 @@ import { candidatesForSeat, applyMove, coastMove, retireSeat } from './model/tur
 import { Difficulty, chooseMove } from './model/ai';
 import { buildNavField } from './model/nav';
 import { strings, localeTag, dateLocale } from './i18n';
-import { AI_MOVE_DELAY_MS } from './config';
+import { botMoveDelayMs } from './bot-pacing';
 import { render, AppView } from './view/render';
 import { Bounds, polylineBounds } from './view/camera';
 import * as vp from './view/viewport';
@@ -78,6 +78,10 @@ const S = newAppState();
 /** Timer for the delayed bot move — not state, just a handle: stays private
  *  to main.ts, we don't put it in S. Cleared on any exit from the race. */
 let aiTimer: number | null = null;
+/** How many bots have already moved in the current unbroken run — the pause
+ *  shrinks with each one (botMoveDelayMs). Reset the moment the turn is back
+ *  with a human, and on any exit from the race. */
+let aiStreak = 0;
 
 /** Is this seat a bot (and at what difficulty)? Bot-ness lives in state (Player.bot). */
 function isBotSeat(i: number): boolean {
@@ -252,12 +256,15 @@ function cancelAiMove(): void {
     clearTimeout(aiTimer);
     aiTimer = null;
   }
+  aiStreak = 0;
 }
 
 /**
  * Bot-move loop for a LOCAL game: if it's currently a bot's turn, make its
  * move after a short pause (giving the human time to follow along), and keep
- * going until the turn returns to a human or the race ends. Doesn't run in
+ * going until the turn returns to a human or the race ends. The pause shrinks
+ * with every next bot in the run (botMoveDelayMs) — with 4–5 bots a full pause
+ * each would leave the human waiting through five of them in a row. Doesn't run in
  * online games — there, bot moves are computed and committed by the host
  * through online-controller (otherwise the local applyMove would diverge
  * from the server). The pause is cleared on any exit from the race
@@ -274,8 +281,11 @@ function scheduleAiMove(): void {
     !S.game ||
     S.game.phase !== 'race' ||
     !isBotSeat(S.game.current)
-  )
+  ) {
+    aiStreak = 0; // the run is over (or never started) — the next bot waits the full pause
     return;
+  }
+  const delay = botMoveDelayMs(aiStreak++);
   aiTimer = window.setTimeout(() => {
     aiTimer = null;
     if (!S.game || S.game.phase !== 'race' || !isBotSeat(S.game.current) || !S.raceNav)
@@ -284,7 +294,7 @@ function scheduleAiMove(): void {
     if (cand) applyMove(S.game, cand);
     else coastMove(S.game); // all candidates are taken by opponents — coast instead
     commit();
-  }, AI_MOVE_DELAY_MS);
+  }, delay);
 }
 
 /**
