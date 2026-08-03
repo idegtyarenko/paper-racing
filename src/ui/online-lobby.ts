@@ -92,6 +92,10 @@ function build(): void {
 
   const foot = el('div', 'pr-lobby__foot', body);
   status = buildStatus(foot);
+  // This screen is the *guest's* lobby (main.ts hands the host's view to the
+  // setup chrome instead), so leaving really is just freeing a seat — the room
+  // outlives it. The host's button is the one that says "Cancel game", and the
+  // one that asks for confirmation first.
   const leaveBtn = button('pr-btn pr-btn--caps pr-lobby__leave', foot);
   icon('pr-btn__ico', CLOSE_SVG, leaveBtn);
   el('span', '', leaveBtn).textContent = strings.online.leaveLobby;

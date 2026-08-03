@@ -120,7 +120,7 @@ export const en = {
     local: 'With friends on one device',
     localSub: 'Pass the phone between racers',
     online: 'With friends online',
-    onlineSub: 'Host or join a room',
+    onlineSub: 'Host or join a game',
     ai: 'You versus the computer',
     aiSub: 'Race with up to 5\u00A0bots',
   },
@@ -215,22 +215,28 @@ export const en = {
     namePlaceholder: 'Type in your name',
     // Join by code.
     joinByCode: 'Join online game',
-    joinTitle: 'Join a race',
-    codePlaceholder: 'Race code',
+    joinTitle: 'Join online game',
+    codePlaceholder: 'Game code',
     joinSubmit: 'Join',
     // Lobby.
-    lobbyBadge: 'Lobby',
+    lobbyBadge: 'Online game',
     lobbyGuest: 'Waiting for the track creator to start the race…',
-    roomCode: 'Room code',
+    roomCode: 'Game code',
     trackLabel: 'Track',
     players: (n: number, max: number): string => `Players · ${n}/${max}`,
     /** Badge on the racer who owns the track (and starts the race). */
     hostBadge: 'Host',
     /** Under the roster while nobody else has joined. */
-    noGuests: 'Share the room code — no one else has joined yet',
+    noGuests: 'Share the game code — no one else has joined yet',
     /** Why "Start race" is disabled: your own name is still empty. */
     enterName: 'Enter your name to continue',
-    leaveLobby: 'Leave lobby',
+    /** Guest's way out: the room lives on without them. */
+    leaveLobby: 'Leave game',
+    /** The host's counterpart — for them, walking out closes the room itself. */
+    cancelRace: 'Cancel game',
+    /** Asked before that, since it drops everyone else too. The confirm button
+     *  reuses `cancelRace`. */
+    cancelConfirm: 'Cancel the game? Everyone else will be dropped.',
     copied: 'Link copied',
     codeCopied: 'Code copied',
     waiting: 'Waiting for at least one more racer…',
@@ -245,11 +251,11 @@ export const en = {
     skipTurnBtn: 'Skip turn',
     offline: 'offline',
     // Errors / notifications.
-    notFound: 'No race found with that code.',
+    notFound: 'No game found with that code.',
     full: 'This race is already full (6\u00A0players max).',
     started: 'This race has already started.',
     error: "Couldn't connect. Try again.",
-    closed: 'The race has ended or was closed by the track creator.',
+    closed: 'The game has ended or was closed by the track creator.',
     // Sending a move / start (confirm-first: write first, then switch locally).
     sending: 'Sending move…',
     sendFailed: "Couldn't send your move. Check your connection and try again.",
@@ -262,7 +268,7 @@ export const en = {
       'The track creator can start a rematch\u00A0— everyone continues on the same track.',
     /** The guest's own way on from that wait: frees their seat for good, while
      *  the rematch still runs for everyone else. */
-    leaveRace: 'Leave the race',
+    leaveRace: 'Leave the game',
     /** Someone else walked out of the room for good — announced to everyone still
      *  in it, in the lobby and mid-race alike. Distinct from `playerRetired`: that
      *  one is still here watching, this one is gone and won't be in the next race. */
@@ -273,11 +279,11 @@ export const en = {
     // Connection-state banner (realtime channel dropped).
     reconnecting: 'Connection lost. Reconnecting…',
     /** Code on the reconnect banner: tap to copy, so the race can be rejoined. */
-    raceCode: (code: string): string => `Race code ${code}`,
+    raceCode: (code: string): string => `Game code ${code}`,
     // Returning to the last online race after a disconnect/reload.
-    resumeTitle: (code: string): string => `Return to race ${code}?`,
-    resumeYes: 'Return to race',
-    gameGone: 'This race is no longer available.',
+    resumeTitle: (code: string): string => `Return to game ${code}?`,
+    resumeYes: 'Return to game',
+    gameGone: 'This game is no longer available.',
   },
 
   race: {

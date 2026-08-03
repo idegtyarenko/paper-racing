@@ -23,6 +23,7 @@ import { Rules, MIN_PLAYERS } from '../model/game';
 import { Difficulty } from '../model/ai';
 import { strings } from '../i18n';
 import { bindTap } from './dom';
+import { openConfirm } from './confirm';
 import { mountRulesEditor, RulesEditor } from './rules-editor';
 import {
   el,
@@ -260,10 +261,25 @@ function build(): void {
   });
   // Leaving is the lobby's way out — the action row's Back would be ambiguous
   // (going back means giving up the room), so it sits at the end of the list.
+  // This screen is the *host's* lobby (renderSetupChrome only keeps `lobbyView`
+  // for a host, and the button is hidden without it), and for them walking out
+  // closes the room rather than freeing a seat — hence "Cancel game", not the
+  // guest's "Leave game" over in online-lobby.ts.
   const leaveBtn = button('pr-btn pr-btn--caps pr-setup__leave', lineupPane);
   icon('pr-btn__ico', CLOSE_SVG, leaveBtn);
-  el('span', 'pr-setup__leave-label', leaveBtn).textContent = strings.online.leaveLobby;
-  bindTap(leaveBtn, () => handlers.onLobbyLeave());
+  el('span', 'pr-setup__leave-label', leaveBtn).textContent = strings.online.cancelRace;
+  // Ask first — this one closes the room out from under everyone who joined.
+  // The confirmation is wired here rather than onto `onLobbyLeave` because the
+  // two lobby screens share that handler: the guest's way out (online-lobby.ts)
+  // and the guest's "leave" on the results screen are cheap and reversible —
+  // they free one seat and can be undone by rejoining with the code — so they
+  // stay one tap. Only the host's is destructive, and only this button is the
+  // host's.
+  bindTap(leaveBtn, () =>
+    openConfirm(strings.online.cancelConfirm, strings.online.cancelRace, () =>
+      handlers.onLobbyLeave(),
+    ),
+  );
 
   lineup = {
     codeRow,
