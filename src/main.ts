@@ -223,9 +223,11 @@ function updateUI(): void {
     nav: S.raceNav,
     over,
     earlyExit,
-    // Hot-seat has no single "you", so nothing gets the personal treatment
-    // there — online it's our own seat.
-    mySeat: session.active() ? session.mySeat() : -1,
+    // Whose result this is, personally: our own seat online, the one human in a
+    // race against bots. Hot-seat is the only mode with no single "you" (every
+    // player shares this screen), so there it stays −1 and nobody gets the
+    // personal treatment.
+    mySeat: session.active() ? session.mySeat() : soloHumanSeat(),
     onlineGuest: !!net && !net.isHost,
     canRematch: (!!S.game && !!S.lastLocalRace) || online.canRematch(),
     isOnline: session.active(),

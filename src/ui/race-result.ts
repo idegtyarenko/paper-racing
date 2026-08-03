@@ -17,6 +17,7 @@ import { strings } from '../i18n';
 import { renderRows } from './classification';
 import { raceActionSlot } from './race-chrome';
 import { el, button, icon } from './pr-chrome';
+import { isPodium } from './format';
 import { PODIUM_SVG, REMATCH_SVG, TROPHY_SVG } from './icons';
 
 const board = document.querySelector('.app__board')!;
@@ -182,7 +183,21 @@ function renderHead(game: GameState, mySeat: number): void {
   icon('pr-result__iconsvg', mine ? TROPHY_SVG : PODIUM_SVG, iconEl);
   headlineEl.style.color = w.color;
   headlineEl.textContent = mine ? strings.race.youWon : strings.race.someoneWon(w.name);
-  subtitleEl.textContent = mine ? strings.race.youWonSub : strings.race.someoneWonSub;
+  subtitleEl.textContent = mine ? strings.race.youWonSub : loserSub(game, mySeat);
+}
+
+/**
+ * The subtitle for someone who didn't win. "Better luck next time" is wrong for
+ * a driver who came third of six — that's a result, and the field's size is
+ * what decides (see `isPodium`). Retirements have no place at all, so they get
+ * the consolation line; so does hot-seat, where `mySeat` is −1 and there is no
+ * single "you" to congratulate.
+ */
+function loserSub(game: GameState, mySeat: number): string {
+  const place = mySeat >= 0 ? game.players[mySeat].place : null;
+  return place !== null && isPodium(place, game.players.length)
+    ? strings.race.podiumSub(place)
+    : strings.race.someoneWonSub;
 }
 
 /**

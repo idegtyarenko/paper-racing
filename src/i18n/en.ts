@@ -320,6 +320,9 @@ export const en = {
     youWonSub: 'First place\u00A0— nice drive',
     someoneWon: (name: string): string => `${name} in 1st place`,
     someoneWonSub: 'Better luck next time',
+    /** Subtitle for a driver who didn't win but placed high enough for the
+     *  field's size to make it an achievement (see `isPodium`). */
+    podiumSub: (place: number): string => `${ordinal(place)} place — a strong drive`,
     allRetired: 'Everyone retired',
     allRetiredSub: 'No cars finished\u00A0— no result this time',
     /** Retired or finished while the others drive on: the three ways out dock

@@ -223,6 +223,7 @@ export const be: Strings = {
     youWonSub: 'Першае месца\u00A0— выдатны заезд',
     someoneWon: (name) => `${name} на\u00A01-м месцы`,
     someoneWonSub: 'Наступным разам пашанцуе',
+    podiumSub: (place) => `${place}-е месца\u00A0— годны вынік`,
     allRetired: 'Усе сышлі',
     allRetiredSub: 'Ніхто не\u00A0фінішаваў\u00A0— выніку няма',
     earlyExitHostWait:
