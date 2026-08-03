@@ -20,6 +20,8 @@ import { Difficulty } from './model/ai';
 import { worldToScreen } from './view/camera';
 import * as vp from './view/viewport';
 import * as input from './view/input';
+import * as online from './online/online-controller';
+import * as session from './online/online';
 
 /** Dependencies from `main.ts` that the helpers call by reference —
  *  orchestration stays private to main.ts, and we only expose exactly what's
@@ -276,5 +278,86 @@ export function installDevHelpers(deps: DevHelperDeps): void {
       redraw();
       return snap();
     },
+    /**
+     * Online, driven from the console. A two-client check otherwise costs a long
+     * chain of clicks per tab (mode select → create → type a name → read the code
+     * off the screen → the other tab's join dialog), and every one of them is a
+     * chance to mis-click into a different screen. These call the same controller
+     * entry points the buttons do, so what's exercised is the real flow.
+     *
+     * They're async because the room is a network round-trip away: await them, or
+     * poll `online.info()` until `code` shows up.
+     */
+    online: {
+      /** Create a room on a ready-made track (as host). Resolves with the code. */
+      async host(name = 'Host') {
+        await leaveIfInOne();
+        S.raceTrack = devTrack();
+        S.playersReturn = 'edit';
+        online.setName(name);
+        online.promptCreate();
+        return waitFor(() => session.getCode());
+      },
+      /** Join an existing room by code — the invite-link path, no dialogs. */
+      async join(code: string, name = 'Guest') {
+        await leaveIfInOne();
+        online.setName(name);
+        await online.promptJoinByLink(code);
+        await waitFor(() => session.getCode());
+        online.setName(name); // the seat exists now: put the name on it
+        return onlineInfo();
+      },
+      /** Host: start the race / start a rematch. */
+      start: online.start,
+      rematch: online.rematch,
+      /** Drop out but stay in the room — the burger's "retire", which is a
+       *  different thing from leaving (the seat keeps its place in the lineup). */
+      retire: online.sendRetire,
+      /** Leave for good (the guest's way out, and the lobby's). */
+      leave: online.leave,
+      /** Who's in the room, from this client's point of view. */
+      info: onlineInfo,
+    },
   };
+
+  /** Drop out of any room we're still in, so host/join always start from nothing.
+   *  Clearing localStorage doesn't do it: the session lives in memory. */
+  async function leaveIfInOne(): Promise<void> {
+    if (!session.active()) return;
+    online.leave();
+    await waitFor(() => (session.active() ? null : true));
+  }
+
+  /** Poll until `get` returns something truthy (or give up) — the room, a seat,
+   *  an incoming state: all of them arrive over the wire, not on the next tick. */
+  async function waitFor<T>(get: () => T | null, ms = 5000): Promise<T | null> {
+    const until = Date.now() + ms;
+    for (;;) {
+      const v = get();
+      if (v) return v;
+      if (Date.now() > until) return null;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }
+
+  /** Room state as JSON: the roster with its `left` flags is the thing most
+   *  online checks are actually about. */
+  function onlineInfo() {
+    return {
+      code: session.getCode(),
+      isHost: session.isHost(),
+      mySeat: session.mySeat(),
+      canRematch: online.canRematch(),
+      roster: session.getRoster().map((r) => ({ name: r.name, left: !!r.left })),
+      players:
+        S.game?.players.map((p) => ({
+          name: p.name,
+          bot: !!p.bot,
+          retired: p.retired,
+          place: p.place,
+        })) ?? null,
+      phase: S.phase,
+      gamePhase: S.game?.phase ?? null,
+    };
+  }
 }
