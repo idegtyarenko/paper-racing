@@ -194,21 +194,33 @@ export function installDevHelpers(deps: DevHelperDeps): void {
       redraw();
       return snap();
     },
-    /** A finished race with a chosen outcome: `total` cars (the human is seat
-     *  0), the human placed `place`, bots filling the rest of the order. Skips
-     *  driving entirely — the result screen is a function of the final places,
-     *  and racing to a *particular* place is not something tapAccel can steer.
+    /** A finished race with a chosen outcome: `total` cars, `humans` of them
+     *  human (seat 0 onwards), and seat 0 placed `place`. Skips driving
+     *  entirely — the result screen is a function of the final places, and
+     *  racing to a *particular* place is not something tapAccel can steer.
      *  Use it to check headline/subtitle/classification for a given finish,
-     *  e.g. resultAt(2, 4) for a podium that isn't a win. */
-    resultAt(place = 2, total = 4) {
+     *  e.g. resultAt(2, 4) for a podium that isn't a win.
+     *
+     *  With `humans > 1` (hot-seat) the leftover places go to the bots first,
+     *  so seat 0's `place` is the BEST human result and the rest of the hot-seat
+     *  players trail behind it: resultAt(3, 4, 2) puts both humans in the bottom
+     *  half, resultAt(2, 4, 2) leaves one human on the podium with a bot winning. */
+    resultAt(place = 2, total = 4, humans = 1) {
       S.raceTrack = devTrack();
-      startRace(1, Math.max(0, total - 1), 'medium');
+      const humanCount = Math.min(Math.max(1, humans), Math.max(1, total));
+      startRace(humanCount, Math.max(0, total - humanCount), 'medium');
       const players = S.game!.players;
       // Places 1..total, with `place` reserved for the human at seat 0.
       const rest: number[] = [];
       for (let p = 1; p <= players.length; p++) if (p !== place) rest.push(p);
-      players.forEach((p, i) => {
-        p.place = i === 0 ? place : rest.shift()!;
+      // Ascending, bots served first: the extra hot-seat humans end up last.
+      const others = players.map((_, i) => i).filter((i) => i !== 0);
+      for (const i of others.filter((i) => players[i].bot))
+        players[i].place = rest.shift()!;
+      for (const i of others.filter((i) => !players[i].bot))
+        players[i].place = rest.shift()!;
+      players[0].place = place;
+      players.forEach((p) => {
         p.crossings = WIN_CROSSINGS;
       });
       const first = players.findIndex((p) => p.place === 1);
