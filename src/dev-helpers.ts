@@ -182,10 +182,38 @@ export function installDevHelpers(deps: DevHelperDeps): void {
       h.crossings = WIN_CROSSINGS - 1;
       h.pos = { x: 18, y: 4 };
       h.vel = { x: 2, y: 0 };
+      // Opponents wait on the top straight, out of the finisher's way — but
+      // spread out, one every two cells. Parked on a single point they block
+      // each other's candidates and never move again, so with more than one
+      // bot the race never resolves and a browser check polls a dead scene.
       for (let i = 1; i < S.game!.players.length; i++) {
-        S.game!.players[i].pos = { x: 16, y: 20 }; // top straight, out of the finisher's way
+        S.game!.players[i].pos = { x: 16 - 2 * (i - 1), y: 20 };
       }
       refreshCands();
+      updateUI();
+      redraw();
+      return snap();
+    },
+    /** A finished race with a chosen outcome: `total` cars (the human is seat
+     *  0), the human placed `place`, bots filling the rest of the order. Skips
+     *  driving entirely — the result screen is a function of the final places,
+     *  and racing to a *particular* place is not something tapAccel can steer.
+     *  Use it to check headline/subtitle/classification for a given finish,
+     *  e.g. resultAt(2, 4) for a podium that isn't a win. */
+    resultAt(place = 2, total = 4) {
+      S.raceTrack = devTrack();
+      startRace(1, Math.max(0, total - 1), 'medium');
+      const players = S.game!.players;
+      // Places 1..total, with `place` reserved for the human at seat 0.
+      const rest: number[] = [];
+      for (let p = 1; p <= players.length; p++) if (p !== place) rest.push(p);
+      players.forEach((p, i) => {
+        p.place = i === 0 ? place : rest.shift()!;
+        p.crossings = WIN_CROSSINGS;
+      });
+      const first = players.findIndex((p) => p.place === 1);
+      S.game!.winner = first;
+      S.game!.phase = 'over';
       updateUI();
       redraw();
       return snap();
