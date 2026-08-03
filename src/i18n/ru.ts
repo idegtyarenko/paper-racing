@@ -220,7 +220,7 @@ export const ru: Strings = {
     raceComplete: 'Гонка завершена',
     youWon: 'Ты\u00A0победил',
     youWonSub: 'Первое место — отличный заезд',
-    someoneWon: (name) => `Победа: ${name}`,
+    someoneWon: (name) => `${name} на\u00A01-м месте`,
     someoneWonSub: 'В следующий раз повезет',
     allRetired: 'Все сошли',
     allRetiredSub: 'Никто не финишировал — результата нет',

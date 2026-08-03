@@ -221,7 +221,7 @@ export const be: Strings = {
     raceComplete: 'Гонка завершана',
     youWon: 'Ты\u00A0перамог',
     youWonSub: 'Першае месца\u00A0— выдатны заезд',
-    someoneWon: (name) => `Перамога: ${name}`,
+    someoneWon: (name) => `${name} на\u00A01-м месцы`,
     someoneWonSub: 'Наступным разам пашанцуе',
     allRetired: 'Усе сышлі',
     allRetiredSub: 'Ніхто не\u00A0фінішаваў\u00A0— выніку няма',

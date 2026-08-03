@@ -318,7 +318,7 @@ export const en = {
     /** Outcome headline + subtitle: you won / someone else did / nobody did. */
     youWon: 'You won',
     youWonSub: 'First place\u00A0— nice drive',
-    someoneWon: (name: string): string => `${name} wins`,
+    someoneWon: (name: string): string => `${name} in 1st place`,
     someoneWonSub: 'Better luck next time',
     allRetired: 'Everyone retired',
     allRetiredSub: 'No cars finished\u00A0— no result this time',

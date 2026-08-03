@@ -150,8 +150,8 @@ export interface ResultCtx {
 
 /**
  * Headline block. Three outcomes, and the difference between the first two is
- * whether the winner is you: "You won" in your own colour, or "<name> wins" in
- * theirs. Nobody finishing is neither — no trophy, no colour, just what happened.
+ * whether the winner is you: "You won" in your own colour, or "<name> in 1st
+ * place" in theirs — someone else's win reads as a line of the classification. Nobody finishing is neither — no trophy, no colour, just what happened.
  */
 function renderHead(game: GameState, mySeat: number): void {
   const { winner } = game;
