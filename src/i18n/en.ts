@@ -323,6 +323,9 @@ export const en = {
     /** Subtitle for a driver who didn't win but placed high enough for the
      *  field's size to make it an achievement (see `isPodium`). */
     podiumSub: (place: number): string => `${ordinal(place)} place — a strong drive`,
+    /** Hot-seat subtitle when one of the people sharing this screen won: there
+     *  is no "you" here, so the winner is congratulated in the third person. */
+    hotseatWonSub: 'Congratulations to the winner!',
     allRetired: 'Everyone retired',
     allRetiredSub: 'No cars finished\u00A0— no result this time',
     /** Retired or finished while the others drive on: the three ways out dock

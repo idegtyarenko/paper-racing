@@ -223,6 +223,7 @@ export const ru: Strings = {
     someoneWon: (name) => `${name} на\u00A01-м месте`,
     someoneWonSub: 'В следующий раз повезет',
     podiumSub: (place) => `${place}-е место\u00A0— достойный результат`,
+    hotseatWonSub: 'Поздравляем победителя!',
     allRetired: 'Все сошли',
     allRetiredSub: 'Никто не финишировал — результата нет',
     earlyExitHostWait:

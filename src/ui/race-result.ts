@@ -158,6 +158,7 @@ function renderHead(game: GameState, mySeat: number): void {
   const { winner } = game;
   iconEl.replaceChildren();
   iconEl.hidden = false;
+  subtitleEl.hidden = false;
   headlineEl.style.removeProperty('color');
 
   if (winner === null) {
@@ -183,21 +184,38 @@ function renderHead(game: GameState, mySeat: number): void {
   icon('pr-result__iconsvg', mine ? TROPHY_SVG : PODIUM_SVG, iconEl);
   headlineEl.style.color = w.color;
   headlineEl.textContent = mine ? strings.race.youWon : strings.race.someoneWon(w.name);
-  subtitleEl.textContent = mine ? strings.race.youWonSub : loserSub(game, mySeat);
+  const sub = mine ? strings.race.youWonSub : loserSub(game, winner, mySeat);
+  subtitleEl.textContent = sub ?? '';
+  subtitleEl.hidden = sub === null;
 }
 
 /**
- * The subtitle for someone who didn't win. "Better luck next time" is wrong for
- * a driver who came third of six — that's a result, and the field's size is
- * what decides (see `isPodium`). Retirements have no place at all, so they get
- * the consolation line; so does hot-seat, where `mySeat` is −1 and there is no
- * single "you" to congratulate.
+ * The subtitle for a screen whose reader didn't win — `null` means show none.
+ *
+ * With a seat of our own (online, or the one human against bots) it's personal:
+ * "better luck next time" is wrong for a driver who came third of six, and the
+ * size of the field is what decides (see `isPodium`).
+ *
+ * Hot-seat has no "you" — everyone shares this screen — so it speaks about the
+ * race instead. One of the people here winning is worth congratulating; humans
+ * beaten by the bots into the bottom half get the consolation line, which is
+ * about the group and still true. In between (a human placed well, but a bot
+ * took it) neither line fits, and the headline plus the classification already
+ * say everything — so nothing is shown rather than something addressed at
+ * nobody.
  */
-function loserSub(game: GameState, mySeat: number): string {
-  const place = mySeat >= 0 ? game.players[mySeat].place : null;
-  return place !== null && isPodium(place, game.players.length)
-    ? strings.race.podiumSub(place)
-    : strings.race.someoneWonSub;
+function loserSub(game: GameState, winner: number, mySeat: number): string | null {
+  const total = game.players.length;
+  if (mySeat >= 0) {
+    const place = game.players[mySeat].place;
+    return place !== null && isPodium(place, total)
+      ? strings.race.podiumSub(place)
+      : strings.race.someoneWonSub;
+  }
+  if (!game.players[winner].bot) return strings.race.hotseatWonSub;
+  const humans = game.players.filter((p) => !p.bot);
+  const allBeaten = humans.every((p) => p.place === null || !isPodium(p.place, total));
+  return allBeaten ? strings.race.someoneWonSub : null;
 }
 
 /**
