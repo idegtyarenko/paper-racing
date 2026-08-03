@@ -9,19 +9,8 @@
 
 import { strings, setLocale, locale, LocaleCode } from '../i18n';
 import { versionLabel } from './dialogs';
-import {
-  el,
-  button,
-  icon,
-  buildItem,
-  buildBrand,
-  CLOSE_SVG,
-  FLAG_SVG,
-  RULES_SVG,
-  GLOBE_SVG,
-  LANG_SVG,
-  CHECK_SVG,
-} from './pr-chrome';
+import { el, button, icon, buildItem, buildBrand } from './pr-chrome';
+import { CHECK_SVG, CLOSE_SVG, FLAG_SVG, GLOBE_SVG, LANG_SVG, RULES_SVG } from './icons';
 
 export interface MenuHandlers {
   /** Open the Rules / How-to-play sheet. */

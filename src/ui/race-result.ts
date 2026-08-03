@@ -16,14 +16,9 @@ import { NavField } from '../model/nav';
 import { strings } from '../i18n';
 import { renderRows } from './classification';
 import { raceActionSlot } from './race-chrome';
-import { el, button, icon, REMATCH_SVG } from './pr-chrome';
+import { el, button, icon } from './pr-chrome';
+import { PODIUM_SVG, REMATCH_SVG, TROPHY_SVG } from './icons';
 
-/** Laurel cup — you won. */
-const TROPHY_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10v4a5 5 0 0 1-10 0zM7 6H4v1.5a3.5 3.5 0 0 0 3.4 3.5M17 6h3v1.5a3.5 3.5 0 0 1-3.4 3.5M9 19h6M8.5 21h7M12 15v4"/></svg>';
-/** Podium bars — someone else took it. */
-const PODIUM_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="15" width="6" height="6"/><rect x="9" y="10" width="6" height="11"/><rect x="16" y="17" width="6" height="4"/></svg>';
 const board = document.querySelector('.app__board')!;
 
 export interface ResultHandlers {

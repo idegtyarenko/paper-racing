@@ -6,8 +6,9 @@
 // and a room.
 
 import { bindTap, closeOverlay, openSheet } from './dom';
-import { button, buildSheet, el, icon, WARN_SVG } from './pr-chrome';
+import { button, buildSheet, el, icon } from './pr-chrome';
 import { strings } from '../i18n';
+import { WARN_SVG } from './icons';
 
 const toast = document.getElementById('toast')!;
 // The failure skin's warning mark. It lives in markup rather than a CSS

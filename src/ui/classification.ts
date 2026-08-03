@@ -10,7 +10,8 @@ import { NavField } from '../model/nav';
 import { computeStandings, turnsTaken } from '../model/standings';
 import { len } from '../geometry';
 import { strings } from '../i18n';
-import { el, icon, BOT_SVG, CLOCK_SVG, CRASH_SVG } from './pr-chrome';
+import { el, icon } from './pr-chrome';
+import { BOT_SVG, CLOCK_SVG, CRASH_SVG } from './icons';
 
 // ── Standings order ──────────────────────────────────────────────────────────
 // Frozen at lap boundaries: mid-lap, different cars have made different numbers

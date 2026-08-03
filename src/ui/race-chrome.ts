@@ -22,21 +22,16 @@ import { strings } from '../i18n';
 import { msToClock } from './format';
 import { renderRows, resetStandings } from './classification';
 import { bindTap } from './dom';
-import {
-  el,
-  button,
-  icon,
-  buildBrand,
-  buildStatus,
-  StatusBanner,
-  BURGER_SVG,
-  COPY_SVG,
-  SHARE_SVG,
-  CHECK_SVG,
-  SKIP_SVG,
-  REMATCH_SVG,
-} from './pr-chrome';
+import { el, button, icon, buildBrand, buildStatus, StatusBanner } from './pr-chrome';
 import { openMenu } from './menu';
+import {
+  BURGER_SVG,
+  CHECK_SVG,
+  COPY_SVG,
+  REMATCH_SVG,
+  SHARE_SVG,
+  SKIP_SVG,
+} from './icons';
 
 /** How many upcoming turns the UP NEXT strip shows, including the current one. */
 const QUEUE_LEN = 9;

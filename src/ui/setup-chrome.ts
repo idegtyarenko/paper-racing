@@ -31,22 +31,13 @@ import {
   buildItem,
   buildCode,
   buildRoster,
-  ARROW_SVG,
-  CLOSE_SVG,
-  GLOBE_SVG,
   CodeBlock,
   LobbyView,
   Roster,
 } from './pr-chrome';
+import { ARROW_SVG, CHIP_SVG, CLOSE_SVG, GLOBE_SVG, PHONE_SVG } from './icons';
 
 const board = document.querySelector('.app__board')!;
-
-/** Mode-card icons from the hi-fi: a chip (bots), a phone (hotseat); the globe
-    is the shared one (the menu's "join online game" uses the same mark). */
-const CHIP_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></svg>';
-const PHONE_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="3" width="12" height="18" rx="2.5"/><path d="M11 18h2"/></svg>';
 
 const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard'];
 /** Bot counts offered on each screen (the grid capacity disables the rest). */

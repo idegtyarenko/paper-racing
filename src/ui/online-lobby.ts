@@ -21,14 +21,13 @@ import {
   buildCode,
   buildRoster,
   buildStatus,
-  BURGER_SVG,
-  CLOSE_SVG,
   CodeBlock,
   LobbyView,
   Roster,
   StatusBanner,
 } from './pr-chrome';
 import { openMenu } from './menu';
+import { BURGER_SVG, CLOSE_SVG } from './icons';
 
 const board = document.querySelector('.app__board')!;
 

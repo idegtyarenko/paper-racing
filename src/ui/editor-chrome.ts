@@ -14,16 +14,9 @@ import { Phase } from '../app-state';
 import { strings } from '../i18n';
 import { showErrorToast } from './dialogs';
 import { bindTap } from './dom';
-import {
-  ARROW_SVG,
-  button,
-  el,
-  icon,
-  GLOBE_SVG,
-  PENCIL_SVG,
-  UNDO_SVG,
-} from './pr-chrome';
+import { button, el, icon } from './pr-chrome';
 import { wizardNavFoot } from './wizard-nav';
+import { ARROW_SVG, GLOBE_SVG, PENCIL_SVG, UNDO_SVG } from './icons';
 
 const board = document.querySelector('.app__board')!;
 
