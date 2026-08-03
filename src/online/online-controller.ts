@@ -11,7 +11,13 @@
 //   • host-bots.ts — lobby bot config plus the host computing and committing bot moves.
 // The controller hands them the shared state (deps) and confirmFirst/commitOnline via init.
 
-import { GameState, Candidate, cloneState, isFinished } from '../model/game';
+import {
+  GameState,
+  Candidate,
+  cloneState,
+  isFinished,
+  humansAllDone,
+} from '../model/game';
 import { applyMove, retireSeat } from '../model/turns';
 import { editorFromTrack } from '../model/editor';
 import {
@@ -441,17 +447,21 @@ function startOnline(): Promise<void> {
   });
 }
 
-/** Whether this client can start a rematch: it's the host, the race is over, and there
- *  is still someone to race against — in that case one tap replays the same track with
- *  the same lineup (the "Rematch" button on the results screen). Once the last guest has
- *  left, a rematch would be a lone drive around the track, so the button goes away and
- *  the results screen offers only the way out. */
+/** Whether this client can start a rematch: it's the host, nothing is left for the
+ *  people to drive, and there is still someone to race against — in that case one tap
+ *  replays the same track with the same lineup (the "Rematch" button on the results
+ *  screen). Once the last guest has left, a rematch would be a lone drive around the
+ *  track, so the button goes away and the results screen offers only the way out.
+ *
+ *  Not strictly `phase === 'over'`: once every human has a place or has retired, the
+ *  race is decided as far as the room is concerned — waiting out a tail of bots before
+ *  anyone may press Rematch is just a queue for nothing. */
 export function canRematch(): boolean {
   const game = deps.state.game;
   return (
     session.isHost() &&
     !!game &&
-    game.phase === 'over' &&
+    (game.phase === 'over' || humansAllDone(game)) &&
     session.activeRoster().length >= 2
   );
 }
@@ -475,12 +485,14 @@ function rematchOnline(): Promise<void> {
       return;
     }
     const g = hostBots.buildStartState(raceTrack);
+    const prev = deps.state.game;
     try {
       await session.start(g);
-      // The host never left race mode when the race finished — an echo of our own
-      // write will arrive via onGameState with an over→race transition and switch us
-      // into the new race there. If that echo is delayed, fall back the same way startOnline does.
-      if (deps.state.game?.phase === 'over') {
+      // The host never left race mode when the race finished — an echo of our own write
+      // will arrive via onGameState and switch us into the new race there. If that echo
+      // is delayed, fall back the same way startOnline does. Comparing against the state
+      // we started from is what tells the two apart: the echo replaces the object.
+      if (deps.state.game === prev) {
         deps.setGame(g);
         closeOverlay();
         deps.fitToContent();
