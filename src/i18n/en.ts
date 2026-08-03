@@ -263,9 +263,13 @@ export const en = {
     /** The guest's own way on from that wait: frees their seat for good, while
      *  the rematch still runs for everyone else. */
     leaveRace: 'Leave the race',
-    /** Someone else walked out — announced to everyone still in the room, in the
-     *  lobby and mid-race alike. */
-    playerLeft: (name: string): string => `${name} left the race.`,
+    /** Someone else walked out of the room for good — announced to everyone still
+     *  in it, in the lobby and mid-race alike. Distinct from `playerRetired`: that
+     *  one is still here watching, this one is gone and won't be in the next race. */
+    playerLeft: (name: string): string => `${name} left the game.`,
+    /** Someone else gave up mid-race but stayed in the room. Their car stops for a
+     *  reason no one else could guess, so it's worth saying. */
+    playerRetired: (name: string): string => `${name} retired from the race.`,
     // Connection-state banner (realtime channel dropped).
     reconnecting: 'Connection lost. Reconnecting…',
     /** Code on the reconnect banner: tap to copy, so the race can be rejoined. */

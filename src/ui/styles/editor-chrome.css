@@ -104,25 +104,6 @@ body.is-editing .zoom-ctl {
   bottom: 92px;
 }
 
-/* The editor's toast hangs under the top strip instead of at the bottom edge,
-   where the step rail and the action bar already sit. Position only — how the
-   toast looks is the tone modifier's job (.pr-toast--error, pr-controls.css),
-   so a plain notice like "the app updated" keeps the normal Blueprint skin
-   here. Scoped to :not([hidden]) per the convention in pr-controls.css. */
-body.is-editing .pr-toast:not([hidden]) {
-  top: calc(env(safe-area-inset-top, 0px) + 88px);
-  bottom: auto;
-  /* The shared toast slides up from the bottom edge with a translateX(-50%) it
-     needs for centring; this one is centred by left/right, so the keyframes
-     would jerk it sideways. */
-  animation: none;
-  left: var(--pr-gutter);
-  right: var(--pr-gutter);
-  transform: none;
-  max-width: 480px;
-  margin: 0 auto;
-}
-
 /* ── Draw-head cursor (design 3A): amber ring + dot follows the pointer while
    drawing the loop. Canvas also renders it at the stroke head (view/render.ts)
    so it shows under a finger on touch, where there is no OS cursor. ─────────── */

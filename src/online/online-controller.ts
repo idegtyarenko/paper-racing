@@ -253,6 +253,31 @@ function forgetSession(): void {
   }
 }
 
+/**
+ * Announce anyone who gave up between two states. Retirement never touches the roster
+ * — it's a flag inside the race state — so it has to be spotted by diffing, unlike a
+ * departure (see announceDepartures in online.ts).
+ *
+ * A seat already flagged `left` is skipped: walking out of a running race retires the
+ * seat too, and "left the game" is the truer of the two. The leaver flags the seat
+ * before writing the retirement precisely so this check sees it in time.
+ *
+ * Only for a race carrying on with the same lineup: a rematch brings a whole new
+ * `players` array, where seat-by-seat comparison would be meaningless.
+ */
+function announceRetirements(before: GameState | null, after: GameState): void {
+  if (!before || before.phase !== 'race' || after.phase === 'over') return;
+  if (before.players.length !== after.players.length) return;
+  const mine = session.mySeat();
+  const roster = session.getRoster();
+  after.players.forEach((p, seat) => {
+    if (seat === mine || p.bot) return;
+    if (!p.retired || before.players[seat].retired) return;
+    if (roster[seat]?.left) return; // they didn't give up, they walked out
+    showToast(strings.online.playerRetired(p.name));
+  });
+}
+
 /** Turn a join error into user-facing text. */
 function joinErrorText(e: unknown): string {
   const m = (e as { message?: string })?.message ?? '';
@@ -283,6 +308,7 @@ const handlers: OnlineHandlers = {
     // race mode, so the normal transition below (mode !== 'race') won't fire — catch
     // over→race separately to close the winner dialog/banner and re-fit the field.
     const wasOver = deps.state.game?.phase === 'over';
+    announceRetirements(deps.state.game, g);
     deps.setGame(g);
     if (deps.state.phase !== 'race') {
       deps.state.phase = 'race';
@@ -313,6 +339,8 @@ const handlers: OnlineHandlers = {
   onPlayerLeft: (name) => {
     // News, not a failure — the neutral skin. Worth saying in both places: in the lobby
     // a seat frees up, and in a race a car goes quiet for a reason no one would guess.
+    // Leaving outranks the retirement it implies mid-race; announceRetirements stays
+    // quiet for a seat that's flagged gone, so a departure is announced once, as itself.
     showToast(strings.online.playerLeft(name));
   },
   onConnection: (ok) => {
@@ -469,6 +497,12 @@ async function retireBeforeLeaving(): Promise<void> {
   const seat = session.mySeat();
   const me = game.players[seat];
   if (!me || isFinished(me) || me.retired) return;
+  // Flag the seat as gone first, then retire it. Both reach the others as separate
+  // realtime updates, and this order is what lets them tell the two apart: seeing
+  // the flag first, they announce a departure and stay quiet about the retirement
+  // that follows. The reverse order would announce a surrender by someone who has
+  // in fact walked out.
+  await session.markLeft();
   try {
     await confirmFirst(game, (next) => retireSeat(next, seat));
   } catch {

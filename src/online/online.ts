@@ -277,6 +277,24 @@ export function untrack(): void {
   channel?.untrack();
 }
 
+/**
+ * Free our seat on the server while staying subscribed. Called before retiring on the
+ * way out of a running race, so the others learn we're gone *before* the retirement
+ * lands and can announce the departure instead of a surrender. Idempotent: `leave()`
+ * calls the same RPC again afterwards, and flagging an already-flagged seat is a no-op.
+ *
+ * Only meaningful once a race exists — in the lobby the same RPC drops the seat (and
+ * may delete the room), and we'd receive the echo of our own removal as `onClosed`.
+ */
+export async function markLeft(): Promise<void> {
+  if (!code) return;
+  try {
+    await leaveGame(code);
+  } catch {
+    // Best-effort: leaving must not be blocked by a failed write.
+  }
+}
+
 /** Leave the session: free the seat on the server and unsubscribe. */
 export async function leave(): Promise<void> {
   const c = code;

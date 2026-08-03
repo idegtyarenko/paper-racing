@@ -191,7 +191,8 @@ export const ru: Strings = {
     rematchWaiting:
       'Создатель трассы может запустить рематч — тогда все продолжат на этой же трассе.',
     leaveRace: 'Выйти из\u00A0гонки',
-    playerLeft: (name) => `${name} выходит из\u00A0гонки.`,
+    playerLeft: (name) => `${name} покинул игру.`,
+    playerRetired: (name) => `${name} сошел с\u00A0дистанции.`,
     reconnecting: 'Нет связи. Переподключаемся…',
     raceCode: (code) => `Код гонки ${code}`,
     resumeTitle: (code) => `Вернуться в гонку ${code}?`,
