@@ -192,8 +192,12 @@
 }
 .pr-result__dots {
   flex: 0 0 auto;
-  display: inline-flex;
   gap: 3px;
+}
+/* Hidden when there's nothing to wait for (the creator left) — see the convention
+   in pr-controls.css: display lives under :not([hidden]) so [hidden] still wins. */
+.pr-result__dots:not([hidden]) {
+  display: inline-flex;
 }
 .pr-result__dot {
   width: 4px;

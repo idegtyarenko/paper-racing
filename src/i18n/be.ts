@@ -194,6 +194,7 @@ export const be: Strings = {
     rematchWaiting:
       'Стваральнік трасы можа запусціць паўтор\u00A0— тады ўсе працягнуць на\u00A0гэтай жа\u00A0трасе.',
     leaveRace: 'Выйсці з\u00A0гульні',
+    hostLeftNoRematch: 'Стваральнік трасы выйшаў з\u00A0гульні\u00A0— паўтору не\u00A0будзе.',
     playerLeft: (name) => `${name} пакінуў гульню.`,
     playerRetired: (name) => `${name} сышоў з\u00A0дыстанцыі.`,
     reconnecting: 'Няма сувязі. Перападключаемся…',

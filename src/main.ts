@@ -229,6 +229,7 @@ function updateUI(): void {
     // personal treatment.
     mySeat: session.active() ? session.mySeat() : soloHumanSeat(),
     onlineGuest: !!net && !net.isHost,
+    hostGone: session.active() && session.hostGone(),
     canRematch: (!!S.game && !!S.lastLocalRace) || online.canRematch(),
     isOnline: session.active(),
     // Only the host drives bot moves online (host-bots.ts) — leaving while

@@ -88,6 +88,17 @@ export function hostId(): string | null {
   return hostClient;
 }
 
+/**
+ * Whether the creator has walked out of this room for good. Leaving a race that has
+ * already started doesn't delete the game row (the RPC only flags the seat), so the
+ * room outlives its creator — and with it, everything that only they could start.
+ */
+export function hostGone(): boolean {
+  return (
+    hostClient !== null && !roster.some((r) => r.clientId === hostClient && !r.left)
+  );
+}
+
 export function getTrack(): Track | null {
   return track;
 }

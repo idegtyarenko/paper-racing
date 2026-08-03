@@ -266,6 +266,9 @@ export const en = {
     // Guest hint on the online results screen: a rematch is started by the track creator.
     rematchWaiting:
       'The track creator can start a rematch\u00A0— everyone continues on the same track.',
+    /** Same spot, once the creator has walked out for good: there is nobody left to
+     *  start a rematch, so the wait is over before it began and leaving is all there is. */
+    hostLeftNoRematch: 'The track creator has left the game\u00A0— there will be no rematch.',
     /** The guest's own way on from that wait: frees their seat for good, while
      *  the rematch still runs for everyone else. */
     leaveRace: 'Leave the game',

@@ -48,6 +48,8 @@ let sameTrackBtn: HTMLButtonElement;
 let newTrackBtn: HTMLButtonElement;
 let hostWaitHintEl: HTMLElement;
 let guestEl: HTMLElement;
+let waitDotsEl: HTMLElement;
+let waitTextEl: HTMLElement;
 let built = false;
 
 function build(h: ResultHandlers): void {
@@ -108,9 +110,9 @@ function build(h: ResultHandlers): void {
   // guest isn't waiting on anything, they can still just leave.
   guestEl = el('div', 'pr-result__guest', inner);
   const waitEl = el('div', 'pr-result__wait', guestEl);
-  const dots = el('span', 'pr-result__dots', waitEl);
-  for (let i = 0; i < 3; i++) el('span', 'pr-result__dot', dots);
-  el('span', 'pr-result__waittext', waitEl).textContent = strings.online.rematchWaiting;
+  waitDotsEl = el('span', 'pr-result__dots', waitEl);
+  for (let i = 0; i < 3; i++) el('span', 'pr-result__dot', waitDotsEl);
+  waitTextEl = el('span', 'pr-result__waittext', waitEl);
   // ...but waiting is not the only thing they can do. Without this the screen is
   // a dead end: no buttons, and a reload just restores the finished race from
   // the snapshot. Leaving frees the seat; the rematch still runs without us.
@@ -141,6 +143,8 @@ export interface ResultCtx {
   mySeat: number;
   /** In an online race and not the host: the rematch isn't ours to start. */
   onlineGuest: boolean;
+  /** Online: the creator has left the room, so no rematch is coming — nothing to wait for. */
+  hostGone: boolean;
   /** Whether a one-tap rematch is available at all (a saved lineup, or host online). */
   canRematch: boolean;
   /** Online: "same track, new lineup" runs the local wizard, which would desync the room. */
@@ -250,6 +254,7 @@ export function renderRaceResult(ctx: ResultCtx): void {
     earlyExit,
     mySeat,
     onlineGuest,
+    hostGone,
     canRematch,
     isOnline,
     hostMustStayForBots,
@@ -292,6 +297,12 @@ export function renderRaceResult(ctx: ResultCtx): void {
   const guestWaiting = onlineGuest && over;
   actionsEl.hidden = guestWaiting;
   guestEl.hidden = !guestWaiting;
+  // Once the creator is gone the plate keeps the way out but drops the promise: no
+  // one is left to start a rematch, so the dots stop pretending something's coming.
+  waitDotsEl.hidden = hostGone;
+  waitTextEl.textContent = hostGone
+    ? strings.online.hostLeftNoRematch
+    : strings.online.rematchWaiting;
   // Only offer a rematch when there's something to replay (online rematch
   // also requires the room to actually be over — canRematch already covers that).
   rematchBtn.hidden = !canRematch;
