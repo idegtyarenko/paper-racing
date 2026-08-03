@@ -4,7 +4,7 @@
 
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { Track } from '../model/track';
-import { GameState } from '../model/game';
+import { GameState, seatName } from '../model/game';
 import {
   GameRow,
   RosterEntry,
@@ -29,6 +29,9 @@ export interface OnlineHandlers {
   onGameState: (game: GameState) => void;
   /** The game was deleted on the server (TTL / host left) — leave online mode. */
   onClosed: () => void;
+  /** Someone else left for good — in the lobby their seat is gone, in a race it's
+   *  flagged. Fires on every remaining client so the departure can be announced. */
+  onPlayerLeft: (name: string) => void;
   /** Presence changed (someone went online/offline) — recompute the timer/skip/labels. */
   onPresence: () => void;
   /** The realtime channel's connection state changed — show/hide the connection banner. */
@@ -66,6 +69,14 @@ export function getCode(): string | null {
 
 export function getRoster(): RosterEntry[] {
   return roster;
+}
+
+/**
+ * The roster without the players who left mid-race. Use this to build a lineup (who
+ * actually races next); use `getRoster` where the index matters, since it's the seat.
+ */
+export function activeRoster(): RosterEntry[] {
+  return roster.filter((r) => !r.left);
 }
 
 export function isHost(): boolean {
@@ -149,6 +160,24 @@ export function canStart(): boolean {
   return hostFlag && roster.length >= 2;
 }
 
+/**
+ * Announce anyone who left between two rosters. A departure looks different either
+ * side of the start: in the lobby the entry is dropped, in a race it's flagged (the
+ * index is the grid slot, so it can't be dropped). Our own leave never reaches here —
+ * `leave()` closes the session before the write — but skip ourselves anyway, since a
+ * seat can also be pruned on our behalf.
+ */
+function announceDepartures(before: RosterEntry[], after: RosterEntry[]): void {
+  if (!before.length) return; // first row of a session: everyone is arriving, not leaving
+  const me = clientId();
+  before.forEach((was, seat) => {
+    if (was.clientId === me || was.left) return;
+    const now = after.find((r) => r.clientId === was.clientId);
+    if (now && !now.left) return;
+    handlers?.onPlayerLeft(was.name || seatName(seat));
+  });
+}
+
 /** Handle an incoming game row (from realtime, or the initial fetch). */
 function applyRow(row: GameRow | null): void {
   if (!row) {
@@ -156,7 +185,9 @@ function applyRow(row: GameRow | null): void {
     handlers?.onClosed();
     return;
   }
+  const before = roster;
   roster = row.lobby ?? [];
+  announceDepartures(before, roster);
   if (row.state && track) {
     handlers?.onGameState(deserializeState(row.state, track));
   } else {

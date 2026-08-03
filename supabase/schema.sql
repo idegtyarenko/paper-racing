@@ -136,11 +136,16 @@ $$;
 
 grant execute on function public.rename_player(text, text, text) to anon, authenticated;
 
--- ── Leaving the lobby ──────────────────────────────────────────────────────────────
--- Removes a slot from the lobby. If the lobby ends up empty afterward, or the host
--- left, deletes the game entirely (during a race we don't remove the slot, to avoid
--- disrupting turn order — the departed player simply doesn't take turns, and the game
--- gets cleaned up by TTL).
+-- ── Leaving the lobby or the race ──────────────────────────────────────────────────
+-- In the lobby a seat is removed outright (no grid positions exist yet, so the shift is
+-- safe), and the game is deleted when the host leaves or the lobby empties.
+--
+-- Once the race has started, the seat may NOT be removed: `lobby` is positional — its
+-- index is the player's grid slot, and clients read their own seat by that index — so
+-- dropping an entry would shift everyone below it onto the wrong cars. Instead the entry
+-- is flagged `left`. The running race is unaffected (the departed player simply doesn't
+-- take turns), while the rematch — which is built from this roster — can now tell who is
+-- gone and leave them out.
 create or replace function public.leave_game(p_code text, p_client_id text)
 returns void
 language plpgsql
@@ -155,6 +160,21 @@ begin
     return;
   end if;
   if g.status <> 'lobby' then
+    update public.games
+       set lobby = (
+             select coalesce(
+                      jsonb_agg(
+                        case when e->>'clientId' = p_client_id
+                             then e || jsonb_build_object('left', true)
+                             else e end
+                        order by ord
+                      ),
+                      '[]'::jsonb
+                    )
+             from jsonb_array_elements(g.lobby) with ordinality t(e, ord)
+           ),
+           updated_at = now()
+     where id = p_code;
     return;
   end if;
   if p_client_id = g.host_id then

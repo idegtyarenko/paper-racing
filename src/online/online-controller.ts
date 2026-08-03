@@ -310,6 +310,11 @@ const handlers: OnlineHandlers = {
     showErrorToast(strings.online.closed);
     deps.resetToEdit();
   },
+  onPlayerLeft: (name) => {
+    // News, not a failure — the neutral skin. Worth saying in both places: in the lobby
+    // a seat frees up, and in a race a car goes quiet for a reason no one would guess.
+    showToast(strings.online.playerLeft(name));
+  },
   onConnection: (ok) => {
     setConnBanner(!ok);
     deps.updateUI();
@@ -408,11 +413,19 @@ function startOnline(): Promise<void> {
   });
 }
 
-/** Whether this client can start a rematch: it's the host and the race is over — in
- *  that case one tap replays the same track with the same lineup ("🔄 Rematch" button on the results screen). */
+/** Whether this client can start a rematch: it's the host, the race is over, and there
+ *  is still someone to race against — in that case one tap replays the same track with
+ *  the same lineup (the "Rematch" button on the results screen). Once the last guest has
+ *  left, a rematch would be a lone drive around the track, so the button goes away and
+ *  the results screen offers only the way out. */
 export function canRematch(): boolean {
   const game = deps.state.game;
-  return session.isHost() && !!game && game.phase === 'over';
+  return (
+    session.isHost() &&
+    !!game &&
+    game.phase === 'over' &&
+    session.activeRoster().length >= 2
+  );
 }
 
 /**
@@ -446,6 +459,25 @@ function rematchOnline(): Promise<void> {
 }
 
 /**
+ * Retire our own seat if we're leaving a race that's still running. Reuses the same
+ * confirm-first write as the retire button; a finished or already-retired seat, or a
+ * session that never got past the lobby, has nothing to do here.
+ */
+async function retireBeforeLeaving(): Promise<void> {
+  const game = deps.state.game;
+  if (!game || game.phase !== 'race') return;
+  const seat = session.mySeat();
+  const me = game.players[seat];
+  if (!me || isFinished(me) || me.retired) return;
+  try {
+    await confirmFirst(game, (next) => retireSeat(next, seat));
+  } catch {
+    // The seat stays live for the others; they'll auto-skip it as before. Leaving
+    // must not be blocked by a failed write.
+  }
+}
+
+/**
  * Leave the session for good: free the seat on the server and go back. Reached
  * from the lobby, and from the results screen when a guest doesn't want to wait
  * on the track creator's rematch — the room lives on either way, the rematch
@@ -457,6 +489,12 @@ function rematchOnline(): Promise<void> {
  */
 function leaveSession(): Promise<void> {
   return guarded(async () => {
+    // Walking out of a race we're still driving in is a retirement: the others keep
+    // racing, and our car stops rather than standing there waiting for turns that never
+    // come. Has to go first — session.leave() closes the channel before anything else,
+    // and there's nowhere to write afterwards. Best-effort: a failed write must not
+    // trap us in a session we've decided to leave.
+    await retireBeforeLeaving();
     turnWatch.clearWatches();
     forgetSession(); // deliberate leave — nothing to come back to
     pendingCand = null;

@@ -28,6 +28,10 @@ export type SerializedState = Omit<GameState, 'track'>;
 export interface RosterEntry {
   clientId: string;
   name: string;
+  /** Set once the player leaves a race in progress. The entry itself has to stay —
+   *  its index is the grid slot — so `leave_game` flags it instead of removing it,
+   *  and the next race is built from the entries without this flag. */
+  left?: boolean;
 }
 
 export interface GameRow {

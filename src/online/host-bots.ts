@@ -86,9 +86,10 @@ function seatCapacity(): number {
   return session.getTrack()?.startPoints.length ?? 0;
 }
 
-/** Free lobby seats available for bots: track capacity minus real players. */
+/** Free lobby seats available for bots: track capacity minus real players. Someone who
+ *  left a race gives their seat back — the next race is built without them. */
 function freeSeats(): number {
-  return Math.max(0, seatCapacity() - session.getRoster().length);
+  return Math.max(0, seatCapacity() - session.activeRoster().length);
 }
 
 /** Is this seat occupied by a bot (in a running race)? Bot-ness lives in the state (Player.bot). */
@@ -221,7 +222,10 @@ export function setBotDifficulty(diff: Difficulty): void {
  * in the serialized state (guests don't recompute `players`), so clients don't need a shared seed.
  */
 export function buildStartState(raceTrack: Track): GameState {
-  const roster = session.getRoster();
+  // Whoever left a race in progress keeps their (flagged) roster entry so the running
+  // race's seats stay put — but they don't get a car in the next one, so the lineup is
+  // built from the active entries, and the seats close up behind them.
+  const roster = session.activeRoster();
   const humans = roster.length;
   const bots = Math.min(lobbyBots, freeSeats());
   const g = newGame(
