@@ -27,8 +27,13 @@
 .pr-coach__ico {
   color: var(--pr-accent);
   flex: 0 0 auto;
-  font-size: 15px;
+  display: flex;
   line-height: 1;
+}
+.pr-coach__ico svg {
+  width: 16px;
+  height: 16px;
+  display: block;
 }
 /* Per-step anchor: draw sits low, just above the Join button (design 3A); the
    later steps sit higher, nearer the feature being tuned. */

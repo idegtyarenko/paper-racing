@@ -240,7 +240,6 @@ export function buildStartState(raceTrack: Track): GameState {
   // sync, and only the host computes their moves (scheduleBotMove).
   for (let i = humans; i < g.players.length; i++) {
     g.players[i].bot = lobbyBotDifficulty;
-    g.players[i].name = `${strings.aiSelect.botPrefix} ${g.players[i].name}`;
   }
   return g;
 }

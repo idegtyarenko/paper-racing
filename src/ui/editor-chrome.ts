@@ -14,7 +14,15 @@ import { Phase } from '../app-state';
 import { strings } from '../i18n';
 import { showErrorToast } from './dialogs';
 import { bindTap } from './dom';
-import { button, el, icon, GLOBE_SVG } from './pr-chrome';
+import {
+  ARROW_SVG,
+  button,
+  el,
+  icon,
+  GLOBE_SVG,
+  PENCIL_SVG,
+  UNDO_SVG,
+} from './pr-chrome';
 import { wizardNavFoot } from './wizard-nav';
 
 const board = document.querySelector('.app__board')!;
@@ -25,7 +33,10 @@ let coachTextEl: HTMLElement;
 let railCoachEl: HTMLElement;
 let railCoachTextEl: HTMLElement;
 let backBtn: HTMLButtonElement;
+let backIcoEl: HTMLElement;
+let backTextEl: HTMLElement;
 let nextBtn: HTMLButtonElement;
+let nextTextEl: HTMLElement;
 let joinBtn: HTMLButtonElement;
 let built = false;
 /** Last error surfaced as a toast, so we don't re-toast on every re-render. */
@@ -33,9 +44,6 @@ let lastErrorToast = '';
 
 /** Whether the online backend is configured: without it, "Join by code" never shows. */
 let onlineEnabled = false;
-
-/** Coach-mark bullet — the amber ✎ glyph from the hi-fi (not a drawn pencil). */
-const PEN_GLYPH = '✎';
 
 export interface EditorChromeHandlers {
   /** Step back in the track editor (on step 2 this redraws from scratch). */
@@ -52,21 +60,30 @@ function build(h: EditorChromeHandlers): void {
 
   // ── Coach-mark (travels between steps) ─────────────────────────────────────
   coachEl = el('div', 'pr-card pr-card--lg pr-card--solid pr-coach', root);
-  el('span', 'pr-coach__ico', coachEl).textContent = PEN_GLYPH;
+  icon('pr-coach__ico', PENCIL_SVG, coachEl);
   coachTextEl = el('span', 'pr-coach__text', coachEl);
 
   // ── The same instruction for wide screens: a card in the step rail's bottom
   //    slot, which wizard-nav.ts owns (the floating coach is phone-only). ─────
   railCoachEl = el('div', 'pr-card pr-card--solid pr-edit__rail-coach', wizardNavFoot());
-  el('span', 'pr-coach__ico', railCoachEl).textContent = PEN_GLYPH;
+  icon('pr-coach__ico', PENCIL_SVG, railCoachEl);
   railCoachTextEl = el('span', 'pr-edit__rail-coach-text', railCoachEl);
 
   // ── Bottom action bar: the wizard's three buttons ──────────────────────────
   // Labels and per-step visibility are set by renderBar() on every render.
   const bar = el('div', 'pr-edit__bar', root);
   backBtn = button('pr-btn pr-edit__back', bar);
+  // Two labels share this button (see renderBar): only "Redraw" — which wipes
+  // the drawn track — carries the circular arrow, so the icon is hidden rather
+  // than rebuilt when it goes back to being a plain "Back".
+  backIcoEl = icon('pr-edit__back-ico', UNDO_SVG, backBtn);
+  backTextEl = el('span', 'pr-edit__back-text', backBtn);
   bindTap(backBtn, h.onBack);
   nextBtn = button('pr-btn pr-btn--primary pr-edit__next', bar);
+  // Text first, arrow after it: the label used to end in a "→" and the button
+  // reads as "forward", so the mark stays on the trailing edge.
+  nextTextEl = el('span', 'pr-edit__next-text', nextBtn);
+  icon('pr-edit__next-ico', ARROW_SVG, nextBtn);
   bindTap(nextBtn, h.onNext);
   joinBtn = button('pr-btn pr-btn--caps pr-edit__join', bar);
   // Plain wrapper, not .pr-btn__ico: this globe rides at the shared 16px inline
@@ -93,13 +110,14 @@ function renderBar(editor: EditorState): void {
   // Step 1 has nothing to go back to — hide the button rather than showing a
   // dead one. On step 2 "Back" erases the whole drawn track, so name it honestly.
   backBtn.hidden = !canStepBack(editor);
-  backBtn.textContent =
-    editor.step === 'adjust' ? strings.buttons.redraw : strings.buttons.back;
+  const redrawing = editor.step === 'adjust';
+  backIcoEl.hidden = !redrawing;
+  backTextEl.textContent = redrawing ? strings.buttons.redraw : strings.buttons.back;
   // Next advances adjust → finish → direction; the finish and direction steps
   // are auto-placed/pre-selected, so they confirm with an explicit button. On
   // the last step it becomes "Choose mode" (leaves the editor for setup).
   nextBtn.hidden = !['adjust', 'finish', 'direction'].includes(editor.step);
-  nextBtn.textContent =
+  nextTextEl.textContent =
     editor.step === 'direction' ? strings.buttons.chooseMode : strings.buttons.next;
   // "Join by code" only makes sense on the first step; later in the wizard it's just in the way.
   joinBtn.hidden = !onlineEnabled || editor.step !== 'center';

@@ -20,6 +20,7 @@ import {
   RULES_SVG,
   GLOBE_SVG,
   LANG_SVG,
+  CHECK_SVG,
 } from './pr-chrome';
 
 export interface MenuHandlers {
@@ -120,7 +121,7 @@ function build(): HTMLElement {
     el('span', 'pr-menu__langname', b).textContent = l.label;
     if (l.code === locale) {
       b.classList.add('pr-menu__lang--active');
-      el('span', 'pr-menu__check', b).textContent = '✓';
+      icon('pr-menu__check', CHECK_SVG, b);
     }
     b.addEventListener('click', () => setLocale(l.code));
   }

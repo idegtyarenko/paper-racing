@@ -167,6 +167,13 @@
 }
 .pr-menu__check {
   flex: 0 0 auto;
+  display: flex;
+  color: var(--pr-accent);
+}
+.pr-menu__check svg {
+  width: 16px;
+  height: 16px;
+  display: block;
 }
 
 /* ── Build stamp ────────────────────────────────────────────────────────────── */

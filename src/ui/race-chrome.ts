@@ -32,6 +32,9 @@ import {
   BURGER_SVG,
   COPY_SVG,
   SHARE_SVG,
+  CHECK_SVG,
+  SKIP_SVG,
+  REMATCH_SVG,
 } from './pr-chrome';
 import { openMenu } from './menu';
 
@@ -51,7 +54,11 @@ let chipEl: HTMLElement;
 let chipDot: HTMLElement;
 let chipText: HTMLElement;
 let confirmBtn: HTMLButtonElement;
+let confirmCheckEl: HTMLElement;
+let confirmRetryEl: HTMLElement;
+let confirmTextEl: HTMLElement;
 let skipBtn: HTMLButtonElement;
+let skipTextEl: HTMLElement;
 let connEl: HTMLElement;
 let connStatus: StatusBanner;
 let connCodeBtn: HTMLButtonElement;
@@ -126,10 +133,18 @@ function build(h: RaceChromeHandlers): void {
   // online.skipTurnBtn plus the stuck player's name, in their colour.
   skipBtn = button('pr-btn pr-btn--caps pr-race__skip', actEl);
   skipBtn.hidden = true;
+  icon('pr-race__skip-ico', SKIP_SVG, skipBtn);
+  skipTextEl = el('span', 'pr-race__skip-text', skipBtn);
   bindTap(skipBtn, h.onSkip);
 
   confirmBtn = button('pr-btn pr-btn--primary pr-btn--caps pr-race__confirm', actEl);
   confirmBtn.hidden = true;
+  // Four states share this button (see refreshConfirmBtn), and only two carry an
+  // icon — so both live here permanently and the render picks which, if any, is
+  // shown. Rebuilding them per state would restyle the button mid-race.
+  confirmCheckEl = icon('pr-btn__ico pr-race__confirm-ico', CHECK_SVG, confirmBtn);
+  confirmRetryEl = icon('pr-btn__ico pr-race__confirm-ico', REMATCH_SVG, confirmBtn);
+  confirmTextEl = el('span', 'pr-race__confirm-text', confirmBtn);
   bindTap(confirmBtn, h.onConfirmMove);
 
   board.append(root);
@@ -212,7 +227,7 @@ function refreshConfirmBtn(): void {
   // Visible when there's something to confirm / a send is in progress (or failed) / it's my online turn.
   confirmBtn.hidden = !(confirmSelected || sendState !== 'idle' || confirmMyTurn);
   confirmBtn.disabled = sendState === 'sending' || timerOnly;
-  confirmBtn.textContent =
+  confirmTextEl.textContent =
     sendState === 'sending'
       ? strings.online.sending
       : sendState === 'failed'
@@ -222,6 +237,11 @@ function refreshConfirmBtn(): void {
           : confirmSelected && timer
             ? `${strings.buttons.confirmMove} · ${timer}`
             : strings.buttons.confirmMove;
+  // The tick belongs to "Go!" alone. A send in progress and the bare countdown
+  // are states to read, not act on; a failed send offers the circular arrow
+  // instead, since the button now means "try again".
+  confirmRetryEl.hidden = sendState !== 'failed';
+  confirmCheckEl.hidden = sendState !== 'idle' || timerOnly;
 }
 
 /**
@@ -411,7 +431,7 @@ function renderSkip(game: GameState, net: NetTurn | null): void {
   const name = el('b', 'pr-race__skipname');
   name.style.color = cur.color;
   name.textContent = cur.name;
-  skipBtn.replaceChildren(
+  skipTextEl.replaceChildren(
     document.createTextNode(`${strings.online.skipTurnBtn} `),
     name,
   );

@@ -469,7 +469,6 @@ function startRace(humans: number, bots: number, difficulty: Difficulty): void {
   S.game = newGame(S.raceTrack, humans + bots, S.rules, shuffledIndices(humans + bots));
   for (let i = humans; i < S.game.players.length; i++) {
     S.game.players[i].bot = difficulty;
-    S.game.players[i].name = `${strings.aiSelect.botPrefix} ${S.game.players[i].name}`;
   }
   S.raceNav = buildNavField(S.raceTrack); // needed by bots (chooseMove) and the standings strip
   S.lastLocalRace = { humans, bots, difficulty };

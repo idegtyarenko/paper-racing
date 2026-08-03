@@ -202,6 +202,18 @@
   height: 13px;
   border-radius: 50%;
 }
+/* Bot marker, between the colour swatch and the name — dimmed, so the row still
+   reads name-first and the mark is something you notice rather than read. */
+.pr-race__bot {
+  flex: 0 0 auto;
+  display: flex;
+  color: var(--pr-ink-dim);
+}
+.pr-race__bot svg {
+  width: 13px;
+  height: 13px;
+  display: block;
+}
 .pr-race__name {
   flex: 1;
   min-width: 0;

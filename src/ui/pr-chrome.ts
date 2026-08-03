@@ -64,6 +64,27 @@ export const CRASH_SVG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l2.2 4.2L19 5.6l-1.4 4.6 4.4 1.8-4.4 1.8L19 18.4l-4.8-1.6L12 21l-2.2-4.2L5 18.4l1.4-4.6L2 12l4.4-1.8L5 5.6l4.8 1.6z"/></svg>';
 export const LANG_SVG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg>';
+/** Tick — the selected language, and "Go!" on the confirm-move button. */
+export const CHECK_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5.5 5.5L20 6.5"/></svg>';
+/** Pencil at an angle — the editor's coach-mark bullet. */
+export const PENCIL_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17v3z"/><path d="M14.5 6.5l3 3"/></svg>';
+/** Triangle with a bang — the failure skin on toasts. */
+export const WARN_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4L2.5 20h19z"/><path d="M12 10v4"/><circle cx="12" cy="17.2" r=".4" fill="currentColor" stroke="none"/></svg>';
+/** Boxy head with an antenna — marks a bot in the classification. */
+export const BOT_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4"/><circle cx="12" cy="3.2" r="1.2"/><path d="M9 13v1.5M15 13v1.5"/></svg>';
+/** Arrow into a bar — skip a stalling player's turn. */
+export const SKIP_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6l8 6-8 6zM18 5v14"/></svg>';
+/** Circular arrow — run the race back, and retry a move that failed to send. */
+export const REMATCH_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 3 6.7M3 20v-4h4"/></svg>';
+/** The same arrow the other way — wipe the drawn track and start it over. */
+export const UNDO_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 0-3 6.7M21 20v-4h-4"/></svg>';
 
 /**
  * A tappable list row: icon tile, title (+ optional subtitle), optional chevron.

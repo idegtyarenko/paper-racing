@@ -777,11 +777,11 @@ body.is-lobby .pr-conn {
     transform: translate(-50%, 0);
   }
 }
-/* Failure skin (design 3E): red surface with a ⚠, on every screen — a dropped
-   connection reads the same in the editor and in a race. Declares only what
-   differs from the base toast, so a screen's positional override (which is more
-   specific) can never fight it. :not([hidden]) per the convention above — the
-   flex display would otherwise outrank the UA's [hidden] rule. */
+/* Failure skin (design 3E): red surface with a warning mark, on every screen — a
+   dropped connection reads the same in the editor and in a race. Declares only
+   what differs from the base toast, so a screen's positional override (which is
+   more specific) can never fight it. :not([hidden]) per the convention above —
+   the flex display would otherwise outrank the UA's [hidden] rule. */
 .pr-toast--error:not([hidden]) {
   display: flex;
   align-items: center;
@@ -792,10 +792,15 @@ body.is-lobby .pr-conn {
   color: var(--pr-error-ink);
   text-align: left;
 }
-.pr-toast--error::before {
-  content: '⚠';
+/* The mark itself is markup (dialogs.ts), hidden on a neutral toast. */
+.pr-toast__ico {
+  flex: 0 0 auto;
   color: var(--pr-error);
-  font-size: 15px;
+}
+.pr-toast__ico svg {
+  width: 16px;
+  height: 16px;
+  display: block;
 }
 
 /* ── Overlay + sheet: the modal layer (rules, join by code, confirmations) ───

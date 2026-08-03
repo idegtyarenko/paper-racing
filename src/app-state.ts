@@ -55,7 +55,7 @@ export interface AppState {
    * transient and gets cleared on every refreshCands. null means no pick.
    */
   pending: Candidate | null;
-  /** Race rules chosen in settings (⚙). In online play, the host sets these. */
+  /** Race rules chosen in settings. In online play, the host sets these. */
   rules: Rules;
   /**
    * Navigation field for the current race's track (distances to the finish).

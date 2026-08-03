@@ -148,7 +148,7 @@ function commitOnline(): void {
  * Send our move (confirm-first): apply it to a copy, write it to the server, and only
  * on success make the copy the current state. The original is left untouched, so on
  * error the player's selection and candidates stay intact and the button turns into
- * "↻ Retry sending". Identity guard: if an authoritative state (echo or someone else's
+ * "Send again". Identity guard: if an authoritative state (echo or someone else's
  * move) arrives while the write is in flight, we skip applying ours locally.
  */
 export async function sendMove(cand: Candidate): Promise<void> {

@@ -29,7 +29,7 @@ function ordinal(n: number): string {
 
 export const en = {
   app: {
-    title: '🏁 Paper Racing',
+    title: 'Paper Racing',
   },
 
   editor: {
@@ -147,8 +147,6 @@ export const en = {
     /** Row labels. */
     botsLabel: 'Number of bots',
     difficultyLabel: 'Difficulty',
-    /** Bot name prefix — marks a bot in cards, status and the finish. */
-    botPrefix: '🤖',
   },
 
   // Race rules and car handling — the strings of the shared rules editor, shown
@@ -233,7 +231,6 @@ export const en = {
     /** Why "Start race" is disabled: your own name is still empty. */
     enterName: 'Enter your name to continue',
     leaveLobby: 'Leave lobby',
-    share: '🔗 Share link',
     copied: 'Link copied',
     codeCopied: 'Code copied',
     waiting: 'Waiting for at least one more racer…',
@@ -245,7 +242,7 @@ export const en = {
       `${name} is taking a while. You can skip the turn\u00A0— the car will coast straight.`,
     // Skip-button prefix; the stuck player's name is appended separately in their
     // own color — to make clear you're skipping someone else's turn, not yours.
-    skipTurnBtn: '⏭ Skip turn',
+    skipTurnBtn: 'Skip turn',
     offline: 'offline',
     // Errors / notifications.
     notFound: 'No race found with that code.',
@@ -256,7 +253,7 @@ export const en = {
     // Sending a move / start (confirm-first: write first, then switch locally).
     sending: 'Sending move…',
     sendFailed: "Couldn't send your move. Check your connection and try again.",
-    retrySend: '↻ Send again',
+    retrySend: 'Send again',
     joining: 'Connecting…',
     starting: 'Starting…',
     startFailed: "Couldn't start the race. Try again.",
@@ -338,11 +335,11 @@ export const en = {
   },
 
   buttons: {
-    next: 'Next →',
-    back: '← Back',
-    redraw: '↺ Redraw',
-    chooseMode: 'Choose mode →',
-    confirmMove: '✓ Go!',
+    next: 'Next',
+    back: 'Back',
+    redraw: 'Redraw',
+    chooseMode: 'Choose mode',
+    confirmMove: 'Go!',
     // Result-screen actions. No emoji: the redesigned chrome uses inline SVG
     // where it needs a glyph (the rematch button carries one), and these render
     // in caps, where an emoji reads as a smudge.
@@ -362,8 +359,8 @@ export const en = {
       "Your car rolls with momentum\u00A0— it keeps drifting the same way on its own. Each turn you can only nudge it a little: pick one of the highlighted cells. You can't swerve or stop on a dime, so brake and set up your corners early.\n\n" +
       "Fly off the track and you're stuck in the gravel. The faster you were going, the longer it takes to dig out\u00A0— and once you're free, you start from a standstill.\n\n" +
       "You can't drive through or onto another car: rivals hold their ground, just like in a real race.\n\n" +
-      'First one back to the start/finish line wins. And if several cars cross it at almost the same moment, whoever went furthest past the line comes out ahead. 🏁\n\n' +
-      'Car handling and off-track penalties can be tuned to taste\u00A0— check the ⚙ settings.',
+      'First one back to the start/finish line wins. And if several cars cross it at almost the same moment, whoever went furthest past the line comes out ahead.\n\n' +
+      'Car handling and off-track penalties can be tuned to taste\u00A0— check the settings.',
   },
 
   install: {
