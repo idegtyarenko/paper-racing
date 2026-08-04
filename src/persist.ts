@@ -4,7 +4,7 @@
 // through this — its session lives on the server and is restored its own way.
 
 import { AppState, Phase, LastLocalRace } from './app-state';
-import { EditorState, EditorStep } from './model/editor';
+import { EditorState, EditorStep, stepPrompt } from './model/editor';
 import { Track } from './model/track';
 import { GameState, Rules } from './model/game';
 import {
@@ -154,6 +154,12 @@ export function load(): LocalSnapshot | null {
  * Reset an in-progress editor gesture: the snapshot might have been taken
  * mid-stroke or mid-edge-drag (the tab was backgrounded in the middle of a
  * gesture), and pointerUp will never arrive after a reload.
+ *
+ * The error state goes with it. A gesture cut short by the system (an iOS
+ * home-indicator swipe on the drawing screen) ends in `pointerCancel`, which
+ * fails the editor with a "gesture cancelled" toast — and that message belongs
+ * to the session that was interrupted. Restoring it means the app re-opens
+ * showing an error about something the player never did.
  */
 function sanitizeEditor(e: EditorState): EditorState {
   // The wizard step was renamed phase→step — we read older snapshots via the
@@ -163,6 +169,8 @@ function sanitizeEditor(e: EditorState): EditorState {
   return {
     ...e,
     step,
+    error: false,
+    message: stepPrompt(step),
     drawing: false,
     stroke: [],
     dragStart: null,

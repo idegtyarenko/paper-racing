@@ -234,6 +234,11 @@ export const TOUCH_TOL_PX = 24;
 /** Activation radius for aiming around the nearest candidate, css-px: a touch
  *  closer than this starts aiming, farther starts panning the map. */
 export const AIM_ZONE_PX = 44;
+/** Margin added on top of `env(safe-area-inset-bottom)` to get the dead strip
+ *  along the bottom edge where a touch is ignored: a swipe up from there is
+ *  the system "home" gesture, not a stroke. The margin also gives the strip
+ *  some width where the inset is 0 (Android gesture navigation, desktop). */
+export const BOTTOM_DEADZONE_PAD_PX = 12;
 /** "Tap vs. pan" threshold, css-px: pointer movement past this turns a
  *  click-action (finish/move/arrow selection) into panning. */
 export const DRAG_PX = 6;

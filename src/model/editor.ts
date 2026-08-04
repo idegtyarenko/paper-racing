@@ -61,6 +61,11 @@ export interface EditorState {
 
 const MSG: Record<EditorStep, string> = strings.editor.step;
 
+/** The step's inviting prompt — what's shown when there's no error standing. */
+export function stepPrompt(step: EditorStep): string {
+  return MSG[step];
+}
+
 export function newEditor(): EditorState {
   return {
     step: 'center',

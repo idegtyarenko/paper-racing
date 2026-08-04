@@ -78,6 +78,9 @@
 
   /* ── Shape ────────────────────────────────────────────────────────────── */
   --pr-gutter: 16px; /* side margin every full-width floating element aligns to */
+  /* Read from JS (view/input.ts): the strip along the bottom edge where the
+     system "home" gesture hijacks a touch. */
+  --pr-safe-bottom: env(safe-area-inset-bottom, 0px);
   --pr-nav-h: 48px; /* phone step strip — what floating content below it clears */
   --pr-rail-w: 220px; /* wide-screen step rail — what the screens beside it clear */
   --pr-radius: 8px;

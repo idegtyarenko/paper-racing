@@ -18,6 +18,7 @@ import {
   TOUCH_TOL_PX,
   LOUPE_MAX_CELL_PX,
   AIM_ZONE_PX,
+  BOTTOM_DEADZONE_PAD_PX,
   CONFIRM_BTN_ZONE_PX,
   DRAG_PX,
   ZOOM_BTN_FACTOR,
@@ -179,6 +180,28 @@ let tapDownScr: Vec | null = null;
 /** Candidate hit radius in cells: for a finger, never smaller than TOUCH_TOL_PX. */
 function touchTol(): number {
   return Math.max(0.45, TOUCH_TOL_PX / vp.scale());
+}
+
+/**
+ * Height of the strip along the bottom of the canvas where a touch is not
+ * ours: a swipe up from there is the system "home" gesture (iOS home
+ * indicator, Android gesture navigation). Taking such a touch as the start of
+ * a stroke is how a swipe-to-minimize used to end as a cancelled gesture and
+ * an error toast on the drawing screen.
+ *
+ * Reads `--pr-safe-bottom` (`env(safe-area-inset-bottom)`, styles/base.css) —
+ * getComputedStyle resolves env() for us. Cached: this runs on every
+ * pointerdown, and the value only changes when the viewport does.
+ */
+let deadzonePx: number | null = null;
+function bottomDeadzone(): number {
+  if (deadzonePx === null) {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue(
+      '--pr-safe-bottom',
+    );
+    deadzonePx = (parseFloat(raw) || 0) + BOTTOM_DEADZONE_PAD_PX;
+  }
+  return deadzonePx;
 }
 
 /** Whether the aim point needs to be lifted above the finger — only while cells are small. */
@@ -550,6 +573,16 @@ export function initInput(d: InputDeps): void {
   canvas.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     const touch = e.pointerType === 'touch';
+    const scr = vp.toScreen(e);
+    // A swipe from the bottom edge belongs to the system, not to us: it starts
+    // on the canvas but ends as "minimize the app", and the pointercancel that
+    // follows would land in the editor as a cut-short stroke (an error toast
+    // waiting on the screen when the app is reopened). Drop it before any
+    // bookkeeping — no capture, no activePointers entry — so the later
+    // pointercancel finds nothing to undo. Measured against the viewport, not
+    // the canvas: the strip belongs to the screen edge, wherever the board
+    // happens to end.
+    if (touch && window.innerHeight - e.clientY < bottomDeadzone()) return;
     // The first finger of a new touch series (`isPrimary`) while state is
     // non-empty means a leftover phantom pointer from a dropped iOS
     // pointerup/pointercancel. In a healthy state `activePointers` would be
@@ -562,7 +595,6 @@ export function initInput(d: InputDeps): void {
     try {
       canvas.setPointerCapture(e.pointerId);
     } catch {}
-    const scr = vp.toScreen(e);
     if (touch) activePointers.set(e.pointerId, scr);
 
     // A second finger means pinch (zoom + pan) in every mode.
@@ -719,6 +751,14 @@ export function initInput(d: InputDeps): void {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) parkGestures();
   });
+
+  // The safe-area inset differs between portrait and landscape — drop the
+  // cached dead-zone height so the next pointerdown re-reads it.
+  const forgetDeadzone = (): void => {
+    deadzonePx = null;
+  };
+  window.addEventListener('resize', forgetDeadzone);
+  window.addEventListener('orientationchange', forgetDeadzone);
   window.addEventListener('blur', parkGestures);
 
   document.getElementById('zoomIn')?.addEventListener('click', () => zoomByButton(1));
