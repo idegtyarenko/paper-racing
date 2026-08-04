@@ -619,6 +619,26 @@ body.is-lobby .pr-conn {
 .pr-roster__input:placeholder-shown {
   border-color: var(--pr-border);
 }
+/* Send the typed name. Appears only while the field differs from what the room
+   already has, sized to sit flush with the input rather than the 48px slab the
+   icon buttons use in a top bar. */
+.pr-roster__confirm {
+  width: 40px;
+  height: 40px;
+  border-color: var(--pr-accent);
+  background: var(--pr-accent);
+  color: var(--pr-accent-ink);
+}
+@media (hover: hover) {
+  .pr-roster__confirm:hover:not(:disabled) {
+    background: var(--pr-accent-hover);
+    border-color: var(--pr-accent);
+    color: var(--pr-accent-ink);
+  }
+}
+.pr-roster__confirm:active:not(:disabled) {
+  background: var(--pr-accent-hover);
+}
 .pr-roster__badge {
   font-family: var(--pr-font);
   flex: 0 0 auto;

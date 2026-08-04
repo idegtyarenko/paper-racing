@@ -6,7 +6,8 @@
 // own layout and state.
 
 import { Difficulty } from '../model/ai';
-import { CHEVRON_SVG, COPY_SVG, SHARE_SVG } from './icons';
+import { bindTap } from './dom';
+import { CHECK_SVG, CHEVRON_SVG, COPY_SVG, SHARE_SVG } from './icons';
 
 /** Create an element with a class, optionally appending it to a parent. */
 export function el<K extends keyof HTMLElementTagNameMap>(
@@ -131,7 +132,13 @@ export interface Roster {
 /**
  * The player list. Rows are reused across renders rather than rebuilt: your own
  * row holds a live <input> for your name, and replacing it mid-render would
- * drop the caret on every keystroke (each one echoes back through realtime).
+ * drop the caret.
+ *
+ * Typing is a local draft — `onRename` is a network write plus a roster redraw
+ * for everyone in the room, so it fires only on an explicit commit: the check
+ * button that appears beside a changed field, Enter, or leaving the field.
+ * Blur commits rather than reverts because an unsent name reads as "no name
+ * yet" to the host, who then can't start.
  *
  * A player who hasn't typed a name yet reads as their car's colour to everyone
  * else — the same fallback the race itself uses — while their own row stays an
@@ -153,6 +160,8 @@ export function buildRoster(
     name: HTMLElement;
     input: HTMLInputElement;
     badge: HTMLElement;
+    /** Adopt the name the room knows, dropping any draft state with it. */
+    setName(name: string): void;
   }
   const rows: Row[] = [];
 
@@ -165,16 +174,47 @@ export function buildRoster(
     input.maxLength = 20;
     input.placeholder = opts.placeholder;
     input.hidden = true;
+    const confirm = button('pr-btn pr-btn--icon pr-roster__confirm', row);
+    icon('pr-btn__ico', CHECK_SVG, confirm);
+    confirm.hidden = true;
+
+    /** What the room already has — the draft is anything else in the field. */
+    let sent = '';
+    const syncConfirm = (): void => {
+      confirm.hidden = input.hidden || input.value === sent;
+    };
+    const setName = (value: string): void => {
+      sent = value;
+      input.value = value;
+      syncConfirm();
+    };
     if (onRename) {
-      input.addEventListener('input', () => onRename(input.value));
-      // Enter is "I'm done" on a phone keyboard — close it rather than submit
-      // anything (there's no form; the value is already on its way).
+      input.addEventListener('input', syncConfirm);
+      const commit = (): void => {
+        if (input.value !== sent) {
+          sent = input.value;
+          onRename(sent);
+        }
+        syncConfirm();
+      };
+      // Enter is also "I'm done" on a phone keyboard: send, then let the
+      // keyboard go.
       input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') input.blur();
+        if (e.key !== 'Enter') return;
+        commit();
+        input.blur();
+      });
+      input.addEventListener('blur', commit);
+      // Keep the caret in the field: without this the press blurs the input,
+      // whose own commit hides the button out from under the release.
+      confirm.addEventListener('pointerdown', (e) => e.preventDefault());
+      bindTap(confirm, () => {
+        commit();
+        input.blur();
       });
     }
     const badge = el('span', 'pr-roster__badge', row);
-    return { root: row, dot, name, input, badge };
+    return { root: row, dot, name, input, badge, setName };
   };
 
   const render = (players: RosterPlayer[], emptyNote?: string | null): void => {
@@ -190,8 +230,9 @@ export function buildRoster(
       if (p.you) {
         // Never write over what's being typed — the value is already ours, and
         // the echo of our own rename would otherwise reset the caret.
-        if (document.activeElement !== row.input) row.input.value = p.name;
+        if (document.activeElement !== row.input) row.setName(p.name);
       } else {
+        row.setName('');
         row.name.textContent = p.name;
       }
       const badge = p.host
