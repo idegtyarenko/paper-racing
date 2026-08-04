@@ -249,74 +249,95 @@ body.is-lobby .pr-conn {
   display: block;
 }
 
-/* ── Brand mark: app icon + skewed wordmark over a checkered rule ───────────
-   Heads the menu drawer and the editor's wide-screen rail (`--sm`). */
+/* ── Brand mark: app icon + skewed wordmark over a dashed rule ──────────────
+   Heads the menu drawer and the editor's wide-screen rail (`--sm`). Proportions
+   come from the logo sheet in Claude Design, scaled off the icon: wordmark half
+   the icon, dash 0.31 × 0.10 of it. The words are painted with gradients rather
+   than flat ink — that lift is most of what separates this from a bold label.
+   Onest ships no italic, so the slant stays a skew, and the rule leans with it. */
 .pr-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9.5px;
 }
 .pr-brand__logo {
   flex: 0 0 auto;
   width: 34px;
   height: 34px;
-  border-radius: 9px;
 }
 .pr-brand__text {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4.5px;
 }
 .pr-brand__wordmark {
   font-family: var(--pr-font);
-  display: inline-block;
-  font-weight: 800;
-  font-size: 15.5px;
+  display: flex;
+  align-items: baseline;
+  gap: 4.5px;
+  font-weight: 900;
+  font-size: 17px;
   line-height: 1;
   letter-spacing: -0.3px;
-  transform: skew(-6deg);
+  transform: skew(-10deg);
 }
+/* The flat `color` is the fallback: it shows through wherever background-clip:text
+   isn't honoured, which is why each word still names its own ink.
+   The padding is not spacing — background-clip crops the gradient to the padding
+   box, and with line-height 1 that box ends at the baseline, beheading the "g" of
+   Racing. Pad the box out, then pull the same amount back with a negative margin
+   so nothing around it moves. */
 .pr-brand__word {
   color: var(--pr-ink);
+  background: linear-gradient(178deg, #ffffff 34%, #dbe6f2 72%, #c3d2e2 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  padding: 0.1em 0.14em 0.26em 0.08em;
+  margin: -0.1em -0.14em -0.26em -0.08em;
 }
 .pr-brand__word--accent {
   color: var(--pr-accent);
+  background: linear-gradient(178deg, #ffc86d 32%, #ffa930 70%, #f79a20 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 .pr-brand__dashes {
   display: flex;
-  gap: 2px;
+  gap: 2.5px;
 }
 .pr-brand__dash {
-  width: 7px;
-  height: 3px;
-  background: var(--pr-ink);
+  width: 10.5px;
+  height: 3.5px;
+  transform: skewX(-14deg);
+  background: linear-gradient(180deg, #ffffff, #dbe6f2);
 }
-.pr-brand__dash--hollow {
-  background: transparent;
-  border: 1px solid rgba(var(--pr-ink-rgb), 0.4);
+.pr-brand__dash--slate {
+  background: #3f5a7d;
 }
 /* Compact: the editor rail, where the brand shares its row with the burger. */
 .pr-brand--sm {
-  gap: 9px;
+  gap: 8px;
 }
 .pr-brand--sm .pr-brand__logo {
   width: 28px;
   height: 28px;
-  border-radius: 7px;
 }
 .pr-brand--sm .pr-brand__text {
-  gap: 2px;
+  gap: 3.5px;
 }
 .pr-brand--sm .pr-brand__wordmark {
-  font-size: 13px;
+  font-size: 14px;
+  gap: 3.5px;
   letter-spacing: -0.2px;
 }
 .pr-brand--sm .pr-brand__dashes {
-  gap: 1.5px;
+  gap: 2px;
 }
 .pr-brand--sm .pr-brand__dash {
-  width: 5px;
-  height: 2.5px;
+  width: 8.5px;
+  height: 3px;
 }
 
 /* ── List item: icon tile + text + chevron ──────────────────────────────────

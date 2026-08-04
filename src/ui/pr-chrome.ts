@@ -64,19 +64,18 @@ export function buildBrand(
 ): HTMLElement {
   const brand = el('span', `pr-brand${opts.cls ? ' ' + opts.cls : ''}`, parent);
   const logo = el('img', 'pr-brand__logo', brand);
-  logo.src = `${import.meta.env.BASE_URL}pwa-192x192-v2.png`;
+  // The vector flag, not the pencil-drawn PNG: that one is the launcher icon and
+  // stays there. At 28–34px its hatching turns to mush anyway.
+  logo.src = `${import.meta.env.BASE_URL}favicon-v3.svg`;
   logo.alt = '';
   const text = el('span', 'pr-brand__text', brand);
   const mark = el('span', 'pr-brand__wordmark', text);
+  // No space between the words: the wordmark is a flex row, so the gap is the gap.
   el('span', 'pr-brand__word', mark).textContent = 'Paper';
-  el('span', 'pr-brand__word pr-brand__word--accent', mark).textContent = ' Racing';
+  el('span', 'pr-brand__word pr-brand__word--accent', mark).textContent = 'Racing';
   const dashes = el('span', 'pr-brand__dashes', text);
   for (let i = 0; i < opts.dashes; i++) {
-    el(
-      'span',
-      i % 2 ? 'pr-brand__dash pr-brand__dash--hollow' : 'pr-brand__dash',
-      dashes,
-    );
+    el('span', i % 2 ? 'pr-brand__dash pr-brand__dash--slate' : 'pr-brand__dash', dashes);
   }
   return brand;
 }

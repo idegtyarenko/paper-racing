@@ -6,7 +6,7 @@
     </linearGradient>
   </defs>
   <rect width="512" height="512" rx="113" fill="url(#g)"/>
-  <g transform="rotate(-8 256 256)">
+  <g transform="rotate(8 256 256)">
     <clipPath id="c"><rect x="113" y="113" width="286" height="286" rx="10"/></clipPath>
     <g clip-path="url(#c)">
       <rect x="113" y="113" width="286" height="286" fill="#efede6"/>

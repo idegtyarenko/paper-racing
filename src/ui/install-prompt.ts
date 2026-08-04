@@ -126,7 +126,7 @@ function build(
 
   const icon = document.createElement('img');
   icon.className = 'pr-install__icon';
-  icon.src = `${import.meta.env.BASE_URL}pwa-192x192-v2.png`;
+  icon.src = `${import.meta.env.BASE_URL}pwa-192x192-v3.png`;
   icon.alt = '';
 
   const text = document.createElement('div');
