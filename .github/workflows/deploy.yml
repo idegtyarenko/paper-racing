@@ -18,32 +18,33 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: main
           path: main
       # `staging` may not exist yet (or gets deleted) — don't fail the whole
       # deploy over it, just skip the staging copy below.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         id: checkout-staging
         continue-on-error: true
         with:
           ref: staging
           path: staging
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: |
             main/package-lock.json
             staging/package-lock.json
-      # `main`'s dist is cached by main's own commit SHA. A staging-only push
-      # must NOT rebuild main: __BUILD_TIME__ (Date.now()) is baked into the
-      # bundle, so a no-op rebuild still changes the SW precache manifest and
-      # would falsely prompt production users to update.
+      # `main`'s dist is cached by main's own commit SHA, so a staging-only push
+      # doesn't spend CI time rebuilding an unchanged main. The bundle itself is
+      # deterministic per commit (`__BUILD_TIME__` is the commit's date, not the
+      # wall clock — see vite.config.ts), so a cache miss is only slower, never a
+      # false "update available" prompt for production users.
       - name: Cache main build
         id: cache-main
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: main/dist
           key: main-dist-${{ hashFiles('main/**') }}
@@ -102,7 +103,7 @@ jobs:
             mkdir -p combined/staging
             cp -r staging/dist/. combined/staging/
           fi
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: combined
 
@@ -113,6 +114,6 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/configure-pages@v4
-      - uses: actions/deploy-pages@v4
+      - uses: actions/configure-pages@v6
+      - uses: actions/deploy-pages@v5
         id: deployment
