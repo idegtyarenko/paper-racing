@@ -6,10 +6,16 @@
 // and a room.
 
 import { bindTap, closeOverlay, openSheet } from './dom';
-import { button, buildSheet, el } from './pr-chrome';
+import { button, buildSheet, el, icon } from './pr-chrome';
 import { strings } from '../i18n';
+import { WARN_SVG } from './icons';
 
 const toast = document.getElementById('toast')!;
+// The failure skin's warning mark. It lives in markup rather than a CSS
+// ::before so it inherits currentColor like every other icon — content: url()
+// would not — and the toast's own text node is rebuilt around it per message.
+const toastIcon = icon('pr-toast__ico', WARN_SVG, toast);
+const toastText = el('span', 'pr-toast__text', toast);
 const connBanner = document.getElementById('connBanner')!;
 connBanner.textContent = strings.online.reconnecting;
 
@@ -168,10 +174,25 @@ export function setConnBanner(lost: boolean): void {
 
 let toastTimer: number | undefined;
 
-/** Short popup notification (link/code copied, etc.). */
-export function showToast(msg: string, ms = 1800): void {
-  toast.textContent = msg;
+function raiseToast(msg: string, ms: number, error: boolean): void {
+  toastText.textContent = msg;
+  // The skin follows the message's meaning, not the screen it lands on: the
+  // "app updated" notice used to look like a crash purely because it arrives
+  // while the editor is still open.
+  toast.classList.toggle('pr-toast--error', error);
+  toastIcon.hidden = !error;
   toast.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = window.setTimeout(() => (toast.hidden = true), ms);
+}
+
+/** Short popup notification (link/code copied, an update installed, etc.). */
+export function showToast(msg: string, ms = 1800): void {
+  raiseToast(msg, ms, false);
+}
+
+/** Same popup in the red warning skin — for a failure, not for news the player
+ *  merely needs to see. */
+export function showErrorToast(msg: string, ms = 1800): void {
+  raiseToast(msg, ms, true);
 }

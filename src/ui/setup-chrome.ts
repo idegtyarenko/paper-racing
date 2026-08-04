@@ -23,6 +23,7 @@ import { Rules, MIN_PLAYERS } from '../model/game';
 import { Difficulty } from '../model/ai';
 import { strings } from '../i18n';
 import { bindTap } from './dom';
+import { openConfirm } from './confirm';
 import { mountRulesEditor, RulesEditor } from './rules-editor';
 import {
   el,
@@ -31,22 +32,13 @@ import {
   buildItem,
   buildCode,
   buildRoster,
-  ARROW_SVG,
-  CLOSE_SVG,
-  GLOBE_SVG,
   CodeBlock,
   LobbyView,
   Roster,
 } from './pr-chrome';
+import { ARROW_SVG, CHIP_SVG, CLOSE_SVG, GLOBE_SVG, PHONE_SVG } from './icons';
 
 const board = document.querySelector('.app__board')!;
-
-/** Mode-card icons from the hi-fi: a chip (bots), a phone (hotseat); the globe
-    is the shared one (the menu's "join online game" uses the same mark). */
-const CHIP_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></svg>';
-const PHONE_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="3" width="12" height="18" rx="2.5"/><path d="M11 18h2"/></svg>';
 
 const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard'];
 /** Bot counts offered on each screen (the grid capacity disables the rest). */
@@ -269,10 +261,25 @@ function build(): void {
   });
   // Leaving is the lobby's way out — the action row's Back would be ambiguous
   // (going back means giving up the room), so it sits at the end of the list.
+  // This screen is the *host's* lobby (renderSetupChrome only keeps `lobbyView`
+  // for a host, and the button is hidden without it), and for them walking out
+  // closes the room rather than freeing a seat — hence "Cancel game", not the
+  // guest's "Leave game" over in online-lobby.ts.
   const leaveBtn = button('pr-btn pr-btn--caps pr-setup__leave', lineupPane);
   icon('pr-btn__ico', CLOSE_SVG, leaveBtn);
-  el('span', 'pr-setup__leave-label', leaveBtn).textContent = strings.online.leaveLobby;
-  bindTap(leaveBtn, () => handlers.onLobbyLeave());
+  el('span', 'pr-setup__leave-label', leaveBtn).textContent = strings.online.cancelRace;
+  // Ask first — this one closes the room out from under everyone who joined.
+  // The confirmation is wired here rather than onto `onLobbyLeave` because the
+  // two lobby screens share that handler: the guest's way out (online-lobby.ts)
+  // and the guest's "leave" on the results screen are cheap and reversible —
+  // they free one seat and can be undone by rejoining with the code — so they
+  // stay one tap. Only the host's is destructive, and only this button is the
+  // host's.
+  bindTap(leaveBtn, () =>
+    openConfirm(strings.online.cancelConfirm, strings.online.cancelRace, () =>
+      handlers.onLobbyLeave(),
+    ),
+  );
 
   lineup = {
     codeRow,

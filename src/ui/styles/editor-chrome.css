@@ -27,8 +27,13 @@
 .pr-coach__ico {
   color: var(--pr-accent);
   flex: 0 0 auto;
-  font-size: 15px;
+  display: flex;
   line-height: 1;
+}
+.pr-coach__ico svg {
+  width: 16px;
+  height: 16px;
+  display: block;
 }
 /* Per-step anchor: draw sits low, just above the Join button (design 3A); the
    later steps sit higher, nearer the feature being tuned. */
@@ -97,40 +102,6 @@
    itself is shared by every redesigned screen (pr-controls.css). */
 body.is-editing .zoom-ctl {
   bottom: 92px;
-}
-
-/* Editor errors surface as a red Blueprint toast under the top strip (design
-   3E). In the edit phase the toast only ever carries an error. Scoped to
-   :not([hidden]) so the flex display never overrides the element's own hidden
-   state (showToast toggles the `hidden` attribute to dismiss it). */
-body.is-editing .pr-toast:not([hidden]) {
-  top: calc(env(safe-area-inset-top, 0px) + 88px);
-  bottom: auto;
-  /* The shared toast slides up from the bottom edge with a translateX(-50%) it
-     needs for centring; this one is centred by left/right, so the keyframes
-     would jerk it sideways. */
-  animation: none;
-  left: var(--pr-gutter);
-  right: var(--pr-gutter);
-  transform: none;
-  max-width: 480px;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  background: var(--pr-error-bg);
-  border: 1px solid var(--pr-error);
-  border-radius: var(--pr-radius-lg);
-  color: var(--pr-error-ink);
-  font-weight: 600;
-  text-align: left;
-  padding: 13px 16px;
-  box-shadow: var(--pr-shadow);
-}
-body.is-editing .pr-toast:not([hidden])::before {
-  content: '⚠';
-  color: var(--pr-error);
-  font-size: 15px;
 }
 
 /* ── Draw-head cursor (design 3A): amber ring + dot follows the pointer while

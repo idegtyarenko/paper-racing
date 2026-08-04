@@ -9,18 +9,8 @@
 
 import { strings, setLocale, locale, LocaleCode } from '../i18n';
 import { versionLabel } from './dialogs';
-import {
-  el,
-  button,
-  icon,
-  buildItem,
-  buildBrand,
-  CLOSE_SVG,
-  FLAG_SVG,
-  RULES_SVG,
-  GLOBE_SVG,
-  LANG_SVG,
-} from './pr-chrome';
+import { el, button, icon, buildItem, buildBrand } from './pr-chrome';
+import { CHECK_SVG, CLOSE_SVG, FLAG_SVG, GLOBE_SVG, LANG_SVG, RULES_SVG } from './icons';
 
 export interface MenuHandlers {
   /** Open the Rules / How-to-play sheet. */
@@ -120,7 +110,7 @@ function build(): HTMLElement {
     el('span', 'pr-menu__langname', b).textContent = l.label;
     if (l.code === locale) {
       b.classList.add('pr-menu__lang--active');
-      el('span', 'pr-menu__check', b).textContent = '✓';
+      icon('pr-menu__check', CHECK_SVG, b);
     }
     b.addEventListener('click', () => setLocale(l.code));
   }

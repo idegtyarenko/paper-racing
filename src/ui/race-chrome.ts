@@ -22,18 +22,16 @@ import { strings } from '../i18n';
 import { msToClock } from './format';
 import { renderRows, resetStandings } from './classification';
 import { bindTap } from './dom';
-import {
-  el,
-  button,
-  icon,
-  buildBrand,
-  buildStatus,
-  StatusBanner,
-  BURGER_SVG,
-  COPY_SVG,
-  SHARE_SVG,
-} from './pr-chrome';
+import { el, button, icon, buildBrand, buildStatus, StatusBanner } from './pr-chrome';
 import { openMenu } from './menu';
+import {
+  BURGER_SVG,
+  CHECK_SVG,
+  COPY_SVG,
+  REMATCH_SVG,
+  SHARE_SVG,
+  SKIP_SVG,
+} from './icons';
 
 /** How many upcoming turns the UP NEXT strip shows, including the current one. */
 const QUEUE_LEN = 9;
@@ -51,7 +49,11 @@ let chipEl: HTMLElement;
 let chipDot: HTMLElement;
 let chipText: HTMLElement;
 let confirmBtn: HTMLButtonElement;
+let confirmCheckEl: HTMLElement;
+let confirmRetryEl: HTMLElement;
+let confirmTextEl: HTMLElement;
 let skipBtn: HTMLButtonElement;
+let skipTextEl: HTMLElement;
 let connEl: HTMLElement;
 let connStatus: StatusBanner;
 let connCodeBtn: HTMLButtonElement;
@@ -126,10 +128,18 @@ function build(h: RaceChromeHandlers): void {
   // online.skipTurnBtn plus the stuck player's name, in their colour.
   skipBtn = button('pr-btn pr-btn--caps pr-race__skip', actEl);
   skipBtn.hidden = true;
+  icon('pr-race__skip-ico', SKIP_SVG, skipBtn);
+  skipTextEl = el('span', 'pr-race__skip-text', skipBtn);
   bindTap(skipBtn, h.onSkip);
 
   confirmBtn = button('pr-btn pr-btn--primary pr-btn--caps pr-race__confirm', actEl);
   confirmBtn.hidden = true;
+  // Four states share this button (see refreshConfirmBtn), and only two carry an
+  // icon — so both live here permanently and the render picks which, if any, is
+  // shown. Rebuilding them per state would restyle the button mid-race.
+  confirmCheckEl = icon('pr-btn__ico pr-race__confirm-ico', CHECK_SVG, confirmBtn);
+  confirmRetryEl = icon('pr-btn__ico pr-race__confirm-ico', REMATCH_SVG, confirmBtn);
+  confirmTextEl = el('span', 'pr-race__confirm-text', confirmBtn);
   bindTap(confirmBtn, h.onConfirmMove);
 
   board.append(root);
@@ -151,6 +161,19 @@ export function initRaceChrome(h: RaceChromeHandlers): void {
   onShare = h.onShare;
   onCopy = h.onCopy;
   build(h);
+}
+
+/**
+ * The bottom action stack, for another module to dock a control into.
+ *
+ * Only race-result uses it: a player who has retired or finished while the
+ * others drive on gets their three ways out here rather than under a
+ * full-screen layer, and the bottom of the board is already this stack's job —
+ * safe-area insets, the desktop grid column and the zoom controls' clearance
+ * are all solved here and would only be re-derived, badly, by a second bar.
+ */
+export function raceActionSlot(): HTMLElement {
+  return actEl;
 }
 
 // ── Confirm-move button: a single render driven by four inputs ───────────────
@@ -179,6 +202,12 @@ let chipBase: string | null = null;
 // skippable/my-turn states, which have their own UI.
 let chipWaiting = false;
 
+// Local game, bots on the clock: the chip already holds the stable "rivals are
+// moving" line. Bot turns re-render the chrome several times a second, and
+// rebuilding the same line would restart the ellipsis animation on every one of
+// them — so we only touch the DOM when entering the state.
+let chipAiWaiting = false;
+
 /** Build the confirm-move button's appearance from the current state. */
 function refreshConfirmBtn(): void {
   if (!built) return;
@@ -193,7 +222,7 @@ function refreshConfirmBtn(): void {
   // Visible when there's something to confirm / a send is in progress (or failed) / it's my online turn.
   confirmBtn.hidden = !(confirmSelected || sendState !== 'idle' || confirmMyTurn);
   confirmBtn.disabled = sendState === 'sending' || timerOnly;
-  confirmBtn.textContent =
+  confirmTextEl.textContent =
     sendState === 'sending'
       ? strings.online.sending
       : sendState === 'failed'
@@ -203,6 +232,11 @@ function refreshConfirmBtn(): void {
           : confirmSelected && timer
             ? `${strings.buttons.confirmMove} · ${timer}`
             : strings.buttons.confirmMove;
+  // The tick belongs to "Go!" alone. A send in progress and the bare countdown
+  // are states to read, not act on; a failed send offers the circular arrow
+  // instead, since the button now means "try again".
+  confirmRetryEl.hidden = sendState !== 'failed';
+  confirmCheckEl.hidden = sendState !== 'idle' || timerOnly;
 }
 
 /**
@@ -352,6 +386,7 @@ export function renderRaceChrome(ctx: RaceCtx): void {
     resetStandings(); // leaving the race — a new one recomputes from scratch
     chipBase = null;
     chipWaiting = false;
+    chipAiWaiting = false;
     return;
   }
 
@@ -391,7 +426,7 @@ function renderSkip(game: GameState, net: NetTurn | null): void {
   const name = el('b', 'pr-race__skipname');
   name.style.color = cur.color;
   name.textContent = cur.name;
-  skipBtn.replaceChildren(
+  skipTextEl.replaceChildren(
     document.createTextNode(`${strings.online.skipTurnBtn} `),
     name,
   );
@@ -401,6 +436,8 @@ function renderSkip(game: GameState, net: NetTurn | null): void {
 function renderChip(game: GameState, net: NetTurn | null, aiTurn: boolean): void {
   chipBase = null; // by default don't decorate the chip with a timer (set in the net branch)
   chipWaiting = false; // the animated ellipsis is only armed for "someone else's turn"
+  const wasAiWaiting = chipAiWaiting; // every branch below but the bots' one leaves the state
+  chipAiWaiting = false;
   const cur = game.players[game.current];
 
   if (net) {
@@ -428,8 +465,17 @@ function renderChip(game: GameState, net: NetTurn | null, aiTurn: boolean): void
 
   const warn = game.finalTurnsLeft !== null ? strings.race.finalWarn : '';
   if (aiTurn) {
-    // A bot is moving: the "tap a point" hint doesn't apply — the human waits.
-    setChip(`${strings.race.driver(cur.name)}${warn}`, cur.color);
+    // Bots are moving: ONE line for their whole run rather than each bot's name
+    // in turn — naming them rewrote the chip several times a second, which is
+    // unreadable and useless, since the human has nothing to do until it's their
+    // turn again. Same waiting ellipsis as the online branch, and no dot: the
+    // line is about the field, not about one car. finalWarn is left off too —
+    // it's advice on the human's own driving, and it comes back with the hint.
+    if (!wasAiWaiting) {
+      setChip('', null);
+      applyWaitingChip(strings.race.rivalsMoving, null);
+    }
+    chipAiWaiting = true;
     return;
   }
   setChip(`${strings.race.driver(cur.name)} ${strings.race.hintPick}${warn}`, cur.color);

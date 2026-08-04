@@ -10,7 +10,8 @@ import { NavField } from '../model/nav';
 import { computeStandings, turnsTaken } from '../model/standings';
 import { len } from '../geometry';
 import { strings } from '../i18n';
-import { el, icon, CLOCK_SVG, CRASH_SVG } from './pr-chrome';
+import { el, icon } from './pr-chrome';
+import { BOT_SVG, CLOCK_SVG, CRASH_SVG } from './icons';
 
 // ── Standings order ──────────────────────────────────────────────────────────
 // Frozen at lap boundaries: mid-lap, different cars have made different numbers
@@ -148,6 +149,10 @@ export function buildRow(
       : String(index + 1);
 
   el('span', 'pr-race__swatch', row).style.background = p.color;
+  // A bot is marked by an icon rather than a prefix welded into its name: the
+  // name travels through the online state and every other place it's shown,
+  // and only this row has somewhere to put a mark.
+  if (p.bot) icon('pr-race__bot', BOT_SVG, row);
   el('span', 'pr-race__name', row).textContent = p.name;
   row.append(rowStatus(p, { stalled: seat === ctx.stalledSeat, final: !!ctx.final }));
   return row;

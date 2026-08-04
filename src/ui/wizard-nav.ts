@@ -14,8 +14,9 @@
 import { Phase } from '../app-state';
 import { EditorStep } from '../model/editor';
 import { strings } from '../i18n';
-import { el, button, icon, buildTopbar, buildBrand, BURGER_SVG } from './pr-chrome';
+import { el, button, icon, buildTopbar, buildBrand } from './pr-chrome';
 import { openMenu } from './menu';
+import { BURGER_SVG } from './icons';
 
 const board = document.querySelector('.app__board')!;
 

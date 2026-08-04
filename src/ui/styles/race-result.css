@@ -118,6 +118,22 @@
 }
 
 /* ── Ways on from here ─────────────────────────────────────────────────────── */
+/* The buttons' wrapper. On the full screen it is a plain pass-through row of the
+   centred column; `--live` is the other home, docked into the live race's action
+   stack while the rest of the field is still driving. */
+.pr-result__dock:not([hidden]) {
+  display: block;
+}
+.pr-result__dock--live {
+  width: 100%;
+  /* Matches the chip's cap above it, so the stack reads as one column and a long
+     button can't run under the zoom controls at the board's right edge. */
+  max-width: min(100%, 460px);
+  /* .pr-race hands pointer events only to its own controls (race-chrome.css);
+     a guest of the action stack has to opt in for itself. */
+  pointer-events: auto;
+}
+
 .pr-result__actions {
   flex-direction: column;
   gap: 10px;
@@ -130,6 +146,24 @@
 }
 /* The two secondary routes are quieter than the rematch above them. */
 .pr-result__actions > .pr-btn:not(.pr-btn--primary) {
+  padding: 13px 18px;
+  font-weight: 600;
+  font-size: 13.5px;
+  letter-spacing: 1px;
+}
+
+/* The guest's end-of-race block: the inert wait plate plus their own way out.
+   Same column rhythm as .pr-result__actions, which it stands in for. */
+.pr-result__guest {
+  flex-direction: column;
+  gap: 10px;
+}
+.pr-result__guest:not([hidden]) {
+  display: flex;
+}
+/* Quiet, like the secondary routes on the host's side of this screen. */
+.pr-result__guest > .pr-btn {
+  width: 100%;
   padding: 13px 18px;
   font-weight: 600;
   font-size: 13.5px;
@@ -158,8 +192,12 @@
 }
 .pr-result__dots {
   flex: 0 0 auto;
-  display: inline-flex;
   gap: 3px;
+}
+/* Hidden when there's nothing to wait for (the creator left) — see the convention
+   in pr-controls.css: display lives under :not([hidden]) so [hidden] still wins. */
+.pr-result__dots:not([hidden]) {
+  display: inline-flex;
 }
 .pr-result__dot {
   width: 4px;

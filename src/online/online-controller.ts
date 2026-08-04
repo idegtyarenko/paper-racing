@@ -11,18 +11,26 @@
 //   • host-bots.ts — lobby bot config plus the host computing and committing bot moves.
 // The controller hands them the shared state (deps) and confirmFirst/commitOnline via init.
 
-import { GameState, Candidate, cloneState, isFinished } from '../model/game';
+import {
+  GameState,
+  Candidate,
+  cloneState,
+  isFinished,
+  humansAllDone,
+  hasLiveBots,
+} from '../model/game';
 import { applyMove, retireSeat } from '../model/turns';
 import { editorFromTrack } from '../model/editor';
 import {
   openJoinDialog,
   showJoinError,
+  showErrorToast,
   showToast,
   setJoinBusy,
   setConnBanner,
 } from '../ui/dialogs';
 import { closeOverlay } from '../ui/dom';
-import { openConfirm } from '../ui/confirm';
+import { openConfirm, openNotice } from '../ui/confirm';
 import { AppState } from '../app-state';
 import { RENAME_DEBOUNCE_MS } from '../config';
 import { setMoveSendState } from '../ui/race-chrome';
@@ -147,7 +155,7 @@ function commitOnline(): void {
  * Send our move (confirm-first): apply it to a copy, write it to the server, and only
  * on success make the copy the current state. The original is left untouched, so on
  * error the player's selection and candidates stay intact and the button turns into
- * "↻ Retry sending". Identity guard: if an authoritative state (echo or someone else's
+ * "Send again". Identity guard: if an authoritative state (echo or someone else's
  * move) arrives while the write is in flight, we skip applying ours locally.
  */
 export async function sendMove(cand: Candidate): Promise<void> {
@@ -204,7 +212,7 @@ export async function sendRetire(): Promise<void> {
   } catch {
     sending = false;
     setMoveSendState('idle');
-    showToast(strings.online.error);
+    showErrorToast(strings.online.error);
   }
 }
 
@@ -252,6 +260,31 @@ function forgetSession(): void {
   }
 }
 
+/**
+ * Announce anyone who gave up between two states. Retirement never touches the roster
+ * — it's a flag inside the race state — so it has to be spotted by diffing, unlike a
+ * departure (see announceDepartures in online.ts).
+ *
+ * A seat already flagged `left` is skipped: walking out of a running race retires the
+ * seat too, and "left the game" is the truer of the two. The leaver flags the seat
+ * before writing the retirement precisely so this check sees it in time.
+ *
+ * Only for a race carrying on with the same lineup: a rematch brings a whole new
+ * `players` array, where seat-by-seat comparison would be meaningless.
+ */
+function announceRetirements(before: GameState | null, after: GameState): void {
+  if (!before || before.phase !== 'race' || after.phase === 'over') return;
+  if (before.players.length !== after.players.length) return;
+  const mine = session.mySeat();
+  const roster = session.getRoster();
+  after.players.forEach((p, seat) => {
+    if (seat === mine || p.bot) return;
+    if (!p.retired || before.players[seat].retired) return;
+    if (roster[seat]?.left) return; // they didn't give up, they walked out
+    showToast(strings.online.playerRetired(p.name));
+  });
+}
+
 /** Turn a join error into user-facing text. */
 function joinErrorText(e: unknown): string {
   const m = (e as { message?: string })?.message ?? '';
@@ -259,6 +292,37 @@ function joinErrorText(e: unknown): string {
   if (m.includes('game_full')) return strings.online.full;
   if (m.includes('game_started')) return strings.online.started;
   return strings.online.error;
+}
+
+/** Whether the notice below is already up, so a stream of events doesn't re-raise it. */
+let stallNoticed = false;
+
+/**
+ * A guest's race that can no longer be finished: the creator has walked out, and bots
+ * are still driving — and only the creator's client works out their moves, so the queue
+ * stops at the first bot and never moves again. Nothing can be done in the room from
+ * here, so say it plainly and hand over the way out rather than leaving everyone to
+ * work out why nobody is moving. Without bots the race carries on without its creator,
+ * which is the whole point of not deleting the room when they leave.
+ */
+function noticeHostStall(): void {
+  const game = deps.state.game;
+  const stalled =
+    session.active() &&
+    !session.isHost() &&
+    session.hostGone() &&
+    !!game &&
+    game.phase === 'race' &&
+    hasLiveBots(game);
+  if (!stalled) {
+    stallNoticed = false;
+    return;
+  }
+  if (stallNoticed) return;
+  stallNoticed = true;
+  openNotice(strings.online.hostLeftStalled, strings.online.leaveRace, () =>
+    leaveSession(),
+  );
 }
 
 const handlers: OnlineHandlers = {
@@ -282,6 +346,7 @@ const handlers: OnlineHandlers = {
     // race mode, so the normal transition below (mode !== 'race') won't fire — catch
     // over→race separately to close the winner dialog/banner and re-fit the field.
     const wasOver = deps.state.game?.phase === 'over';
+    announceRetirements(deps.state.game, g);
     deps.setGame(g);
     if (deps.state.phase !== 'race') {
       deps.state.phase = 'race';
@@ -298,16 +363,27 @@ const handlers: OnlineHandlers = {
     turnWatch.armTurnWatch();
     deps.updateUI();
     deps.redraw();
+    // Last: the creator's departure arrives as a roster change on a state row, so this
+    // is where a guest finds out the race has nowhere left to go.
+    noticeHostStall();
   },
   onClosed: () => {
     turnWatch.clearWatches();
     forgetSession(); // the game was deleted/closed by the host — nothing to come back to
+    stallNoticed = false;
     pendingCand = null;
     setMoveSendState('idle');
     setConnBanner(false);
     hostBots.setLobbyStarting(false);
-    showToast(strings.online.closed);
+    showErrorToast(strings.online.closed);
     deps.resetToEdit();
+  },
+  onPlayerLeft: (name) => {
+    // News, not a failure — the neutral skin. Worth saying in both places: in the lobby
+    // a seat frees up, and in a race a car goes quiet for a reason no one would guess.
+    // Leaving outranks the retirement it implies mid-race; announceRetirements stays
+    // quiet for a seat that's flagged gone, so a departure is announced once, as itself.
+    showToast(strings.online.playerLeft(name));
   },
   onConnection: (ok) => {
     setConnBanner(!ok);
@@ -336,7 +412,7 @@ function hostOnline(name: string): Promise<void> {
       deps.updateUI();
       deps.redraw();
     } catch {
-      showToast(strings.online.error);
+      showErrorToast(strings.online.error);
     }
   });
 }
@@ -400,18 +476,30 @@ function startOnline(): Promise<void> {
         commitOnline();
       }
     } catch {
-      showToast(strings.online.startFailed);
+      showErrorToast(strings.online.startFailed);
     } finally {
       hostBots.setLobbyStarting(false);
     }
   });
 }
 
-/** Whether this client can start a rematch: it's the host and the race is over — in
- *  that case one tap replays the same track with the same lineup ("🔄 Rematch" button on the results screen). */
+/** Whether this client can start a rematch: it's the host, nothing is left for the
+ *  people to drive, and there is still someone to race against — in that case one tap
+ *  replays the same track with the same lineup (the "Rematch" button on the results
+ *  screen). Once the last guest has left, a rematch would be a lone drive around the
+ *  track, so the button goes away and the results screen offers only the way out.
+ *
+ *  Not strictly `phase === 'over'`: once every human has a place or has retired, the
+ *  race is decided as far as the room is concerned — waiting out a tail of bots before
+ *  anyone may press Rematch is just a queue for nothing. */
 export function canRematch(): boolean {
   const game = deps.state.game;
-  return session.isHost() && !!game && game.phase === 'over';
+  return (
+    session.isHost() &&
+    !!game &&
+    (game.phase === 'over' || humansAllDone(game)) &&
+    session.activeRoster().length >= 2
+  );
 }
 
 /**
@@ -425,30 +513,79 @@ export function canRematch(): boolean {
 function rematchOnline(): Promise<void> {
   return guarded(async () => {
     const raceTrack = deps.state.raceTrack;
-    if (!raceTrack || !canRematch()) return;
+    // The button is only shown when a rematch is on, so landing here means the room
+    // moved under us (the last guest left, someone's state arrived late). Say so —
+    // a visible button that silently does nothing is the worst of both.
+    if (!raceTrack || !canRematch()) {
+      showErrorToast(strings.online.startFailed);
+      return;
+    }
     const g = hostBots.buildStartState(raceTrack);
+    const prev = deps.state.game;
     try {
       await session.start(g);
-      // The host never left race mode when the race finished — an echo of our own
-      // write will arrive via onGameState with an over→race transition and switch us
-      // into the new race there. If that echo is delayed, fall back the same way startOnline does.
-      if (deps.state.game?.phase === 'over') {
+      // The host never left race mode when the race finished — an echo of our own write
+      // will arrive via onGameState and switch us into the new race there. If that echo
+      // is delayed, fall back the same way startOnline does. Comparing against the state
+      // we started from is what tells the two apart: the echo replaces the object.
+      if (deps.state.game === prev) {
         deps.setGame(g);
         closeOverlay();
         deps.fitToContent();
         commitOnline();
       }
     } catch {
-      showToast(strings.online.startFailed);
+      showErrorToast(strings.online.startFailed);
     }
   });
 }
 
-/** Leave the lobby: free the seat on the server and go back (host goes to mode select). */
-function leaveLobby(): Promise<void> {
+/**
+ * Retire our own seat if we're leaving a race that's still running. Reuses the same
+ * confirm-first write as the retire button; a finished or already-retired seat, or a
+ * session that never got past the lobby, has nothing to do here.
+ */
+async function retireBeforeLeaving(): Promise<void> {
+  const game = deps.state.game;
+  if (!game || game.phase !== 'race') return;
+  const seat = session.mySeat();
+  const me = game.players[seat];
+  if (!me || isFinished(me) || me.retired) return;
+  // Flag the seat as gone first, then retire it. Both reach the others as separate
+  // realtime updates, and this order is what lets them tell the two apart: seeing
+  // the flag first, they announce a departure and stay quiet about the retirement
+  // that follows. The reverse order would announce a surrender by someone who has
+  // in fact walked out.
+  await session.markLeft();
+  try {
+    await confirmFirst(game, (next) => retireSeat(next, seat));
+  } catch {
+    // The seat stays live for the others; they'll auto-skip it as before. Leaving
+    // must not be blocked by a failed write.
+  }
+}
+
+/**
+ * Leave the session for good: free the seat on the server and go back. Reached
+ * from the lobby, and from the results screen when a guest doesn't want to wait
+ * on the track creator's rematch — the room lives on either way, the rematch
+ * just starts without us.
+ *
+ * Where "back" is follows who we are: the host still owns the drawn track
+ * (`raceTrack`), so they land on mode select with it; a guest never had one
+ * (nulled on join) and goes to a clean editor.
+ */
+function leaveSession(): Promise<void> {
   return guarded(async () => {
+    // Walking out of a race we're still driving in is a retirement: the others keep
+    // racing, and our car stops rather than standing there waiting for turns that never
+    // come. Has to go first — session.leave() closes the channel before anything else,
+    // and there's nowhere to write afterwards. Best-effort: a failed write must not
+    // trap us in a session we've decided to leave.
+    await retireBeforeLeaving();
     turnWatch.clearWatches();
     forgetSession(); // deliberate leave — nothing to come back to
+    stallNoticed = false;
     pendingCand = null;
     setMoveSendState('idle');
     setConnBanner(false);
@@ -571,7 +708,7 @@ export function promptResume(): void {
     async () => {
       const known = await session.memberName(code);
       if (!known) {
-        showToast(strings.online.gameGone);
+        showErrorToast(strings.online.gameGone);
         return;
       }
       rememberName(known);
@@ -588,7 +725,7 @@ export function rematch(): void {
   rematchOnline();
 }
 export function leave(): void {
-  leaveLobby();
+  leaveSession();
 }
 export function share(): void {
   shareLink();

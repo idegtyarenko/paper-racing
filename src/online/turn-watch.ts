@@ -14,12 +14,12 @@
 
 import { GameState, isFinished } from '../model/game';
 import { coastMove } from '../model/turns';
-import { showToast } from '../ui/dialogs';
+import { showErrorToast } from '../ui/dialogs';
 import type { NetTurn } from '../ui/race-chrome';
 import { strings } from '../i18n';
 import { TURN_TIMEOUT_MS, LOBBY_PRUNE_MS, SKIP_RETRY_MS } from '../config';
 import * as session from './online';
-import { isBotSeat, scheduleBotMove, clearBotTimer } from './host-bots';
+import { isBotSeat, scheduleBotMove, clearBotTimer, resetBotStreak } from './host-bots';
 import type { OnlineDeps } from './online-controller';
 
 /** Result of confirm-first (see the controller): either we applied our copy
@@ -55,8 +55,12 @@ let skipTimer: number | null = null;
 let lobbyPruneTimer: number | null = null;
 /** Turn time-remaining tracker: the moment the turn started (local clock) plus a
  *  ticker that refreshes the display. This is a local, per-client count (no shared
- *  timestamp in the state) — small drift between clients is fine for a "soft" timer. */
+ *  timestamp in the state) — small drift between clients is fine for a "soft" timer.
+ *  `watchedTurn` is the state's turn number this count belongs to: armTurnWatch runs
+ *  on every state change and presence event, and only a genuinely new turn may restart
+ *  the clock (see armTurnWatch). */
 let turnStartAt: number | null = null;
+let watchedTurn: number | null = null;
 let tickTimer: number | null = null;
 /** Whether to show the manual skip button (true only for a player who's present). */
 let skipVisible = false;
@@ -74,6 +78,7 @@ export function clearTurnWatch(): void {
     tickTimer = null;
   }
   turnStartAt = null;
+  watchedTurn = null;
   deps.setTurnCountdown(null, false); // clear the timer display — otherwise it'd freeze at "· 0:00"
   skipVisible = false;
 }
@@ -125,14 +130,26 @@ function iAmActive(game: GameState): boolean {
 
 /** Recompute turn watching for the current turn. Called on every state change and presence event. */
 export function armTurnWatch(): void {
+  // Keep hold of the count we're about to clear: if this call is about the same turn
+  // (a presence sync, a re-fetch echoing the state we already have), the clock carries
+  // on rather than starting over.
+  const prevTurn = watchedTurn;
+  const prevStart = turnStartAt;
   clearTurnWatch();
   const game = deps.state.game;
   // Mode gate (same idea as scheduleAiMove): a presence event in the lobby calls
   // armTurnWatch, but a previous race might still be sitting in state.game with phase
   // 'race' (creating a new lobby doesn't clear it) — without this check we'd show a
   // turn-timer button for someone else's/our own turn while in the lobby.
-  if (!session.active() || !game || game.phase !== 'race' || deps.state.phase !== 'race')
+  if (
+    !session.active() ||
+    !game ||
+    game.phase !== 'race' ||
+    deps.state.phase !== 'race'
+  ) {
+    resetBotStreak(); // no running race — the next one starts with a full pause
     return;
+  }
   const cur = game.current;
 
   // Only the host computes and commits bot moves; guests just wait for its pushMove
@@ -142,14 +159,26 @@ export function armTurnWatch(): void {
     if (session.isHost()) scheduleBotMove(cur);
     return;
   }
+  resetBotStreak(); // a human's turn ends the bot run — the next bot waits the full pause
 
   // Turn limit comes from the race rules (set by the host in settings); old states
   // without the field fall back to a default.
   const limit = game.rules.turnLimitMs ?? TURN_TIMEOUT_MS;
 
-  // Local countdown of time remaining — for me (label on the button) and for
-  // opponents (suffix in the status). Start it before the "my turn" early return, so it's visible to me too.
-  turnStartAt = Date.now();
+  // Countdown of time remaining — for me (label on the button) and for opponents
+  // (suffix in the status). Start it before the "my turn" early return, so it's visible
+  // to me too. Three sources, in order: the count we were already running for this turn
+  // (so a presence sync doesn't hand the player on the clock a fresh minute), the stamp
+  // the mover wrote into the state (so a tab that was closed and reopened mid-turn
+  // rejoins the same countdown instead of starting its own), and only then our own
+  // clock — a turn that began locally, this instant.
+  const shared = session.turnStartedAt(game.turn);
+  turnStartAt =
+    prevTurn === game.turn && prevStart !== null ? prevStart : (shared ?? Date.now());
+  watchedTurn = game.turn;
+  // What's left of this turn right now — the skip timers below are set from it, so a
+  // re-arm mid-turn doesn't push manual skip and auto-skip back by a full limit either.
+  const remaining = Math.max(0, limit - (Date.now() - turnStartAt));
   const tick = (): void => {
     const g = deps.state.game;
     if (!session.active() || !g || g.phase !== 'race' || turnStartAt === null) return;
@@ -169,13 +198,13 @@ export function armTurnWatch(): void {
     skipTimer = window.setTimeout(() => {
       skipVisible = true;
       deps.updateUI();
-    }, limit);
+    }, remaining);
     return;
   }
   // Absent: auto-skip is performed by the designated present client.
   if (session.designatedSkipper() !== session.mySeat()) return;
   const left = session.leftAtOf(cur);
-  const grace = left === null ? limit : Math.max(0, limit - (Date.now() - left));
+  const grace = left === null ? remaining : Math.max(0, limit - (Date.now() - left));
   skipTimer = window.setTimeout(() => autoSkip(cur), grace);
 }
 
@@ -205,7 +234,7 @@ async function applySkip(game: GameState): Promise<void> {
       commitOnline();
     }
   } catch {
-    showToast(strings.online.error);
+    showErrorToast(strings.online.error);
     // Auto-skip: retry silently — autoSkip will re-check (same turn, player still
     // offline, I'm still designated). Manual skip: skipVisible stays true, button is available again.
     if (!session.isPresent(game.current)) {

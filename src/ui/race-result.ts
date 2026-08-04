@@ -15,17 +15,11 @@ import { GameState } from '../model/game';
 import { NavField } from '../model/nav';
 import { strings } from '../i18n';
 import { renderRows } from './classification';
+import { bindTap } from './dom';
+import { raceActionSlot } from './race-chrome';
 import { el, button, icon } from './pr-chrome';
-
-/** Laurel cup — you won. */
-const TROPHY_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10v4a5 5 0 0 1-10 0zM7 6H4v1.5a3.5 3.5 0 0 0 3.4 3.5M17 6h3v1.5a3.5 3.5 0 0 1-3.4 3.5M9 19h6M8.5 21h7M12 15v4"/></svg>';
-/** Podium bars — someone else took it. */
-const PODIUM_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="15" width="6" height="6"/><rect x="9" y="10" width="6" height="11"/><rect x="16" y="17" width="6" height="4"/></svg>';
-/** Circular arrow — run it back. */
-const REMATCH_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 3 6.7M3 20v-4h4"/></svg>';
+import { isPodium } from './format';
+import { PODIUM_SVG, REMATCH_SVG, TROPHY_SVG } from './icons';
 
 const board = document.querySelector('.app__board')!;
 
@@ -36,6 +30,8 @@ export interface ResultHandlers {
   onSameTrack: () => void;
   /** "Draw a new track" — back to the editor (online: leaves the session). */
   onNewTrack: () => void;
+  /** Online guest's exit from the rematch wait — frees the seat, leaves the room running. */
+  onGuestLeave: () => void;
 }
 
 let root: HTMLElement;
@@ -43,14 +39,16 @@ let labelEl: HTMLElement;
 let iconEl: HTMLElement;
 let headlineEl: HTMLElement;
 let subtitleEl: HTMLElement;
-let cardEl: HTMLElement;
 let rowsEl: HTMLElement;
+let innerEl: HTMLElement;
+let dockEl: HTMLElement;
 let actionsEl: HTMLElement;
 let rematchBtn: HTMLButtonElement;
 let sameTrackBtn: HTMLButtonElement;
 let newTrackBtn: HTMLButtonElement;
-let hostWaitHintEl: HTMLElement;
-let waitEl: HTMLElement;
+let guestEl: HTMLElement;
+let waitDotsEl: HTMLElement;
+let waitTextEl: HTMLElement;
 let built = false;
 
 function build(h: ResultHandlers): void {
@@ -61,7 +59,8 @@ function build(h: ResultHandlers): void {
   // what everyone just drove) but stops competing with the result.
   el('div', 'pr-result__scrim', root);
 
-  const inner = el('div', 'pr-result__inner', root);
+  innerEl = el('div', 'pr-result__inner', root);
+  const inner = innerEl;
 
   const head = el('div', 'pr-result__head', inner);
   iconEl = el('span', 'pr-result__icon', head);
@@ -69,38 +68,52 @@ function build(h: ResultHandlers): void {
   headlineEl = el('div', 'pr-result__headline', head);
   subtitleEl = el('div', 'pr-result__subtitle', head);
 
-  cardEl = el('div', 'pr-card pr-result__card', inner);
+  // Only the full screen has a classification — the dock appears while the race
+  // is still being decided, so there is no final one to show.
+  const cardEl = el('div', 'pr-card pr-result__card', inner);
   el('span', 'pr-label pr-result__cardhead', cardEl).textContent =
     strings.race.classification;
   rowsEl = el('div', 'pr-race__rows', cardEl);
   rowsEl.setAttribute('role', 'img');
   rowsEl.setAttribute('aria-label', strings.race.standingsLabel);
 
-  actionsEl = el('div', 'pr-result__actions', inner);
+  // The buttons live in a wrapper, because they have two homes: inside this
+  // layer when the race is over, and docked into the live race's bottom stack
+  // while the others are still driving (see renderRaceResult). Moving one
+  // wrapper keeps that a re-parent rather than a rebuild — the buttons, their
+  // listeners and their state are the same either way.
+  dockEl = el('div', 'pr-result__dock', inner);
+  actionsEl = el('div', 'pr-result__actions', dockEl);
   rematchBtn = button('pr-btn pr-btn--primary pr-btn--caps', actionsEl);
   icon('pr-btn__ico', REMATCH_SVG, rematchBtn);
   el('span', 'pr-result__btntext', rematchBtn).textContent = strings.buttons.sameTrack;
-  rematchBtn.addEventListener('click', h.onRematch);
+  // bindTap, not a bare click: this screen arrives straight after a gesture on the
+  // canvas, and that's exactly when iOS drops the first synthetic click on a button
+  // that just appeared — "Rematch" would need a second tap (see ui/dom.ts).
+  bindTap(rematchBtn, h.onRematch);
   sameTrackBtn = button('pr-btn pr-btn--caps', actionsEl);
   sameTrackBtn.textContent = strings.buttons.sameTrackNewMode;
-  sameTrackBtn.addEventListener('click', h.onSameTrack);
+  bindTap(sameTrackBtn, h.onSameTrack);
   newTrackBtn = button('pr-btn pr-btn--caps', actionsEl);
   newTrackBtn.textContent = strings.buttons.newTrack;
-  newTrackBtn.addEventListener('click', h.onNewTrack);
-  // Shown only for a host stuck driving bots for the rest of the room — see
-  // hostMustStayForBots in renderRaceResult.
-  hostWaitHintEl = el('div', 'pr-result__subtitle', actionsEl);
-  hostWaitHintEl.textContent = strings.race.earlyExitHostWait;
+  bindTap(newTrackBtn, h.onNewTrack);
 
   // A guest can't start anything — the track's creator owns the room, and the
   // guest is dropped straight into the new race when they do. So they get a
   // dashed "waiting" plate where the buttons would be, not disabled buttons.
   // Only for the real end-of-race rematch wait — during an early exit the
   // guest isn't waiting on anything, they can still just leave.
-  waitEl = el('div', 'pr-result__wait', inner);
-  const dots = el('span', 'pr-result__dots', waitEl);
-  for (let i = 0; i < 3; i++) el('span', 'pr-result__dot', dots);
-  el('span', 'pr-result__waittext', waitEl).textContent = strings.online.rematchWaiting;
+  guestEl = el('div', 'pr-result__guest', inner);
+  const waitEl = el('div', 'pr-result__wait', guestEl);
+  waitDotsEl = el('span', 'pr-result__dots', waitEl);
+  for (let i = 0; i < 3; i++) el('span', 'pr-result__dot', waitDotsEl);
+  waitTextEl = el('span', 'pr-result__waittext', waitEl);
+  // ...but waiting is not the only thing they can do. Without this the screen is
+  // a dead end: no buttons, and a reload just restores the finished race from
+  // the snapshot. Leaving frees the seat; the rematch still runs without us.
+  const guestLeaveBtn = button('pr-btn pr-btn--caps', guestEl);
+  guestLeaveBtn.textContent = strings.online.leaveRace;
+  bindTap(guestLeaveBtn, h.onGuestLeave);
 
   board.append(root);
   built = true;
@@ -125,27 +138,24 @@ export interface ResultCtx {
   mySeat: number;
   /** In an online race and not the host: the rematch isn't ours to start. */
   onlineGuest: boolean;
+  /** Online: the creator has left the room, so no rematch is coming — nothing to wait for. */
+  hostGone: boolean;
   /** Whether a one-tap rematch is available at all (a saved lineup, or host online). */
   canRematch: boolean;
   /** Online: "same track, new lineup" runs the local wizard, which would desync the room. */
   isOnline: boolean;
-  /**
-   * Online host with bots still live in the room: leaving (session.leave())
-   * would strand them mid-race for everyone else, since only the host drives
-   * bot moves — "Draw a new track" is disabled until the bots are done.
-   */
-  hostMustStayForBots: boolean;
 }
 
 /**
  * Headline block. Three outcomes, and the difference between the first two is
- * whether the winner is you: "You won" in your own colour, or "<name> wins" in
- * theirs. Nobody finishing is neither — no trophy, no colour, just what happened.
+ * whether the winner is you: "You won" in your own colour, or "<name> in 1st
+ * place" in theirs — someone else's win reads as a line of the classification. Nobody finishing is neither — no trophy, no colour, just what happened.
  */
 function renderHead(game: GameState, mySeat: number): void {
   const { winner } = game;
   iconEl.replaceChildren();
   iconEl.hidden = false;
+  subtitleEl.hidden = false;
   headlineEl.style.removeProperty('color');
 
   if (winner === null) {
@@ -171,29 +181,58 @@ function renderHead(game: GameState, mySeat: number): void {
   icon('pr-result__iconsvg', mine ? TROPHY_SVG : PODIUM_SVG, iconEl);
   headlineEl.style.color = w.color;
   headlineEl.textContent = mine ? strings.race.youWon : strings.race.someoneWon(w.name);
-  subtitleEl.textContent = mine ? strings.race.youWonSub : strings.race.someoneWonSub;
+  const sub = mine ? strings.race.youWonSub : loserSub(game, winner, mySeat);
+  subtitleEl.textContent = sub ?? '';
+  subtitleEl.hidden = sub === null;
 }
 
 /**
- * Headline for the early-exit case: no human has anything left to do, but the
- * race isn't resolved yet (bots may still be finishing it), so there's no
- * `winner` to read and no final classification to show — just the way out.
+ * The subtitle for a screen whose reader didn't win — `null` means show none.
+ *
+ * With a seat of our own (online, or the one human against bots) it's personal:
+ * "better luck next time" is wrong for a driver who came third of six, and the
+ * size of the field is what decides (see `isPodium`).
+ *
+ * Hot-seat has no "you" — everyone shares this screen — so it speaks about the
+ * race instead. One of the people here winning is worth congratulating; humans
+ * beaten by the bots into the bottom half get the consolation line, which is
+ * about the group and still true. In between (a human placed well, but a bot
+ * took it) neither line fits, and the headline plus the classification already
+ * say everything — so nothing is shown rather than something addressed at
+ * nobody.
  */
-function renderEarlyExitHead(): void {
-  iconEl.hidden = true;
-  headlineEl.classList.add('pr-result__headline--quiet');
-  headlineEl.style.removeProperty('color');
-  headlineEl.textContent = strings.race.earlyExitTitle;
-  subtitleEl.textContent = strings.race.earlyExitSub;
+function loserSub(game: GameState, winner: number, mySeat: number): string | null {
+  const total = game.players.length;
+  if (mySeat >= 0) {
+    const place = game.players[mySeat].place;
+    return place !== null && isPodium(place, total)
+      ? strings.race.podiumSub(place)
+      : strings.race.someoneWonSub;
+  }
+  if (!game.players[winner].bot) return strings.race.hotseatWonSub;
+  const humans = game.players.filter((p) => !p.bot);
+  const allBeaten = humans.every((p) => p.place === null || !isPodium(p.place, total));
+  return allBeaten ? strings.race.someoneWonSub : null;
 }
 
 /**
- * Show or hide the result screen. `over` is the main gate: a decided winner is
- * not enough while others are still driving (5G). `earlyExit` is a second,
- * narrower gate — no human has anything left to do, even though the race
- * itself hasn't resolved (bots may still be racing) — same screen, no
- * classification (there isn't a final one yet), and `over` wins if both are
- * somehow true at once (the race legitimately finished while this was up).
+ * Show the ways on from here, in one of two shapes.
+ *
+ * `over` — the race is resolved — is the full-screen layer: outcome, final
+ * classification, three buttons. A decided winner is not enough while others
+ * are still driving (5G).
+ *
+ * `earlyExit` — this human has retired or finished, but the race hasn't
+ * resolved (bots or other players are still driving) — is the same three
+ * buttons docked into the live race's bottom stack instead. The board stays
+ * visible and drivable-looking so you can watch the rest of the field come
+ * home, which is the whole point: finishing first used to blank the race out.
+ * There's no headline and no classification down there — the buttons are the
+ * only thing this player still has to decide, and a final classification
+ * doesn't exist yet.
+ *
+ * `over` wins if both are somehow true at once (the race resolved while the
+ * dock was up), which is also how the dock gives way to the full screen.
  */
 export function renderRaceResult(ctx: ResultCtx): void {
   if (!built) return;
@@ -204,29 +243,54 @@ export function renderRaceResult(ctx: ResultCtx): void {
     earlyExit,
     mySeat,
     onlineGuest,
+    hostGone,
     canRematch,
     isOnline,
-    hostMustStayForBots,
   } = ctx;
-  const show = (over || earlyExit) && !!game && !!nav;
-  root.hidden = !show;
-  document.body.classList.toggle('is-result', show);
-  if (!show) return;
+  const ready = !!game && !!nav;
+  const fullscreen = over && ready;
+  const docked = !over && earlyExit && ready;
 
-  labelEl.textContent = over ? strings.race.raceComplete : strings.race.earlyExitLabel;
-  cardEl.hidden = !over;
-  if (over) {
+  root.hidden = !fullscreen;
+  // Not for the dock: `is-result` says the layer owns the board, and it takes
+  // the zoom controls away with it (race-result.css). The dock leaves the race
+  // to be watched, so the board keeps its controls.
+  document.body.classList.toggle('is-result', fullscreen);
+  // The chip talks to whoever is on the clock — whose turn it is, what to tap.
+  // This player has finished driving; the buttons say everything left to say,
+  // so the chip steps aside rather than stacking above them (race-chrome.css).
+  document.body.classList.toggle('is-early-exit', docked);
+
+  dockEl.hidden = !fullscreen && !docked;
+  // Re-parent only on a change of home: this runs on every render, and moving a
+  // live node would otherwise churn layout (and restart the button's glow) many
+  // times a second while the bots drive.
+  const home = docked ? raceActionSlot() : innerEl;
+  if (dockEl.parentElement !== home) {
+    if (docked) home.append(dockEl);
+    else innerEl.insertBefore(dockEl, guestEl);
+  }
+  dockEl.classList.toggle('pr-result__dock--live', docked);
+
+  if (!fullscreen && !docked) return;
+
+  if (fullscreen) {
+    labelEl.textContent = strings.race.raceComplete;
     renderHead(game!, mySeat);
     renderRows(rowsEl, game!, nav!, { mySeat, final: true });
-  } else {
-    renderEarlyExitHead();
   }
 
   // A guest waits for the host only for the real end-of-race rematch — during
   // an early exit there's nothing to wait for, they can just leave.
   const guestWaiting = onlineGuest && over;
   actionsEl.hidden = guestWaiting;
-  waitEl.hidden = !guestWaiting;
+  guestEl.hidden = !guestWaiting;
+  // Once the creator is gone the plate keeps the way out but drops the promise: no
+  // one is left to start a rematch, so the dots stop pretending something's coming.
+  waitDotsEl.hidden = hostGone;
+  waitTextEl.textContent = hostGone
+    ? strings.online.hostLeftNoRematch
+    : strings.online.rematchWaiting;
   // Only offer a rematch when there's something to replay (online rematch
   // also requires the room to actually be over — canRematch already covers that).
   rematchBtn.hidden = !canRematch;
@@ -234,6 +298,4 @@ export function renderRaceResult(ctx: ResultCtx): void {
   // desync a live room — online that leaves "Rematch" and "Draw a new track"
   // (which, online, means leaving the session).
   sameTrackBtn.hidden = isOnline;
-  newTrackBtn.disabled = hostMustStayForBots;
-  hostWaitHintEl.hidden = !hostMustStayForBots;
 }

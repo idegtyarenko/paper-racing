@@ -4,7 +4,7 @@
 
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { Track } from '../model/track';
-import { GameState } from '../model/game';
+import { GameState, seatName } from '../model/game';
 import {
   GameRow,
   RosterEntry,
@@ -20,6 +20,7 @@ import {
   unsubscribe,
   deserializeTrack,
   deserializeState,
+  turnStartedAt as readTurnStartedAt,
 } from './net';
 
 export interface OnlineHandlers {
@@ -29,6 +30,9 @@ export interface OnlineHandlers {
   onGameState: (game: GameState) => void;
   /** The game was deleted on the server (TTL / host left) — leave online mode. */
   onClosed: () => void;
+  /** Someone else left for good — in the lobby their seat is gone, in a race it's
+   *  flagged. Fires on every remaining client so the departure can be announced. */
+  onPlayerLeft: (name: string) => void;
   /** Presence changed (someone went online/offline) — recompute the timer/skip/labels. */
   onPresence: () => void;
   /** The realtime channel's connection state changed — show/hide the connection banner. */
@@ -49,6 +53,10 @@ let present = new Set<string>();
 let leftAt = new Map<string, number>();
 /** Whether the realtime channel is currently connected (drives the "no connection" banner). */
 let connected = true;
+/** When the current turn began, per the client that wrote the move (null if unknown),
+ *  together with the turn number it belongs to — a stamp only counts for its own turn. */
+let turnStart: number | null = null;
+let turnStartFor = -1;
 
 /** Whether an online session is active (a game was created or joined). */
 export function active(): boolean {
@@ -68,6 +76,14 @@ export function getRoster(): RosterEntry[] {
   return roster;
 }
 
+/**
+ * The roster without the players who left mid-race. Use this to build a lineup (who
+ * actually races next); use `getRoster` where the index matters, since it's the seat.
+ */
+export function activeRoster(): RosterEntry[] {
+  return roster.filter((r) => !r.left);
+}
+
 export function isHost(): boolean {
   return hostFlag;
 }
@@ -75,6 +91,15 @@ export function isHost(): boolean {
 /** clientId of the game's creator (null outside a session). */
 export function hostId(): string | null {
   return hostClient;
+}
+
+/**
+ * Whether the creator has walked out of this room for good. Leaving a race that has
+ * already started doesn't delete the game row (the RPC only flags the seat), so the
+ * room outlives its creator — and with it, everything that only they could start.
+ */
+export function hostGone(): boolean {
+  return hostClient !== null && !roster.some((r) => r.clientId === hostClient && !r.left);
 }
 
 export function getTrack(): Track | null {
@@ -95,6 +120,15 @@ function seatClientId(seat: number): string | null {
 export function isPresent(seat: number): boolean {
   const id = seatClientId(seat);
   return id !== null && present.has(id);
+}
+
+/**
+ * When the current turn began (ms, wall clock), as stamped by whoever wrote the move —
+ * null if that row predates the stamp or the clocks disagree. Shared so that a client
+ * arriving mid-turn sees the same countdown as everyone else, instead of a fresh one.
+ */
+export function turnStartedAt(turn: number): number | null {
+  return turnStartFor === turn ? turnStart : null;
 }
 
 /** When the player in this seat dropped out of presence (ms), or null if they're online. */
@@ -149,6 +183,24 @@ export function canStart(): boolean {
   return hostFlag && roster.length >= 2;
 }
 
+/**
+ * Announce anyone who left between two rosters. A departure looks different either
+ * side of the start: in the lobby the entry is dropped, in a race it's flagged (the
+ * index is the grid slot, so it can't be dropped). Our own leave never reaches here —
+ * `leave()` closes the session before the write — but skip ourselves anyway, since a
+ * seat can also be pruned on our behalf.
+ */
+function announceDepartures(before: RosterEntry[], after: RosterEntry[]): void {
+  if (!before.length) return; // first row of a session: everyone is arriving, not leaving
+  const me = clientId();
+  before.forEach((was, seat) => {
+    if (was.clientId === me || was.left) return;
+    const now = after.find((r) => r.clientId === was.clientId);
+    if (now && !now.left) return;
+    handlers?.onPlayerLeft(was.name || seatName(seat));
+  });
+}
+
 /** Handle an incoming game row (from realtime, or the initial fetch). */
 function applyRow(row: GameRow | null): void {
   if (!row) {
@@ -156,8 +208,14 @@ function applyRow(row: GameRow | null): void {
     handlers?.onClosed();
     return;
   }
+  const before = roster;
   roster = row.lobby ?? [];
+  announceDepartures(before, roster);
   if (row.state && track) {
+    // Before the handler: arming the turn watch is downstream of onGameState, and it
+    // reads this to tell how much of the turn is already gone.
+    turnStart = readTurnStartedAt(row.state);
+    turnStartFor = row.state.turn ?? 0;
     handlers?.onGameState(deserializeState(row.state, track));
   } else {
     handlers?.onLobby();
@@ -246,6 +304,24 @@ export function untrack(): void {
   channel?.untrack();
 }
 
+/**
+ * Free our seat on the server while staying subscribed. Called before retiring on the
+ * way out of a running race, so the others learn we're gone *before* the retirement
+ * lands and can announce the departure instead of a surrender. Idempotent: `leave()`
+ * calls the same RPC again afterwards, and flagging an already-flagged seat is a no-op.
+ *
+ * Only meaningful once a race exists — in the lobby the same RPC drops the seat (and
+ * may delete the room), and we'd receive the echo of our own removal as `onClosed`.
+ */
+export async function markLeft(): Promise<void> {
+  if (!code) return;
+  try {
+    await leaveGame(code);
+  } catch {
+    // Best-effort: leaving must not be blocked by a failed write.
+  }
+}
+
 /** Leave the session: free the seat on the server and unsubscribe. */
 export async function leave(): Promise<void> {
   const c = code;
@@ -274,5 +350,7 @@ function close(): void {
   present = new Set();
   leftAt = new Map();
   connected = true;
+  turnStart = null;
+  turnStartFor = -1;
   if (ch) unsubscribe(ch);
 }

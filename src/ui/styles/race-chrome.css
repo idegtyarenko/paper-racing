@@ -117,6 +117,7 @@
   flex: 0 0 auto;
   width: 11px;
   height: 11px;
+  border-radius: 50%;
 }
 /* Whoever is moving: bigger, ringed in the accent and breathing, so the head of
    the queue is findable without counting from the left. */
@@ -199,6 +200,19 @@
   flex: 0 0 auto;
   width: 13px;
   height: 13px;
+  border-radius: 50%;
+}
+/* Bot marker, between the colour swatch and the name — dimmed, so the row still
+   reads name-first and the mark is something you notice rather than read. */
+.pr-race__bot {
+  flex: 0 0 auto;
+  display: flex;
+  color: var(--pr-ink-dim);
+}
+.pr-race__bot svg {
+  width: 13px;
+  height: 13px;
+  display: block;
 }
 .pr-race__name {
   flex: 1;
@@ -306,6 +320,12 @@
 .pr-race__chip:not([hidden]) {
   display: flex;
 }
+/* Retired or finished while the others drive on: the result buttons are docked
+   in this stack (race-result.css) and the chip has nothing left to tell this
+   player — it addresses whoever is on the clock, and that isn't them any more. */
+body.is-early-exit .pr-race__chip:not([hidden]) {
+  display: none;
+}
 .pr-race__chip--error {
   background: var(--pr-error-bg);
   border-color: var(--pr-error);
@@ -315,6 +335,7 @@
   flex: 0 0 auto;
   width: 9px;
   height: 9px;
+  border-radius: 50%;
 }
 
 .pr-race__act > .pr-btn {
@@ -369,6 +390,13 @@
    status chip + confirm button running the full width. */
 body.is-racing .zoom-ctl {
   bottom: 140px;
+}
+/* The early-exit dock is the tallest thing this stack ever holds — three
+   full-width buttons instead of a chip and one — so it needs more clearance
+   than the racing default above, or the zoom column lands on the top button.
+   Sized for the full set; a shorter dock (online hides one) just sits lower. */
+body.is-early-exit .zoom-ctl {
+  bottom: 200px;
 }
 
 /* The global cream banner would say it twice, in the wrong place: the race has

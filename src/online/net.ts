@@ -8,7 +8,7 @@ import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabas
 import { Vec } from '../geometry';
 import { Track } from '../model/track';
 import { GameState, normalizeRules } from '../model/game';
-import { NET_TIMEOUT_MS } from '../config';
+import { CLOCK_SANITY_MS, NET_TIMEOUT_MS } from '../config';
 
 // ── Serialization ────────────────────────────────────────────────────────────────
 
@@ -22,12 +22,22 @@ export interface SerializedTrack {
   startPoints: Vec[];
 }
 
-/** Race state without the `track` field (the track is stored separately on the row and is immutable). */
-export type SerializedState = Omit<GameState, 'track'>;
+/**
+ * Race state without the `track` field (the track is stored separately on the row and
+ * is immutable), plus the wall-clock moment the row was written — which, since a row is
+ * written exactly when a move lands, is the moment the turn on it began. It rides the
+ * wire rather than `GameState` on purpose: the model stays free of clocks, and a client
+ * arriving mid-turn (a reload, a reopened tab) can still tell how much of it is left.
+ */
+export type SerializedState = Omit<GameState, 'track'> & { turnStartedAt?: number };
 
 export interface RosterEntry {
   clientId: string;
   name: string;
+  /** Set once the player leaves a race in progress. The entry itself has to stay —
+   *  its index is the grid slot — so `leave_game` flags it instead of removing it,
+   *  and the next race is built from the entries without this flag. */
+  left?: boolean;
 }
 
 export interface GameRow {
@@ -68,14 +78,29 @@ export function deserializeTrack(s: SerializedTrack): Track {
 
 export function serializeState(g: GameState): SerializedState {
   const { track: _track, ...rest } = g;
-  return rest;
+  return { ...rest, turnStartedAt: Date.now() };
+}
+
+/**
+ * When the turn in this state began, by the writer's clock — null on rows written
+ * before the stamp existed, and on anything that reads as nonsense: a stamp from the
+ * future, or one so old it can only mean the two clocks disagree (an ordinary overrun
+ * is kept, so the turn reads as expired rather than starting over). Callers fall back
+ * to their own clock, which is what every client did before this travelled.
+ */
+export function turnStartedAt(s: SerializedState): number | null {
+  const at = s.turnStartedAt;
+  if (typeof at !== 'number') return null;
+  const elapsed = Date.now() - at;
+  return elapsed < 0 || elapsed > CLOCK_SANITY_MS ? null : at;
 }
 
 export function deserializeState(s: SerializedState, track: Track): GameState {
   // Rules and the turn counter travel inside the state; old rows without them
   // get a default (turn 0 — a safe starting point for the rotation).
+  const { turnStartedAt: _at, ...rest } = s; // wire-only, read separately — see turnStartedAt
   return {
-    ...s,
+    ...rest,
     // Normalize rules: backfill defaults (so new fields aren't undefined on old
     // rows) plus migrate legacy physics → drive.
     rules: normalizeRules(s.rules),

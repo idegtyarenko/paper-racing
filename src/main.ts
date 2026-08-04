@@ -27,7 +27,7 @@ import { candidatesForSeat, applyMove, coastMove, retireSeat } from './model/tur
 import { Difficulty, chooseMove } from './model/ai';
 import { buildNavField } from './model/nav';
 import { strings, localeTag, dateLocale } from './i18n';
-import { AI_MOVE_DELAY_MS } from './config';
+import { botMoveDelayMs } from './bot-pacing';
 import { render, AppView } from './view/render';
 import { Bounds, polylineBounds } from './view/camera';
 import * as vp from './view/viewport';
@@ -78,6 +78,10 @@ const S = newAppState();
 /** Timer for the delayed bot move — not state, just a handle: stays private
  *  to main.ts, we don't put it in S. Cleared on any exit from the race. */
 let aiTimer: number | null = null;
+/** How many bots have already moved in the current unbroken run — the pause
+ *  shrinks with each one (botMoveDelayMs). Reset the moment the turn is back
+ *  with a human, and on any exit from the race. */
+let aiStreak = 0;
 
 /** Is this seat a bot (and at what difficulty)? Bot-ness lives in state (Player.bot). */
 function isBotSeat(i: number): boolean {
@@ -219,16 +223,15 @@ function updateUI(): void {
     nav: S.raceNav,
     over,
     earlyExit,
-    // Hot-seat has no single "you", so nothing gets the personal treatment
-    // there — online it's our own seat.
-    mySeat: session.active() ? session.mySeat() : -1,
+    // Whose result this is, personally: our own seat online, the one human in a
+    // race against bots. Hot-seat is the only mode with no single "you" (every
+    // player shares this screen), so there it stays −1 and nobody gets the
+    // personal treatment.
+    mySeat: session.active() ? session.mySeat() : soloHumanSeat(),
     onlineGuest: !!net && !net.isHost,
+    hostGone: session.active() && session.hostGone(),
     canRematch: (!!S.game && !!S.lastLocalRace) || online.canRematch(),
     isOnline: session.active(),
-    // Only the host drives bot moves online (host-bots.ts) — leaving while
-    // bots still have moves left would strand everyone else mid-race.
-    hostMustStayForBots:
-      session.active() && session.isHost() && !!S.game && hasLiveBots(S.game),
   });
   renderEditorChrome(S.editor, S.phase);
   // The lobby view drives three renderers: the host's lobby is the setup screen
@@ -252,12 +255,15 @@ function cancelAiMove(): void {
     clearTimeout(aiTimer);
     aiTimer = null;
   }
+  aiStreak = 0;
 }
 
 /**
  * Bot-move loop for a LOCAL game: if it's currently a bot's turn, make its
  * move after a short pause (giving the human time to follow along), and keep
- * going until the turn returns to a human or the race ends. Doesn't run in
+ * going until the turn returns to a human or the race ends. The pause shrinks
+ * with every next bot in the run (botMoveDelayMs) — with 4–5 bots a full pause
+ * each would leave the human waiting through five of them in a row. Doesn't run in
  * online games — there, bot moves are computed and committed by the host
  * through online-controller (otherwise the local applyMove would diverge
  * from the server). The pause is cleared on any exit from the race
@@ -274,8 +280,11 @@ function scheduleAiMove(): void {
     !S.game ||
     S.game.phase !== 'race' ||
     !isBotSeat(S.game.current)
-  )
+  ) {
+    aiStreak = 0; // the run is over (or never started) — the next bot waits the full pause
     return;
+  }
+  const delay = botMoveDelayMs(aiStreak++);
   aiTimer = window.setTimeout(() => {
     aiTimer = null;
     if (!S.game || S.game.phase !== 'race' || !isBotSeat(S.game.current) || !S.raceNav)
@@ -284,7 +293,7 @@ function scheduleAiMove(): void {
     if (cand) applyMove(S.game, cand);
     else coastMove(S.game); // all candidates are taken by opponents — coast instead
     commit();
-  }, AI_MOVE_DELAY_MS);
+  }, delay);
 }
 
 /**
@@ -469,7 +478,6 @@ function startRace(humans: number, bots: number, difficulty: Difficulty): void {
   S.game = newGame(S.raceTrack, humans + bots, S.rules, shuffledIndices(humans + bots));
   for (let i = humans; i < S.game.players.length; i++) {
     S.game.players[i].bot = difficulty;
-    S.game.players[i].name = `${strings.aiSelect.botPrefix} ${S.game.players[i].name}`;
   }
   S.raceNav = buildNavField(S.raceTrack); // needed by bots (chooseMove) and the standings strip
   S.lastLocalRace = { humans, bots, difficulty };
@@ -602,7 +610,21 @@ initRaceResult({
   },
   // "Same track, new lineup": keep the track, re-pick the mode/players.
   onSameTrack: () => goToMode('race'),
-  onNewTrack: () => resetToEdit(),
+  // "Draw a new track" online means leaving the room, and only the host works out
+  // the bots' moves (host-bots.ts) — walking out mid-race freezes it for everyone
+  // else. That's a warning, not a rule: a disabled button explains nothing and, as
+  // it turned out, doesn't even read as disabled.
+  onNewTrack: () => {
+    if (session.active() && session.isHost() && S.game && hasLiveBots(S.game)) {
+      openConfirm(strings.online.leaveBotsConfirm, strings.buttons.newTrack, resetToEdit);
+      return;
+    }
+    resetToEdit();
+  },
+  // A guest done waiting on the track creator's rematch: free the seat and go
+  // draw something. online.leave() lands a guest in the editor by itself, and
+  // clears the resume breadcrumb so a reload doesn't drag us back in.
+  onGuestLeave: () => online.leave(),
 });
 
 // The global menu's entries call the same intents the screens' own controls do.

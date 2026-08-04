@@ -29,7 +29,7 @@ function ordinal(n: number): string {
 
 export const en = {
   app: {
-    title: '🏁 Paper Racing',
+    title: 'Paper Racing',
   },
 
   editor: {
@@ -120,7 +120,7 @@ export const en = {
     local: 'With friends on one device',
     localSub: 'Pass the phone between racers',
     online: 'With friends online',
-    onlineSub: 'Host or join a room',
+    onlineSub: 'Host or join a game',
     ai: 'You versus the computer',
     aiSub: 'Race with up to 5\u00A0bots',
   },
@@ -147,8 +147,6 @@ export const en = {
     /** Row labels. */
     botsLabel: 'Number of bots',
     difficultyLabel: 'Difficulty',
-    /** Bot name prefix — marks a bot in cards, status and the finish. */
-    botPrefix: '🤖',
   },
 
   // Race rules and car handling — the strings of the shared rules editor, shown
@@ -217,23 +215,28 @@ export const en = {
     namePlaceholder: 'Type in your name',
     // Join by code.
     joinByCode: 'Join online game',
-    joinTitle: 'Join a race',
-    codePlaceholder: 'Race code',
+    joinTitle: 'Join online game',
+    codePlaceholder: 'Game code',
     joinSubmit: 'Join',
     // Lobby.
-    lobbyBadge: 'Lobby',
+    lobbyBadge: 'Online game',
     lobbyGuest: 'Waiting for the track creator to start the race…',
-    roomCode: 'Room code',
+    roomCode: 'Game code',
     trackLabel: 'Track',
     players: (n: number, max: number): string => `Players · ${n}/${max}`,
     /** Badge on the racer who owns the track (and starts the race). */
     hostBadge: 'Host',
     /** Under the roster while nobody else has joined. */
-    noGuests: 'Share the room code — no one else has joined yet',
+    noGuests: 'Share the game code — no one else has joined yet',
     /** Why "Start race" is disabled: your own name is still empty. */
     enterName: 'Enter your name to continue',
-    leaveLobby: 'Leave lobby',
-    share: '🔗 Share link',
+    /** Guest's way out: the room lives on without them. */
+    leaveLobby: 'Leave game',
+    /** The host's counterpart — for them, walking out closes the room itself. */
+    cancelRace: 'Cancel game',
+    /** Asked before that, since it drops everyone else too. The confirm button
+     *  reuses `cancelRace`. */
+    cancelConfirm: 'Cancel the game? Everyone else will be dropped.',
     copied: 'Link copied',
     codeCopied: 'Code copied',
     waiting: 'Waiting for at least one more racer…',
@@ -245,36 +248,60 @@ export const en = {
       `${name} is taking a while. You can skip the turn\u00A0— the car will coast straight.`,
     // Skip-button prefix; the stuck player's name is appended separately in their
     // own color — to make clear you're skipping someone else's turn, not yours.
-    skipTurnBtn: '⏭ Skip turn',
+    skipTurnBtn: 'Skip turn',
     offline: 'offline',
     // Errors / notifications.
-    notFound: 'No race found with that code.',
+    notFound: 'No game found with that code.',
     full: 'This race is already full (6\u00A0players max).',
     started: 'This race has already started.',
     error: "Couldn't connect. Try again.",
-    closed: 'The race has ended or was closed by the track creator.',
+    closed: 'The game has ended or was closed by the track creator.',
     // Sending a move / start (confirm-first: write first, then switch locally).
     sending: 'Sending move…',
     sendFailed: "Couldn't send your move. Check your connection and try again.",
-    retrySend: '↻ Send again',
+    retrySend: 'Send again',
     joining: 'Connecting…',
     starting: 'Starting…',
     startFailed: "Couldn't start the race. Try again.",
     // Guest hint on the online results screen: a rematch is started by the track creator.
     rematchWaiting:
       'The track creator can start a rematch\u00A0— everyone continues on the same track.',
+    /** Same spot, once the creator has walked out for good: there is nobody left to
+     *  start a rematch, so the wait is over before it began and leaving is all there is. */
+    hostLeftNoRematch:
+      'The track creator has left the game\u00A0— there will be no rematch.',
+    /** The guest's own way on from that wait: frees their seat for good, while
+     *  the rematch still runs for everyone else. */
+    leaveRace: 'Leave the game',
+    /** Online host with bots still driving: only this client works out their moves, so
+     *  walking out ends the race for everyone else. Asked, not forbidden. */
+    leaveBotsConfirm: "If you leave, everyone else's race is over.",
+    /** What those guests are then told, with the way out as the only button. */
+    hostLeftStalled:
+      "The track creator has left. This race can't go on\u00A0\u2014\u00A0nobody is driving the bots.",
+    /** Someone else walked out of the room for good — announced to everyone still
+     *  in it, in the lobby and mid-race alike. Distinct from `playerRetired`: that
+     *  one is still here watching, this one is gone and won't be in the next race. */
+    playerLeft: (name: string): string => `${name} left the game.`,
+    /** Someone else gave up mid-race but stayed in the room. Their car stops for a
+     *  reason no one else could guess, so it's worth saying. */
+    playerRetired: (name: string): string => `${name} retired from the race.`,
     // Connection-state banner (realtime channel dropped).
     reconnecting: 'Connection lost. Reconnecting…',
     /** Code on the reconnect banner: tap to copy, so the race can be rejoined. */
-    raceCode: (code: string): string => `Race code ${code}`,
+    raceCode: (code: string): string => `Game code ${code}`,
     // Returning to the last online race after a disconnect/reload.
-    resumeTitle: (code: string): string => `Return to race ${code}?`,
-    resumeYes: 'Return to race',
-    gameGone: 'This race is no longer available.',
+    resumeTitle: (code: string): string => `Return to game ${code}?`,
+    resumeYes: 'Return to game',
+    gameGone: 'This game is no longer available.',
   },
 
   race: {
     driver: (name: string): string => `${name} is moving.`,
+    /** Local game, bots on the clock: one stable line for their whole run of
+     *  turns, instead of naming each bot as it moves. The animated ellipsis is
+     *  added by the chip itself. */
+    rivalsMoving: 'Rivals are moving…',
     /** What to do on your turn. One hint for both input kinds: since the
      *  redesign, a desktop click picks a target and Go! commits it, exactly as
      *  on touch. */
@@ -301,15 +328,16 @@ export const en = {
     /** Outcome headline + subtitle: you won / someone else did / nobody did. */
     youWon: 'You won',
     youWonSub: 'First place\u00A0— nice drive',
-    someoneWon: (name: string): string => `${name} wins`,
+    someoneWon: (name: string): string => `${name} in 1st place`,
     someoneWonSub: 'Better luck next time',
+    /** Subtitle for a driver who didn't win but placed high enough for the
+     *  field's size to make it an achievement (see `isPodium`). */
+    podiumSub: (place: number): string => `${ordinal(place)} place — a strong drive`,
+    /** Hot-seat subtitle when one of the people sharing this screen won: there
+     *  is no "you" here, so the winner is congratulated in the third person. */
+    hotseatWonSub: 'Congratulations to the winner!',
     allRetired: 'Everyone retired',
     allRetiredSub: 'No cars finished\u00A0— no result this time',
-    earlyExitLabel: 'Your race is done',
-    earlyExitTitle: 'What next?',
-    earlyExitSub: 'No need to wait for the others\u00A0— start over whenever you like',
-    earlyExitHostWait:
-      'Wait for the bots to finish\u00A0— leaving now would stall the race for everyone else',
     /** A dead heat for first place. */
     drawTitle: 'Photo finish',
     draw: "Too close to call\u00A0— the photo finish couldn't split them!",
@@ -330,11 +358,11 @@ export const en = {
   },
 
   buttons: {
-    next: 'Next →',
-    back: '← Back',
-    redraw: '↺ Redraw',
-    chooseMode: 'Choose mode →',
-    confirmMove: '✓ Go!',
+    next: 'Next',
+    back: 'Back',
+    redraw: 'Redraw',
+    chooseMode: 'Choose mode',
+    confirmMove: 'Go!',
     // Result-screen actions. No emoji: the redesigned chrome uses inline SVG
     // where it needs a glyph (the rematch button carries one), and these render
     // in caps, where an emoji reads as a smudge.
@@ -354,8 +382,8 @@ export const en = {
       "Your car rolls with momentum\u00A0— it keeps drifting the same way on its own. Each turn you can only nudge it a little: pick one of the highlighted cells. You can't swerve or stop on a dime, so brake and set up your corners early.\n\n" +
       "Fly off the track and you're stuck in the gravel. The faster you were going, the longer it takes to dig out\u00A0— and once you're free, you start from a standstill.\n\n" +
       "You can't drive through or onto another car: rivals hold their ground, just like in a real race.\n\n" +
-      'First one back to the start/finish line wins. And if several cars cross it at almost the same moment, whoever went furthest past the line comes out ahead. 🏁\n\n' +
-      'Car handling and off-track penalties can be tuned to taste\u00A0— check the ⚙ settings.',
+      'First one back to the start/finish line wins. And if several cars cross it at almost the same moment, whoever went furthest past the line comes out ahead.\n\n' +
+      'Car handling and off-track penalties can be tuned to taste\u00A0— check the settings.',
   },
 
   install: {

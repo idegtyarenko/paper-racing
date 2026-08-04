@@ -743,16 +743,26 @@ body.is-lobby .pr-conn {
 /* ── Toast: transient notice ("code copied", a failed send) ─────────────────
    The counterpart to .pr-status — this one fades on its own, so it carries
    things you may miss, never state you must be able to come back to. Lives in
-   the shared layer (it was the cream lobby's, and every screen fires it); the
-   editor overrides the skin for its error toast (editor-chrome.css). */
+   the shared layer (it was the cream lobby's, and every screen fires it).
+
+   Hangs from the top on every screen. It used to sit at the bottom edge, which
+   is where each screen keeps its action — it landed on the lobby's "Let's go",
+   on the race's turn timer, and the editor already had to override it back up.
+   One position for all of them beats a per-screen offset each new screen has to
+   remember. Centred by left/right + auto margins rather than translateX, so the
+   entry animation is free to use transform.
+
+   Whether a toast looks like a failure is the --error modifier's business, set
+   from the call site (showToast) — not the screen's. */
 .pr-toast {
   font-family: var(--pr-font);
   position: fixed;
-  left: 50%;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
-  transform: translateX(-50%);
+  top: calc(env(safe-area-inset-top, 0px) + 88px);
+  left: var(--pr-gutter);
+  right: var(--pr-gutter);
+  margin: 0 auto;
   z-index: 20;
-  max-width: calc(100% - 2 * var(--pr-gutter));
+  max-width: 480px;
   padding: 12px 18px;
   border-radius: var(--pr-radius-lg);
   border: 1px solid var(--pr-border);
@@ -768,12 +778,37 @@ body.is-lobby .pr-conn {
 @keyframes pr-toast-in {
   from {
     opacity: 0;
-    transform: translate(-50%, 8px);
+    transform: translateY(-8px);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, 0);
+    transform: none;
   }
+}
+/* Failure skin (design 3E): red surface with a warning mark, on every screen — a
+   dropped connection reads the same in the editor and in a race. Declares only
+   what differs from the base toast, so a screen's positional override (which is
+   more specific) can never fight it. :not([hidden]) per the convention above —
+   the flex display would otherwise outrank the UA's [hidden] rule. */
+.pr-toast--error:not([hidden]) {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 13px 16px;
+  background: var(--pr-error-bg);
+  border-color: var(--pr-error);
+  color: var(--pr-error-ink);
+  text-align: left;
+}
+/* The mark itself is markup (dialogs.ts), hidden on a neutral toast. */
+.pr-toast__ico {
+  flex: 0 0 auto;
+  color: var(--pr-error);
+}
+.pr-toast__ico svg {
+  width: 16px;
+  height: 16px;
+  display: block;
 }
 
 /* ── Overlay + sheet: the modal layer (rules, join by code, confirmations) ───

@@ -19,9 +19,10 @@ import { GameState, newGame, shuffledIndices, seatColor, seatName } from '../mod
 import { coastMove, applyMove } from '../model/turns';
 import { Difficulty, chooseMove } from '../model/ai';
 import type { LobbyView } from '../ui/pr-chrome';
-import { showToast } from '../ui/dialogs';
+import { showErrorToast } from '../ui/dialogs';
 import { strings } from '../i18n';
-import { AI_MOVE_DELAY_MS, SKIP_RETRY_MS } from '../config';
+import { SKIP_RETRY_MS } from '../config';
+import { botMoveDelayMs } from '../bot-pacing';
 import * as session from './online';
 import type { OnlineDeps } from './online-controller';
 
@@ -66,6 +67,13 @@ let lobbyBotDifficulty: Difficulty = 'medium';
 let botTimer: number | null = null;
 /** Whether a bot move write is in flight (host-only) — guards against duplicates, like skipSending. */
 let botSending = false;
+/** How many bots have already moved in the current unbroken run — the pause shrinks with
+ *  each one. Not cleared by clearBotTimer: that fires on every re-arm of turn watching,
+ *  including between two bot moves. Only a human's turn ends the run. */
+let botStreak = 0;
+/** Turn number the streak was last counted for — a presence event re-arms turn watching
+ *  mid-pause, and rescheduling the *same* turn must not count as another bot in the run. */
+let botStreakTurn = -1;
 
 /** Clear added bots (a fresh host lobby starts with none). Difficulty setting is kept. */
 export function resetBots(): void {
@@ -86,9 +94,10 @@ function seatCapacity(): number {
   return session.getTrack()?.startPoints.length ?? 0;
 }
 
-/** Free lobby seats available for bots: track capacity minus real players. */
+/** Free lobby seats available for bots: track capacity minus real players. Someone who
+ *  left a race gives their seat back — the next race is built without them. */
 function freeSeats(): number {
-  return Math.max(0, seatCapacity() - session.getRoster().length);
+  return Math.max(0, seatCapacity() - session.activeRoster().length);
 }
 
 /** Is this seat occupied by a bot (in a running race)? Bot-ness lives in the state (Player.bot). */
@@ -96,17 +105,33 @@ export function isBotSeat(game: GameState, seat: number): boolean {
   return !!game.players[seat]?.bot;
 }
 
+/** The bot run is over — the next bot waits the full pause again. Called from
+ *  turn-watch when the turn belongs to a human. */
+export function resetBotStreak(): void {
+  botStreak = 0;
+  botStreakTurn = -1;
+}
+
 /**
- * Schedule a bot move (host-only): wait AI_MOVE_DELAY_MS so a human has a chance to
- * follow the bot's move, same as in local play. Only one timer at a time
+ * Schedule a bot move (host-only): wait a beat so a human has a chance to follow
+ * the bot's move, same as in local play — and, same as there, shrink that pause with
+ * every next bot in an unbroken run (botMoveDelayMs). Only one timer at a time
  * (clearTurnWatch cancels it on every re-arm of turn watching).
  */
 export function scheduleBotMove(seat: number): void {
   if (botTimer !== null) return;
-  botTimer = window.setTimeout(() => {
-    botTimer = null;
-    runBotMove(seat);
-  }, AI_MOVE_DELAY_MS);
+  const turn = deps.state.game?.turn ?? -1;
+  if (turn !== botStreakTurn) {
+    botStreakTurn = turn;
+    botStreak += 1;
+  }
+  botTimer = window.setTimeout(
+    () => {
+      botTimer = null;
+      runBotMove(seat);
+    },
+    botMoveDelayMs(botStreak - 1),
+  );
 }
 
 /**
@@ -141,7 +166,7 @@ async function runBotMove(seat: number): Promise<void> {
       commitOnline();
     }
   } catch {
-    showToast(strings.online.error);
+    showErrorToast(strings.online.error);
     // Silent retry: it's still the bot's turn and we're still host — runBotMove will re-check.
     botTimer = window.setTimeout(() => {
       botTimer = null;
@@ -221,7 +246,10 @@ export function setBotDifficulty(diff: Difficulty): void {
  * in the serialized state (guests don't recompute `players`), so clients don't need a shared seed.
  */
 export function buildStartState(raceTrack: Track): GameState {
-  const roster = session.getRoster();
+  // Whoever left a race in progress keeps their (flagged) roster entry so the running
+  // race's seats stay put — but they don't get a car in the next one, so the lineup is
+  // built from the active entries, and the seats close up behind them.
+  const roster = session.activeRoster();
   const humans = roster.length;
   const bots = Math.min(lobbyBots, freeSeats());
   const g = newGame(
@@ -240,7 +268,6 @@ export function buildStartState(raceTrack: Track): GameState {
   // sync, and only the host computes their moves (scheduleBotMove).
   for (let i = humans; i < g.players.length; i++) {
     g.players[i].bot = lobbyBotDifficulty;
-    g.players[i].name = `${strings.aiSelect.botPrefix} ${g.players[i].name}`;
   }
   return g;
 }

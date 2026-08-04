@@ -20,6 +20,8 @@ import { Difficulty } from './model/ai';
 import { worldToScreen } from './view/camera';
 import * as vp from './view/viewport';
 import * as input from './view/input';
+import * as online from './online/online-controller';
+import * as session from './online/online';
 
 /** Dependencies from `main.ts` that the helpers call by reference —
  *  orchestration stays private to main.ts, and we only expose exactly what's
@@ -180,10 +182,50 @@ export function installDevHelpers(deps: DevHelperDeps): void {
       h.crossings = WIN_CROSSINGS - 1;
       h.pos = { x: 18, y: 4 };
       h.vel = { x: 2, y: 0 };
+      // Opponents wait on the top straight, out of the finisher's way — but
+      // spread out, one every two cells. Parked on a single point they block
+      // each other's candidates and never move again, so with more than one
+      // bot the race never resolves and a browser check polls a dead scene.
       for (let i = 1; i < S.game!.players.length; i++) {
-        S.game!.players[i].pos = { x: 16, y: 20 }; // top straight, out of the finisher's way
+        S.game!.players[i].pos = { x: 16 - 2 * (i - 1), y: 20 };
       }
       refreshCands();
+      updateUI();
+      redraw();
+      return snap();
+    },
+    /** A finished race with a chosen outcome: `total` cars, `humans` of them
+     *  human (seat 0 onwards), and seat 0 placed `place`. Skips driving
+     *  entirely — the result screen is a function of the final places, and
+     *  racing to a *particular* place is not something tapAccel can steer.
+     *  Use it to check headline/subtitle/classification for a given finish,
+     *  e.g. resultAt(2, 4) for a podium that isn't a win.
+     *
+     *  With `humans > 1` (hot-seat) the leftover places go to the bots first,
+     *  so seat 0's `place` is the BEST human result and the rest of the hot-seat
+     *  players trail behind it: resultAt(3, 4, 2) puts both humans in the bottom
+     *  half, resultAt(2, 4, 2) leaves one human on the podium with a bot winning. */
+    resultAt(place = 2, total = 4, humans = 1) {
+      S.raceTrack = devTrack();
+      const humanCount = Math.min(Math.max(1, humans), Math.max(1, total));
+      startRace(humanCount, Math.max(0, total - humanCount), 'medium');
+      const players = S.game!.players;
+      // Places 1..total, with `place` reserved for the human at seat 0.
+      const rest: number[] = [];
+      for (let p = 1; p <= players.length; p++) if (p !== place) rest.push(p);
+      // Ascending, bots served first: the extra hot-seat humans end up last.
+      const others = players.map((_, i) => i).filter((i) => i !== 0);
+      for (const i of others.filter((i) => players[i].bot))
+        players[i].place = rest.shift()!;
+      for (const i of others.filter((i) => !players[i].bot))
+        players[i].place = rest.shift()!;
+      players[0].place = place;
+      players.forEach((p) => {
+        p.crossings = WIN_CROSSINGS;
+      });
+      const first = players.findIndex((p) => p.place === 1);
+      S.game!.winner = first;
+      S.game!.phase = 'over';
       updateUI();
       redraw();
       return snap();
@@ -276,5 +318,86 @@ export function installDevHelpers(deps: DevHelperDeps): void {
       redraw();
       return snap();
     },
+    /**
+     * Online, driven from the console. A two-client check otherwise costs a long
+     * chain of clicks per tab (mode select → create → type a name → read the code
+     * off the screen → the other tab's join dialog), and every one of them is a
+     * chance to mis-click into a different screen. These call the same controller
+     * entry points the buttons do, so what's exercised is the real flow.
+     *
+     * They're async because the room is a network round-trip away: await them, or
+     * poll `online.info()` until `code` shows up.
+     */
+    online: {
+      /** Create a room on a ready-made track (as host). Resolves with the code. */
+      async host(name = 'Host') {
+        await leaveIfInOne();
+        S.raceTrack = devTrack();
+        S.playersReturn = 'edit';
+        online.setName(name);
+        online.promptCreate();
+        return waitFor(() => session.getCode());
+      },
+      /** Join an existing room by code — the invite-link path, no dialogs. */
+      async join(code: string, name = 'Guest') {
+        await leaveIfInOne();
+        online.setName(name);
+        await online.promptJoinByLink(code);
+        await waitFor(() => session.getCode());
+        online.setName(name); // the seat exists now: put the name on it
+        return onlineInfo();
+      },
+      /** Host: start the race / start a rematch. */
+      start: online.start,
+      rematch: online.rematch,
+      /** Drop out but stay in the room — the burger's "retire", which is a
+       *  different thing from leaving (the seat keeps its place in the lineup). */
+      retire: online.sendRetire,
+      /** Leave for good (the guest's way out, and the lobby's). */
+      leave: online.leave,
+      /** Who's in the room, from this client's point of view. */
+      info: onlineInfo,
+    },
   };
+
+  /** Drop out of any room we're still in, so host/join always start from nothing.
+   *  Clearing localStorage doesn't do it: the session lives in memory. */
+  async function leaveIfInOne(): Promise<void> {
+    if (!session.active()) return;
+    online.leave();
+    await waitFor(() => (session.active() ? null : true));
+  }
+
+  /** Poll until `get` returns something truthy (or give up) — the room, a seat,
+   *  an incoming state: all of them arrive over the wire, not on the next tick. */
+  async function waitFor<T>(get: () => T | null, ms = 5000): Promise<T | null> {
+    const until = Date.now() + ms;
+    for (;;) {
+      const v = get();
+      if (v) return v;
+      if (Date.now() > until) return null;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }
+
+  /** Room state as JSON: the roster with its `left` flags is the thing most
+   *  online checks are actually about. */
+  function onlineInfo() {
+    return {
+      code: session.getCode(),
+      isHost: session.isHost(),
+      mySeat: session.mySeat(),
+      canRematch: online.canRematch(),
+      roster: session.getRoster().map((r) => ({ name: r.name, left: !!r.left })),
+      players:
+        S.game?.players.map((p) => ({
+          name: p.name,
+          bot: !!p.bot,
+          retired: p.retired,
+          place: p.place,
+        })) ?? null,
+      phase: S.phase,
+      gamePhase: S.game?.phase ?? null,
+    };
+  }
 }

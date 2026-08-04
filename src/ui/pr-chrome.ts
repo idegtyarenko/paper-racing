@@ -1,10 +1,12 @@
-// Shared Blueprint chrome helpers (redesign): the tiny DOM builders, the inline
-// icons and the top bar that every redesigned screen assembles itself from.
+// Shared Blueprint chrome helpers (redesign): the tiny DOM builders and the top
+// bar that every redesigned screen assembles itself from. The icon set they draw
+// from lives next door in icons.ts.
 // Styling lives in styles/pr-controls.css — this module only builds markup, so
 // each screen's owner module (editor-chrome.ts, setup-chrome.ts) stays about its
 // own layout and state.
 
 import { Difficulty } from '../model/ai';
+import { CHEVRON_SVG, COPY_SVG, SHARE_SVG } from './icons';
 
 /** Create an element with a class, optionally appending it to a parent. */
 export function el<K extends keyof HTMLElementTagNameMap>(
@@ -31,39 +33,6 @@ export function icon(cls: string, inner: string, parent: HTMLElement): HTMLEleme
   span.innerHTML = inner;
   return span;
 }
-
-export const BURGER_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>';
-export const BACK_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H6M11 6l-6 6 6 6"/></svg>';
-export const ARROW_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>';
-export const CHEVRON_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
-export const CLOSE_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
-export const RULES_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.1 9.5a2.9 2.9 0 1 1 4.4 2.5c-1 .6-1.5 1.1-1.5 2.1"/><circle cx="12" cy="17.2" r=".4" fill="currentColor" stroke="none"/></svg>';
-/** Globe with meridians — the online mode card and "join by code". */
-export const GLOBE_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18M4.5 7.5h15M4.5 16.5h15"/></svg>';
-/** Two offset sheets — "copy to clipboard", on the room-code button. */
-export const COPY_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-/** Three linked nodes — the share sheet / invite link. */
-export const SHARE_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>';
-/** Flag on a pole — retiring from the race (the menu's mid-race entry). */
-export const FLAG_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v18"/><path d="M6 4h11l-2.4 4L17 12H6z"/></svg>';
-/** Stopwatch — turns still to sit out after a crash (the classification's pit slot). */
-export const CLOCK_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="7.5"/><path d="M12 9.5V13l2.5 1.6M9 3h6"/></svg>';
-/** Burst — how many times this car has been off into the gravel. */
-export const CRASH_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l2.2 4.2L19 5.6l-1.4 4.6 4.4 1.8-4.4 1.8L19 18.4l-4.8-1.6L12 21l-2.2-4.2L5 18.4l1.4-4.6L2 12l4.4-1.8L5 5.6l4.8 1.6z"/></svg>';
-export const LANG_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg>';
 
 /**
  * A tappable list row: icon tile, title (+ optional subtitle), optional chevron.
