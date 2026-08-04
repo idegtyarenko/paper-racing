@@ -193,7 +193,9 @@ export const ru: Strings = {
     rematchWaiting:
       'Создатель трассы может запустить рематч — тогда все продолжат на этой же трассе.',
     leaveRace: 'Выйти из\u00A0игры',
-    hostLeftNoRematch: 'Создатель трассы вышел из\u00A0игры\u00A0— рематча не\u00A0будет.',
+    leaveBotsConfirm: 'Если ты\u00A0выйдешь, гонка у\u00A0всех гостей зависнет.',
+    hostLeftNoRematch:
+      'Создатель трассы вышел из\u00A0игры\u00A0— рематча не\u00A0будет.',
     playerLeft: (name) => `${name} покинул игру.`,
     playerRetired: (name) => `${name} сошел с\u00A0дистанции.`,
     reconnecting: 'Нет связи. Переподключаемся…',
@@ -227,8 +229,6 @@ export const ru: Strings = {
     hotseatWonSub: 'Поздравляем победителя!',
     allRetired: 'Все сошли',
     allRetiredSub: 'Никто не финишировал — результата нет',
-    earlyExitHostWait:
-      'Подождите, пока доедут боты\u00A0— иначе гонка прервётся для остальных',
     drawTitle: 'Фотофиниш',
     draw: 'Ого, фотофиниш не смог выявить победителя!',
     retire: 'Сойти с дистанции',

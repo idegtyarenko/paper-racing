@@ -194,7 +194,9 @@ export const be: Strings = {
     rematchWaiting:
       'Стваральнік трасы можа запусціць паўтор\u00A0— тады ўсе працягнуць на\u00A0гэтай жа\u00A0трасе.',
     leaveRace: 'Выйсці з\u00A0гульні',
-    hostLeftNoRematch: 'Стваральнік трасы выйшаў з\u00A0гульні\u00A0— паўтору не\u00A0будзе.',
+    leaveBotsConfirm: 'Калі ты\u00A0выйдзеш, гонка ва\u00A0ўсіх гасцей завісне.',
+    hostLeftNoRematch:
+      'Стваральнік трасы выйшаў з\u00A0гульні\u00A0— паўтору не\u00A0будзе.',
     playerLeft: (name) => `${name} пакінуў гульню.`,
     playerRetired: (name) => `${name} сышоў з\u00A0дыстанцыі.`,
     reconnecting: 'Няма сувязі. Перападключаемся…',
@@ -228,8 +230,6 @@ export const be: Strings = {
     hotseatWonSub: 'Віншуем пераможцу!',
     allRetired: 'Усе сышлі',
     allRetiredSub: 'Ніхто не\u00A0фінішаваў\u00A0— выніку няма',
-    earlyExitHostWait:
-      'Пачакайце, пакуль даедуць боты\u00A0— інакш гонка спыніцца для астатніх',
     drawTitle: 'Фотафініш',
     draw: 'Ого, фотафініш не\u00A0змог вызначыць пераможцу!',
     retire: 'Сысці з дыстанцыі',

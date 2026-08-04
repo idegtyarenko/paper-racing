@@ -268,10 +268,14 @@ export const en = {
       'The track creator can start a rematch\u00A0— everyone continues on the same track.',
     /** Same spot, once the creator has walked out for good: there is nobody left to
      *  start a rematch, so the wait is over before it began and leaving is all there is. */
-    hostLeftNoRematch: 'The track creator has left the game\u00A0— there will be no rematch.',
+    hostLeftNoRematch:
+      'The track creator has left the game\u00A0— there will be no rematch.',
     /** The guest's own way on from that wait: frees their seat for good, while
      *  the rematch still runs for everyone else. */
     leaveRace: 'Leave the game',
+    /** Online host with bots still driving: only this client works out their moves, so
+     *  walking out would freeze the race for everyone else. Asked, not forbidden. */
+    leaveBotsConfirm: 'If you leave, the race will freeze for every guest.',
     /** Someone else walked out of the room for good — announced to everyone still
      *  in it, in the lobby and mid-race alike. Distinct from `playerRetired`: that
      *  one is still here watching, this one is gone and won't be in the next race. */
@@ -331,12 +335,6 @@ export const en = {
     hotseatWonSub: 'Congratulations to the winner!',
     allRetired: 'Everyone retired',
     allRetiredSub: 'No cars finished\u00A0— no result this time',
-    /** Retired or finished while the others drive on: the three ways out dock
-     *  into the race's bottom bar with no headline of their own, so the board
-     *  stays visible and the rest of the field can be watched home. Only this
-     *  hint survives, beside the disabled "Draw a new track". */
-    earlyExitHostWait:
-      'Wait for the bots to finish\u00A0— leaving now would stall the race for everyone else',
     /** A dead heat for first place. */
     drawTitle: 'Photo finish',
     draw: "Too close to call\u00A0— the photo finish couldn't split them!",

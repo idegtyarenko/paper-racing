@@ -46,7 +46,6 @@ let actionsEl: HTMLElement;
 let rematchBtn: HTMLButtonElement;
 let sameTrackBtn: HTMLButtonElement;
 let newTrackBtn: HTMLButtonElement;
-let hostWaitHintEl: HTMLElement;
 let guestEl: HTMLElement;
 let waitDotsEl: HTMLElement;
 let waitTextEl: HTMLElement;
@@ -98,10 +97,6 @@ function build(h: ResultHandlers): void {
   newTrackBtn = button('pr-btn pr-btn--caps', actionsEl);
   newTrackBtn.textContent = strings.buttons.newTrack;
   bindTap(newTrackBtn, h.onNewTrack);
-  // Shown only for a host stuck driving bots for the rest of the room — see
-  // hostMustStayForBots in renderRaceResult.
-  hostWaitHintEl = el('div', 'pr-result__subtitle', actionsEl);
-  hostWaitHintEl.textContent = strings.race.earlyExitHostWait;
 
   // A guest can't start anything — the track's creator owns the room, and the
   // guest is dropped straight into the new race when they do. So they get a
@@ -149,12 +144,6 @@ export interface ResultCtx {
   canRematch: boolean;
   /** Online: "same track, new lineup" runs the local wizard, which would desync the room. */
   isOnline: boolean;
-  /**
-   * Online host with bots still live in the room: leaving (session.leave())
-   * would strand them mid-race for everyone else, since only the host drives
-   * bot moves — "Draw a new track" is disabled until the bots are done.
-   */
-  hostMustStayForBots: boolean;
 }
 
 /**
@@ -257,7 +246,6 @@ export function renderRaceResult(ctx: ResultCtx): void {
     hostGone,
     canRematch,
     isOnline,
-    hostMustStayForBots,
   } = ctx;
   const ready = !!game && !!nav;
   const fullscreen = over && ready;
@@ -310,6 +298,4 @@ export function renderRaceResult(ctx: ResultCtx): void {
   // desync a live room — online that leaves "Rematch" and "Draw a new track"
   // (which, online, means leaving the session).
   sameTrackBtn.hidden = isOnline;
-  newTrackBtn.disabled = hostMustStayForBots;
-  hostWaitHintEl.hidden = !hostMustStayForBots;
 }

@@ -94,9 +94,7 @@ export function hostId(): string | null {
  * room outlives its creator — and with it, everything that only they could start.
  */
 export function hostGone(): boolean {
-  return (
-    hostClient !== null && !roster.some((r) => r.clientId === hostClient && !r.left)
-  );
+  return hostClient !== null && !roster.some((r) => r.clientId === hostClient && !r.left);
 }
 
 export function getTrack(): Track | null {

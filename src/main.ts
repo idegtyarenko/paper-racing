@@ -232,10 +232,6 @@ function updateUI(): void {
     hostGone: session.active() && session.hostGone(),
     canRematch: (!!S.game && !!S.lastLocalRace) || online.canRematch(),
     isOnline: session.active(),
-    // Only the host drives bot moves online (host-bots.ts) — leaving while
-    // bots still have moves left would strand everyone else mid-race.
-    hostMustStayForBots:
-      session.active() && session.isHost() && !!S.game && hasLiveBots(S.game),
   });
   renderEditorChrome(S.editor, S.phase);
   // The lobby view drives three renderers: the host's lobby is the setup screen
@@ -614,7 +610,17 @@ initRaceResult({
   },
   // "Same track, new lineup": keep the track, re-pick the mode/players.
   onSameTrack: () => goToMode('race'),
-  onNewTrack: () => resetToEdit(),
+  // "Draw a new track" online means leaving the room, and only the host works out
+  // the bots' moves (host-bots.ts) — walking out mid-race freezes it for everyone
+  // else. That's a warning, not a rule: a disabled button explains nothing and, as
+  // it turned out, doesn't even read as disabled.
+  onNewTrack: () => {
+    if (session.active() && session.isHost() && S.game && hasLiveBots(S.game)) {
+      openConfirm(strings.online.leaveBotsConfirm, strings.buttons.newTrack, resetToEdit);
+      return;
+    }
+    resetToEdit();
+  },
   // A guest done waiting on the track creator's rematch: free the seat and go
   // draw something. online.leave() lands a guest in the editor by itself, and
   // clears the resume breadcrumb so a reload doesn't drag us back in.
