@@ -58,7 +58,7 @@ export default defineConfig({
       // We register the SW ourselves in src/pwa.ts (registerSW from virtual:pwa-register),
       // to avoid a double registration.
       injectRegister: false,
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+      includeAssets: ['favicon-v2.svg', 'apple-touch-icon-v2.png'],
       manifest: {
         name: 'Paper Racing',
         short_name: 'Paper Racing',
@@ -75,9 +75,12 @@ export default defineConfig({
         theme_color: '#0d3252',
         // prettier-ignore
         icons: [
-          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-          { src: 'pwa-maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          // The `-v2` suffix is a cache bust (see the comment on the icon links in
+          // index.html) — a changed manifest is also what makes an installed app
+          // re-fetch its launcher icon at all.
+          { src: 'pwa-192x192-v2.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'pwa-512x512-v2.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: 'pwa-maskable-512x512-v2.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
       workbox: {

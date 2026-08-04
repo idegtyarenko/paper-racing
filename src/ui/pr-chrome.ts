@@ -64,7 +64,7 @@ export function buildBrand(
 ): HTMLElement {
   const brand = el('span', `pr-brand${opts.cls ? ' ' + opts.cls : ''}`, parent);
   const logo = el('img', 'pr-brand__logo', brand);
-  logo.src = `${import.meta.env.BASE_URL}pwa-192x192.png`;
+  logo.src = `${import.meta.env.BASE_URL}pwa-192x192-v2.png`;
   logo.alt = '';
   const text = el('span', 'pr-brand__text', brand);
   const mark = el('span', 'pr-brand__wordmark', text);
