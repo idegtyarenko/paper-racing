@@ -37,7 +37,19 @@ jobs:
           cache-dependency-path: |
             main/package-lock.json
             staging/package-lock.json
-      # `main`'s dist is cached by main's own commit SHA, so a staging-only push
+      # The cache keys below are the checked-out commits. NOT `hashFiles('main/**')`:
+      # that also hashes `main/.git/**`, where the reflog and the index carry the
+      # checkout's wall-clock time, so every run computed a brand-new key and the
+      # cache never hit once (18 distinct `main-dist-*` entries in two days, zero
+      # restores) — the gate existed on paper only.
+      - name: Resolve checked-out commits
+        id: shas
+        run: |
+          echo "main=$(cd main && git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if [ -d staging/.git ]; then
+            echo "staging=$(cd staging && git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+      # `main`'s dist is cached by main's own commit, so a staging-only push
       # doesn't spend CI time rebuilding an unchanged main. The bundle itself is
       # deterministic per commit (`__BUILD_TIME__` is the commit's date, not the
       # wall clock — see vite.config.ts), so a cache miss is only slower, never a
@@ -47,7 +59,23 @@ jobs:
         uses: actions/cache@v6
         with:
           path: main/dist
-          key: main-dist-${{ hashFiles('main/**') }}
+          key: main-dist-${{ steps.shas.outputs.main }}
+      # Same for `staging`: a push to `main` shouldn't reinstall and rebuild an
+      # unchanged staging (that's what made the deploy twice as long). Skipped when
+      # there's no `staging` branch — then `cache-hit` is empty and the four steps
+      # below stay gated on `checkout-staging` anyway.
+      #
+      # Caveat of Actions' cache scoping: a cache written by a run on `staging` is
+      # not readable from a run on `main` (the reverse works — `main` is the default
+      # branch). So the first main push after a staging push still rebuilds staging
+      # once and re-saves it into main's scope; the ones after that hit.
+      - name: Cache staging build
+        id: cache-staging
+        if: steps.checkout-staging.outcome == 'success'
+        uses: actions/cache@v6
+        with:
+          path: staging/dist
+          key: staging-dist-${{ steps.shas.outputs.staging }}
       # Гейт деплоя отдельными шагами — чтобы в логах CI было видно, ЧТО упало
       # (тайпчек / тесты / сборка), а не один общий `npm run build`. Провал любого
       # шага роняет job `build` → job `deploy` (needs: build) не запускается.
@@ -75,19 +103,19 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Install (staging)
-        if: steps.checkout-staging.outcome == 'success'
+        if: steps.checkout-staging.outcome == 'success' && steps.cache-staging.outputs.cache-hit != 'true'
         working-directory: staging
         run: npm ci
       - name: Typecheck (staging)
-        if: steps.checkout-staging.outcome == 'success'
+        if: steps.checkout-staging.outcome == 'success' && steps.cache-staging.outputs.cache-hit != 'true'
         working-directory: staging
         run: npm run typecheck
       - name: Test (staging)
-        if: steps.checkout-staging.outcome == 'success'
+        if: steps.checkout-staging.outcome == 'success' && steps.cache-staging.outputs.cache-hit != 'true'
         working-directory: staging
         run: npm test
       - name: Build (staging)
-        if: steps.checkout-staging.outcome == 'success'
+        if: steps.checkout-staging.outcome == 'success' && steps.cache-staging.outputs.cache-hit != 'true'
         working-directory: staging
         run: npx vite build
         env:
