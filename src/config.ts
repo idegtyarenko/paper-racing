@@ -131,6 +131,10 @@ export const LOBBY_PRUNE_MS = 10_000;
 export const NET_TIMEOUT_MS = 10_000;
 /** Delay before a silent retry of auto-skip after a failed write, ms. */
 export const SKIP_RETRY_MS = 5_000;
+/** How stale a turn's start stamp may be before we stop believing it, ms. The stamp
+ *  comes off another device's wall clock, and turns run in minutes — an hour's worth
+ *  of "elapsed" means the two clocks disagree, not that anyone thought that long. */
+export const CLOCK_SANITY_MS = 3_600_000;
 /** How long typing in the lobby has to pause before the name is written to the
  *  server, ms — one request per pause instead of one per character. */
 export const RENAME_DEBOUNCE_MS = 400;

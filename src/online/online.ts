@@ -20,6 +20,7 @@ import {
   unsubscribe,
   deserializeTrack,
   deserializeState,
+  turnStartedAt as readTurnStartedAt,
 } from './net';
 
 export interface OnlineHandlers {
@@ -52,6 +53,10 @@ let present = new Set<string>();
 let leftAt = new Map<string, number>();
 /** Whether the realtime channel is currently connected (drives the "no connection" banner). */
 let connected = true;
+/** When the current turn began, per the client that wrote the move (null if unknown),
+ *  together with the turn number it belongs to — a stamp only counts for its own turn. */
+let turnStart: number | null = null;
+let turnStartFor = -1;
 
 /** Whether an online session is active (a game was created or joined). */
 export function active(): boolean {
@@ -115,6 +120,15 @@ function seatClientId(seat: number): string | null {
 export function isPresent(seat: number): boolean {
   const id = seatClientId(seat);
   return id !== null && present.has(id);
+}
+
+/**
+ * When the current turn began (ms, wall clock), as stamped by whoever wrote the move —
+ * null if that row predates the stamp or the clocks disagree. Shared so that a client
+ * arriving mid-turn sees the same countdown as everyone else, instead of a fresh one.
+ */
+export function turnStartedAt(turn: number): number | null {
+  return turnStartFor === turn ? turnStart : null;
 }
 
 /** When the player in this seat dropped out of presence (ms), or null if they're online. */
@@ -198,6 +212,10 @@ function applyRow(row: GameRow | null): void {
   roster = row.lobby ?? [];
   announceDepartures(before, roster);
   if (row.state && track) {
+    // Before the handler: arming the turn watch is downstream of onGameState, and it
+    // reads this to tell how much of the turn is already gone.
+    turnStart = readTurnStartedAt(row.state);
+    turnStartFor = row.state.turn ?? 0;
     handlers?.onGameState(deserializeState(row.state, track));
   } else {
     handlers?.onLobby();
@@ -332,5 +350,7 @@ function close(): void {
   present = new Set();
   leftAt = new Map();
   connected = true;
+  turnStart = null;
+  turnStartFor = -1;
   if (ch) unsubscribe(ch);
 }

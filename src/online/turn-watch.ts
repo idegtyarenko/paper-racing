@@ -165,12 +165,16 @@ export function armTurnWatch(): void {
   // without the field fall back to a default.
   const limit = game.rules.turnLimitMs ?? TURN_TIMEOUT_MS;
 
-  // Local countdown of time remaining — for me (label on the button) and for
-  // opponents (suffix in the status). Start it before the "my turn" early return, so it's
-  // visible to me too. Only a new turn number restarts it: without this, anyone closing or
-  // reopening their tab (a presence sync) would hand the player on the clock a fresh minute.
-  // A client that arrives mid-turn has nothing to carry over and starts from full.
-  turnStartAt = prevTurn === game.turn && prevStart !== null ? prevStart : Date.now();
+  // Countdown of time remaining — for me (label on the button) and for opponents
+  // (suffix in the status). Start it before the "my turn" early return, so it's visible
+  // to me too. Three sources, in order: the count we were already running for this turn
+  // (so a presence sync doesn't hand the player on the clock a fresh minute), the stamp
+  // the mover wrote into the state (so a tab that was closed and reopened mid-turn
+  // rejoins the same countdown instead of starting its own), and only then our own
+  // clock — a turn that began locally, this instant.
+  const shared = session.turnStartedAt(game.turn);
+  turnStartAt =
+    prevTurn === game.turn && prevStart !== null ? prevStart : (shared ?? Date.now());
   watchedTurn = game.turn;
   // What's left of this turn right now — the skip timers below are set from it, so a
   // re-arm mid-turn doesn't push manual skip and auto-skip back by a full limit either.
