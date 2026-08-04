@@ -542,6 +542,7 @@ input.initInput({
   commitMove,
   // Pre-pick mode: not our turn right now, but our seat can still queue a move (online/vs-bots).
   isPreselect: () => !myTurn() && candOwner() >= 0,
+  myTurn,
   setPending: (cand) => {
     S.pending = cand;
     showConfirmMove(false); // not our turn — don't show the button, the pending pick is visible on the field

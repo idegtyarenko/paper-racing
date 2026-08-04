@@ -40,6 +40,8 @@ export interface InputDeps {
   commitMove(cand: Candidate): void;
   /** Not our turn right now, but we can pre-pick a move for later (online/vs bots). */
   isPreselect(): boolean;
+  /** Our turn to move — a pending pick can be confirmed right now. */
+  myTurn(): boolean;
   /** Pre-pick a move (queued for our next turn) instead of committing/highlighting the button. */
   setPending(cand: Candidate): void;
   updateUI(): void;
@@ -132,17 +134,36 @@ let activeId: number | null = null;
  * `activePointers` forever, and the next single touch is falsely read as a
  * pinch (`size === 2` because of the phantom) → the field zooms and the only
  * way out is a restart.
+ *
+ * `keepPick` drops the pointer bookkeeping only, leaving the chosen candidate
+ * and its "Go!" button alone: that's the tab-switch case (blur / tab hidden),
+ * where there is a phantom pointer to fear but no reason to throw away a move
+ * the player has already picked.
  */
-function resetGestureState(): void {
+function resetGestureState(opts: { keepPick?: boolean } = {}): void {
   activePointers.clear();
   pinch = null;
   gesture = null;
   activeId = null;
   loupe = null;
   hover = null;
-  selected = null;
-  showConfirmMove(false);
   canvas.classList.remove('grabbing');
+  if (opts.keepPick) return;
+  selected = null;
+  syncConfirmMove();
+}
+
+/**
+ * Hide the "Go!" button — unless a pick that can still be confirmed stands:
+ * either a candidate tapped on our own turn (`selected`) or a pre-pick queued
+ * during someone else's turn that our turn has now come round to
+ * (`state.pending`). Both are drawn on the field, so hiding the button while
+ * one of them stands leaves a mark that can't be confirmed.
+ */
+function syncConfirmMove(): void {
+  const pending = deps.state.phase === 'race' && deps.state.pending && deps.myTurn();
+  if (selected || pending) showConfirmMove(true, confirmAnchor());
+  else showConfirmMove(false);
 }
 
 // ── Double-tap (touch) → zoom the field camera toward a point ──────────────
@@ -686,10 +707,19 @@ export function initInput(d: InputDeps): void {
   // (iOS), leaving a phantom pointer behind. As a safety net, fully reset
   // gestures on tab hide and blur so we return to a clean state instead of a
   // stuck pinch-zoom.
+  // The pick itself is deliberately kept (`keepPick`): switching tabs is a
+  // routine thing in an async online race, and coming back to a mark on the
+  // field with no way to confirm it reads as a breakage. The redraw matters —
+  // this path clears hover/loupe without one, and the stale frame is what made
+  // the mark look alive while its button was already gone.
+  const parkGestures = (): void => {
+    resetGestureState({ keepPick: true });
+    deps.redraw();
+  };
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) resetGestureState();
+    if (document.hidden) parkGestures();
   });
-  window.addEventListener('blur', () => resetGestureState());
+  window.addEventListener('blur', parkGestures);
 
   document.getElementById('zoomIn')?.addEventListener('click', () => zoomByButton(1));
   document.getElementById('zoomOut')?.addEventListener('click', () => zoomByButton(-1));
