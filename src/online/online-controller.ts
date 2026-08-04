@@ -17,6 +17,7 @@ import {
   cloneState,
   isFinished,
   humansAllDone,
+  hasLiveBots,
 } from '../model/game';
 import { applyMove, retireSeat } from '../model/turns';
 import { editorFromTrack } from '../model/editor';
@@ -29,7 +30,7 @@ import {
   setConnBanner,
 } from '../ui/dialogs';
 import { closeOverlay } from '../ui/dom';
-import { openConfirm } from '../ui/confirm';
+import { openConfirm, openNotice } from '../ui/confirm';
 import { AppState } from '../app-state';
 import { RENAME_DEBOUNCE_MS } from '../config';
 import { setMoveSendState } from '../ui/race-chrome';
@@ -293,6 +294,37 @@ function joinErrorText(e: unknown): string {
   return strings.online.error;
 }
 
+/** Whether the notice below is already up, so a stream of events doesn't re-raise it. */
+let stallNoticed = false;
+
+/**
+ * A guest's race that can no longer be finished: the creator has walked out, and bots
+ * are still driving — and only the creator's client works out their moves, so the queue
+ * stops at the first bot and never moves again. Nothing can be done in the room from
+ * here, so say it plainly and hand over the way out rather than leaving everyone to
+ * work out why nobody is moving. Without bots the race carries on without its creator,
+ * which is the whole point of not deleting the room when they leave.
+ */
+function noticeHostStall(): void {
+  const game = deps.state.game;
+  const stalled =
+    session.active() &&
+    !session.isHost() &&
+    session.hostGone() &&
+    !!game &&
+    game.phase === 'race' &&
+    hasLiveBots(game);
+  if (!stalled) {
+    stallNoticed = false;
+    return;
+  }
+  if (stallNoticed) return;
+  stallNoticed = true;
+  openNotice(strings.online.hostLeftStalled, strings.online.leaveRace, () =>
+    leaveSession(),
+  );
+}
+
 const handlers: OnlineHandlers = {
   onLobby: () => {
     // We're in a live lobby — remember the code for resuming after a disconnect (idempotent).
@@ -331,10 +363,14 @@ const handlers: OnlineHandlers = {
     turnWatch.armTurnWatch();
     deps.updateUI();
     deps.redraw();
+    // Last: the creator's departure arrives as a roster change on a state row, so this
+    // is where a guest finds out the race has nowhere left to go.
+    noticeHostStall();
   },
   onClosed: () => {
     turnWatch.clearWatches();
     forgetSession(); // the game was deleted/closed by the host — nothing to come back to
+    stallNoticed = false;
     pendingCand = null;
     setMoveSendState('idle');
     setConnBanner(false);
@@ -549,6 +585,7 @@ function leaveSession(): Promise<void> {
     await retireBeforeLeaving();
     turnWatch.clearWatches();
     forgetSession(); // deliberate leave — nothing to come back to
+    stallNoticed = false;
     pendingCand = null;
     setMoveSendState('idle');
     setConnBanner(false);

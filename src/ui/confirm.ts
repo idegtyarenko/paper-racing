@@ -9,6 +9,7 @@ import { strings } from '../i18n';
 let sheet: HTMLElement | null = null;
 let titleEl: HTMLElement;
 let yesBtn: HTMLButtonElement;
+let cancelBtn: HTMLButtonElement;
 let onYes: () => void = () => {};
 
 /** Build the confirmation sheet and mount it into the overlay (once). */
@@ -22,9 +23,9 @@ function build(): HTMLElement {
     onYes();
   });
 
-  const cancel = button('pr-btn', s);
-  cancel.textContent = strings.buttons.cancel;
-  bindTap(cancel, closeOverlay);
+  cancelBtn = button('pr-btn', s);
+  cancelBtn.textContent = strings.buttons.cancel;
+  bindTap(cancelBtn, closeOverlay);
   return s;
 }
 
@@ -45,5 +46,23 @@ export function openConfirm(
   yesBtn.classList.toggle('pr-btn--danger', danger);
   yesBtn.classList.toggle('pr-btn--primary', !danger);
   onYes = onConfirm;
+  cancelBtn.hidden = false;
+  openSheet(sheet);
+}
+
+/**
+ * Same sheet, one button: news the player can only acknowledge (the race can't go on),
+ * not a choice. "Cancel" would offer a way to stay in a situation there's no staying in,
+ * so it's dropped — the overlay can still be dismissed, and the news comes back the next
+ * time anything happens in the room.
+ */
+export function openNotice(title: string, okLabel: string, onOk: () => void): void {
+  if (!sheet) sheet = build();
+  titleEl.textContent = title;
+  yesBtn.textContent = okLabel;
+  yesBtn.classList.remove('pr-btn--danger');
+  yesBtn.classList.add('pr-btn--primary');
+  onYes = onOk;
+  cancelBtn.hidden = true;
   openSheet(sheet);
 }
