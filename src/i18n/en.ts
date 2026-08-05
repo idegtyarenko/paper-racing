@@ -298,6 +298,10 @@ export const en = {
 
   race: {
     driver: (name: string): string => `${name} is moving.`,
+    /** Same line when the only human is racing bots — one known addressee. */
+    driverYou: 'Your turn.',
+    /** Their classification row, in place of a car colour. */
+    you: 'Me',
     /** Local game, bots on the clock: one stable line for their whole run of
      *  turns, instead of naming each bot as it moves. The animated ellipsis is
      *  added by the chip itself. */

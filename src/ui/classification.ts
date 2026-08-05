@@ -97,6 +97,13 @@ function rowStatus(p: Player, opts: { stalled: boolean; final: boolean }): HTMLE
 export interface RowCtx {
   /** This client's seat, or −1 — the row that gets the amber "you're up" tint. */
   mySeat: number;
+  /**
+   * The lone human in a local race against bots, or −1. Their row is signed
+   * "Me" rather than their car colour: there's exactly one addressee, and the
+   * colour tells them nothing they don't already see in the swatch. Hot-seat
+   * and online keep colour names — there the name distinguishes people.
+   */
+  soloSeat?: number;
   /** Seat whose turn has stalled past the timer and can be skipped; −1 if none. */
   stalledSeat?: number;
   /** Seats whose tab is currently offline (index = seat). */
@@ -153,7 +160,8 @@ export function buildRow(
   // name travels through the online state and every other place it's shown,
   // and only this row has somewhere to put a mark.
   if (p.bot) icon('pr-race__bot', BOT_SVG, row);
-  el('span', 'pr-race__name', row).textContent = p.name;
+  el('span', 'pr-race__name', row).textContent =
+    seat === ctx.soloSeat ? strings.race.you : p.name;
   row.append(rowStatus(p, { stalled: seat === ctx.stalledSeat, final: !!ctx.final }));
   return row;
 }

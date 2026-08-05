@@ -356,6 +356,8 @@ export interface RaceCtx {
   aiTurn?: boolean;
   /** This client's own seat, or −1. Drives the amber "you are up" row. */
   mySeat: number;
+  /** The lone human racing bots, or −1 — the seat we address as "you". */
+  soloSeat?: number;
   /** Realtime channel is up. Only meaningful online; a local race is never "lost". */
   connected?: boolean;
 }
@@ -374,7 +376,16 @@ function setChip(text: string, color: string | null, error = false): void {
  */
 export function renderRaceChrome(ctx: RaceCtx): void {
   if (!built) return;
-  const { phase, game, nav, net = null, aiTurn = false, mySeat, connected = true } = ctx;
+  const {
+    phase,
+    game,
+    nav,
+    net = null,
+    aiTurn = false,
+    mySeat,
+    soloSeat = -1,
+    connected = true,
+  } = ctx;
   // Only the LIVE race, not the results screen: the designed result layer is the
   // next step, and until it lands the old panel still owns `over` (winner banner
   // + "New race"). That's the seam — when the layer arrives, drop `game.phase`
@@ -398,12 +409,13 @@ export function renderRaceChrome(ctx: RaceCtx): void {
 
   renderRows(rowsEl, game!, nav!, {
     mySeat,
+    soloSeat,
     stalledSeat: net?.canSkip ? game!.current : -1,
     present: net?.present,
   });
 
   renderSkip(game!, net);
-  renderChip(game!, net, aiTurn);
+  renderChip(game!, net, aiTurn, soloSeat);
 
   // Realtime is down: the banner replaces the status chip rather than stacking
   // with it — the chip would only say whose turn it is, which is exactly the
@@ -433,7 +445,12 @@ function renderSkip(game: GameState, net: NetTurn | null): void {
 }
 
 /** The one line of text under the board: whose turn it is and what to do. */
-function renderChip(game: GameState, net: NetTurn | null, aiTurn: boolean): void {
+function renderChip(
+  game: GameState,
+  net: NetTurn | null,
+  aiTurn: boolean,
+  soloSeat: number,
+): void {
   chipBase = null; // by default don't decorate the chip with a timer (set in the net branch)
   chipWaiting = false; // the animated ellipsis is only armed for "someone else's turn"
   const wasAiWaiting = chipAiWaiting; // every branch below but the bots' one leaves the state
@@ -478,5 +495,9 @@ function renderChip(game: GameState, net: NetTurn | null, aiTurn: boolean): void
     chipAiWaiting = true;
     return;
   }
-  setChip(`${strings.race.driver(cur.name)} ${strings.race.hintPick}${warn}`, cur.color);
+  // Racing bots on your own: the mover is always you, so name the turn instead
+  // of the car — a colour name tells the only human at the wheel nothing.
+  const driver =
+    game.current === soloSeat ? strings.race.driverYou : strings.race.driver(cur.name);
+  setChip(`${driver} ${strings.race.hintPick}${warn}`, cur.color);
 }

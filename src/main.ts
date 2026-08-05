@@ -203,6 +203,10 @@ function updateUI(): void {
     // Whose row gets the amber "you're up" treatment: our own seat online, the
     // human at the controls locally (hot-seat players share this client).
     mySeat: localHumanSeat(),
+    // Alone against bots there is exactly one addressee, so the chip and their
+    // row say "you" instead of naming a car colour. Online and hot-seat keep
+    // names — there the name is what tells two people apart.
+    soloSeat: session.active() ? -1 : soloHumanSeat(),
     connected: session.isConnected(),
   });
   const over = S.phase === 'race' && S.game?.phase === 'over';
@@ -228,6 +232,7 @@ function updateUI(): void {
     // player shares this screen), so there it stays −1 and nobody gets the
     // personal treatment.
     mySeat: session.active() ? session.mySeat() : soloHumanSeat(),
+    soloSeat: session.active() ? -1 : soloHumanSeat(),
     onlineGuest: !!net && !net.isHost,
     hostGone: session.active() && session.hostGone(),
     canRematch: (!!S.game && !!S.lastLocalRace) || online.canRematch(),

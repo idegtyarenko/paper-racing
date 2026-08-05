@@ -208,6 +208,8 @@ export const ru: Strings = {
 
   race: {
     driver: (name) => `Ходит ${name}.`,
+    driverYou: 'Твой ход.',
+    you: 'Я',
     rivalsMoving: 'Ходят соперники…',
     hintPick: 'Выбери точку и подтверди, нажав «Едем!»',
     finalWarn: ' Попробуй успеть финишировать и заехать дальше соперника.',

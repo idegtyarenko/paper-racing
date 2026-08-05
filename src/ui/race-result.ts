@@ -136,6 +136,8 @@ export interface ResultCtx {
   earlyExit: boolean;
   /** This client's seat, or −1 (hot-seat has no single "you"). */
   mySeat: number;
+  /** The lone human racing bots, or −1 — their final row is signed "Me" too. */
+  soloSeat?: number;
   /** In an online race and not the host: the rematch isn't ours to start. */
   onlineGuest: boolean;
   /** Online: the creator has left the room, so no rematch is coming — nothing to wait for. */
@@ -242,6 +244,7 @@ export function renderRaceResult(ctx: ResultCtx): void {
     over,
     earlyExit,
     mySeat,
+    soloSeat = -1,
     onlineGuest,
     hostGone,
     canRematch,
@@ -277,7 +280,7 @@ export function renderRaceResult(ctx: ResultCtx): void {
   if (fullscreen) {
     labelEl.textContent = strings.race.raceComplete;
     renderHead(game!, mySeat);
-    renderRows(rowsEl, game!, nav!, { mySeat, final: true });
+    renderRows(rowsEl, game!, nav!, { mySeat, soloSeat, final: true });
   }
 
   // A guest waits for the host only for the real end-of-race rematch — during

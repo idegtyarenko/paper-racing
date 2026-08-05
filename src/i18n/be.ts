@@ -210,6 +210,8 @@ export const be: Strings = {
 
   race: {
     driver: (name) => `Ходзіць ${name}.`,
+    driverYou: 'Твой ход.',
+    you: 'Я',
     rivalsMoving: 'Ходзяць сапернікі…',
     hintPick: 'Выберы кропку і пацвердзі, націснуўшы «Едзем!»',
     finalWarn: ' Паспрабуй паспець фінішаваць і заехаць далей за саперніка.',
