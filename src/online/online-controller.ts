@@ -520,6 +520,22 @@ function flushSetup(): void {
   writeSetupNow();
 }
 
+/**
+ * Write the setup even though nothing changed — the host coming back into their own
+ * lobby (a reload, a resumed session). Otherwise the row keeps whatever it was created
+ * with: nothing at all if that was a client from before the setup travelled, and then
+ * a guest sees no settings for the whole lobby, because only a *change* writes again.
+ * The host's local rules are the ones the race will run on, so they're the truth here.
+ */
+function republishSetup(): void {
+  if (!session.active() || !session.isHost()) return;
+  if (setupTimer !== null) {
+    clearTimeout(setupTimer);
+    setupTimer = null;
+  }
+  writeSetupNow();
+}
+
 /** Create an online game (as host) with the entered name and open the lobby. */
 function hostOnline(name: string): Promise<void> {
   return guarded(async () => {
@@ -558,6 +574,9 @@ function joinOnline(code: string, name: string, inJoinDialog: boolean): Promise<
       // Reconnecting into an already-running race: onGameState already switched us
       // into race mode — don't force it back to lobby. Otherwise (game not yet started) go to the lobby.
       if (deps.state.phase !== 'race') deps.state.phase = 'lobby';
+      // Back in our own room as its host: refresh the row's copy of the setup (see
+      // republishSetup). In a race it's the state that carries the rules — nothing to do.
+      if (deps.state.phase === 'lobby') republishSetup();
       deps.fitToContent(); // center the host's track
       deps.redraw();
       deps.updateUI();
