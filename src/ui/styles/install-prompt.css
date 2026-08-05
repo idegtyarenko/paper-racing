@@ -30,7 +30,7 @@
   flex: none;
   width: 44px;
   height: 44px;
-  border-radius: 10px;
+  border-radius: var(--pr-radius);
 }
 
 .pr-install__text {
@@ -42,13 +42,13 @@
 }
 
 .pr-install__title {
-  font-size: 14px;
+  font-size: var(--pr-text-base);
   font-weight: 700;
   color: var(--pr-ink);
 }
 
 .pr-install__body {
-  font-size: 12px;
+  font-size: var(--pr-text-sm);
   line-height: 1.35;
   color: var(--pr-ink-dim);
 }
@@ -66,7 +66,7 @@
   flex: none;
   padding: 10px 16px;
   border-radius: var(--pr-radius-pill);
-  font-size: 13px;
+  font-size: var(--pr-text-base);
 }
 
 .pr-install__close {
@@ -75,7 +75,7 @@
   width: 26px;
   height: 26px;
   margin: -4px -4px 0 0;
-  font-size: 20px;
+  font-size: var(--pr-text-xl);
   line-height: 1;
   color: var(--pr-ink-dim);
   background: none;

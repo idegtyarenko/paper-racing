@@ -47,7 +47,7 @@
   border: 1px solid var(--pr-border);
   background: var(--pr-panel);
   color: var(--pr-ink-soft);
-  font-size: 20px;
+  font-size: var(--pr-text-xl);
   line-height: 1;
   font-weight: 700;
   cursor: pointer;
@@ -116,7 +116,7 @@ body.is-lobby .pr-conn {
 .pr-label {
   font-family: var(--pr-mono);
   font-weight: 700;
-  font-size: 11px;
+  font-size: var(--pr-text-sm);
   letter-spacing: 2.5px;
   text-transform: uppercase;
   color: var(--pr-edge);
@@ -160,7 +160,7 @@ body.is-lobby .pr-conn {
   background: var(--pr-panel);
   color: var(--pr-ink-soft);
   font-weight: 700;
-  font-size: 14px;
+  font-size: var(--pr-text-base);
   letter-spacing: 0.5px;
   cursor: pointer;
   touch-action: manipulation;
@@ -276,7 +276,7 @@ body.is-lobby .pr-conn {
   align-items: baseline;
   gap: 4.5px;
   font-weight: 900;
-  font-size: 17px;
+  font-size: var(--pr-text-lg);
   line-height: 1;
   letter-spacing: -0.3px;
   transform: skew(-10deg);
@@ -328,7 +328,7 @@ body.is-lobby .pr-conn {
   gap: 3.5px;
 }
 .pr-brand--sm .pr-brand__wordmark {
-  font-size: 14px;
+  font-size: var(--pr-text-base);
   gap: 3.5px;
   letter-spacing: -0.2px;
 }
@@ -353,7 +353,7 @@ body.is-lobby .pr-conn {
   text-align: left;
   color: var(--pr-ink);
   font-weight: 600;
-  font-size: 14px;
+  font-size: var(--pr-text-base);
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -372,7 +372,7 @@ body.is-lobby .pr-conn {
 /* Soft-filled row, used where there is no card underneath (menu entries). */
 .pr-item--fill {
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: var(--pr-radius);
   background: var(--pr-fill-soft);
 }
 /* Card-sized row: the mode-select cards. */
@@ -386,7 +386,7 @@ body.is-lobby .pr-conn {
   height: 36px;
   display: grid;
   place-items: center;
-  border-radius: 9px;
+  border-radius: var(--pr-radius);
   background: rgba(var(--pr-edge-rgb), 0.12);
   color: var(--pr-edge);
 }
@@ -413,16 +413,16 @@ body.is-lobby .pr-conn {
 .pr-item__title {
   font-family: var(--pr-font);
   font-weight: 600;
-  font-size: 14px;
+  font-size: var(--pr-text-base);
 }
 .pr-item--lg .pr-item__title {
   font-weight: 700;
-  font-size: 15px;
+  font-size: var(--pr-text-lg);
 }
 .pr-item__sub {
   font-family: var(--pr-font);
   font-weight: 400;
-  font-size: 12px;
+  font-size: var(--pr-text-sm);
   color: var(--pr-ink-mute);
 }
 .pr-item__chev {
@@ -470,7 +470,7 @@ body.is-lobby .pr-conn {
   background: var(--pr-sunken);
   color: var(--pr-ink-soft);
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--pr-text-sm);
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -525,7 +525,7 @@ body.is-lobby .pr-conn {
 .pr-code__text {
   font-family: var(--pr-font);
   font-weight: 800;
-  font-size: 20px;
+  font-size: var(--pr-text-xl);
   letter-spacing: 4px;
   /* The code is read out loud and typed in by hand — keep the glyphs even. */
   font-variant-numeric: tabular-nums;
@@ -593,7 +593,7 @@ body.is-lobby .pr-conn {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--pr-text-sm);
   color: var(--pr-ink);
 }
 .pr-roster__input {
@@ -602,12 +602,12 @@ body.is-lobby .pr-conn {
   min-width: 0;
   height: 40px;
   padding: 0 12px;
-  border-radius: 7px;
+  border-radius: var(--pr-radius);
   border: 1px solid var(--pr-edge);
   background: rgba(var(--pr-ink-rgb), 0.06);
   outline: none;
   font-weight: 700;
-  font-size: 14.5px;
+  font-size: var(--pr-text-base);
   color: var(--pr-ink);
 }
 .pr-roster__input::placeholder {
@@ -643,14 +643,14 @@ body.is-lobby .pr-conn {
   font-family: var(--pr-font);
   flex: 0 0 auto;
   font-weight: 600;
-  font-size: 10px;
+  font-size: var(--pr-text-xs);
   letter-spacing: 0.5px;
   text-transform: uppercase;
   color: var(--pr-ink-dim);
 }
 .pr-roster__badge--host {
   padding: 2px 7px;
-  border-radius: 4px;
+  border-radius: var(--pr-radius-sm);
   background: var(--pr-accent);
   color: var(--pr-accent-ink);
   font-weight: 700;
@@ -664,7 +664,7 @@ body.is-lobby .pr-conn {
   border: 1px dashed var(--pr-border-dim);
   text-align: center;
   font-weight: 600;
-  font-size: 12px;
+  font-size: var(--pr-text-sm);
   color: var(--pr-ink-dim);
 }
 
@@ -681,7 +681,7 @@ body.is-lobby .pr-conn {
   border: 1px solid var(--pr-border-dim);
   background: rgba(var(--pr-sunken-rgb), 0.7);
   font-weight: 600;
-  font-size: 12.5px;
+  font-size: var(--pr-text-sm);
   line-height: 1.4;
   text-align: center;
   color: var(--pr-ink-soft);
@@ -810,7 +810,7 @@ body.is-lobby .pr-conn {
   background: var(--pr-panel-solid);
   color: var(--pr-ink);
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: var(--pr-text-base);
   text-align: center;
   box-shadow: var(--pr-shadow);
   pointer-events: none;
@@ -885,13 +885,13 @@ body.is-lobby .pr-conn {
 }
 .pr-sheet__title {
   font-weight: 800;
-  font-size: 17px;
+  font-size: var(--pr-text-lg);
   letter-spacing: 0.3px;
 }
 /* Body copy inside a sheet. Paragraphs are separated by \n\n — pre-line turns
    those into breaks (single line breaks collapse, as in normal text flow). */
 .pr-sheet__text {
-  font-size: 13px;
+  font-size: var(--pr-text-sm);
   line-height: 1.55;
   color: var(--pr-ink-soft);
   white-space: pre-line;
@@ -901,7 +901,7 @@ body.is-lobby .pr-conn {
   margin-top: 4px;
   text-align: center;
   font-family: var(--pr-mono);
-  font-size: 11px;
+  font-size: var(--pr-text-sm);
   color: var(--pr-ink-dim);
   font-variant-numeric: tabular-nums;
 }
@@ -939,7 +939,7 @@ body.is-lobby .pr-conn {
   background: var(--pr-sunken);
   color: var(--pr-ink);
   font-weight: 600;
-  font-size: 16px; /* iOS zooms a focused field below 16px */
+  font-size: var(--pr-text-lg); /* iOS zooms a focused field below 16px */
 }
 .pr-field::placeholder {
   color: var(--pr-ink-dim);
@@ -966,7 +966,7 @@ body.is-lobby .pr-conn {
 .pr-field-error:not([hidden]) {
   display: block;
   color: var(--pr-error);
-  font-size: 13px;
+  font-size: var(--pr-text-sm);
   font-weight: 600;
 }
 
@@ -992,7 +992,7 @@ body.is-lobby .pr-conn {
 .pr-row__value {
   font-family: var(--pr-font);
   margin-left: auto;
-  font-size: 12px;
+  font-size: var(--pr-text-sm);
   font-weight: 700;
   color: var(--pr-accent);
   font-variant-numeric: tabular-nums;
@@ -1013,7 +1013,7 @@ body.is-lobby .pr-conn {
   background: none;
   color: var(--pr-edge);
   font-weight: 700;
-  font-size: 11px;
+  font-size: var(--pr-text-sm);
   line-height: 1;
   cursor: pointer;
   touch-action: manipulation;
@@ -1046,7 +1046,7 @@ body.is-lobby .pr-conn {
   border-radius: var(--pr-radius);
   background: var(--pr-accent-wash);
   border: 1px solid rgba(var(--pr-accent-rgb), 0.3);
-  font-size: 12px;
+  font-size: var(--pr-text-sm);
   line-height: 1.5;
   color: var(--pr-accent-soft);
 }
@@ -1057,7 +1057,7 @@ body.is-lobby .pr-conn {
   border-radius: var(--pr-radius);
   background: rgba(var(--pr-edge-rgb), 0.06);
   border: 1px solid var(--pr-edge-line);
-  font-size: 13px;
+  font-size: var(--pr-text-base);
   line-height: 1.5;
   color: var(--pr-ink-soft);
 }
@@ -1089,7 +1089,6 @@ body.is-lobby .pr-conn {
 }
 .pr-rules__sliders .pr-label {
   font-family: var(--pr-font);
-  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
@@ -1131,7 +1130,7 @@ body.is-lobby .pr-conn {
   display: flex;
   justify-content: space-between;
   font-family: var(--pr-mono);
-  font-size: 11px;
+  font-size: var(--pr-text-sm);
   color: var(--pr-ink-dim);
   font-variant-numeric: tabular-nums;
 }

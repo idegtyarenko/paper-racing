@@ -57,10 +57,10 @@
   margin: 0;
   padding: 2px 6px;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--pr-radius-sm);
   background: none;
   font-family: var(--pr-mono);
-  font-size: 11px;
+  font-size: var(--pr-text-sm);
   letter-spacing: 1px;
   color: var(--pr-ink-dim);
   cursor: pointer;
@@ -102,7 +102,7 @@
   min-height: 18px;
 }
 .pr-race__nextlabel {
-  font-size: 9px;
+  font-size: var(--pr-text-xs);
   letter-spacing: 2px;
   text-transform: uppercase;
   color: var(--pr-ink-dim);
@@ -189,7 +189,7 @@
 }
 .pr-race__pos {
   flex: 0 0 18px;
-  font-size: 12px;
+  font-size: var(--pr-text-sm);
   color: var(--pr-ink-dim);
 }
 .pr-race__row--mine .pr-race__pos {
@@ -222,7 +222,7 @@
   white-space: nowrap;
   font-family: var(--pr-font);
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: var(--pr-text-base);
   color: var(--pr-ink);
 }
 .pr-race__row--mine .pr-race__name {
@@ -233,9 +233,14 @@
 .pr-race__stat {
   flex: 0 0 auto;
   display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  /* Two sizes in one reading, so they sit on a shared baseline — centring them
+     would leave the unit floating against the digits. The crash badge opts back
+     out: it's icon-led, and an icon aligns optically, not typographically. */
+  align-items: baseline;
+  /* Tight, because the only pair this gap separates is the number and its unit —
+     they read as one reading. The crash badge buys its own air back below. */
+  gap: 2px;
+  font-size: var(--pr-text-sm);
   font-weight: 600;
   color: var(--pr-ink-soft);
 }
@@ -245,7 +250,7 @@
 }
 .pr-race__stat--done,
 .pr-race__stat--out {
-  font-size: 10.5px;
+  font-size: var(--pr-text-xs);
   letter-spacing: 1px;
   text-transform: uppercase;
 }
@@ -257,13 +262,16 @@
 }
 .pr-race__stat--warn {
   color: var(--pr-warn);
-  font-size: 10.5px;
+  font-size: var(--pr-text-xs);
   letter-spacing: 1px;
   text-transform: uppercase;
 }
+/* A step below the number, and lighter than the row's 600 (700 on --mine): the
+   reading is the number, «км/ч» is only what it's measured in. Uppercase needs
+   both — set in the same size it outweighs the digits, being wider per glyph. */
 .pr-race__unit {
-  margin-left: 2px;
-  font-size: 8px;
+  font-size: var(--pr-text-xs);
+  font-weight: 400;
   text-transform: uppercase;
   opacity: 0.5;
 }
@@ -273,11 +281,17 @@
 .pr-race__crashes {
   display: flex;
   align-items: center;
+  align-self: center;
   gap: 3px;
-  font-size: 11px;
+  font-size: var(--pr-text-xs);
 }
 .pr-race__crashes {
   color: var(--pr-ink-dim);
+}
+/* Only the crash tally can trail a speed reading (the pit countdown replaces it),
+   so it's the one place that needs air the tight stat gap no longer gives. */
+.pr-race__unit + .pr-race__crashes {
+  margin-left: 4px;
 }
 .pr-race__ico {
   display: block;
@@ -288,7 +302,7 @@
   height: 12px;
 }
 .pr-race__statnum {
-  font-size: 11px;
+  font-size: var(--pr-text-xs);
 }
 
 /* ── Action zone: status chip over the confirm / skip buttons ──────────────── */
@@ -312,7 +326,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px 15px;
-  font-size: 12.5px;
+  font-size: var(--pr-text-sm);
   letter-spacing: 0.3px;
   color: var(--pr-ink);
   text-align: center;
@@ -340,7 +354,7 @@ body.is-early-exit .pr-race__chip:not([hidden]) {
 
 .pr-race__act > .pr-btn {
   padding: 15px 30px;
-  font-size: 16px;
+  font-size: var(--pr-text-lg);
 }
 /* No target picked yet: the button is a countdown placeholder, not an action.
    Outlined rather than a dimmed amber slab — a translucent fill over navy goes
@@ -430,7 +444,7 @@ body.is-racing .pr-conn {
   color: var(--pr-ink-soft);
   font-family: var(--pr-font);
   font-weight: 700;
-  font-size: 12.5px;
+  font-size: var(--pr-text-sm);
   letter-spacing: 1px;
   cursor: pointer;
   touch-action: manipulation;

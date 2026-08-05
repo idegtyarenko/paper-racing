@@ -97,7 +97,7 @@
 }
 /* Open language row + its sublist read as one block. */
 .pr-menu__group--open .pr-menu__langbtn {
-  border-radius: 10px 10px 0 0;
+  border-radius: var(--pr-radius) var(--pr-radius) 0 0;
 }
 /* This row expands rather than navigates, so its chevron points down, and flips
    up while the sublist is open (the shared chevron points right). */
@@ -112,7 +112,7 @@
   flex-direction: column;
   gap: 3px;
   padding: 6px 10px 10px;
-  border-radius: 0 0 10px 10px;
+  border-radius: 0 0 var(--pr-radius) var(--pr-radius);
   background: rgba(var(--pr-edge-rgb), 0.03);
 }
 .pr-menu__langs:not([hidden]) {
@@ -125,11 +125,11 @@
   padding: 10px 12px;
   text-align: left;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: var(--pr-radius);
   background: none;
   color: var(--pr-ink-mute);
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: var(--pr-text-base);
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -152,7 +152,7 @@
   flex: 0 0 auto;
   width: 20px;
   height: 14px;
-  border-radius: 2px;
+  border-radius: var(--pr-radius-xs);
   overflow: hidden;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
 }
@@ -182,7 +182,7 @@
   padding: 16px 24px 24px;
   border-top: 1px solid rgba(var(--pr-edge-rgb), 0.14);
   font-family: var(--pr-mono);
-  font-size: 11px;
+  font-size: var(--pr-text-sm);
   color: var(--pr-ink-faint);
 }
 

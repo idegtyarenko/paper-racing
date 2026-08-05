@@ -76,7 +76,7 @@ body.is-setup .zoom-ctl {
   border-bottom: 2.5px solid transparent;
   color: var(--pr-ink-dim);
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--pr-text-sm);
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -113,7 +113,7 @@ body.is-setup .zoom-ctl {
 .pr-setup__leave {
   margin-top: 4px;
   padding: 12px;
-  font-size: 12.5px;
+  font-size: var(--pr-text-sm);
   letter-spacing: 1px;
 }
 .pr-setup__leave .pr-btn__ico svg {
@@ -127,7 +127,7 @@ body.is-setup .zoom-ctl {
 .pr-setup__hint {
   flex: 0 0 auto;
   text-align: center;
-  font-size: 11.5px;
+  font-size: var(--pr-text-sm);
   line-height: 1.4;
   color: var(--pr-ink-dim);
 }
@@ -138,7 +138,7 @@ body.is-setup .zoom-ctl {
 
 .pr-setup__start {
   padding: 16px;
-  font-size: 15px;
+  font-size: var(--pr-text-lg);
 }
 .pr-setup__start:disabled {
   opacity: 0.45;

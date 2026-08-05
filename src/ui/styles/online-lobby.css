@@ -41,7 +41,7 @@
 }
 .pr-lobby__leave {
   padding: 14px;
-  font-size: 12.5px;
+  font-size: var(--pr-text-sm);
   letter-spacing: 1px;
 }
 .pr-lobby__leave .pr-btn__ico svg {
