@@ -4,8 +4,7 @@ import { Vec, Polyline, add, sub, scale, normalize, lerp } from '../geometry';
 import { Track } from '../model/track';
 import { EditorState, Arrow } from '../model/editor';
 import { GameState, Candidate, Drive, Player } from '../model/game';
-import { aeroFactor } from '../model/turns';
-import { MIN_LAUNCH } from '../config';
+import { aeroFactor, forwardCap } from '../model/turns';
 import { Camera } from './camera';
 import { computeLanes, LaneStop } from './trail-lanes';
 
@@ -646,11 +645,11 @@ function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): 
 /**
  * Fill for the "traction ellipse" — the zone around the coast point
  * C = pos + vel that contains the candidate points. In velocity-relative
- * coordinates: the front is a half-ellipse with semi-axes (accel × grip_eff),
- * the back is (brake_eff × grip_eff); at the start (vel = 0) it's a circle of
- * radius max(accel, MIN_LAUNCH). Braking and grip account for downforce at
- * the current speed (grip_eff/brake_eff = grip/brake · aeroFactor), so the
- * fill matches the actually reachable nodes. Drawn as a pale fill with no
+ * coordinates: the front is a half-ellipse with semi-axes
+ * (forwardCap(accel) × grip_eff), the back is (brake_eff × grip_eff); at the
+ * start (vel = 0) it's a circle of radius forwardCap(accel). Braking and grip
+ * account for downforce at the current speed (grip_eff/brake_eff =
+ * grip/brake · aeroFactor), so the fill matches the actually reachable nodes. Drawn as a pale fill with no
  * stroke — marks the boundary with minimal visual noise.
  */
 function drawDriveArea(
@@ -672,15 +671,23 @@ function drawDriveArea(
   ctx.globalAlpha = alpha;
   ctx.beginPath();
   if (speed === 0) {
-    ctx.arc(pos.x * s, pos.y * s, Math.max(accel, MIN_LAUNCH) * s, 0, Math.PI * 2);
+    ctx.arc(pos.x * s, pos.y * s, forwardCap(accel) * s, 0, Math.PI * 2);
   } else {
     const cx = (pos.x + vel.x) * s;
     const cy = (pos.y + vel.y) * s;
     const phi = Math.atan2(vel.y, vel.x); // longitudinal axis = direction of travel
     // Two ellipse half-arcs meeting along the lateral axis (angles ±π/2): the
-    // front uses semi-axis accel along the direction of travel, the back uses
-    // brake_eff; both use grip_eff sideways.
-    ctx.ellipse(cx, cy, accel * s, gripEff * s, phi, -Math.PI / 2, Math.PI / 2);
+    // front uses semi-axis forwardCap(accel) along the direction of travel, the
+    // back uses brake_eff; both use grip_eff sideways.
+    ctx.ellipse(
+      cx,
+      cy,
+      forwardCap(accel) * s,
+      gripEff * s,
+      phi,
+      -Math.PI / 2,
+      Math.PI / 2,
+    );
     ctx.ellipse(cx, cy, brakeEff * s, gripEff * s, phi, Math.PI / 2, (3 * Math.PI) / 2);
     ctx.closePath();
   }

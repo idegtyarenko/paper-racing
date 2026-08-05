@@ -61,11 +61,21 @@ export const STATIC_TURNS_MAX = 8;
 // Values are tuned by playtesting.
 /** Preset handling profiles (a ladder by downforce). classic — isotropic (all
  *  axes equal, downforce 0 → a 3×3 square); sports — brakes reach twice as
- *  far as acceleration, no aero; gt — more grip plus a bit of downforce; f1 —
- *  strong downforce. Future "cars with perks" get added here too. */
+ *  far as acceleration and grips LESS sideways than classic, no aero; gt —
+ *  more grip plus a bit of downforce; f1 — strong downforce. Future "cars with
+ *  perks" get added here too.
+ *
+ *  Why sports sits below classic on grip: with the forward semi-axis floored at
+ *  the lattice diagonal (forwardCap in turns.ts), grip is the only axis left
+ *  that can bend the fan away from the plain 3×3 square at these sizes. At
+ *  grip 1.5 sports WAS classic plus one extra braking node — same corner
+ *  radius, same nodes. At 1.25 the corners of the square are cut: throttle and
+ *  steering can no longer be spent in the same move, which is the coupling the
+ *  preset promises. (1.2 gives an identical set of nodes; 1.25 is the value
+ *  that also lands on the DRIVE_STEP grid, so "Custom" can show it.) */
 export const DRIVE_PRESETS = {
   classic: { accel: 1.5, brake: 1.5, grip: 1.5, downforce: 0 },
-  sports: { accel: 1, brake: 2, grip: 1.5, downforce: 0 },
+  sports: { accel: 1, brake: 2, grip: 1.25, downforce: 0 },
   gt: { accel: 1, brake: 2, grip: 2, downforce: 0.3 },
   f1: { accel: 1, brake: 2.5, grip: 2, downforce: 0.75 },
 } as const;
@@ -75,7 +85,10 @@ export const DRIVE_PRESETS = {
  *  value would be meaningless. */
 export const DRIVE_MIN = 1;
 export const DRIVE_MAX = 4;
-export const DRIVE_STEP = 0.5;
+/** 0.25 rather than 0.5 so every preset value is reachable on the slider —
+ *  otherwise "Custom" opened from a preset would show a snapped number that
+ *  isn't the one the car is actually driving with (sports grip 1.25). */
+export const DRIVE_STEP = 0.25;
 /** Range and step for the downforce slider — its own scale: 0 (no aero) to
  *  1.5, step 0.25. Kept separate from the mechanical axes since it's a
  *  dimensionless coefficient for how grip grows with speed, not a semi-axis
@@ -93,10 +106,18 @@ export const DOWNFORCE_STEP = 0.25;
  *  corners and braking is still required (otherwise the race loses its
  *  point). Tuned by playtesting. */
 export const DOWNFORCE_VREF = 6;
-/** Floor on launch radius at the start (vel = 0): guarantees a diagonal start
- *  (the 3×3 set) regardless of acceleration. A powerful accel (> √2) launches
- *  further in a straight line. */
-export const MIN_LAUNCH = Math.SQRT2;
+/** One diagonal step of the grid — the shortest distance to a node that is not
+ *  on a lattice axis. Both floors on acceleration come from it, and neither is
+ *  about physics: they exist because the moves are integer nodes.
+ *  - at a standstill (vel = 0) it floors the launch radius, so a diagonal start
+ *    (the 3×3 set) is available whatever the accel;
+ *  - on the move it floors the forward semi-axis (forwardCap in turns.ts), so
+ *    "same course, more speed" is a node on every heading. Without it, an accel
+ *    below √2 leaves a car travelling diagonally no straight-ahead node at all:
+ *    a = (1,1) has a longitudinal component of √2, and the only speed-gaining
+ *    moves left are the ones that also turn.
+ *  A powerful accel (> √2) reaches further than the floor in a straight line. */
+export const LATTICE_DIAG = Math.SQRT2;
 /**
  * Tolerance for straying past the track edge, in cells. A move that clips the
  * wall no deeper than this doesn't count as a crash — you can graze it. 0

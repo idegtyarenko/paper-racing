@@ -4,7 +4,7 @@
 // (for online play). Shared outcome/winner/penalty-return logic lives in game.ts.
 
 import { Vec, pointOnSegment } from '../geometry';
-import { MIN_LAUNCH, DOWNFORCE_VREF } from '../config';
+import { LATTICE_DIAG, DOWNFORCE_VREF } from '../config';
 import {
   GameState,
   Candidate,
@@ -27,8 +27,10 @@ import {
  * Around the coast point C = pos + vel sits a "traction ellipse" in the velocity
  * frame: integer grid nodes whose velocity change a = target - C fits inside an
  * ellipse with semi-axes given by drive (cells per move):
- *  - forward along the direction of travel (a.u >= 0) uses the accel semi-axis;
- *    backward (braking) uses brake_eff;
+ *  - forward along the direction of travel (a.u >= 0) uses the accel semi-axis
+ *    (forwardCap: accel, floored at one lattice diagonal so that "same course,
+ *    more speed" is a node on every heading — see LATTICE_DIAG); backward
+ *    (braking) uses brake_eff;
  *  - lateral (sideways) uses grip_eff;
  *  - the ellipse condition (a_along/cap)^2 + (a_lat/grip_eff)^2 <= 1 couples
  *    acceleration and steering: floor the throttle and there's no steering left,
@@ -45,7 +47,7 @@ import {
  * and aero doesn't come into play.
  *
  * At the start (vel = 0) there's no direction yet: an isotropic disk of radius
- * max(accel, MIN_LAUNCH). The floor MIN_LAUNCH = sqrt(2) guarantees a diagonal
+ * forwardCap(accel) — the same lattice floor, here guaranteeing a diagonal
  * launch (the 3x3 set) regardless of accel. When all three semi-axes are equal
  * and downforce = 0, you get an isotropic circle: grip in [sqrt(2), 2) yields
  * exactly the 3x3 square (classic mode).
@@ -59,23 +61,24 @@ export function reachableTargets(pos: Vec, vel: Vec, drive: Drive): Vec[] {
   const aero = aeroFactor(downforce, speed);
   const brakeEff = brake * aero;
   const gripEff = grip * aero;
+  const accelEff = forwardCap(accel);
   // The search bounding box uses the EFFECTIVE semi-axes: at speed, downforce can
   // push brake/grip above their base values, so bounding by the raw values would
   // clip off otherwise-reachable nodes.
-  const r = Math.ceil(Math.max(accel, brakeEff, gripEff, MIN_LAUNCH));
+  const r = Math.ceil(Math.max(accelEff, brakeEff, gripEff, LATTICE_DIAG));
   const EPS = 1e-9;
   const out: Vec[] = [];
   for (let ay = -r; ay <= r; ay++) {
     for (let ax = -r; ax <= r; ax++) {
       if (speed === 0) {
-        const rad = Math.max(accel, MIN_LAUNCH); // at the start, the diagonal is available to everyone
+        const rad = accelEff; // at the start, the diagonal is available to everyone
         if (ax * ax + ay * ay > rad * rad + EPS) continue;
       } else {
         const ux = vel.x / speed;
         const uy = vel.y / speed;
         const along = ax * ux + ay * uy; // longitudinal component of a (along velocity)
         const lat = -ax * uy + ay * ux; // lateral component of a (sideways)
-        const cap = along >= 0 ? accel : brakeEff; // forward uses accel, backward uses braking
+        const cap = along >= 0 ? accelEff : brakeEff; // forward uses accel, backward uses braking
         const nl = cap === 0 ? (along === 0 ? 0 : Infinity) : along / cap;
         const nt = gripEff === 0 ? (lat === 0 ? 0 : Infinity) : lat / gripEff;
         if (nl * nl + nt * nt > 1 + EPS) continue; // outside the traction ellipse
@@ -95,6 +98,19 @@ export function reachableTargets(pos: Vec, vel: Vec, drive: Drive): Vec[] {
  */
 export function aeroFactor(downforce: number, speed: number): number {
   return 1 + downforce * (speed / DOWNFORCE_VREF) ** 2;
+}
+
+/**
+ * The forward semi-axis of the traction ellipse: acceleration, floored at one
+ * diagonal step of the grid (LATTICE_DIAG). The floor is about the lattice, not
+ * about the engine — see the constant's comment: below it, a car travelling
+ * diagonally has no "same course, more speed" node at all, and every way to
+ * gain speed also turns the car. Downforce never touches it (it is aero grip,
+ * not thrust). Shared between the engine and both drawings of the zone (the
+ * race view and the settings preview), so what is drawn is what is reachable.
+ */
+export function forwardCap(accel: number): number {
+  return Math.max(accel, LATTICE_DIAG);
 }
 
 /**

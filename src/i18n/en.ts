@@ -165,8 +165,8 @@ export const en = {
     driveModeClassic: 'Classic',
     driveModeCustom: 'Custom',
     driveExplainSports:
-      "The car brakes harder than it accelerates and won't let you brake sharply and " +
-      'turn at once\u00A0— realistic racing lines with forgiving grip.',
+      "The car brakes harder than it accelerates and won't let you add speed and " +
+      'turn in the same move\u00A0— you have to set up for a corner in advance.',
     driveExplainGt:
       'More grip and braking than a sports car, plus light downforce that tightens ' +
       'fast corners.',

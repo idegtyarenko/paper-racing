@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { newGame, cloneState, Candidate, Player, DEFAULT_RULES } from './game';
+import { newGame, cloneState, Candidate, Drive, Player, DEFAULT_RULES } from './game';
 import {
   candidates,
   candidatesForSeat,
@@ -10,6 +10,7 @@ import {
   upcomingSlots,
   retireSeat,
   reachableTargets,
+  forwardCap,
 } from './turns';
 import { WIN_CROSSINGS, DRIVE_PRESETS } from '../config';
 import { key } from './track';
@@ -179,7 +180,7 @@ describe('candidates — realistic physics (traction ellipse)', () => {
     const uy = vel.y / speed;
     const along = a.x * ux + a.y * uy;
     const lat = -a.x * uy + a.y * ux;
-    const cap = along >= 0 ? D.accel : D.brake;
+    const cap = along >= 0 ? forwardCap(D.accel) : D.brake;
     return (along / cap) ** 2 + (lat / D.grip) ** 2 <= 1 + 1e-9;
   }
   /** Largest turn (angle between old and new velocity) among the candidates. */
@@ -236,8 +237,63 @@ describe('candidates — realistic physics (traction ellipse)', () => {
     const p = g.players[0];
     const speeds = candidates(g).map((c) => c.target.x - p.pos.x); // new speed along direction of travel
     const base = p.vel.x;
-    expect(Math.max(...speeds) - base).toBe(D.accel); // forward — exactly the acceleration cap
+    // Forward and backward — the furthest node inside each cap. Forward the cap
+    // is forwardCap (accel floored at the lattice diagonal), so the last node
+    // that fits is 1, not 2.
+    expect(Math.max(...speeds) - base).toBe(Math.floor(forwardCap(D.accel)));
     expect(base - Math.min(...speeds)).toBe(D.brake); // backward — exactly the braking cap
+  });
+
+  // What separates "sports" from "classic" now that the forward semi-axis is
+  // floored: at these sizes grip is the only axis that can bend the fan away
+  // from a plain 3×3 square, so sports grips less sideways and loses the
+  // corners of the square — throttle and steering can't go into one move.
+  it('sports cannot add speed and turn in the same move, classic can', () => {
+    const cornerTargets = (drive: Drive): string[] => {
+      const g = newGame(ringTrack(), 2, { ...DEFAULT_RULES, drive: { ...drive } });
+      place(g.players[0], [10, 4], [4, 0]); // moving right: a corner is (+1, ±1)
+      const p = g.players[0];
+      return candidates(g)
+        .filter(
+          (c) => c.target.x === p.pos.x + p.vel.x + 1 && c.target.y !== p.pos.y + p.vel.y,
+        )
+        .map((c) => `${c.target.x},${c.target.y}`);
+    };
+    expect(cornerTargets(D)).toEqual([]);
+    expect(cornerTargets(DRIVE_PRESETS.classic).length).toBeGreaterThan(0);
+  });
+
+  it('on a diagonal heading, accelerating straight ahead is available (lattice floor)', () => {
+    // accel = 1 is shorter than the lattice diagonal √2, so without the floor
+    // the only speed-gaining nodes on a 45° heading are off-axis ones — the
+    // fan looked wider sideways than forward. With the floor, a = (1,1) fits.
+    const g = realGame();
+    place(g.players[0], [10, 4], [3, 3]);
+    const targets = candidates(g).map((c) => `${c.target.x},${c.target.y}`);
+    expect(targets).toContain('14,8'); // pos + vel + (1,1): straight on, faster
+  });
+
+  it('every heading has a candidate that is strictly forward and faster', () => {
+    // The invariant the floor buys: whatever direction you travel in, "more
+    // throttle, same course" is a move you can actually pick — no lattice
+    // heading is forced to turn in order to gain speed.
+    for (const vel of [
+      [3, 0],
+      [0, 3],
+      [3, 3],
+      [-2, 2],
+    ] as [number, number][]) {
+      const g = realGame();
+      place(g.players[0], [10, 4], vel);
+      const p = g.players[0];
+      const speed = Math.hypot(vel[0], vel[1]);
+      const straightFaster = candidates(g).some((c) => {
+        const nv = { x: c.target.x - p.pos.x, y: c.target.y - p.pos.y };
+        const cross = vel[0] * nv.y - vel[1] * nv.x; // zero → same course
+        return cross === 0 && Math.hypot(nv.x, nv.y) > speed;
+      });
+      expect(straightFaster, `heading ${vel}`).toBe(true);
+    }
   });
 
   it('the higher the speed, the smaller the maximum turn per move', () => {

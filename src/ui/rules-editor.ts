@@ -11,7 +11,7 @@
 // sent back out via onChange.
 
 import { Rules, Drive } from '../model/game';
-import { reachableTargets, aeroFactor } from '../model/turns';
+import { reachableTargets, aeroFactor, forwardCap } from '../model/turns';
 import {
   CRASH_EXPONENT_STANDARD,
   CRASH_EXPONENT_STRICT,
@@ -413,8 +413,8 @@ function drawPreview(canvas: HTMLCanvasElement, drive: Drive): void {
   const speeds = showSpeeds ? [...PREVIEW_SPEEDS] : [PREVIEW_SPEEDS[0]];
 
   // One layer per speed: offsets a = target − C (cells relative to the SHARED
-  // coasting point) plus the effective ellipse semi-axes (front = accel, which
-  // downforce leaves untouched).
+  // coasting point) plus the effective ellipse semi-axes (front = forwardCap,
+  // which downforce leaves untouched).
   const layers = speeds.map((v) => {
     const aero = aeroFactor(downforce, v);
     const off = reachableTargets({ x: 0, y: 0 }, { x: v, y: 0 }, drive).map((c) => ({
@@ -441,7 +441,7 @@ function drawPreview(canvas: HTMLCanvasElement, drive: Drive): void {
   const maxBack = Math.max(...layers.map((l) => l.back));
   const maxSide = Math.max(...layers.map((l) => l.side));
   let minX = -maxBack;
-  let maxX = accel;
+  let maxX = forwardCap(accel);
   let minY = -maxSide;
   let maxY = maxSide;
   for (const p of points) {
@@ -491,10 +491,18 @@ function drawPreview(canvas: HTMLCanvasElement, drive: Drive): void {
   ctx.fill();
 
   // Grip outlines (from high speed to low — the smaller one drawn on top).
-  // Half-ellipse: front = accel, back = back, side = side.
+  // Half-ellipse: front = forwardCap(accel), back = back, side = side.
   const traceEllipse = (back: number, side: number): void => {
     ctx.beginPath();
-    ctx.ellipse(cx, cy, accel * cell, side * cell, 0, -Math.PI / 2, Math.PI / 2);
+    ctx.ellipse(
+      cx,
+      cy,
+      forwardCap(accel) * cell,
+      side * cell,
+      0,
+      -Math.PI / 2,
+      Math.PI / 2,
+    );
     ctx.ellipse(cx, cy, back * cell, side * cell, 0, Math.PI / 2, (3 * Math.PI) / 2);
     ctx.closePath();
   };
