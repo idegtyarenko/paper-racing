@@ -7,8 +7,12 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
     <title>Paper Racing</title>
-    <link rel="icon" href="/paper-racing/favicon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="/paper-racing/apple-touch-icon.png" />
+    <!-- Files under public/ ship to a fixed URL — no content hash — so a redrawn
+         icon reaches nobody: browsers keep serving the favicon they cached, some
+         of them for months. The `-v3` suffix is the cache bust; bump it whenever
+         the artwork changes, here and in vite.config.ts's manifest. -->
+    <link rel="icon" href="/paper-racing/favicon-v3.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/paper-racing/apple-touch-icon-v3.png" />
     <meta name="theme-color" content="#0d3252" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />

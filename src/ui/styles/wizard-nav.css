@@ -15,7 +15,7 @@
   flex: 0 0 auto;
   font-family: var(--pr-mono);
   font-weight: 600;
-  font-size: 11px;
+  font-size: var(--pr-text-sm);
   letter-spacing: 1px;
   text-transform: uppercase;
   color: var(--pr-accent);
@@ -27,7 +27,7 @@
 .pr-nav__seg {
   flex: 1;
   height: 4px;
-  border-radius: 2px;
+  border-radius: var(--pr-radius-xs);
   background: rgba(var(--pr-edge-rgb), 0.25);
   transition:
     background 0.35s ease,
@@ -68,7 +68,7 @@
 .pr-nav__rail-burger {
   width: 30px;
   height: 30px;
-  border-radius: 7px;
+  border-radius: var(--pr-radius);
 }
 .pr-nav__rail-burger .pr-btn__ico svg {
   width: 16px;
@@ -112,7 +112,7 @@
   place-items: center;
   font-family: var(--pr-mono);
   font-weight: 700;
-  font-size: 11.5px;
+  font-size: var(--pr-text-sm);
   border: 1px solid var(--pr-edge);
   color: var(--pr-edge);
 }
@@ -128,7 +128,7 @@
   color: var(--pr-board);
 }
 .pr-nav__rail-label {
-  font-size: 13px;
+  font-size: var(--pr-text-sm);
   color: var(--pr-ink-soft);
 }
 .pr-nav__rail-step--active .pr-nav__rail-label {

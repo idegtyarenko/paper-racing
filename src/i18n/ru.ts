@@ -149,6 +149,7 @@ export const ru: Strings = {
     limit1m: '1 мин',
     limit2m: '2 мин',
     limit5m: '5 мин',
+    readOnlyNote: 'Это настройки создателя трассы — менять их\u00A0может только он.',
     done: 'Готово',
   },
 
@@ -203,11 +204,16 @@ export const ru: Strings = {
     raceCode: (code) => `Код игры ${code}`,
     resumeTitle: (code) => `Вернуться в игру ${code}?`,
     resumeYes: 'Вернуться в игру',
+    setupChanged: (what: string): string =>
+      `Создатель трассы изменил настройки: ${what}.`,
+    setupChangedMany: 'Создатель трассы изменил настройки гонки.',
     gameGone: 'Игра больше недоступна.',
   },
 
   race: {
     driver: (name) => `Ходит ${name}.`,
+    driverYou: 'Твой ход.',
+    you: 'Я',
     rivalsMoving: 'Ходят соперники…',
     hintPick: 'Выбери точку и подтверди, нажав «Едем!»',
     finalWarn: ' Попробуй успеть финишировать и заехать дальше соперника.',
@@ -267,10 +273,11 @@ export const ru: Strings = {
 
   install: {
     title: 'Установи игру на домашний экран',
-    body: 'Она будет открываться на весь экран и работать без сети.',
+    body: 'Откроется на весь экран и работает без сети.',
     action: 'Установить',
-    iosBefore: 'Нажми три точки и ',
-    iosAfter: ' внизу и выбери «На экран „Домой“».',
+    iosBefore: 'Нажми ',
+    iosMid: ' внизу, потом ',
+    iosAfter: ' «Поделиться» → «На экран „Домой“».',
     close: 'Закрыть',
   },
 };

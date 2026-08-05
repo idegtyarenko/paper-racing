@@ -47,7 +47,7 @@
   border: 1px solid var(--pr-border);
   background: var(--pr-panel);
   color: var(--pr-ink-soft);
-  font-size: 20px;
+  font-size: var(--pr-text-xl);
   line-height: 1;
   font-weight: 700;
   cursor: pointer;
@@ -116,7 +116,7 @@ body.is-lobby .pr-conn {
 .pr-label {
   font-family: var(--pr-mono);
   font-weight: 700;
-  font-size: 11px;
+  font-size: var(--pr-text-sm);
   letter-spacing: 2.5px;
   text-transform: uppercase;
   color: var(--pr-edge);
@@ -160,7 +160,7 @@ body.is-lobby .pr-conn {
   background: var(--pr-panel);
   color: var(--pr-ink-soft);
   font-weight: 700;
-  font-size: 14px;
+  font-size: var(--pr-text-base);
   letter-spacing: 0.5px;
   cursor: pointer;
   touch-action: manipulation;
@@ -249,74 +249,95 @@ body.is-lobby .pr-conn {
   display: block;
 }
 
-/* ── Brand mark: app icon + skewed wordmark over a checkered rule ───────────
-   Heads the menu drawer and the editor's wide-screen rail (`--sm`). */
+/* ── Brand mark: app icon + skewed wordmark over a dashed rule ──────────────
+   Heads the menu drawer and the editor's wide-screen rail (`--sm`). Proportions
+   come from the logo sheet in Claude Design, scaled off the icon: wordmark half
+   the icon, dash 0.31 × 0.10 of it. The words are painted with gradients rather
+   than flat ink — that lift is most of what separates this from a bold label.
+   Onest ships no italic, so the slant stays a skew, and the rule leans with it. */
 .pr-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9.5px;
 }
 .pr-brand__logo {
   flex: 0 0 auto;
   width: 34px;
   height: 34px;
-  border-radius: 9px;
 }
 .pr-brand__text {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4.5px;
 }
 .pr-brand__wordmark {
   font-family: var(--pr-font);
-  display: inline-block;
-  font-weight: 800;
-  font-size: 15.5px;
+  display: flex;
+  align-items: baseline;
+  gap: 4.5px;
+  font-weight: 900;
+  font-size: var(--pr-text-lg);
   line-height: 1;
   letter-spacing: -0.3px;
-  transform: skew(-6deg);
+  transform: skew(-10deg);
 }
+/* The flat `color` is the fallback: it shows through wherever background-clip:text
+   isn't honoured, which is why each word still names its own ink.
+   The padding is not spacing — background-clip crops the gradient to the padding
+   box, and with line-height 1 that box ends at the baseline, beheading the "g" of
+   Racing. Pad the box out, then pull the same amount back with a negative margin
+   so nothing around it moves. */
 .pr-brand__word {
   color: var(--pr-ink);
+  background: linear-gradient(178deg, #ffffff 34%, #dbe6f2 72%, #c3d2e2 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  padding: 0.1em 0.14em 0.26em 0.08em;
+  margin: -0.1em -0.14em -0.26em -0.08em;
 }
 .pr-brand__word--accent {
   color: var(--pr-accent);
+  background: linear-gradient(178deg, #ffc86d 32%, #ffa930 70%, #f79a20 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 .pr-brand__dashes {
   display: flex;
-  gap: 2px;
+  gap: 2.5px;
 }
 .pr-brand__dash {
-  width: 7px;
-  height: 3px;
-  background: var(--pr-ink);
+  width: 10.5px;
+  height: 3.5px;
+  transform: skewX(-14deg);
+  background: linear-gradient(180deg, #ffffff, #dbe6f2);
 }
-.pr-brand__dash--hollow {
-  background: transparent;
-  border: 1px solid rgba(var(--pr-ink-rgb), 0.4);
+.pr-brand__dash--slate {
+  background: #3f5a7d;
 }
 /* Compact: the editor rail, where the brand shares its row with the burger. */
 .pr-brand--sm {
-  gap: 9px;
+  gap: 8px;
 }
 .pr-brand--sm .pr-brand__logo {
   width: 28px;
   height: 28px;
-  border-radius: 7px;
 }
 .pr-brand--sm .pr-brand__text {
-  gap: 2px;
+  gap: 3.5px;
 }
 .pr-brand--sm .pr-brand__wordmark {
-  font-size: 13px;
+  font-size: var(--pr-text-base);
+  gap: 3.5px;
   letter-spacing: -0.2px;
 }
 .pr-brand--sm .pr-brand__dashes {
-  gap: 1.5px;
+  gap: 2px;
 }
 .pr-brand--sm .pr-brand__dash {
-  width: 5px;
-  height: 2.5px;
+  width: 8.5px;
+  height: 3px;
 }
 
 /* ── List item: icon tile + text + chevron ──────────────────────────────────
@@ -332,7 +353,7 @@ body.is-lobby .pr-conn {
   text-align: left;
   color: var(--pr-ink);
   font-weight: 600;
-  font-size: 14px;
+  font-size: var(--pr-text-base);
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -351,7 +372,7 @@ body.is-lobby .pr-conn {
 /* Soft-filled row, used where there is no card underneath (menu entries). */
 .pr-item--fill {
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: var(--pr-radius);
   background: var(--pr-fill-soft);
 }
 /* Card-sized row: the mode-select cards. */
@@ -365,7 +386,7 @@ body.is-lobby .pr-conn {
   height: 36px;
   display: grid;
   place-items: center;
-  border-radius: 9px;
+  border-radius: var(--pr-radius);
   background: rgba(var(--pr-edge-rgb), 0.12);
   color: var(--pr-edge);
 }
@@ -392,16 +413,16 @@ body.is-lobby .pr-conn {
 .pr-item__title {
   font-family: var(--pr-font);
   font-weight: 600;
-  font-size: 14px;
+  font-size: var(--pr-text-base);
 }
 .pr-item--lg .pr-item__title {
   font-weight: 700;
-  font-size: 15px;
+  font-size: var(--pr-text-lg);
 }
 .pr-item__sub {
   font-family: var(--pr-font);
   font-weight: 400;
-  font-size: 12px;
+  font-size: var(--pr-text-sm);
   color: var(--pr-ink-mute);
 }
 .pr-item__chev {
@@ -419,6 +440,55 @@ body.is-lobby .pr-conn {
 .pr-item--lg .pr-item__chev svg {
   width: 16px;
   height: 16px;
+}
+
+/* ── Tabs: a strip over a stack of panes, inside a card (ui/pr-chrome.ts
+      buildTabs) — the race-setup card and the guest lobby's ─────────────────── */
+.pr-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  border-bottom: 1px solid var(--pr-edge-line);
+}
+.pr-tabs__tab {
+  flex: 1;
+  padding: 13px 4px;
+  background: none;
+  border: none;
+  /* The active tab is underlined by its own border, so every tab reserves the
+     same space — otherwise the row would jump on switch. */
+  border-bottom: 2.5px solid transparent;
+  color: var(--pr-ink-dim);
+  font-weight: 600;
+  font-size: var(--pr-text-sm);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+@media (hover: hover) {
+  .pr-tabs__tab:hover:not(.pr-tabs__tab--active) {
+    color: var(--pr-ink);
+    background: var(--pr-hover);
+  }
+}
+.pr-tabs__tab--active {
+  color: var(--pr-accent);
+  border-bottom-color: var(--pr-accent);
+  font-weight: 700;
+}
+.pr-panes {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow-y: auto;
+}
+/* Scoped to :not([hidden]) so the flex display never overrides the hidden
+   attribute that switches tabs. */
+.pr-pane:not([hidden]) {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 18px;
 }
 
 /* ── Segmented options: a row/grid of choices with one active ───────────────── */
@@ -449,7 +519,7 @@ body.is-lobby .pr-conn {
   background: var(--pr-sunken);
   color: var(--pr-ink-soft);
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--pr-text-sm);
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -504,7 +574,7 @@ body.is-lobby .pr-conn {
 .pr-code__text {
   font-family: var(--pr-font);
   font-weight: 800;
-  font-size: 20px;
+  font-size: var(--pr-text-xl);
   letter-spacing: 4px;
   /* The code is read out loud and typed in by hand — keep the glyphs even. */
   font-variant-numeric: tabular-nums;
@@ -572,7 +642,7 @@ body.is-lobby .pr-conn {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--pr-text-sm);
   color: var(--pr-ink);
 }
 .pr-roster__input {
@@ -581,12 +651,12 @@ body.is-lobby .pr-conn {
   min-width: 0;
   height: 40px;
   padding: 0 12px;
-  border-radius: 7px;
+  border-radius: var(--pr-radius);
   border: 1px solid var(--pr-edge);
   background: rgba(var(--pr-ink-rgb), 0.06);
   outline: none;
   font-weight: 700;
-  font-size: 14.5px;
+  font-size: var(--pr-text-base);
   color: var(--pr-ink);
 }
 .pr-roster__input::placeholder {
@@ -598,18 +668,38 @@ body.is-lobby .pr-conn {
 .pr-roster__input:placeholder-shown {
   border-color: var(--pr-border);
 }
+/* Send the typed name. Appears only while the field differs from what the room
+   already has, sized to sit flush with the input rather than the 48px slab the
+   icon buttons use in a top bar. */
+.pr-roster__confirm {
+  width: 40px;
+  height: 40px;
+  border-color: var(--pr-accent);
+  background: var(--pr-accent);
+  color: var(--pr-accent-ink);
+}
+@media (hover: hover) {
+  .pr-roster__confirm:hover:not(:disabled) {
+    background: var(--pr-accent-hover);
+    border-color: var(--pr-accent);
+    color: var(--pr-accent-ink);
+  }
+}
+.pr-roster__confirm:active:not(:disabled) {
+  background: var(--pr-accent-hover);
+}
 .pr-roster__badge {
   font-family: var(--pr-font);
   flex: 0 0 auto;
   font-weight: 600;
-  font-size: 10px;
+  font-size: var(--pr-text-xs);
   letter-spacing: 0.5px;
   text-transform: uppercase;
   color: var(--pr-ink-dim);
 }
 .pr-roster__badge--host {
   padding: 2px 7px;
-  border-radius: 4px;
+  border-radius: var(--pr-radius-sm);
   background: var(--pr-accent);
   color: var(--pr-accent-ink);
   font-weight: 700;
@@ -623,7 +713,7 @@ body.is-lobby .pr-conn {
   border: 1px dashed var(--pr-border-dim);
   text-align: center;
   font-weight: 600;
-  font-size: 12px;
+  font-size: var(--pr-text-sm);
   color: var(--pr-ink-dim);
 }
 
@@ -640,7 +730,7 @@ body.is-lobby .pr-conn {
   border: 1px solid var(--pr-border-dim);
   background: rgba(var(--pr-sunken-rgb), 0.7);
   font-weight: 600;
-  font-size: 12.5px;
+  font-size: var(--pr-text-sm);
   line-height: 1.4;
   text-align: center;
   color: var(--pr-ink-soft);
@@ -677,66 +767,51 @@ body.is-lobby .pr-conn {
   }
 }
 
-/* ── Animated ellipsis: waiting on someone else's online move ────────────────
-   Dots light up one by one, looping, so a non-interactive board reads as
-   "waiting" rather than "frozen" (m1). Three separate spans (`content` can't be
-   animated — we fade each dot's opacity with a phase offset). They always take
-   up space (inline-block), so the adjacent timer text doesn't jump around. */
+/* ── Waiting indicator: three pulsing dots ───────────────────────────────────
+   Someone else is on the clock and there is nothing to press: the dots run so a
+   frozen-looking screen reads as "waiting" (m1). Shared by the race chip and the
+   guest's rematch plate on the result screen — one indicator, not a per-screen
+   variant. Dots lead the line, so the wait is legible before the text is read.
+   `currentColor` lets each host set the tone with its own text colour. */
 .pr-dots {
-  display: inline-block;
-  min-width: 1.2em;
-  text-align: left;
+  flex: 0 0 auto;
+  gap: 3px;
+  vertical-align: middle;
 }
-
-/* A shared 1.4s timeline for all dots (no delay), but different lighting thresholds —
-   so all three go dark in sync at the start of the cycle (reset "…" → ""), then light
-   up in sequence: 1st at 25%, 2nd at 50%, 3rd at 75%. Exactly replicates the old
-   frame sequence '', '.', '..', '...'. */
+/* display under :not([hidden]) — the result plate hides the dots when there is
+   nothing left to wait for (see the convention at the top of this file). */
+.pr-dots:not([hidden]) {
+  display: inline-flex;
+}
+/* One 1.4s timeline, staggered by delay: the wave runs left to right. */
 .pr-dots__dot {
-  opacity: 0;
-  animation: 1.4s steps(1, end) infinite;
-}
-.pr-dots__dot:nth-child(1) {
-  animation-name: pr-dot-1;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pr-dot-pulse 1.4s infinite;
 }
 .pr-dots__dot:nth-child(2) {
-  animation-name: pr-dot-2;
+  animation-delay: 0.2s;
 }
 .pr-dots__dot:nth-child(3) {
-  animation-name: pr-dot-3;
+  animation-delay: 0.4s;
 }
-@keyframes pr-dot-1 {
-  0% {
-    opacity: 0;
-  }
-  25%,
+@keyframes pr-dot-pulse {
+  0%,
+  80%,
   100% {
+    opacity: 0.25;
+  }
+  40% {
     opacity: 1;
   }
 }
-@keyframes pr-dot-2 {
-  0% {
-    opacity: 0;
-  }
-  50%,
-  100% {
-    opacity: 1;
-  }
-}
-@keyframes pr-dot-3 {
-  0% {
-    opacity: 0;
-  }
-  75%,
-  100% {
-    opacity: 1;
-  }
-}
-/* Respect "reduce motion": a static ellipsis, all three dots visible. */
+/* Respect "reduce motion": three static dots, evenly lit. */
 @media (prefers-reduced-motion: reduce) {
   .pr-dots__dot {
     animation: none;
-    opacity: 1;
+    opacity: 0.6;
   }
 }
 
@@ -769,7 +844,7 @@ body.is-lobby .pr-conn {
   background: var(--pr-panel-solid);
   color: var(--pr-ink);
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: var(--pr-text-base);
   text-align: center;
   box-shadow: var(--pr-shadow);
   pointer-events: none;
@@ -844,13 +919,13 @@ body.is-lobby .pr-conn {
 }
 .pr-sheet__title {
   font-weight: 800;
-  font-size: 17px;
+  font-size: var(--pr-text-lg);
   letter-spacing: 0.3px;
 }
 /* Body copy inside a sheet. Paragraphs are separated by \n\n — pre-line turns
    those into breaks (single line breaks collapse, as in normal text flow). */
 .pr-sheet__text {
-  font-size: 13px;
+  font-size: var(--pr-text-sm);
   line-height: 1.55;
   color: var(--pr-ink-soft);
   white-space: pre-line;
@@ -860,7 +935,7 @@ body.is-lobby .pr-conn {
   margin-top: 4px;
   text-align: center;
   font-family: var(--pr-mono);
-  font-size: 11px;
+  font-size: var(--pr-text-sm);
   color: var(--pr-ink-dim);
   font-variant-numeric: tabular-nums;
 }
@@ -898,7 +973,7 @@ body.is-lobby .pr-conn {
   background: var(--pr-sunken);
   color: var(--pr-ink);
   font-weight: 600;
-  font-size: 16px; /* iOS zooms a focused field below 16px */
+  font-size: var(--pr-text-lg); /* iOS zooms a focused field below 16px */
 }
 .pr-field::placeholder {
   color: var(--pr-ink-dim);
@@ -925,7 +1000,7 @@ body.is-lobby .pr-conn {
 .pr-field-error:not([hidden]) {
   display: block;
   color: var(--pr-error);
-  font-size: 13px;
+  font-size: var(--pr-text-sm);
   font-weight: 600;
 }
 
@@ -951,7 +1026,7 @@ body.is-lobby .pr-conn {
 .pr-row__value {
   font-family: var(--pr-font);
   margin-left: auto;
-  font-size: 12px;
+  font-size: var(--pr-text-sm);
   font-weight: 700;
   color: var(--pr-accent);
   font-variant-numeric: tabular-nums;
@@ -972,7 +1047,7 @@ body.is-lobby .pr-conn {
   background: none;
   color: var(--pr-edge);
   font-weight: 700;
-  font-size: 11px;
+  font-size: var(--pr-text-sm);
   line-height: 1;
   cursor: pointer;
   touch-action: manipulation;
@@ -1005,7 +1080,7 @@ body.is-lobby .pr-conn {
   border-radius: var(--pr-radius);
   background: var(--pr-accent-wash);
   border: 1px solid rgba(var(--pr-accent-rgb), 0.3);
-  font-size: 12px;
+  font-size: var(--pr-text-sm);
   line-height: 1.5;
   color: var(--pr-accent-soft);
 }
@@ -1016,7 +1091,7 @@ body.is-lobby .pr-conn {
   border-radius: var(--pr-radius);
   background: rgba(var(--pr-edge-rgb), 0.06);
   border: 1px solid var(--pr-edge-line);
-  font-size: 13px;
+  font-size: var(--pr-text-base);
   line-height: 1.5;
   color: var(--pr-ink-soft);
 }
@@ -1034,6 +1109,31 @@ body.is-lobby .pr-conn {
 .pr-rules--rules {
   gap: 22px;
 }
+/* Read-only (the guest's lobby shows the host's settings): a readout, not a
+   disabled form. The chosen option keeps its accent plaque and everything else
+   drops the button skin, so the row reads as a value; the sliders go away
+   completely — a draggable thumb that doesn't drag is the one control nobody
+   believes is read-only. The numbers survive in .pr-row__value beside the label. */
+.pr-rules--ro .pr-seg__opt {
+  cursor: default;
+}
+.pr-rules--ro .pr-seg__opt:disabled {
+  opacity: 1;
+}
+.pr-rules--ro .pr-seg__opt:not(.pr-seg__opt--active) {
+  background: none;
+  border-color: transparent;
+  color: var(--pr-ink-dim);
+  font-weight: 600;
+}
+.pr-rules--ro .pr-seg__opt:active {
+  transform: none;
+}
+.pr-rules--ro .pr-slider,
+.pr-rules--ro .pr-slider__scale {
+  display: none;
+}
+
 .pr-rules__sliders {
   flex-direction: column;
   gap: 8px;
@@ -1048,7 +1148,6 @@ body.is-lobby .pr-conn {
 }
 .pr-rules__sliders .pr-label {
   font-family: var(--pr-font);
-  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
@@ -1090,7 +1189,7 @@ body.is-lobby .pr-conn {
   display: flex;
   justify-content: space-between;
   font-family: var(--pr-mono);
-  font-size: 11px;
+  font-size: var(--pr-text-sm);
   color: var(--pr-ink-dim);
   font-variant-numeric: tabular-nums;
 }

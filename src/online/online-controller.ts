@@ -13,6 +13,7 @@
 
 import {
   GameState,
+  Rules,
   Candidate,
   cloneState,
   isFinished,
@@ -34,9 +35,13 @@ import { openConfirm, openNotice } from '../ui/confirm';
 import { AppState } from '../app-state';
 import { RENAME_DEBOUNCE_MS } from '../config';
 import { setMoveSendState } from '../ui/race-chrome';
+import { describeSetupChanges } from '../ui/rules-summary';
+import type { SettingChange, SetupSummary } from '../ui/rules-summary';
 import { strings } from '../i18n';
 import * as session from './online';
 import { OnlineHandlers } from './online';
+import type { LobbySetup } from './online';
+import type { SerializedSetup } from './net';
 import * as hostBots from './host-bots';
 import * as turnWatch from './turn-watch';
 
@@ -74,6 +79,7 @@ export function initOnline(d: OnlineDeps): void {
     confirmFirst,
     commitOnline,
     clearTurnWatch: turnWatch.clearTurnWatch,
+    pushSetup,
   });
   turnWatch.initTurnWatch({ deps: d, confirmFirst, commitOnline });
   // On page close/navigate-away: drop presence immediately (so others notice we're
@@ -285,6 +291,62 @@ function announceRetirements(before: GameState | null, after: GameState): void {
   });
 }
 
+// ── Announcing the host's changes (guest side) ──────────────────────────────────
+// A guest may be looking at any of the three lobby tabs — or at the roster, where a
+// rules change leaves no trace at all — so every change the host makes is spoken
+// aloud once. The announcement waits: the host writes with a debounce, but dragging
+// through several values still lands several rows, and one toast per intermediate
+// value would be worse than none. The window collects them, and the diff is taken
+// against the setup the guest was last told about, never against the previous row.
+
+/** How long changes are collected before they're announced, ms. */
+const SETUP_NOTICE_MS = 3_000;
+
+let noticeTimer: number | null = null;
+/** The setup as last announced (the baseline for the next diff), while a window is open. */
+let noticedSetup: SetupSummary | null = null;
+
+function sayChanges(changes: SettingChange[]): void {
+  if (!changes.length) return;
+  // More than a couple of settings at once stops being informative and starts
+  // being a wall of text — then just say that something moved.
+  if (changes.length > 2) {
+    showToast(strings.online.setupChangedMany, 3_000);
+    return;
+  }
+  showToast(
+    strings.online.setupChanged(changes.map((c) => `${c.label} — ${c.value}`).join(', ')),
+    3_000,
+  );
+}
+
+function announceSetupChange(before: LobbySetup, after: LobbySetup): void {
+  if (!noticedSetup) noticedSetup = before;
+  if (noticeTimer !== null) clearTimeout(noticeTimer);
+  noticeTimer = window.setTimeout(() => {
+    noticeTimer = null;
+    const base = noticedSetup;
+    noticedSetup = null;
+    if (base) sayChanges(describeSetupChanges(base, after));
+  }, SETUP_NOTICE_MS);
+}
+
+/**
+ * The race started while an announcement was still waiting. The rules inside the
+ * state are the ones being raced, so the diff is redone against those and shown
+ * immediately — a change nobody was told about is worse in a race than in a lobby.
+ */
+function flushSetupNotice(raced: Rules): void {
+  if (noticeTimer === null) return;
+  clearTimeout(noticeTimer);
+  noticeTimer = null;
+  const base = noticedSetup;
+  noticedSetup = null;
+  if (!base) return;
+  // Bots are already visible on the grid by now — only the rules still need saying.
+  sayChanges(describeSetupChanges(base, { rules: raced, bots: base.bots }));
+}
+
 /** Turn a join error into user-facing text. */
 function joinErrorText(e: unknown): string {
   const m = (e as { message?: string })?.message ?? '';
@@ -363,6 +425,10 @@ const handlers: OnlineHandlers = {
     turnWatch.armTurnWatch();
     deps.updateUI();
     deps.redraw();
+    // A setting changed in the last seconds of the lobby: the announcement is still
+    // waiting out its window, and the race has started meanwhile. Say it now, against
+    // the rules the race actually runs on — there's nothing left to wait for.
+    flushSetupNotice(g.rules);
     // Last: the creator's departure arrives as a roster change on a state row, so this
     // is where a guest finds out the race has nowhere left to go.
     noticeHostStall();
@@ -385,6 +451,12 @@ const handlers: OnlineHandlers = {
     // quiet for a seat that's flagged gone, so a departure is announced once, as itself.
     showToast(strings.online.playerLeft(name));
   },
+  onSetupChanged: (before, after) => {
+    // The guest's lobby draws the host's settings (read-only tabs) and their bots
+    // (roster rows) — both come off this, so a change has to reach the screen.
+    deps.updateUI();
+    announceSetupChange(before, after);
+  },
   onConnection: (ok) => {
     setConnBanner(!ok);
     deps.updateUI();
@@ -400,6 +472,70 @@ const handlers: OnlineHandlers = {
   },
 };
 
+// ── The host's setup on the row ──────────────────────────────────────────────────
+// Rules and the bot fill are the host's to choose and the guests' to see, and until
+// the race starts the row is the only place they can meet (state is null). The write
+// is debounced: dragging a slider is a stream of changes, and every row that lands
+// raises a toast on the other side.
+
+/** How long the host's settings have to settle before they're written, ms. */
+const SETUP_DEBOUNCE_MS = 800;
+
+let setupTimer: number | null = null;
+
+/** The setup as it stands right now, in wire form. */
+function currentSetup(): SerializedSetup {
+  return { rules: deps.state.rules, bots: hostBots.lobbyBotConfig() };
+}
+
+function writeSetupNow(): void {
+  session.writeSetup(currentSetup()).catch(() => {
+    // A dropped setup write isn't worth interrupting the host over: the next change
+    // (or the start of the race, which carries the rules in the state) writes it again.
+  });
+}
+
+/**
+ * The host changed something in the lobby — schedule the write. No-op for a guest
+ * or outside a session (the local setup screens change the same rules).
+ */
+export function pushSetup(): void {
+  if (!session.active() || !session.isHost()) return;
+  if (setupTimer !== null) clearTimeout(setupTimer);
+  setupTimer = window.setTimeout(() => {
+    setupTimer = null;
+    writeSetupNow();
+  }, SETUP_DEBOUNCE_MS);
+}
+
+/**
+ * Write a pending setup immediately. Called just before the race starts: a host who
+ * tweaks a setting and hits "Start" right after would otherwise leave the row holding
+ * the previous values, and the guest's "what changed" would be computed against a lie.
+ */
+function flushSetup(): void {
+  if (setupTimer === null) return;
+  clearTimeout(setupTimer);
+  setupTimer = null;
+  writeSetupNow();
+}
+
+/**
+ * Write the setup even though nothing changed — the host coming back into their own
+ * lobby (a reload, a resumed session). Otherwise the row keeps whatever it was created
+ * with: nothing at all if that was a client from before the setup travelled, and then
+ * a guest sees no settings for the whole lobby, because only a *change* writes again.
+ * The host's local rules are the ones the race will run on, so they're the truth here.
+ */
+function republishSetup(): void {
+  if (!session.active() || !session.isHost()) return;
+  if (setupTimer !== null) {
+    clearTimeout(setupTimer);
+    setupTimer = null;
+  }
+  writeSetupNow();
+}
+
 /** Create an online game (as host) with the entered name and open the lobby. */
 function hostOnline(name: string): Promise<void> {
   return guarded(async () => {
@@ -407,7 +543,7 @@ function hostOnline(name: string): Promise<void> {
     if (!raceTrack) return;
     hostBots.resetBots(); // fresh lobby — no leftover bots from before
     try {
-      await session.host(raceTrack, name, handlers);
+      await session.host(raceTrack, name, currentSetup(), handlers);
       deps.state.phase = 'lobby';
       deps.updateUI();
       deps.redraw();
@@ -438,6 +574,9 @@ function joinOnline(code: string, name: string, inJoinDialog: boolean): Promise<
       // Reconnecting into an already-running race: onGameState already switched us
       // into race mode — don't force it back to lobby. Otherwise (game not yet started) go to the lobby.
       if (deps.state.phase !== 'race') deps.state.phase = 'lobby';
+      // Back in our own room as its host: refresh the row's copy of the setup (see
+      // republishSetup). In a race it's the state that carries the rules — nothing to do.
+      if (deps.state.phase === 'lobby') republishSetup();
       deps.fitToContent(); // center the host's track
       deps.redraw();
       deps.updateUI();
@@ -464,6 +603,9 @@ function startOnline(): Promise<void> {
   return guarded(async () => {
     const raceTrack = deps.state.raceTrack;
     if (!raceTrack || !session.canStart()) return;
+    // A setting changed a moment ago may still be sitting in the debounce — get it
+    // out before the state lands, so the lobby row never disagrees with the race.
+    flushSetup();
     const g = hostBots.buildStartState(raceTrack);
     hostBots.setLobbyStarting(true);
     try {

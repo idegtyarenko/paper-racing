@@ -150,6 +150,7 @@ export const be: Strings = {
     limit1m: '1\u00A0хв',
     limit2m: '2\u00A0хв',
     limit5m: '5\u00A0хв',
+    readOnlyNote: 'Гэта налады стваральніка трасы — мяняць іх\u00A0можа толькі ён.',
     done: 'Гатова',
   },
 
@@ -205,11 +206,15 @@ export const be: Strings = {
     raceCode: (code) => `Код гульні ${code}`,
     resumeTitle: (code) => `Вярнуцца ў\u00A0гульню ${code}?`,
     resumeYes: 'Вярнуцца ў\u00A0гульню',
+    setupChanged: (what: string): string => `Стваральнік трасы змяніў налады: ${what}.`,
+    setupChangedMany: 'Стваральнік трасы змяніў налады гонкі.',
     gameGone: 'Гульня больш недаступна.',
   },
 
   race: {
     driver: (name) => `Ходзіць ${name}.`,
+    driverYou: 'Твой ход.',
+    you: 'Я',
     rivalsMoving: 'Ходзяць сапернікі…',
     hintPick: 'Выберы кропку і пацвердзі, націснуўшы «Едзем!»',
     finalWarn: ' Паспрабуй паспець фінішаваць і заехаць далей за саперніка.',
@@ -269,10 +274,11 @@ export const be: Strings = {
 
   install: {
     title: 'Усталюй гульню на\u00A0хатні экран',
-    body: 'Яна будзе адкрывацца на\u00A0ўвесь экран і\u00A0працаваць без сеткі.',
+    body: 'Адкрыецца на\u00A0ўвесь экран і\u00A0працуе без\u00A0сеткі.',
     action: 'Усталяваць',
     iosBefore: 'Націсні ',
-    iosAfter: ' унізе і\u00A0выберы «На\u00A0экран „Дадому“».',
+    iosMid: ' унізе, потым ',
+    iosAfter: ' «Падзяліцца» → «На\u00A0экран\u00A0„Дадому“».',
     close: 'Закрыць',
   },
 };

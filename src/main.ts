@@ -119,6 +119,10 @@ function redraw(): void {
     cam: vp.camera(),
   };
   render(ctx, app);
+  // The action zone and the floating "Go!" button are pinned to where the
+  // candidates are on screen, so they follow every camera change — and a
+  // camera change is exactly what a redraw is for.
+  if (viewMode === 'race') input.updateConfirmPlacement();
 }
 
 /**
@@ -203,6 +207,10 @@ function updateUI(): void {
     // Whose row gets the amber "you're up" treatment: our own seat online, the
     // human at the controls locally (hot-seat players share this client).
     mySeat: localHumanSeat(),
+    // Alone against bots there is exactly one addressee, so the chip and their
+    // row say "you" instead of naming a car colour. Online and hot-seat keep
+    // names — there the name is what tells two people apart.
+    soloSeat: session.active() ? -1 : soloHumanSeat(),
     connected: session.isConnected(),
   });
   const over = S.phase === 'race' && S.game?.phase === 'over';
@@ -228,6 +236,7 @@ function updateUI(): void {
     // player shares this screen), so there it stays −1 and nobody gets the
     // personal treatment.
     mySeat: session.active() ? session.mySeat() : soloHumanSeat(),
+    soloSeat: session.active() ? -1 : soloHumanSeat(),
     onlineGuest: !!net && !net.isHost,
     hostGone: session.active() && session.hostGone(),
     canRematch: (!!S.game && !!S.lastLocalRace) || online.canRematch(),
@@ -362,8 +371,11 @@ function refreshCands(): void {
   // in (pre-pick mode) — restore hover from the actual mouse position, since
   // clearSelection above would have cleared it.
   input.reaimHover();
-  // A pending pick survived until our turn — arm the "Go!" button so it can be confirmed with one tap.
-  if (myTurn() && S.pending) showConfirmMove(true, input.confirmAnchor());
+  // Arms the "Go!" button if a pending pick survived until our turn (one tap
+  // confirms it), and places the action zone for the fresh candidates — the
+  // chip and the countdown button are on screen from the start of the turn, so
+  // where they sit can't wait for a pick.
+  input.syncConfirmMove();
 }
 
 /**
@@ -542,6 +554,7 @@ input.initInput({
   commitMove,
   // Pre-pick mode: not our turn right now, but our seat can still queue a move (online/vs-bots).
   isPreselect: () => !myTurn() && candOwner() >= 0,
+  myTurn,
   setPending: (cand) => {
     S.pending = cand;
     showConfirmMove(false); // not our turn — don't show the button, the pending pick is visible on the field
@@ -671,6 +684,9 @@ initSetupChrome({
   getRules: () => S.rules,
   onRulesChange: (r) => {
     S.rules = r;
+    // In the host's lobby the same tabs configure a race other people are waiting
+    // for — publish the change so their screens can show it (no-op offline).
+    online.pushSetup();
   },
   ...lobbyHandlers,
   onLobbyBotCount: (n) => online.setBotCount(n),
@@ -752,8 +768,15 @@ setVersionLabel(`${__COMMIT__} · ${buildLabel}`, () => {
 
 // If the commit changed since the last run, the app was updated: show a toast.
 // We compare the compiled-in commit to the saved one, without relying on SW mechanics.
+//
+// The key is per-app, not per-origin: production and the staging preview are two
+// builds on one GitHub Pages origin, so a single key made them overwrite each
+// other's last-seen commit — moving between them announced an "update" that never
+// happened, and a real update could go unannounced. Which makes the toast useless
+// as evidence when the actual question is whether the service worker picked up a
+// new version.
 try {
-  const BUILD_KEY = 'pr-build';
+  const BUILD_KEY = `pr-build:${import.meta.env.BASE_URL}`;
   const seen = localStorage.getItem(BUILD_KEY);
   if (seen && seen !== __COMMIT__) {
     showToast(strings.race.updated, 3000);

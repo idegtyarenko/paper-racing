@@ -22,7 +22,7 @@ import { strings } from '../i18n';
 import { msToClock } from './format';
 import { renderRows, resetStandings } from './classification';
 import { bindTap } from './dom';
-import { el, button, icon, buildBrand, buildStatus, StatusBanner } from './pr-chrome';
+import { el, button, icon, buildStatus, StatusBanner } from './pr-chrome';
 import { openMenu } from './menu';
 import {
   BURGER_SVG,
@@ -70,12 +70,12 @@ function build(h: RaceChromeHandlers): void {
   root.hidden = true;
 
   // ── Top: burger + the classification card ──────────────────────────────────
-  // On a phone the burger floats beside the card; from 700px the pair becomes a
-  // rail, and the brand joins the burger on its top row — the same header the
-  // wizard rail carries, so the run-up and the race read as one screen.
+  // The burger floats beside the card at every width — on a wide screen the card
+  // stops stretching and hugs the right corner instead of becoming a rail. No
+  // brand here: the app's identity isn't in question mid-race, and a logo would
+  // only take board away.
   const top = el('div', 'pr-race__top', root);
   const bar = el('div', 'pr-race__bar', top);
-  buildBrand(bar, { cls: 'pr-brand--sm pr-race__brand', dashes: 6 });
   const burger = button('pr-btn pr-btn--icon pr-race__burger', bar);
   burger.setAttribute('aria-label', strings.menu.title);
   icon('pr-btn__ico', BURGER_SVG, burger);
@@ -237,6 +237,11 @@ function refreshConfirmBtn(): void {
   // instead, since the button now means "try again".
   confirmRetryEl.hidden = sendState !== 'failed';
   confirmCheckEl.hidden = sendState !== 'idle' || timerOnly;
+  // The float is a position, not a state: a hidden button or one that has
+  // turned into "sending"/"retry" belongs back in the bottom stack, and nothing
+  // else would clear it (the caller only recomputes on camera/candidate
+  // changes, which a send state change isn't).
+  if (confirmBtn.hidden || sendState !== 'idle') setConfirmFloat(null);
 }
 
 /**
@@ -252,36 +257,108 @@ export function setMoveSendState(s: SendState): void {
 
 /**
  * Show/hide the floating confirm-move button. While sending or after a failure,
- * we don't hide it — it shows progress/retry. `anchor` moves the action zone to
- * the half of the field free of candidates, so it doesn't cover target points
- * (otherwise a tap on a target would hit the button).
+ * we don't hide it — it shows progress/retry.
  */
-export function showConfirmMove(
-  show: boolean,
-  anchor: 'top' | 'bottom' = 'bottom',
-): void {
+export function showConfirmMove(show: boolean): void {
   confirmSelected = show;
-  if (built) root.classList.toggle('pr-race--act-top', anchor === 'top');
   refreshConfirmBtn();
 }
 
 /**
- * Render the "waiting for someone else's turn" chip: base text (with any
- * trailing "…" stripped) + an animated ellipsis + an optional "· m:ss" suffix.
- * Built via DOM rather than textContent because the ellipsis is CSS-animated
- * (three dot spans with staggered opacity); both the full render and the
- * ticking setTurnCountdown call this helper, so the tick doesn't wipe out the
- * animation.
+ * Move the whole action zone (chip + button) to the half of the field free of
+ * candidates, so it doesn't cover target points. Split out of showConfirmMove:
+ * the anchor used to be decided only when a target was picked, which is too
+ * late — the chip and the countdown button are already on screen by then and
+ * may sit on the very candidates the player is aiming at. Callers apply it as
+ * soon as candidates exist, and again whenever the camera moves.
+ *
+ * The body class lets things outside the race chrome react — the toast moves to
+ * the opposite end of the screen (see race-chrome.css).
+ */
+export function setActAnchor(anchor: 'top' | 'bottom'): void {
+  if (!built) return;
+  root.classList.toggle('pr-race--act-top', anchor === 'top');
+  document.body.classList.toggle('is-act-top', anchor === 'top');
+}
+
+/**
+ * Desktop: pull the confirm button out of the bottom stack and float it next to
+ * the candidate fan (`pos` = its top-left corner in board css px), so the
+ * cursor doesn't cross a wide window on every move. `null` docks it back.
+ *
+ * The caller owns the geometry — it has the camera and the candidates; this
+ * only decides whether floating is allowed at all. It isn't while a move is
+ * being sent or has failed (the retry belongs next to the error-coloured stack)
+ * nor for a player who has retired (the result buttons dock into that stack).
+ */
+export function setConfirmFloat(pos: { x: number; y: number } | null): void {
+  if (!built) return;
+  const ok =
+    pos !== null &&
+    sendState === 'idle' &&
+    !confirmBtn.hidden &&
+    !document.body.classList.contains('is-early-exit');
+  confirmBtn.classList.toggle('pr-race__confirm--float', ok);
+  if (ok) {
+    confirmBtn.style.left = `${pos.x}px`;
+    confirmBtn.style.top = `${pos.y}px`;
+  } else {
+    confirmBtn.style.left = '';
+    confirmBtn.style.top = '';
+  }
+}
+
+/**
+ * Size of the confirm button as currently rendered — the caller needs it to
+ * place the float outside the fan. Zero while it's hidden (nothing to place).
+ */
+export function confirmBtnSize(): { w: number; h: number } {
+  if (!built || confirmBtn.hidden) return { w: 0, h: 0 };
+  return { w: confirmBtn.offsetWidth, h: confirmBtn.offsetHeight };
+}
+
+/**
+ * The status chip's box in board coordinates (the same space the caller works
+ * in — the layer spans the board), or null when it isn't on screen. The float
+ * has to dodge it: the chip carries the turn's instruction, and a button parked
+ * across the middle of it cuts the line in half.
+ */
+export function chipRect(): { x: number; y: number; w: number; h: number } | null {
+  if (!built || chipEl.hidden) return null;
+  const c = chipEl.getBoundingClientRect();
+  const r = root.getBoundingClientRect();
+  return { x: c.x - r.x, y: c.y - r.y, w: c.width, h: c.height };
+}
+
+/**
+ * How far up from the bottom edge the action stack reaches: its own height
+ * (chip + button, not just the button) plus the layer's bottom padding, which
+ * is the gutter and the safe-area inset. That's what the anchor has to keep
+ * clear of the candidates.
+ *
+ * Derived rather than measured in place on purpose — once the stack has moved
+ * to the top, its position says nothing about the room it would need at the
+ * bottom, and measuring that would make the anchor oscillate.
+ */
+export function actZoneHeight(): number {
+  if (!built) return 0;
+  const pad = parseFloat(getComputedStyle(root).paddingBottom) || 0;
+  return actEl.offsetHeight + pad;
+}
+
+/**
+ * Render the "waiting for someone else's turn" chip: the shared pulsing-dots
+ * indicator (the same one the result screen's rematch plate uses), then the base
+ * text (with any trailing "…" stripped) and an optional "· m:ss" suffix. Built
+ * via DOM rather than textContent because the dots are CSS-animated elements;
+ * both the full render and the ticking setTurnCountdown call this helper, so the
+ * tick doesn't wipe out the animation.
  */
 function applyWaitingChip(base: string, msLeft: number | null): void {
-  const dots = el('span', 'pr-dots');
-  // Three separate dots: `content` can't be animated, so we fade each one's opacity instead.
-  for (let i = 0; i < 3; i++) {
-    el('span', 'pr-dots__dot', dots).textContent = '.';
-  }
-  const nodes: (Node | string)[] = [base.replace(/…$/, ''), dots];
-  if (msLeft !== null) nodes.push(` · ${msToClock(msLeft)}`);
-  chipText.replaceChildren(...nodes);
+  const dots = el('span', 'pr-dots pr-race__chipwait');
+  for (let i = 0; i < 3; i++) el('span', 'pr-dots__dot', dots);
+  const tail = msLeft !== null ? ` · ${msToClock(msLeft)}` : '';
+  chipText.replaceChildren(dots, `${base.replace(/…$/, '')}${tail}`);
 }
 
 /**
@@ -356,6 +433,8 @@ export interface RaceCtx {
   aiTurn?: boolean;
   /** This client's own seat, or −1. Drives the amber "you are up" row. */
   mySeat: number;
+  /** The lone human racing bots, or −1 — the seat we address as "you". */
+  soloSeat?: number;
   /** Realtime channel is up. Only meaningful online; a local race is never "lost". */
   connected?: boolean;
 }
@@ -374,7 +453,16 @@ function setChip(text: string, color: string | null, error = false): void {
  */
 export function renderRaceChrome(ctx: RaceCtx): void {
   if (!built) return;
-  const { phase, game, nav, net = null, aiTurn = false, mySeat, connected = true } = ctx;
+  const {
+    phase,
+    game,
+    nav,
+    net = null,
+    aiTurn = false,
+    mySeat,
+    soloSeat = -1,
+    connected = true,
+  } = ctx;
   // Only the LIVE race, not the results screen: the designed result layer is the
   // next step, and until it lands the old panel still owns `over` (winner banner
   // + "New race"). That's the seam — when the layer arrives, drop `game.phase`
@@ -383,6 +471,10 @@ export function renderRaceChrome(ctx: RaceCtx): void {
   root.hidden = !racing;
   document.body.classList.toggle('is-racing', racing);
   if (!racing) {
+    // Both are race-only positioning: outside a race the toast goes back to the
+    // top of the screen and the button back into its stack.
+    document.body.classList.remove('is-act-top');
+    setConfirmFloat(null);
     resetStandings(); // leaving the race — a new one recomputes from scratch
     chipBase = null;
     chipWaiting = false;
@@ -398,12 +490,13 @@ export function renderRaceChrome(ctx: RaceCtx): void {
 
   renderRows(rowsEl, game!, nav!, {
     mySeat,
+    soloSeat,
     stalledSeat: net?.canSkip ? game!.current : -1,
     present: net?.present,
   });
 
   renderSkip(game!, net);
-  renderChip(game!, net, aiTurn);
+  renderChip(game!, net, aiTurn, soloSeat);
 
   // Realtime is down: the banner replaces the status chip rather than stacking
   // with it — the chip would only say whose turn it is, which is exactly the
@@ -433,7 +526,12 @@ function renderSkip(game: GameState, net: NetTurn | null): void {
 }
 
 /** The one line of text under the board: whose turn it is and what to do. */
-function renderChip(game: GameState, net: NetTurn | null, aiTurn: boolean): void {
+function renderChip(
+  game: GameState,
+  net: NetTurn | null,
+  aiTurn: boolean,
+  soloSeat: number,
+): void {
   chipBase = null; // by default don't decorate the chip with a timer (set in the net branch)
   chipWaiting = false; // the animated ellipsis is only armed for "someone else's turn"
   const wasAiWaiting = chipAiWaiting; // every branch below but the bots' one leaves the state
@@ -478,5 +576,9 @@ function renderChip(game: GameState, net: NetTurn | null, aiTurn: boolean): void
     chipAiWaiting = true;
     return;
   }
-  setChip(`${strings.race.driver(cur.name)} ${strings.race.hintPick}${warn}`, cur.color);
+  // Racing bots on your own: the mover is always you, so name the turn instead
+  // of the car — a colour name tells the only human at the wheel nothing.
+  const driver =
+    game.current === soloSeat ? strings.race.driverYou : strings.race.driver(cur.name);
+  setChip(`${driver} ${strings.race.hintPick}${warn}`, cur.color);
 }

@@ -32,9 +32,11 @@ import {
   buildItem,
   buildCode,
   buildRoster,
+  buildTabs,
   CodeBlock,
   LobbyView,
   Roster,
+  Tabs,
 } from './pr-chrome';
 import { ARROW_SVG, CHIP_SVG, CLOSE_SVG, GLOBE_SVG, PHONE_SVG } from './icons';
 
@@ -122,8 +124,7 @@ interface Lineup {
   difficultyOpts: HTMLButtonElement[];
 }
 let lineup: Lineup;
-const tabs: Partial<Record<SetupTab, HTMLButtonElement>> = {};
-const panes: Partial<Record<SetupTab, HTMLElement>> = {};
+let tabbar: Tabs<SetupTab>;
 
 /** One labelled row of options; returns the row and its option buttons. */
 function optionRow(
@@ -194,23 +195,17 @@ function build(): void {
   // ── Race setup: the tabbed card ───────────────────────────────────────────
   setupScreen = el('div', 'pr-setup__screen pr-setup__screen--setup', body);
   const card = el('div', 'pr-card pr-card--lg pr-setup__card', setupScreen);
-  const tabRow = el('div', 'pr-setup__tabs', card);
-  const addTab = (key: SetupTab, label: string): void => {
-    const b = button('pr-setup__tab', tabRow);
-    b.textContent = label;
-    bindTap(b, () => showTab(key));
-    tabs[key] = b;
-  };
-  addTab('lineup', strings.setup.tabLineup);
-  addTab('drive', strings.setup.tabBehaviour);
-  addTab('rules', strings.setup.tabRules);
+  tabbar = buildTabs<SetupTab>(
+    card,
+    [
+      { key: 'lineup', label: strings.setup.tabLineup },
+      { key: 'drive', label: strings.setup.tabBehaviour },
+      { key: 'rules', label: strings.setup.tabRules },
+    ],
+    showTab,
+  );
 
-  const paneBox = el('div', 'pr-setup__panes pr-scroll-bleed', card);
-  for (const key of ['lineup', 'drive', 'rules'] as SetupTab[]) {
-    panes[key] = el('div', 'pr-setup__pane', paneBox);
-  }
-
-  const lineupPane = panes.lineup!;
+  const lineupPane = tabbar.panes.lineup;
   // Online lobby blocks first (hidden for a local race): the room is the thing
   // you're waiting on, the bots below it are the filler.
   const codeRow = el('div', 'pr-row', lineupPane);
@@ -299,7 +294,10 @@ function build(): void {
   };
   humans.label.textContent = strings.players.humansLabel;
 
-  rulesEditor = mountRulesEditor({ drive: panes.drive!, rules: panes.rules! });
+  rulesEditor = mountRulesEditor({
+    drive: tabbar.panes.drive,
+    rules: tabbar.panes.rules,
+  });
 
   // ── Actions (aligned to the same gutter as everything else). Back lives here
   //    on every width: the top strip is the wizard's now, and its leading button
@@ -346,10 +344,7 @@ function setStartLabel(text: string): void {
 
 function showTab(next: SetupTab): void {
   tab = next;
-  for (const key of ['lineup', 'drive', 'rules'] as SetupTab[]) {
-    tabs[key]!.classList.toggle('pr-setup__tab--active', key === tab);
-    panes[key]!.hidden = key !== tab;
-  }
+  tabbar.show(tab);
   // The preview canvas has no width while its pane is hidden, so a render done
   // then drew nothing — redraw once it's visible again.
   if (tab === 'drive') requestAnimationFrame(() => rulesEditor.refreshPreview());

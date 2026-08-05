@@ -17,7 +17,7 @@
   border: 1px solid var(--pr-error);
   background: var(--pr-error-bg);
   color: var(--pr-error-ink);
-  font-size: 13.5px;
+  font-size: var(--pr-text-base);
   font-weight: 600;
   box-shadow: var(--pr-shadow);
   pointer-events: none;

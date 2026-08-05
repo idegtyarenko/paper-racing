@@ -1,0 +1,15 @@
+-- The host's pre-race setup, visible to guests while they wait.
+--
+-- Rules (car handling, crash penalty, turn limit) live inside the serialized game
+-- state — and `state` is null until the race starts, so until now a guest sitting in
+-- the lobby had no way to learn what they were about to race under. The bot fill was
+-- worse off still: the host kept it entirely client-side.
+--
+-- Both now travel in their own column, written by the host on create and on every
+-- change: { "rules": Rules, "bots": { "count": int, "difficulty": string } }.
+-- Nullable, and old rows simply have none — a guest whose host runs an older client
+-- shows no settings rather than wrong ones. Once the race starts the state is
+-- authoritative again; this column is the lobby's copy.
+--
+-- See supabase/schema.sql for the full schema.
+alter table public.games add column if not exists setup jsonb;

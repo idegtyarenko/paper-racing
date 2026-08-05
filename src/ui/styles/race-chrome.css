@@ -1,8 +1,10 @@
 /* Race chrome (Blueprint): the floating HUD over the board while racing.
-   Built by ui/race-chrome.ts. Two layouts off one DOM — a phone stacks the
-   classification card at the top and the action zone at the bottom; from 700px
-   the same pieces become a left rail beside a full-height board, matching the
-   wizard rail so the run-up and the race read as one screen. */
+   Built by ui/race-chrome.ts. One layout at every width — the burger top left,
+   the classification card floating over the board, the action zone at the
+   bottom. The card used to become a left rail from 700px; the rail took a whole
+   240px column away from the track (and the fit doesn't know about it, so the
+   track slid under it), so on a wide screen the card just stops stretching and
+   hugs the top right corner instead. */
 
 .pr-race {
   flex-direction: column;
@@ -36,11 +38,6 @@
 .pr-race__burger {
   height: 48px;
 }
-/* Phone: the bar is just the burger — the brand would only crowd the board, and
-   the app's identity isn't in question mid-race. It appears in the rail below. */
-.pr-race__brand {
-  display: none;
-}
 .pr-race__card {
   flex: 1;
   min-width: 0;
@@ -57,10 +54,10 @@
   margin: 0;
   padding: 2px 6px;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--pr-radius-sm);
   background: none;
   font-family: var(--pr-mono);
-  font-size: 11px;
+  font-size: var(--pr-text-sm);
   letter-spacing: 1px;
   color: var(--pr-ink-dim);
   cursor: pointer;
@@ -102,7 +99,7 @@
   min-height: 18px;
 }
 .pr-race__nextlabel {
-  font-size: 9px;
+  font-size: var(--pr-text-xs);
   letter-spacing: 2px;
   text-transform: uppercase;
   color: var(--pr-ink-dim);
@@ -189,7 +186,7 @@
 }
 .pr-race__pos {
   flex: 0 0 18px;
-  font-size: 12px;
+  font-size: var(--pr-text-sm);
   color: var(--pr-ink-dim);
 }
 .pr-race__row--mine .pr-race__pos {
@@ -222,7 +219,7 @@
   white-space: nowrap;
   font-family: var(--pr-font);
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: var(--pr-text-base);
   color: var(--pr-ink);
 }
 .pr-race__row--mine .pr-race__name {
@@ -233,9 +230,14 @@
 .pr-race__stat {
   flex: 0 0 auto;
   display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  /* Two sizes in one reading, so they sit on a shared baseline — centring them
+     would leave the unit floating against the digits. The crash badge opts back
+     out: it's icon-led, and an icon aligns optically, not typographically. */
+  align-items: baseline;
+  /* Tight, because the only pair this gap separates is the number and its unit —
+     they read as one reading. The crash badge buys its own air back below. */
+  gap: 2px;
+  font-size: var(--pr-text-sm);
   font-weight: 600;
   color: var(--pr-ink-soft);
 }
@@ -245,7 +247,7 @@
 }
 .pr-race__stat--done,
 .pr-race__stat--out {
-  font-size: 10.5px;
+  font-size: var(--pr-text-xs);
   letter-spacing: 1px;
   text-transform: uppercase;
 }
@@ -257,13 +259,16 @@
 }
 .pr-race__stat--warn {
   color: var(--pr-warn);
-  font-size: 10.5px;
+  font-size: var(--pr-text-xs);
   letter-spacing: 1px;
   text-transform: uppercase;
 }
+/* A step below the number, and lighter than the row's 600 (700 on --mine): the
+   reading is the number, «км/ч» is only what it's measured in. Uppercase needs
+   both — set in the same size it outweighs the digits, being wider per glyph. */
 .pr-race__unit {
-  margin-left: 2px;
-  font-size: 8px;
+  font-size: var(--pr-text-xs);
+  font-weight: 400;
   text-transform: uppercase;
   opacity: 0.5;
 }
@@ -273,11 +278,17 @@
 .pr-race__crashes {
   display: flex;
   align-items: center;
+  align-self: center;
   gap: 3px;
-  font-size: 11px;
+  font-size: var(--pr-text-xs);
 }
 .pr-race__crashes {
   color: var(--pr-ink-dim);
+}
+/* Only the crash tally can trail a speed reading (the pit countdown replaces it),
+   so it's the one place that needs air the tight stat gap no longer gives. */
+.pr-race__unit + .pr-race__crashes {
+  margin-left: 4px;
 }
 .pr-race__ico {
   display: block;
@@ -288,7 +299,7 @@
   height: 12px;
 }
 .pr-race__statnum {
-  font-size: 11px;
+  font-size: var(--pr-text-xs);
 }
 
 /* ── Action zone: status chip over the confirm / skip buttons ──────────────── */
@@ -312,7 +323,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px 15px;
-  font-size: 12.5px;
+  font-size: var(--pr-text-sm);
   letter-spacing: 0.3px;
   color: var(--pr-ink);
   text-align: center;
@@ -337,17 +348,30 @@ body.is-early-exit .pr-race__chip:not([hidden]) {
   height: 9px;
   border-radius: 50%;
 }
+/* The waiting dots lead the line, inside the text span — hence a margin rather
+   than the chip's own flex gap. Dimmed: they set the mood, the text carries the
+   message, and at full ink they'd compete with the player's colour dot. */
+.pr-race__chipwait {
+  margin-right: 8px;
+  color: var(--pr-ink-dim);
+}
 
 .pr-race__act > .pr-btn {
   padding: 15px 30px;
-  font-size: 16px;
+  font-size: var(--pr-text-lg);
 }
 /* No target picked yet: the button is a countdown placeholder, not an action.
    Outlined rather than a dimmed amber slab — a translucent fill over navy goes
    muddy, and it would still read as "a primary button you can't press". It must
-   not swallow taps either: a candidate may well be underneath it. */
-.pr-race__confirm--timer {
+   not swallow taps either: a candidate may well be underneath it — and since
+   this button floats over the fan on a desktop, that's the normal case now.
+   Written through the same `.pr-race__act >` wrapper as the rule that turns
+   pointer events on, or that one outranks it and the placeholder eats the tap
+   (the specificity trap the file header warns about). */
+.pr-race__act > .pr-btn.pr-race__confirm--timer {
   pointer-events: none;
+}
+.pr-race__confirm--timer {
   background: var(--pr-panel);
   border: 1px solid var(--pr-accent);
   color: var(--pr-accent);
@@ -406,6 +430,29 @@ body.is-racing .pr-conn {
   display: none;
 }
 
+/* ── Toast: always at the end of the board the action zone isn't ───────────── */
+/* The toast is pinned to the top of the screen everywhere (pr-controls.css). In
+   a race the action zone moves up there whenever the candidate fan sits low —
+   and then the toast lands on the chip and the button, in the one corner the
+   player is looking at. So it takes the opposite end instead. The class is set
+   with the anchor itself (race-chrome.ts) and dropped when the race ends. Only
+   the position moves; the failure skin is the toast's own business. */
+body.is-act-top .pr-toast {
+  top: auto;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+  animation-name: pr-toast-in-up;
+}
+@keyframes pr-toast-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* ── Connection lost (5E): banner + the code to rejoin with ────────────────── */
 .pr-race__conn {
   width: 100%;
@@ -430,7 +477,7 @@ body.is-racing .pr-conn {
   color: var(--pr-ink-soft);
   font-family: var(--pr-font);
   font-weight: 700;
-  font-size: 12.5px;
+  font-size: var(--pr-text-sm);
   letter-spacing: 1px;
   cursor: pointer;
   touch-action: manipulation;
@@ -448,78 +495,59 @@ body.is-racing .pr-conn {
   height: 14px;
 }
 
-/* ── Wide screens: the card becomes a left rail ────────────────────────────── */
+/* ── Wide screens: the card floats in the top right corner ─────────────────── */
 @media (min-width: 700px) {
-  /* :not([hidden]) per the hiding convention (pr-controls.css): this `display`
-     has to lose to the hidden attribute, or the HUD stays on screen outside the
-     race and covers the wizard's step rail. */
-  .pr-race:not([hidden]) {
-    display: grid;
-  }
-  .pr-race {
-    /* A touch wider than the wizard rail: these rows carry a name AND a speed,
-       and at 220px six-character names were already ellipsing. */
-    grid-template-columns: 240px 1fr;
-    grid-template-rows: 1fr;
-    gap: 0;
-    padding: 0;
-  }
+  /* Burger hard left, card hard right — the board keeps its full width, and the
+     two things that hover over it sit in opposite corners rather than lining up
+     into a strip. */
   .pr-race__top {
-    grid-column: 1;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-    padding: 16px;
-    background: var(--pr-panel);
-    border-right: 1px solid var(--pr-border-dim);
-    backdrop-filter: blur(6px);
-    pointer-events: auto;
-    overflow-y: auto;
-  }
-  /* The rail is the surface now, so the card stops being one of its own. */
-  .pr-race__card {
-    background: none;
-    border: 0;
-    backdrop-filter: none;
-    overflow: visible;
-  }
-  .pr-race__bar {
-    display: flex;
-    align-items: center;
     justify-content: space-between;
-    gap: 9px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid rgba(var(--pr-edge-rgb), 0.3);
   }
-  .pr-race__brand {
-    display: flex;
+  /* Fixed rather than content-sized: the rows carry live speeds and placings, so
+     a shrink-to-fit panel would jitter on every move. Wide enough that
+     six-character names don't ellipse next to a speed reading. */
+  .pr-race__card {
+    flex: 0 0 260px;
   }
-  .pr-race__burger {
-    height: 36px;
-    width: 36px;
-  }
-  .pr-race__next {
-    padding: 0 0 12px;
-    border-bottom: 0;
-  }
-  .pr-race__rows {
-    gap: 6px;
-    overflow: visible;
-  }
-  /* The action zone stays over the board, never over the rail. */
+  /* Symmetric side padding wide enough to clear the zoom column at the right
+     edge — the chip wraps rather than sliding under the buttons, and staying
+     symmetric keeps it centred over the board. */
   .pr-race__act {
-    grid-column: 2;
-    grid-row: 1;
-    margin: 0;
-    justify-content: flex-end;
-    /* Symmetric side padding wide enough to clear the zoom column at the right
-       edge — the chip wraps rather than sliding under the buttons, and staying
-       symmetric keeps it centred over the board. */
     padding: 24px 76px 32px;
   }
-  .pr-race--act-top .pr-race__act {
+  /* The reconnect banner is the only thing in this stack that stretches; capped
+     like the chip above it, or it would run the whole width of a desktop window. */
+  .pr-race__conn {
+    max-width: min(100%, 520px);
+  }
+  /* Confirming a move used to mean crossing the whole window: the fan is drawn
+     wherever the track is, the button lived at the bottom edge. Here it leaves
+     the stack and is placed next to the fan (left/top written by input.ts,
+     which owns the camera). Only from 700px — on a phone the thumb is already
+     there, and there's no room to put it anywhere but the bottom.
+
+     The stack keeps the status chip, so nothing collapses; the button is only
+     positioned out of the flow, not moved in the DOM, and `.pr-race__act >
+     .pr-btn` still gives it pointer events. Above the classification card, so
+     an overlap in a corner doesn't bury the thing being pressed. */
+  .pr-race__confirm--float {
+    position: absolute;
     margin: 0;
-    justify-content: flex-start;
+    z-index: 2;
+  }
+  /* Flipped to the top, the stack lines its chip up with the burger and the
+     card rather than hanging below them: on a wide screen the card is a fixed
+     260px in the corner, so the middle of that row is free and the three read
+     as one line of chrome. Absolute, since a flex item can't share a row with
+     the block above it. Narrow screens keep the stacked version — there the
+     card runs the full width and the chip would land on it. */
+  .pr-race--act-top .pr-race__act {
+    position: absolute;
+    top: calc(env(safe-area-inset-top, 0px) + var(--pr-gutter));
+    left: var(--pr-gutter);
+    right: var(--pr-gutter);
+    margin: 0;
+    padding: 0 76px;
   }
   body.is-racing .zoom-ctl {
     bottom: 100px;

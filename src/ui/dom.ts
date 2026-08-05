@@ -94,12 +94,6 @@ function installClickSwallow(): void {
  * starts from the button sends `pointercancel`, cancelling the tap. Mouse,
  * stylus, and keyboard (Enter/Space send `click` without touch) go through the
  * normal `click` path.
- *
- * Contract with `view/input.ts`: committing a move via the "Go!" button
- * depends on a `pointerup` reaching it. If a target candidate ends up under
- * the button, input.ts grabs the pointer on canvas via `setPointerCapture` on
- * `pointerdown` — then `pointerup` never reaches here and the tap doesn't
- * fire (intentional: we go into aiming rather than commit someone else's move).
  */
 export function bindTap(el: HTMLElement, handler: () => void): void {
   const disabled = () => el.matches(':disabled');

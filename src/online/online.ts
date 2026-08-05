@@ -4,16 +4,20 @@
 
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { Track } from '../model/track';
-import { GameState, seatName } from '../model/game';
+import { GameState, Rules, normalizeRules, seatName } from '../model/game';
+import { Difficulty } from '../model/ai';
 import {
   GameRow,
   RosterEntry,
+  SerializedSetup,
   clientId,
   createGame,
   fetchGame,
+  isSerializedSetup,
   joinGame,
   leaveGame,
   pruneSeat,
+  pushSetup,
   pushState,
   renamePlayer,
   subscribeGame,
@@ -33,10 +37,20 @@ export interface OnlineHandlers {
   /** Someone else left for good — in the lobby their seat is gone, in a race it's
    *  flagged. Fires on every remaining client so the departure can be announced. */
   onPlayerLeft: (name: string) => void;
+  /** The host changed the race setup while we wait in the lobby (guests only —
+   *  the host is the one who changed it). Both sides are passed so the announcement
+   *  can name what actually moved. */
+  onSetupChanged: (before: LobbySetup, after: LobbySetup) => void;
   /** Presence changed (someone went online/offline) — recompute the timer/skip/labels. */
   onPresence: () => void;
   /** The realtime channel's connection state changed — show/hide the connection banner. */
   onConnection: (connected: boolean) => void;
+}
+
+/** The host's setup as this client knows it: rules normalized, bots as chosen. */
+export interface LobbySetup {
+  rules: Rules;
+  bots: { count: number; difficulty: Difficulty };
 }
 
 let code: string | null = null;
@@ -57,6 +71,9 @@ let connected = true;
  *  together with the turn number it belongs to — a stamp only counts for its own turn. */
 let turnStart: number | null = null;
 let turnStartFor = -1;
+/** The host's setup as it last arrived on the row — null until a row carries one
+ *  (an old client's game, or a race that started before we joined). */
+let lobbySetup: LobbySetup | null = null;
 
 /** Whether an online session is active (a game was created or joined). */
 export function active(): boolean {
@@ -201,6 +218,23 @@ function announceDepartures(before: RosterEntry[], after: RosterEntry[]): void {
   });
 }
 
+/**
+ * Take the host's setup off an incoming row and announce a change of it. Silent on
+ * the first one we see (arriving in a lobby isn't a change), silent for the host
+ * (they are the one who moved it), and silent on a row that carries none — a guest
+ * whose host runs an older client keeps showing nothing rather than something stale.
+ */
+function applySetup(row: GameRow): void {
+  if (!isSerializedSetup(row.setup)) return;
+  const next: LobbySetup = {
+    rules: normalizeRules(row.setup.rules),
+    bots: { ...row.setup.bots },
+  };
+  const before = lobbySetup;
+  lobbySetup = next;
+  if (before && !hostFlag) handlers?.onSetupChanged(before, next);
+}
+
 /** Handle an incoming game row (from realtime, or the initial fetch). */
 function applyRow(row: GameRow | null): void {
   if (!row) {
@@ -211,6 +245,7 @@ function applyRow(row: GameRow | null): void {
   const before = roster;
   roster = row.lobby ?? [];
   announceDepartures(before, roster);
+  applySetup(row);
   if (row.state && track) {
     // Before the handler: arming the turn watch is downstream of onGameState, and it
     // reads this to tell how much of the turn is already gone.
@@ -222,9 +257,25 @@ function applyRow(row: GameRow | null): void {
   }
 }
 
+/** The host's setup as this client last saw it (null: none has arrived). */
+export function getLobbySetup(): LobbySetup | null {
+  return lobbySetup;
+}
+
+/** Host: write the current setup onto the row. Guests never call this. */
+export async function writeSetup(setup: SerializedSetup): Promise<void> {
+  if (!code || !hostFlag) return;
+  await pushSetup(code, setup);
+}
+
 /** Create a game (as host). Returns the game code. */
-export async function host(t: Track, name: string, h: OnlineHandlers): Promise<string> {
-  const row = await createGame(t, name);
+export async function host(
+  t: Track,
+  name: string,
+  setup: SerializedSetup,
+  h: OnlineHandlers,
+): Promise<string> {
+  const row = await createGame(t, name, setup);
   handlers = h;
   code = row.id;
   hostFlag = true;
@@ -352,5 +403,6 @@ function close(): void {
   connected = true;
   turnStart = null;
   turnStartFor = -1;
+  lobbySetup = null;
   if (ch) unsubscribe(ch);
 }

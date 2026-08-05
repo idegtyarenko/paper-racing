@@ -29,30 +29,13 @@ import {
 import { strings } from '../i18n';
 import { bindTap } from './dom';
 import { el, button } from './pr-chrome';
+import { DriveMode, driveModeOf } from './rules-summary';
 
 type DrivePreset = keyof typeof DRIVE_PRESETS;
-type DriveMode = DrivePreset | 'custom';
 
 /** The exponent corresponding to the selected strictness segment. */
 const exponentOf = (kind: string): number =>
   kind === 'strict' ? CRASH_EXPONENT_STRICT : CRASH_EXPONENT_STANDARD;
-
-/** Whether drive matches a built-in preset (all four axes equal its values). */
-const isPreset = (d: Drive, p: Drive): boolean =>
-  d.accel === p.accel &&
-  d.brake === p.brake &&
-  d.grip === p.grip &&
-  d.downforce === p.downforce;
-
-/** Handling mode derived from drive values: the preset's name if it matches
- *  one, otherwise "Custom". Iterates over DRIVE_PRESETS, so new presets are
- *  picked up automatically. */
-export function driveModeOf(d: Drive): DriveMode {
-  for (const [name, p] of Object.entries(DRIVE_PRESETS)) {
-    if (isPreset(d, p)) return name as DrivePreset;
-  }
-  return 'custom';
-}
 
 // ── Small builders for the shared Blueprint controls ─────────────────────────
 
@@ -132,7 +115,12 @@ export interface RulesEditor {
    * controls mutate the copy; the caller is notified via onChange and never has
    * its own object mutated). isOnline shows the online-only time-limit row.
    */
-  open(current: Rules, isOnline: boolean, onChange: (r: Rules) => void): void;
+  open(
+    current: Rules,
+    isOnline: boolean,
+    onChange: (r: Rules) => void,
+    readOnly?: boolean,
+  ): void;
   /** Redraw the preview — call after the canvas becomes visible (it has no
    *  width while hidden, so a render done then produced nothing). */
   refreshPreview(): void;
@@ -146,6 +134,7 @@ export function mountRulesEditor(hosts: RulesEditorHosts): RulesEditor {
   let rules: Rules = { ...DEFAULT_PREVIEW_RULES };
   let mode: DriveMode = 'sports';
   let online = false;
+  let readOnly = false;
   let onChange: ((r: Rules) => void) | null = null;
 
   const commit = (): void => {
@@ -155,6 +144,8 @@ export function mountRulesEditor(hosts: RulesEditorHosts): RulesEditor {
 
   // ── Handling ───────────────────────────────────────────────────────────────
   const driveRoot = el('div', 'pr-rules pr-rules--drive', hosts.drive);
+  const driveNote = el('p', 'pr-note pr-rules__ro-note', driveRoot);
+  driveNote.textContent = strings.settings.readOnlyNote;
   const pickMode = (key: string): void => {
     mode = key as DriveMode;
     // A preset sets the numbers; "Custom" leaves the current drive values as
@@ -226,6 +217,8 @@ export function mountRulesEditor(hosts: RulesEditorHosts): RulesEditor {
 
   // ── Rules ──────────────────────────────────────────────────────────────────
   const rulesRoot = el('div', 'pr-rules pr-rules--rules', hosts.rules);
+  const rulesNote = el('p', 'pr-note pr-rules__ro-note', rulesRoot);
+  rulesNote.textContent = strings.settings.readOnlyNote;
 
   const penaltyRow = settingRow(
     rulesRoot,
@@ -301,6 +294,28 @@ export function mountRulesEditor(hosts: RulesEditorHosts): RulesEditor {
     },
   );
 
+  /**
+   * Read-only (a guest looking at the host's settings): the controls become a
+   * readout. Not merely disabled — a greyed-out button still reads as something
+   * to press. The unselected options lose their button skin (see .pr-rules--ro in
+   * pr-controls.css), the sliders go away entirely (their value is printed beside
+   * the label anyway), and a line at the top says whose settings these are. The
+   * "?" explanations stay live: a guest needs them most.
+   */
+  function applyReadOnly(): void {
+    for (const root of [driveRoot, rulesRoot]) {
+      root.classList.toggle('pr-rules--ro', readOnly);
+    }
+    driveNote.hidden = !readOnly;
+    rulesNote.hidden = !readOnly;
+    const segs = [presetsTop, presetsBottom, penalty, exponent, turnLimit];
+    for (const s of segs) {
+      for (const b of s.opts) b.disabled = readOnly;
+    }
+    for (const a of Object.values(axes)) a.input.disabled = readOnly;
+    staticSlider.disabled = readOnly;
+  }
+
   /** Refresh every control to match the current rules. */
   function render(): void {
     markSeg(presetsTop, mode);
@@ -340,11 +355,13 @@ export function mountRulesEditor(hosts: RulesEditorHosts): RulesEditor {
   }
 
   return {
-    open(current, isOnline, onChangeCb) {
+    open(current, isOnline, onChangeCb, ro = false) {
       rules = { ...current, drive: { ...current.drive } };
       mode = driveModeOf(rules.drive);
       online = isOnline;
+      readOnly = ro;
       onChange = onChangeCb;
+      applyReadOnly();
       render();
     },
     refreshPreview() {

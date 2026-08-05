@@ -6,7 +6,9 @@
 // own layout and state.
 
 import { Difficulty } from '../model/ai';
-import { CHEVRON_SVG, COPY_SVG, SHARE_SVG } from './icons';
+import { Rules } from '../model/game';
+import { bindTap } from './dom';
+import { CHECK_SVG, CHEVRON_SVG, COPY_SVG, SHARE_SVG } from './icons';
 
 /** Create an element with a class, optionally appending it to a parent. */
 export function el<K extends keyof HTMLElementTagNameMap>(
@@ -64,19 +66,18 @@ export function buildBrand(
 ): HTMLElement {
   const brand = el('span', `pr-brand${opts.cls ? ' ' + opts.cls : ''}`, parent);
   const logo = el('img', 'pr-brand__logo', brand);
-  logo.src = `${import.meta.env.BASE_URL}pwa-192x192.png`;
+  // The vector flag, not the pencil-drawn PNG: that one is the launcher icon and
+  // stays there. At 28–34px its hatching turns to mush anyway.
+  logo.src = `${import.meta.env.BASE_URL}favicon-v3.svg`;
   logo.alt = '';
   const text = el('span', 'pr-brand__text', brand);
   const mark = el('span', 'pr-brand__wordmark', text);
+  // No space between the words: the wordmark is a flex row, so the gap is the gap.
   el('span', 'pr-brand__word', mark).textContent = 'Paper';
-  el('span', 'pr-brand__word pr-brand__word--accent', mark).textContent = ' Racing';
+  el('span', 'pr-brand__word pr-brand__word--accent', mark).textContent = 'Racing';
   const dashes = el('span', 'pr-brand__dashes', text);
   for (let i = 0; i < opts.dashes; i++) {
-    el(
-      'span',
-      i % 2 ? 'pr-brand__dash pr-brand__dash--hollow' : 'pr-brand__dash',
-      dashes,
-    );
+    el('span', i % 2 ? 'pr-brand__dash pr-brand__dash--slate' : 'pr-brand__dash', dashes);
   }
   return brand;
 }
@@ -85,6 +86,49 @@ export function buildBrand(
 // Room code, roster and the waiting banner are the same three blocks on both
 // lobby screens — the host's (inside race setup) and the guest's — so they live
 // here rather than in either owner module.
+
+export interface Tabs<K extends string> {
+  /** The tab buttons, by key — a screen may hide one (`tabs[k].hidden = true`). */
+  tabs: Record<K, HTMLButtonElement>;
+  /** The panes the screen fills, by key. Only the active one is not `hidden`. */
+  panes: Record<K, HTMLElement>;
+  /** Show a pane and light up its tab. */
+  show(key: K): void;
+}
+
+/**
+ * A tab strip over a stack of panes, in one card: the race-setup screen's
+ * Lineup/Behaviour/Rules, and the guest lobby's read-only take on the same two.
+ * The caller keeps whatever it has to do on a switch (redrawing a canvas that
+ * had no width while hidden, say) in its own `onPick`.
+ */
+export function buildTabs<K extends string>(
+  parent: HTMLElement,
+  items: { key: K; label: string }[],
+  onPick: (key: K) => void,
+): Tabs<K> {
+  const tabRow = el('div', 'pr-tabs', parent);
+  const paneBox = el('div', 'pr-panes pr-scroll-bleed', parent);
+  const tabs = {} as Record<K, HTMLButtonElement>;
+  const panes = {} as Record<K, HTMLElement>;
+  for (const it of items) {
+    const b = button('pr-tabs__tab', tabRow);
+    b.textContent = it.label;
+    bindTap(b, () => onPick(it.key));
+    tabs[it.key] = b;
+    panes[it.key] = el('div', 'pr-pane', paneBox);
+  }
+  return {
+    tabs,
+    panes,
+    show(key) {
+      for (const it of items) {
+        tabs[it.key].classList.toggle('pr-tabs__tab--active', it.key === key);
+        panes[it.key].hidden = it.key !== key;
+      }
+    },
+  };
+}
 
 /** The room code with its two actions: tap the code to copy, the button to share. */
 export interface CodeBlock {
@@ -118,6 +162,9 @@ export interface RosterPlayer {
   host: boolean;
   /** Not currently connected — the row dims and says so. */
   offline: boolean;
+  /** A bot seat the host has filled: badged with its difficulty instead of a
+   *  status. Only a guest's roster shows these — see lobbyView in host-bots.ts. */
+  bot?: Difficulty;
 }
 
 export interface Roster {
@@ -132,7 +179,13 @@ export interface Roster {
 /**
  * The player list. Rows are reused across renders rather than rebuilt: your own
  * row holds a live <input> for your name, and replacing it mid-render would
- * drop the caret on every keystroke (each one echoes back through realtime).
+ * drop the caret.
+ *
+ * Typing is a local draft — `onRename` is a network write plus a roster redraw
+ * for everyone in the room, so it fires only on an explicit commit: the check
+ * button that appears beside a changed field, Enter, or leaving the field.
+ * Blur commits rather than reverts because an unsent name reads as "no name
+ * yet" to the host, who then can't start.
  *
  * A player who hasn't typed a name yet reads as their car's colour to everyone
  * else — the same fallback the race itself uses — while their own row stays an
@@ -140,7 +193,15 @@ export interface Roster {
  */
 export function buildRoster(
   parent: HTMLElement,
-  opts: { placeholder: string; hostBadge: string; youBadge: string; offline: string },
+  opts: {
+    placeholder: string;
+    hostBadge: string;
+    youBadge: string;
+    offline: string;
+    /** Badge for a bot seat (its difficulty). Only the guest lobby passes one —
+     *  the host's roster never carries bots. */
+    botBadge?: (d: Difficulty) => string;
+  },
   onRename?: (name: string) => void,
 ): Roster {
   const root = el('div', 'pr-roster', parent);
@@ -154,6 +215,8 @@ export function buildRoster(
     name: HTMLElement;
     input: HTMLInputElement;
     badge: HTMLElement;
+    /** Adopt the name the room knows, dropping any draft state with it. */
+    setName(name: string): void;
   }
   const rows: Row[] = [];
 
@@ -166,16 +229,47 @@ export function buildRoster(
     input.maxLength = 20;
     input.placeholder = opts.placeholder;
     input.hidden = true;
+    const confirm = button('pr-btn pr-btn--icon pr-roster__confirm', row);
+    icon('pr-btn__ico', CHECK_SVG, confirm);
+    confirm.hidden = true;
+
+    /** What the room already has — the draft is anything else in the field. */
+    let sent = '';
+    const syncConfirm = (): void => {
+      confirm.hidden = input.hidden || input.value === sent;
+    };
+    const setName = (value: string): void => {
+      sent = value;
+      input.value = value;
+      syncConfirm();
+    };
     if (onRename) {
-      input.addEventListener('input', () => onRename(input.value));
-      // Enter is "I'm done" on a phone keyboard — close it rather than submit
-      // anything (there's no form; the value is already on its way).
+      input.addEventListener('input', syncConfirm);
+      const commit = (): void => {
+        if (input.value !== sent) {
+          sent = input.value;
+          onRename(sent);
+        }
+        syncConfirm();
+      };
+      // Enter is also "I'm done" on a phone keyboard: send, then let the
+      // keyboard go.
       input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') input.blur();
+        if (e.key !== 'Enter') return;
+        commit();
+        input.blur();
+      });
+      input.addEventListener('blur', commit);
+      // Keep the caret in the field: without this the press blurs the input,
+      // whose own commit hides the button out from under the release.
+      confirm.addEventListener('pointerdown', (e) => e.preventDefault());
+      bindTap(confirm, () => {
+        commit();
+        input.blur();
       });
     }
     const badge = el('span', 'pr-roster__badge', row);
-    return { root: row, dot, name, input, badge };
+    return { root: row, dot, name, input, badge, setName };
   };
 
   const render = (players: RosterPlayer[], emptyNote?: string | null): void => {
@@ -184,6 +278,7 @@ export function buildRoster(
     players.forEach((p, i) => {
       const row = rows[i];
       row.root.classList.toggle('pr-roster__row--offline', p.offline);
+      row.root.classList.toggle('pr-roster__row--bot', !!p.bot);
       row.root.classList.toggle('pr-roster__row--you', p.you);
       row.dot.style.background = p.color;
       row.name.hidden = p.you;
@@ -191,17 +286,20 @@ export function buildRoster(
       if (p.you) {
         // Never write over what's being typed — the value is already ours, and
         // the echo of our own rename would otherwise reset the caret.
-        if (document.activeElement !== row.input) row.input.value = p.name;
+        if (document.activeElement !== row.input) row.setName(p.name);
       } else {
+        row.setName('');
         row.name.textContent = p.name;
       }
-      const badge = p.host
-        ? opts.hostBadge
-        : p.offline
-          ? opts.offline
-          : p.you
-            ? opts.youBadge
-            : '';
+      const badge = p.bot
+        ? (opts.botBadge?.(p.bot) ?? '')
+        : p.host
+          ? opts.hostBadge
+          : p.offline
+            ? opts.offline
+            : p.you
+              ? opts.youBadge
+              : '';
       row.badge.textContent = badge;
       row.badge.hidden = !badge;
       row.badge.classList.toggle('pr-roster__badge--host', p.host);
@@ -221,6 +319,9 @@ export function buildRoster(
 export interface LobbyView {
   code: string;
   players: RosterPlayer[];
+  /** The race settings chosen by the host, for the guest's read-only tabs. Null
+   *  when none have arrived (a host on an older client). */
+  rules: Rules | null;
   /** Seats on this track's starting grid — the roster's capacity. */
   seats: number;
   isHost: boolean;

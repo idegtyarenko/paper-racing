@@ -63,7 +63,7 @@
   margin-top: 8px;
   font-family: var(--pr-font);
   font-weight: 800;
-  font-size: 12px;
+  font-size: var(--pr-text-sm);
   letter-spacing: 4px;
   text-transform: uppercase;
   color: var(--pr-edge);
@@ -73,18 +73,18 @@
   margin-top: 6px;
   font-family: var(--pr-font);
   font-weight: 800;
-  font-size: 34px;
+  font-size: var(--pr-text-display-lg);
   line-height: 1.1;
   letter-spacing: 0.5px;
 }
 /* Nobody finished: no colour to celebrate with, so it steps down in size too. */
 .pr-result__headline--quiet {
-  font-size: 26px;
+  font-size: var(--pr-text-display);
   color: var(--pr-ink-soft);
 }
 .pr-result__subtitle {
   margin-top: 6px;
-  font-size: 13px;
+  font-size: var(--pr-text-base);
   line-height: 1.4;
   color: var(--pr-ink-mute);
 }
@@ -103,7 +103,7 @@
 .pr-result__card .pr-race__row--current .pr-race__pos,
 .pr-result__card .pr-race__row--mine .pr-race__pos {
   font-weight: 800;
-  font-size: 15px;
+  font-size: var(--pr-text-lg);
   color: var(--pr-row-tint, var(--pr-accent));
 }
 /* A finisher is "out" everywhere else, which dims the row — but on the final
@@ -148,7 +148,7 @@
 .pr-result__actions > .pr-btn:not(.pr-btn--primary) {
   padding: 13px 18px;
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: var(--pr-text-base);
   letter-spacing: 1px;
 }
 
@@ -166,7 +166,7 @@
   width: 100%;
   padding: 13px 18px;
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: var(--pr-text-base);
   letter-spacing: 1px;
 }
 
@@ -182,7 +182,7 @@
   background: var(--pr-sunken);
   font-family: var(--pr-font);
   font-weight: 700;
-  font-size: 13px;
+  font-size: var(--pr-text-sm);
   letter-spacing: 0.5px;
   line-height: 1.4;
   color: var(--pr-ink-dim);
@@ -190,43 +190,8 @@
 .pr-result__wait:not([hidden]) {
   display: flex;
 }
-.pr-result__dots {
-  flex: 0 0 auto;
-  gap: 3px;
-}
-/* Hidden when there's nothing to wait for (the creator left) — see the convention
-   in pr-controls.css: display lives under :not([hidden]) so [hidden] still wins. */
-.pr-result__dots:not([hidden]) {
-  display: inline-flex;
-}
-.pr-result__dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--pr-ink-dim);
-  animation: pr-result-dot 1.4s infinite;
-}
-.pr-result__dot:nth-child(2) {
-  animation-delay: 0.2s;
-}
-.pr-result__dot:nth-child(3) {
-  animation-delay: 0.4s;
-}
-@keyframes pr-result-dot {
-  0%,
-  80%,
-  100% {
-    opacity: 0.25;
-  }
-  40% {
-    opacity: 1;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .pr-result__dot {
-    animation: none;
-  }
-}
+/* The waiting dots themselves are the shared `.pr-dots` (pr-controls.css) —
+   they take their tone from the plate's own dimmed text colour. */
 
 /* The result screen owns the board outright, so the zoom controls go away —
    there's nothing left to aim at. */

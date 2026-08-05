@@ -105,8 +105,9 @@ function build(h: ResultHandlers): void {
   // guest isn't waiting on anything, they can still just leave.
   guestEl = el('div', 'pr-result__guest', inner);
   const waitEl = el('div', 'pr-result__wait', guestEl);
-  waitDotsEl = el('span', 'pr-result__dots', waitEl);
-  for (let i = 0; i < 3; i++) el('span', 'pr-result__dot', waitDotsEl);
+  // The shared waiting indicator — the same dots the race chip runs.
+  waitDotsEl = el('span', 'pr-dots', waitEl);
+  for (let i = 0; i < 3; i++) el('span', 'pr-dots__dot', waitDotsEl);
   waitTextEl = el('span', 'pr-result__waittext', waitEl);
   // ...but waiting is not the only thing they can do. Without this the screen is
   // a dead end: no buttons, and a reload just restores the finished race from
@@ -136,6 +137,8 @@ export interface ResultCtx {
   earlyExit: boolean;
   /** This client's seat, or −1 (hot-seat has no single "you"). */
   mySeat: number;
+  /** The lone human racing bots, or −1 — their final row is signed "Me" too. */
+  soloSeat?: number;
   /** In an online race and not the host: the rematch isn't ours to start. */
   onlineGuest: boolean;
   /** Online: the creator has left the room, so no rematch is coming — nothing to wait for. */
@@ -242,6 +245,7 @@ export function renderRaceResult(ctx: ResultCtx): void {
     over,
     earlyExit,
     mySeat,
+    soloSeat = -1,
     onlineGuest,
     hostGone,
     canRematch,
@@ -277,7 +281,7 @@ export function renderRaceResult(ctx: ResultCtx): void {
   if (fullscreen) {
     labelEl.textContent = strings.race.raceComplete;
     renderHead(game!, mySeat);
-    renderRows(rowsEl, game!, nav!, { mySeat, final: true });
+    renderRows(rowsEl, game!, nav!, { mySeat, soloSeat, final: true });
   }
 
   // A guest waits for the host only for the real end-of-race rematch — during

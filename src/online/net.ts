@@ -7,7 +7,8 @@
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { Vec } from '../geometry';
 import { Track } from '../model/track';
-import { GameState, normalizeRules } from '../model/game';
+import { GameState, Rules, normalizeRules } from '../model/game';
+import { Difficulty } from '../model/ai';
 import { CLOCK_SANITY_MS, NET_TIMEOUT_MS } from '../config';
 
 // ── Serialization ────────────────────────────────────────────────────────────────
@@ -31,6 +32,21 @@ export interface SerializedTrack {
  */
 export type SerializedState = Omit<GameState, 'track'> & { turnStartedAt?: number };
 
+/**
+ * The host's pre-race setup as it travels on the row: the rules, and the bot fill
+ * the host has dialled in. Rules also travel inside the state once the race is on —
+ * but `state` is null in the lobby, which is exactly when a guest wants to know what
+ * they're waiting to race under. Bots have no other home at all before the start
+ * (the host keeps the count locally and materializes it in buildStartState).
+ *
+ * Rules are `Partial` on the way in: a row may have been written by an older client,
+ * and normalizeRules backfills whatever is missing.
+ */
+export interface SerializedSetup {
+  rules: Partial<Rules>;
+  bots: { count: number; difficulty: Difficulty };
+}
+
 export interface RosterEntry {
   clientId: string;
   name: string;
@@ -45,6 +61,8 @@ export interface GameRow {
   track: SerializedTrack;
   state: SerializedState | null;
   lobby: RosterEntry[];
+  /** The host's setup (see SerializedSetup). Absent on rows written before it travelled. */
+  setup?: SerializedSetup | null;
   host_id: string;
   status: 'lobby' | 'race' | 'over';
 }
@@ -161,6 +179,16 @@ export function isSerializedState(v: unknown): v is SerializedState {
 }
 
 /**
+ * Shape of the host's setup. A malformed one doesn't invalidate the row (the race
+ * itself doesn't depend on it — it's what the lobby shows), so callers read it
+ * through this guard and fall back to "no settings known".
+ */
+export function isSerializedSetup(v: unknown): v is SerializedSetup {
+  if (!isObj(v) || !isObj(v.rules) || !isObj(v.bots)) return false;
+  return typeof v.bots.count === 'number' && typeof v.bots.difficulty === 'string';
+}
+
+/**
  * Validate an incoming game row and return it, or null if the data is bad (wrong
  * shape — a truncated message, a foreign/old format). On null, the caller falls back
  * gracefully (keeps the last valid state / treats the game as not found) instead of
@@ -260,8 +288,13 @@ function withTimeout<T>(p: PromiseLike<T>, ms = NET_TIMEOUT_MS): Promise<T> {
   });
 }
 
-/** Create a game: inserts a row with the track and the host in the lobby. Returns the row. */
-export async function createGame(track: Track, hostName: string): Promise<GameRow> {
+/** Create a game: inserts a row with the track, the host in the lobby and their
+ *  chosen setup (so a guest joining a second later already sees the settings). */
+export async function createGame(
+  track: Track,
+  hostName: string,
+  setup: SerializedSetup,
+): Promise<GameRow> {
   const id = makeCode();
   const me = clientId();
   const row = {
@@ -269,6 +302,7 @@ export async function createGame(track: Track, hostName: string): Promise<GameRo
     track: serializeTrack(track),
     state: null,
     lobby: [{ clientId: me, name: hostName }],
+    setup,
     host_id: me,
     status: 'lobby' as const,
   };
@@ -277,7 +311,7 @@ export async function createGame(track: Track, hostName: string): Promise<GameRo
   );
   if (error) {
     // Extremely rare code collision — retry once with a new code.
-    if (error.code === '23505') return createGame(track, hostName);
+    if (error.code === '23505') return createGame(track, hostName, setup);
     throw error;
   }
   return data as GameRow;
@@ -310,6 +344,18 @@ export async function renamePlayer(code: string, name: string): Promise<void> {
       p_client_id: clientId(),
       p_name: name,
     }),
+  );
+  if (error) throw error;
+}
+
+/**
+ * Write the host's setup onto the lobby row. Fire-and-forget from the caller's point
+ * of view, like renamePlayer: it's fired while the host drags a slider, and the
+ * authoritative value comes back through the realtime update anyway.
+ */
+export async function pushSetup(code: string, setup: SerializedSetup): Promise<void> {
+  const { error } = await withTimeout(
+    db().from('games').update({ setup }).eq('id', code),
   );
   if (error) throw error;
 }

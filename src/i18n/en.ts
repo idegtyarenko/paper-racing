@@ -206,6 +206,8 @@ export const en = {
     limit1m: '1\u00A0min',
     limit2m: '2\u00A0min',
     limit5m: '5\u00A0min',
+    readOnlyNote:
+      'These are the track creator’s settings\u00A0— only they can change them.',
     done: 'Done',
   },
 
@@ -293,11 +295,18 @@ export const en = {
     // Returning to the last online race after a disconnect/reload.
     resumeTitle: (code: string): string => `Return to game ${code}?`,
     resumeYes: 'Return to game',
+    setupChanged: (what: string): string =>
+      `The track creator changed the settings: ${what}.`,
+    setupChangedMany: 'The track creator changed the race settings.',
     gameGone: 'This game is no longer available.',
   },
 
   race: {
     driver: (name: string): string => `${name} is moving.`,
+    /** Same line when the only human is racing bots — one known addressee. */
+    driverYou: 'Your turn.',
+    /** Their classification row, in place of a car colour. */
+    you: 'Me',
     /** Local game, bots on the clock: one stable line for their whole run of
      *  turns, instead of naming each bot as it moves. The animated ellipsis is
      *  added by the chip itself. */
@@ -388,12 +397,14 @@ export const en = {
 
   install: {
     title: 'Install the game on your home screen',
-    /** Android/Chromium text: an install button is available. */
+    /** Shown in both branches: why installing is worth it. */
     body: "It'll open full-screen and work offline.",
     action: 'Install',
-    /** iOS Safari text: no install button, so we show instructions. */
+    /** iOS Safari has no install button, so we spell out the menu path.
+        The three fragments wrap around the "⋯" and "Share" icons. */
     iosBefore: 'Tap ',
-    iosAfter: ' below, then choose "Add to Home Screen".',
+    iosMid: ' below, then ',
+    iosAfter: ' "Share" → "Add to Home Screen".',
     close: 'Close',
   },
 };

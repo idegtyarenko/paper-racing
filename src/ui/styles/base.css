@@ -78,11 +78,30 @@
 
   /* ── Shape ────────────────────────────────────────────────────────────── */
   --pr-gutter: 16px; /* side margin every full-width floating element aligns to */
+  /* Read from JS (view/input.ts): the strip along the bottom edge where the
+     system "home" gesture hijacks a touch. */
+  --pr-safe-bottom: env(safe-area-inset-bottom, 0px);
   --pr-nav-h: 48px; /* phone step strip — what floating content below it clears */
   --pr-rail-w: 220px; /* wide-screen step rail — what the screens beside it clear */
+  --pr-radius-xs: 2px;
+  --pr-radius-sm: 4px;
   --pr-radius: 8px;
   --pr-radius-lg: 12px;
   --pr-radius-pill: 999px;
+
+  /* ── Type scale ───────────────────────────────────────────────────────── */
+  /* Even 2px steps: a size that isn't on the scale reads as a tweak someone
+     forgot to sweep up. `xs` is the uppercase-and-tracked tier (units, overline
+     labels, badges) — caps height makes it read a step larger than it measures.
+     `lg` doubles as the floor iOS needs on a focused field (below 16px Safari
+     zooms the page). */
+  --pr-text-xs: 10px;
+  --pr-text-sm: 12px;
+  --pr-text-base: 14px; /* body */
+  --pr-text-lg: 16px;
+  --pr-text-xl: 20px;
+  --pr-text-display: 26px;
+  --pr-text-display-lg: 34px;
 }
 
 /* Global reset and base element styles. */
