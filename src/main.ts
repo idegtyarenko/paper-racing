@@ -677,6 +677,9 @@ initSetupChrome({
   getRules: () => S.rules,
   onRulesChange: (r) => {
     S.rules = r;
+    // In the host's lobby the same tabs configure a race other people are waiting
+    // for — publish the change so their screens can show it (no-op offline).
+    online.pushSetup();
   },
   ...lobbyHandlers,
   onLobbyBotCount: (n) => online.setBotCount(n),

@@ -18,7 +18,7 @@ import { Track } from '../model/track';
 import { GameState, newGame, shuffledIndices, seatColor, seatName } from '../model/game';
 import { coastMove, applyMove } from '../model/turns';
 import { Difficulty, chooseMove } from '../model/ai';
-import type { LobbyView } from '../ui/pr-chrome';
+import type { LobbyView, RosterPlayer } from '../ui/pr-chrome';
 import { showErrorToast } from '../ui/dialogs';
 import { strings } from '../i18n';
 import { SKIP_RETRY_MS } from '../config';
@@ -46,18 +46,23 @@ export interface HostBotsDeps {
   confirmFirst: ConfirmFirst;
   commitOnline(): void;
   clearTurnWatch(): void;
+  /** Publish the host's setup to the lobby row (debounced in the controller) —
+   *  the bot fill is part of what guests are shown. */
+  pushSetup(): void;
 }
 
 let deps: OnlineDeps;
 let confirmFirst: ConfirmFirst;
 let commitOnline: () => void;
 let clearTurnWatch: () => void;
+let pushSetup: () => void;
 
 export function initHostBots(h: HostBotsDeps): void {
   deps = h.deps;
   confirmFirst = h.confirmFirst;
   commitOnline = h.commitOnline;
   clearTurnWatch = h.clearTurnWatch;
+  pushSetup = h.pushSetup;
 }
 
 // ── Lobby bot config (host-local) ────────────────────────────────────────────────
@@ -200,19 +205,39 @@ export function lobbyView(): LobbyView | null {
   // free seats — shrink the bot count to fit (if a player leaves, the max grows back,
   // but we don't restore the previous bot count — only the upper bound).
   if (lobbyBots > maxBots) lobbyBots = maxBots;
+  const setup = session.getLobbySetup();
+  const isHost = session.isHost();
+  const players: RosterPlayer[] = roster.map((r, i) => ({
+    // Anyone who hasn't typed a name yet reads as their car's colour — the
+    // name they'd race under. Your own row is the field, so it stays empty.
+    name: r.name || (i === mine ? '' : seatName(i)),
+    color: seatColor(i),
+    you: i === mine,
+    host: r.clientId === session.hostId(),
+    offline: !session.isPresent(i),
+  }));
+  // A guest's roster shows the bots too, in the seats they'll take at the start —
+  // otherwise the free seats read as free when the host has already filled them.
+  // The host doesn't get the extra rows: their own bot counters sit right below.
+  if (!isHost && setup) {
+    for (let i = 0; i < setup.bots.count; i++) {
+      const seat = players.length;
+      players.push({
+        name: seatName(seat),
+        color: seatColor(seat),
+        you: false,
+        host: false,
+        offline: false,
+        bot: setup.bots.difficulty,
+      });
+    }
+  }
   return {
     code: session.getCode() ?? '',
-    players: roster.map((r, i) => ({
-      // Anyone who hasn't typed a name yet reads as their car's colour — the
-      // name they'd race under. Your own row is the field, so it stays empty.
-      name: r.name || (i === mine ? '' : seatName(i)),
-      color: seatColor(i),
-      you: i === mine,
-      host: r.clientId === session.hostId(),
-      offline: !session.isPresent(i),
-    })),
+    players,
+    rules: setup?.rules ?? null,
     seats: seatCapacity(),
-    isHost: session.isHost(),
+    isHost,
     canStart: session.canStart(),
     needsName: mine >= 0 && !roster[mine]?.name,
     botCount: lobbyBots,
@@ -223,10 +248,16 @@ export function lobbyView(): LobbyView | null {
   };
 }
 
+/** The bot fill as the guests are told about it (see SerializedSetup in net.ts). */
+export function lobbyBotConfig(): { count: number; difficulty: Difficulty } {
+  return { count: Math.min(lobbyBots, freeSeats()), difficulty: lobbyBotDifficulty };
+}
+
 /** Host: how many bots fill the free seats (the lobby offers an absolute count). */
 export function setBotCount(n: number): void {
   if (!session.isHost()) return;
   lobbyBots = Math.max(0, Math.min(n, freeSeats()));
+  pushSetup();
   deps.updateUI();
 }
 
@@ -234,6 +265,7 @@ export function setBotCount(n: number): void {
 export function setBotDifficulty(diff: Difficulty): void {
   if (!session.isHost()) return;
   lobbyBotDifficulty = diff;
+  pushSetup();
   deps.updateUI();
 }
 

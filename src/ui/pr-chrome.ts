@@ -6,6 +6,7 @@
 // own layout and state.
 
 import { Difficulty } from '../model/ai';
+import { Rules } from '../model/game';
 import { bindTap } from './dom';
 import { CHECK_SVG, CHEVRON_SVG, COPY_SVG, SHARE_SVG } from './icons';
 
@@ -161,6 +162,9 @@ export interface RosterPlayer {
   host: boolean;
   /** Not currently connected — the row dims and says so. */
   offline: boolean;
+  /** A bot seat the host has filled: badged with its difficulty instead of a
+   *  status. Only a guest's roster shows these — see lobbyView in host-bots.ts. */
+  bot?: Difficulty;
 }
 
 export interface Roster {
@@ -189,7 +193,15 @@ export interface Roster {
  */
 export function buildRoster(
   parent: HTMLElement,
-  opts: { placeholder: string; hostBadge: string; youBadge: string; offline: string },
+  opts: {
+    placeholder: string;
+    hostBadge: string;
+    youBadge: string;
+    offline: string;
+    /** Badge for a bot seat (its difficulty). Only the guest lobby passes one —
+     *  the host's roster never carries bots. */
+    botBadge?: (d: Difficulty) => string;
+  },
   onRename?: (name: string) => void,
 ): Roster {
   const root = el('div', 'pr-roster', parent);
@@ -266,6 +278,7 @@ export function buildRoster(
     players.forEach((p, i) => {
       const row = rows[i];
       row.root.classList.toggle('pr-roster__row--offline', p.offline);
+      row.root.classList.toggle('pr-roster__row--bot', !!p.bot);
       row.root.classList.toggle('pr-roster__row--you', p.you);
       row.dot.style.background = p.color;
       row.name.hidden = p.you;
@@ -278,13 +291,15 @@ export function buildRoster(
         row.setName('');
         row.name.textContent = p.name;
       }
-      const badge = p.host
-        ? opts.hostBadge
-        : p.offline
-          ? opts.offline
-          : p.you
-            ? opts.youBadge
-            : '';
+      const badge = p.bot
+        ? (opts.botBadge?.(p.bot) ?? '')
+        : p.host
+          ? opts.hostBadge
+          : p.offline
+            ? opts.offline
+            : p.you
+              ? opts.youBadge
+              : '';
       row.badge.textContent = badge;
       row.badge.hidden = !badge;
       row.badge.classList.toggle('pr-roster__badge--host', p.host);
@@ -304,6 +319,9 @@ export function buildRoster(
 export interface LobbyView {
   code: string;
   players: RosterPlayer[];
+  /** The race settings chosen by the host, for the guest's read-only tabs. Null
+   *  when none have arrived (a host on an older client). */
+  rules: Rules | null;
   /** Seats on this track's starting grid — the roster's capacity. */
   seats: number;
   isHost: boolean;

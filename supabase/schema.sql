@@ -15,6 +15,8 @@ create table if not exists public.games (
   track      jsonb not null,              -- serialized track + worldW/worldH (written once)
   state      jsonb,                       -- serialized GameState (without track); null before the race starts
   lobby      jsonb not null default '[]', -- roster: [{ "clientId": ..., "name": ... }], index = grid slot
+  setup      jsonb,                       -- the host's pre-race setup: { rules, bots } — before the race starts
+                                           -- this is the only place it exists (afterwards it travels inside state)
   host_id    text  not null,              -- clientId of the game's creator
   status     text  not null default 'lobby' check (status in ('lobby', 'race', 'over')),
   created_at timestamptz not null default now(),
