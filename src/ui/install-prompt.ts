@@ -5,7 +5,9 @@
 //     the native mini-banner, and show our own button that triggers the
 //     system install dialog.
 //   • iOS Safari — the event isn't supported, so we show instructions
-//     ("Share → Add to Home Screen") with the Share button's icon.
+//     ("⋯ → Share → Add to Home Screen") with both buttons' icons. Sharing
+//     moved behind the "⋯" menu, so naming only the Share icon left the very
+//     first step invisible.
 //
 // We don't show it if the game is already running as an installed app
 // (display-mode: standalone), or if the user recently dismissed the prompt.
@@ -98,19 +100,34 @@ function markSoftDismissed(): void {
   } catch {}
 }
 
-/** iOS Share-button icon (square with an up arrow) — for the instructions. */
-function shareIcon(): HTMLElement {
+/** Wrap an inline SVG so it sits on the instruction line like a word. */
+function inlineIcon(svg: string): HTMLElement {
   const span = document.createElement('span');
-  span.className = 'pr-install__share';
+  span.className = 'pr-install__glyph';
   span.setAttribute('aria-hidden', 'true');
   span.innerHTML =
     '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" ' +
     'stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
-    'stroke-linejoin="round">' +
-    '<path d="M12 15V4"/><path d="M8 8l4-4 4 4"/>' +
-    '<path d="M7 12H6a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2h-1"/>' +
-    '</svg>';
+    `stroke-linejoin="round">${svg}</svg>`;
   return span;
+}
+
+/** Safari's toolbar menu button (three dots in a circle) — the first step. */
+function menuIcon(): HTMLElement {
+  return inlineIcon(
+    '<circle cx="12" cy="12" r="9"/>' +
+      '<circle cx="7.5" cy="12" r="0.6" fill="currentColor"/>' +
+      '<circle cx="12" cy="12" r="0.6" fill="currentColor"/>' +
+      '<circle cx="16.5" cy="12" r="0.6" fill="currentColor"/>',
+  );
+}
+
+/** iOS Share icon (square with an up arrow) — the second step. */
+function shareIcon(): HTMLElement {
+  return inlineIcon(
+    '<path d="M12 15V4"/><path d="M8 8l4-4 4 4"/>' +
+      '<path d="M7 12H6a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2h-1"/>',
+  );
 }
 
 /** Build the prompt's DOM. iOS has no install button — just instructions. */
@@ -136,12 +153,21 @@ function build(
   title.textContent = strings.install.title;
   const body = document.createElement('span');
   body.className = 'pr-install__body';
-  if (kind === 'ios') {
-    body.append(strings.install.iosBefore, shareIcon(), strings.install.iosAfter);
-  } else {
-    body.textContent = strings.install.body;
-  }
+  body.textContent = strings.install.body;
   text.append(title, body);
+  // iOS gets the benefit line too, then the menu path as a separate line.
+  if (kind === 'ios') {
+    const steps = document.createElement('span');
+    steps.className = 'pr-install__steps';
+    steps.append(
+      strings.install.iosBefore,
+      menuIcon(),
+      strings.install.iosMid,
+      shareIcon(),
+      strings.install.iosAfter,
+    );
+    text.append(steps);
+  }
 
   const close = document.createElement('button');
   close.className = 'pr-install__close';

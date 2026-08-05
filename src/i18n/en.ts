@@ -388,12 +388,14 @@ export const en = {
 
   install: {
     title: 'Install the game on your home screen',
-    /** Android/Chromium text: an install button is available. */
+    /** Shown in both branches: why installing is worth it. */
     body: "It'll open full-screen and work offline.",
     action: 'Install',
-    /** iOS Safari text: no install button, so we show instructions. */
+    /** iOS Safari has no install button, so we spell out the menu path.
+        The three fragments wrap around the "⋯" and "Share" icons. */
     iosBefore: 'Tap ',
-    iosAfter: ' below, then choose "Add to Home Screen".',
+    iosMid: ' below, then ',
+    iosAfter: ' "Share" → "Add to Home Screen".',
     close: 'Close',
   },
 };

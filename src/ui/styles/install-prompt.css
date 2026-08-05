@@ -53,8 +53,15 @@
   color: var(--pr-ink-dim);
 }
 
-/* "Share" icon inlined into the instruction line for iOS. */
-.pr-install__share {
+/* iOS only: the menu path, under the benefit line the Android branch shares. */
+.pr-install__steps {
+  font-size: var(--pr-text-sm);
+  line-height: 1.35;
+  color: var(--pr-ink);
+}
+
+/* Safari's own icons ("⋯" and "Share") inlined into that instruction line. */
+.pr-install__glyph {
   display: inline-flex;
   vertical-align: -4px;
   color: var(--pr-accent);
