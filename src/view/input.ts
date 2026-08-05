@@ -763,33 +763,4 @@ export function initInput(d: InputDeps): void {
 
   document.getElementById('zoomIn')?.addEventListener('click', () => zoomByButton(1));
   document.getElementById('zoomOut')?.addEventListener('click', () => zoomByButton(-1));
-
-  // Safety net: if the confirm button ends up covering a candidate, a finger
-  // tap on that hidden spot is redirected into aiming rather than
-  // confirmation — otherwise it would confirm a previously selected (wrong)
-  // move. A normal tap on the button (no candidate nearby) passes through as
-  // usual and commits.
-  // Contract with `ui/dom.ts` (bindTap): commit is tied to a `pointerup`
-  // landing on the button. `setPointerCapture` below grabs the pointer onto
-  // the canvas — then `pointerup` never reaches the button and bindTap
-  // doesn't commit. Don't switch this to intercepting on `pointerup` or add
-  // capture on the button itself — that would break the "aim vs commit" split.
-  document.getElementById('confirmMove')?.addEventListener('pointerdown', (e) => {
-    if (e.pointerType !== 'touch' || pinch || activeId !== null) return;
-    const game = deps.state.game;
-    if (!(deps.state.phase === 'race' && game && game.phase === 'race')) return;
-    const scr = vp.toScreen(e);
-    const near = nearestCandScreen(scr);
-    if (!near || near.dist > AIM_ZONE_PX) return; // no target nearby — let it commit
-    e.preventDefault();
-    e.stopPropagation();
-    try {
-      canvas.setPointerCapture(e.pointerId); // steal the pointer from the button onto the canvas
-    } catch {}
-    activePointers.set(e.pointerId, scr);
-    gesture = { kind: 'aim' };
-    activeId = e.pointerId;
-    aimAt(e);
-    deps.redraw();
-  });
 }
