@@ -379,17 +379,20 @@ function refreshCands(): void {
 }
 
 /**
- * Check the pending pick against fresh state: if the picked point has become
- * occupied by an opponent (they landed on it or on its path — blocked) or is
- * now a crash, clear the pick with a toast; otherwise update the reference to
- * the current candidate object. Called from refreshCands — the single funnel
- * for incoming state (onGameState in online, the local bot loop).
+ * Check the pending pick against fresh state: if the picked point is gone from
+ * the fan or has become occupied by an opponent (they landed on it or on its
+ * path — blocked), clear the pick with a toast; otherwise update the reference
+ * to the current candidate object. A crash target is NOT a reason to clear:
+ * going off the edge is a legal move the player picked on purpose (sometimes
+ * the only one, sometimes the fastest), and input.ts lets it be picked — so
+ * dropping it here would undo a deliberate choice. Called from refreshCands —
+ * the single funnel for incoming state (onGameState in online, the bot loop).
  */
 function revalidatePending(): void {
   if (!S.pending || !S.cands) return;
   const t = S.pending.target;
   const match = S.cands.find((c) => c.target.x === t.x && c.target.y === t.y);
-  if (match && !match.blocked && !match.crash) {
+  if (match && !match.blocked) {
     S.pending = match;
   } else {
     S.pending = null;
