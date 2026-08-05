@@ -442,6 +442,55 @@ body.is-lobby .pr-conn {
   height: 16px;
 }
 
+/* ── Tabs: a strip over a stack of panes, inside a card (ui/pr-chrome.ts
+      buildTabs) — the race-setup card and the guest lobby's ─────────────────── */
+.pr-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  border-bottom: 1px solid var(--pr-edge-line);
+}
+.pr-tabs__tab {
+  flex: 1;
+  padding: 13px 4px;
+  background: none;
+  border: none;
+  /* The active tab is underlined by its own border, so every tab reserves the
+     same space — otherwise the row would jump on switch. */
+  border-bottom: 2.5px solid transparent;
+  color: var(--pr-ink-dim);
+  font-weight: 600;
+  font-size: var(--pr-text-sm);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+@media (hover: hover) {
+  .pr-tabs__tab:hover:not(.pr-tabs__tab--active) {
+    color: var(--pr-ink);
+    background: var(--pr-hover);
+  }
+}
+.pr-tabs__tab--active {
+  color: var(--pr-accent);
+  border-bottom-color: var(--pr-accent);
+  font-weight: 700;
+}
+.pr-panes {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow-y: auto;
+}
+/* Scoped to :not([hidden]) so the flex display never overrides the hidden
+   attribute that switches tabs. */
+.pr-pane:not([hidden]) {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 18px;
+}
+
 /* ── Segmented options: a row/grid of choices with one active ───────────────── */
 .pr-seg {
   display: flex;

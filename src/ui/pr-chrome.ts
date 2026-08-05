@@ -86,6 +86,49 @@ export function buildBrand(
 // lobby screens — the host's (inside race setup) and the guest's — so they live
 // here rather than in either owner module.
 
+export interface Tabs<K extends string> {
+  /** The tab buttons, by key — a screen may hide one (`tabs[k].hidden = true`). */
+  tabs: Record<K, HTMLButtonElement>;
+  /** The panes the screen fills, by key. Only the active one is not `hidden`. */
+  panes: Record<K, HTMLElement>;
+  /** Show a pane and light up its tab. */
+  show(key: K): void;
+}
+
+/**
+ * A tab strip over a stack of panes, in one card: the race-setup screen's
+ * Lineup/Behaviour/Rules, and the guest lobby's read-only take on the same two.
+ * The caller keeps whatever it has to do on a switch (redrawing a canvas that
+ * had no width while hidden, say) in its own `onPick`.
+ */
+export function buildTabs<K extends string>(
+  parent: HTMLElement,
+  items: { key: K; label: string }[],
+  onPick: (key: K) => void,
+): Tabs<K> {
+  const tabRow = el('div', 'pr-tabs', parent);
+  const paneBox = el('div', 'pr-panes pr-scroll-bleed', parent);
+  const tabs = {} as Record<K, HTMLButtonElement>;
+  const panes = {} as Record<K, HTMLElement>;
+  for (const it of items) {
+    const b = button('pr-tabs__tab', tabRow);
+    b.textContent = it.label;
+    bindTap(b, () => onPick(it.key));
+    tabs[it.key] = b;
+    panes[it.key] = el('div', 'pr-pane', paneBox);
+  }
+  return {
+    tabs,
+    panes,
+    show(key) {
+      for (const it of items) {
+        tabs[it.key].classList.toggle('pr-tabs__tab--active', it.key === key);
+        panes[it.key].hidden = it.key !== key;
+      }
+    },
+  };
+}
+
 /** The room code with its two actions: tap the code to copy, the button to share. */
 export interface CodeBlock {
   root: HTMLElement;

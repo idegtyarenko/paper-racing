@@ -53,6 +53,8 @@ body.is-setup .zoom-ctl {
 }
 
 /* ── Race setup: one card, three tabs, scrolling panes ─────────────────────── */
+/* The strip and the panes themselves are shared with the guest lobby — see
+   .pr-tabs / .pr-panes in pr-controls.css. */
 .pr-setup__card {
   flex: 1;
   min-height: 0;
@@ -60,52 +62,6 @@ body.is-setup .zoom-ctl {
   flex-direction: column;
   overflow: hidden;
   box-shadow: var(--pr-shadow-card);
-}
-.pr-setup__tabs {
-  flex: 0 0 auto;
-  display: flex;
-  border-bottom: 1px solid var(--pr-edge-line);
-}
-.pr-setup__tab {
-  flex: 1;
-  padding: 13px 4px;
-  background: none;
-  border: none;
-  /* The active tab is underlined by its own border, so every tab reserves the
-     same space — otherwise the row would jump on switch. */
-  border-bottom: 2.5px solid transparent;
-  color: var(--pr-ink-dim);
-  font-weight: 600;
-  font-size: var(--pr-text-sm);
-  cursor: pointer;
-  touch-action: manipulation;
-}
-@media (hover: hover) {
-  .pr-setup__tab:hover:not(.pr-setup__tab--active) {
-    color: var(--pr-ink);
-    background: var(--pr-hover);
-  }
-}
-.pr-setup__tab--active {
-  color: var(--pr-accent);
-  border-bottom-color: var(--pr-accent);
-  font-weight: 700;
-}
-.pr-setup__panes {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  overflow-y: auto;
-}
-/* Scoped to :not([hidden]) so the flex display never overrides the hidden
-   attribute that switches tabs. */
-.pr-setup__pane:not([hidden]) {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  padding: 18px;
 }
 
 /* Online lobby: leaving the room closes it out of the wizard, so it sits at the
@@ -174,7 +130,7 @@ body.is-setup .zoom-ctl {
   }
   /* Left padding of 2px, cancelled by .pr-scroll-bleed on the scrolling box:
      content stays on the gutter, the clip edge sits just outside it. */
-  .pr-setup__pane:not([hidden]) {
+  .pr-setup__card .pr-pane:not([hidden]) {
     padding: 20px 0 0 2px;
   }
   .pr-setup__actions {
