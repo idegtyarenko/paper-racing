@@ -122,6 +122,22 @@ export function installDevHelpers(deps: DevHelperDeps): void {
   };
 
   (window as unknown as Record<string, unknown>).__pr = {
+    /** Every candidate of the current fan in viewport coords, so a browser check
+     *  can assert that no piece of chrome (the "Go!" button above all) has
+     *  landed on a point the player still has to be able to click. */
+    candsScreen() {
+      const r = canvas.getBoundingClientRect();
+      const cam = vp.camera();
+      return (S.cands ?? []).map((c) => {
+        const scr = worldToScreen(cam, c.target);
+        return {
+          target: c.target,
+          blocked: !!c.blocked,
+          x: r.left + scr.x,
+          y: r.top + scr.y,
+        };
+      });
+    },
     /** Test language switcher: writes the choice to localStorage and reloads.
      *  For checking locales without going through the UI (same effect as
      *  `?lang=en|ru|be` in the URL). */

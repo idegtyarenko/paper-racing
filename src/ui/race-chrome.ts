@@ -237,6 +237,11 @@ function refreshConfirmBtn(): void {
   // instead, since the button now means "try again".
   confirmRetryEl.hidden = sendState !== 'failed';
   confirmCheckEl.hidden = sendState !== 'idle' || timerOnly;
+  // The float is a position, not a state: a hidden button or one that has
+  // turned into "sending"/"retry" belongs back in the bottom stack, and nothing
+  // else would clear it (the caller only recomputes on camera/candidate
+  // changes, which a send state change isn't).
+  if (confirmBtn.hidden || sendState !== 'idle') setConfirmFloat(null);
 }
 
 /**
@@ -252,17 +257,93 @@ export function setMoveSendState(s: SendState): void {
 
 /**
  * Show/hide the floating confirm-move button. While sending or after a failure,
- * we don't hide it — it shows progress/retry. `anchor` moves the action zone to
- * the half of the field free of candidates, so it doesn't cover target points
- * (otherwise a tap on a target would hit the button).
+ * we don't hide it — it shows progress/retry.
  */
-export function showConfirmMove(
-  show: boolean,
-  anchor: 'top' | 'bottom' = 'bottom',
-): void {
+export function showConfirmMove(show: boolean): void {
   confirmSelected = show;
-  if (built) root.classList.toggle('pr-race--act-top', anchor === 'top');
   refreshConfirmBtn();
+}
+
+/**
+ * Move the whole action zone (chip + button) to the half of the field free of
+ * candidates, so it doesn't cover target points. Split out of showConfirmMove:
+ * the anchor used to be decided only when a target was picked, which is too
+ * late — the chip and the countdown button are already on screen by then and
+ * may sit on the very candidates the player is aiming at. Callers apply it as
+ * soon as candidates exist, and again whenever the camera moves.
+ *
+ * The body class lets things outside the race chrome react — the toast moves to
+ * the opposite end of the screen (see race-chrome.css).
+ */
+export function setActAnchor(anchor: 'top' | 'bottom'): void {
+  if (!built) return;
+  root.classList.toggle('pr-race--act-top', anchor === 'top');
+  document.body.classList.toggle('is-act-top', anchor === 'top');
+}
+
+/**
+ * Desktop: pull the confirm button out of the bottom stack and float it next to
+ * the candidate fan (`pos` = its top-left corner in board css px), so the
+ * cursor doesn't cross a wide window on every move. `null` docks it back.
+ *
+ * The caller owns the geometry — it has the camera and the candidates; this
+ * only decides whether floating is allowed at all. It isn't while a move is
+ * being sent or has failed (the retry belongs next to the error-coloured stack)
+ * nor for a player who has retired (the result buttons dock into that stack).
+ */
+export function setConfirmFloat(pos: { x: number; y: number } | null): void {
+  if (!built) return;
+  const ok =
+    pos !== null &&
+    sendState === 'idle' &&
+    !confirmBtn.hidden &&
+    !document.body.classList.contains('is-early-exit');
+  confirmBtn.classList.toggle('pr-race__confirm--float', ok);
+  if (ok) {
+    confirmBtn.style.left = `${pos.x}px`;
+    confirmBtn.style.top = `${pos.y}px`;
+  } else {
+    confirmBtn.style.left = '';
+    confirmBtn.style.top = '';
+  }
+}
+
+/**
+ * Size of the confirm button as currently rendered — the caller needs it to
+ * place the float outside the fan. Zero while it's hidden (nothing to place).
+ */
+export function confirmBtnSize(): { w: number; h: number } {
+  if (!built || confirmBtn.hidden) return { w: 0, h: 0 };
+  return { w: confirmBtn.offsetWidth, h: confirmBtn.offsetHeight };
+}
+
+/**
+ * The status chip's box in board coordinates (the same space the caller works
+ * in — the layer spans the board), or null when it isn't on screen. The float
+ * has to dodge it: the chip carries the turn's instruction, and a button parked
+ * across the middle of it cuts the line in half.
+ */
+export function chipRect(): { x: number; y: number; w: number; h: number } | null {
+  if (!built || chipEl.hidden) return null;
+  const c = chipEl.getBoundingClientRect();
+  const r = root.getBoundingClientRect();
+  return { x: c.x - r.x, y: c.y - r.y, w: c.width, h: c.height };
+}
+
+/**
+ * How far up from the bottom edge the action stack reaches: its own height
+ * (chip + button, not just the button) plus the layer's bottom padding, which
+ * is the gutter and the safe-area inset. That's what the anchor has to keep
+ * clear of the candidates.
+ *
+ * Derived rather than measured in place on purpose — once the stack has moved
+ * to the top, its position says nothing about the room it would need at the
+ * bottom, and measuring that would make the anchor oscillate.
+ */
+export function actZoneHeight(): number {
+  if (!built) return 0;
+  const pad = parseFloat(getComputedStyle(root).paddingBottom) || 0;
+  return actEl.offsetHeight + pad;
 }
 
 /**
@@ -390,6 +471,10 @@ export function renderRaceChrome(ctx: RaceCtx): void {
   root.hidden = !racing;
   document.body.classList.toggle('is-racing', racing);
   if (!racing) {
+    // Both are race-only positioning: outside a race the toast goes back to the
+    // top of the screen and the button back into its stack.
+    document.body.classList.remove('is-act-top');
+    setConfirmFloat(null);
     resetStandings(); // leaving the race — a new one recomputes from scratch
     chipBase = null;
     chipWaiting = false;

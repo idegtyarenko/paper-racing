@@ -363,9 +363,15 @@ body.is-early-exit .pr-race__chip:not([hidden]) {
 /* No target picked yet: the button is a countdown placeholder, not an action.
    Outlined rather than a dimmed amber slab — a translucent fill over navy goes
    muddy, and it would still read as "a primary button you can't press". It must
-   not swallow taps either: a candidate may well be underneath it. */
-.pr-race__confirm--timer {
+   not swallow taps either: a candidate may well be underneath it — and since
+   this button floats over the fan on a desktop, that's the normal case now.
+   Written through the same `.pr-race__act >` wrapper as the rule that turns
+   pointer events on, or that one outranks it and the placeholder eats the tap
+   (the specificity trap the file header warns about). */
+.pr-race__act > .pr-btn.pr-race__confirm--timer {
   pointer-events: none;
+}
+.pr-race__confirm--timer {
   background: var(--pr-panel);
   border: 1px solid var(--pr-accent);
   color: var(--pr-accent);
@@ -422,6 +428,29 @@ body.is-early-exit .zoom-ctl {
    screens suppress it. */
 body.is-racing .pr-conn {
   display: none;
+}
+
+/* ── Toast: always at the end of the board the action zone isn't ───────────── */
+/* The toast is pinned to the top of the screen everywhere (pr-controls.css). In
+   a race the action zone moves up there whenever the candidate fan sits low —
+   and then the toast lands on the chip and the button, in the one corner the
+   player is looking at. So it takes the opposite end instead. The class is set
+   with the anchor itself (race-chrome.ts) and dropped when the race ends. Only
+   the position moves; the failure skin is the toast's own business. */
+body.is-act-top .pr-toast {
+  top: auto;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+  animation-name: pr-toast-in-up;
+}
+@keyframes pr-toast-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* ── Connection lost (5E): banner + the code to rejoin with ────────────────── */
@@ -490,6 +519,35 @@ body.is-racing .pr-conn {
      like the chip above it, or it would run the whole width of a desktop window. */
   .pr-race__conn {
     max-width: min(100%, 520px);
+  }
+  /* Confirming a move used to mean crossing the whole window: the fan is drawn
+     wherever the track is, the button lived at the bottom edge. Here it leaves
+     the stack and is placed next to the fan (left/top written by input.ts,
+     which owns the camera). Only from 700px — on a phone the thumb is already
+     there, and there's no room to put it anywhere but the bottom.
+
+     The stack keeps the status chip, so nothing collapses; the button is only
+     positioned out of the flow, not moved in the DOM, and `.pr-race__act >
+     .pr-btn` still gives it pointer events. Above the classification card, so
+     an overlap in a corner doesn't bury the thing being pressed. */
+  .pr-race__confirm--float {
+    position: absolute;
+    margin: 0;
+    z-index: 2;
+  }
+  /* Flipped to the top, the stack lines its chip up with the burger and the
+     card rather than hanging below them: on a wide screen the card is a fixed
+     260px in the corner, so the middle of that row is free and the three read
+     as one line of chrome. Absolute, since a flex item can't share a row with
+     the block above it. Narrow screens keep the stacked version — there the
+     card runs the full width and the chip would land on it. */
+  .pr-race--act-top .pr-race__act {
+    position: absolute;
+    top: calc(env(safe-area-inset-top, 0px) + var(--pr-gutter));
+    left: var(--pr-gutter);
+    right: var(--pr-gutter);
+    margin: 0;
+    padding: 0 76px;
   }
   body.is-racing .zoom-ctl {
     bottom: 100px;

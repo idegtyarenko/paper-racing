@@ -261,3 +261,22 @@ export const DOUBLE_TAP_DRAG_PX_PER_2X = 160;
  *  height ~48) with margin for the point radius and the finger. While
  *  candidates stay above this zone, the button remains at the bottom. */
 export const CONFIRM_BTN_ZONE_PX = 104;
+/** From this viewport width the confirm button leaves the bottom stack and
+ *  floats next to the candidate fan, so the cursor doesn't travel to the bottom
+ *  of a wide window on every move. Matches the desktop breakpoint the race
+ *  chrome's CSS uses. */
+export const CONFIRM_FLOAT_MIN_W_PX = 700;
+/** Gap between the candidate fan's bounding box and the floating button — it is
+ *  placed strictly outside the fan, so a player who changes their mind can
+ *  still reach every candidate. */
+export const CONFIRM_FLOAT_GAP_PX = 16;
+/** Keep the floating button off the board's edges. The right edge also has to
+ *  clear the zoom column, the top one the burger and the classification card. */
+export const CONFIRM_FLOAT_PAD_PX = 16;
+export const CONFIRM_FLOAT_PAD_RIGHT_PX = 76;
+export const CONFIRM_FLOAT_PAD_TOP_PX = 76;
+/** Hysteresis for the top/bottom anchor: once the stack has moved out of the
+ *  candidates' way it stays there until they are this much clear of the zone
+ *  again. Without it a slow pan across the threshold makes the chip and the
+ *  button flicker between the two ends on every frame. */
+export const CONFIRM_ANCHOR_HYST_PX = 56;

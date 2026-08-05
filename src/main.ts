@@ -119,6 +119,10 @@ function redraw(): void {
     cam: vp.camera(),
   };
   render(ctx, app);
+  // The action zone and the floating "Go!" button are pinned to where the
+  // candidates are on screen, so they follow every camera change — and a
+  // camera change is exactly what a redraw is for.
+  if (viewMode === 'race') input.updateConfirmPlacement();
 }
 
 /**
@@ -367,8 +371,11 @@ function refreshCands(): void {
   // in (pre-pick mode) — restore hover from the actual mouse position, since
   // clearSelection above would have cleared it.
   input.reaimHover();
-  // A pending pick survived until our turn — arm the "Go!" button so it can be confirmed with one tap.
-  if (myTurn() && S.pending) showConfirmMove(true, input.confirmAnchor());
+  // Arms the "Go!" button if a pending pick survived until our turn (one tap
+  // confirms it), and places the action zone for the fresh candidates — the
+  // chip and the countdown button are on screen from the start of the turn, so
+  // where they sit can't wait for a pick.
+  input.syncConfirmMove();
 }
 
 /**

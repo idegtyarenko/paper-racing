@@ -12,7 +12,14 @@ import { Candidate } from '../model/game';
 import { AppState } from '../app-state';
 import { worldToScreen, screenToWorld, clampScale } from './camera';
 import * as vp from './viewport';
-import { showConfirmMove } from '../ui/race-chrome';
+import {
+  showConfirmMove,
+  setActAnchor,
+  setConfirmFloat,
+  confirmBtnSize,
+  actZoneHeight,
+  chipRect,
+} from '../ui/race-chrome';
 import {
   TOUCH_LIFT,
   TOUCH_TOL_PX,
@@ -20,6 +27,12 @@ import {
   AIM_ZONE_PX,
   BOTTOM_DEADZONE_PAD_PX,
   CONFIRM_BTN_ZONE_PX,
+  CONFIRM_FLOAT_MIN_W_PX,
+  CONFIRM_FLOAT_GAP_PX,
+  CONFIRM_FLOAT_PAD_PX,
+  CONFIRM_FLOAT_PAD_RIGHT_PX,
+  CONFIRM_FLOAT_PAD_TOP_PX,
+  CONFIRM_ANCHOR_HYST_PX,
   DRAG_PX,
   ZOOM_BTN_FACTOR,
   WHEEL_FACTOR,
@@ -95,6 +108,7 @@ export function clearSelection(): void {
   hover = null;
   selected = null;
   loupe = null;
+  lastFloatSide = 0; // a new fan starts from the preferred side again
   showConfirmMove(false);
 }
 
@@ -155,16 +169,21 @@ function resetGestureState(opts: { keepPick?: boolean } = {}): void {
 }
 
 /**
- * Hide the "Go!" button — unless a pick that can still be confirmed stands:
- * either a candidate tapped on our own turn (`selected`) or a pre-pick queued
- * during someone else's turn that our turn has now come round to
- * (`state.pending`). Both are drawn on the field, so hiding the button while
- * one of them stands leaves a mark that can't be confirmed.
+ * Show or hide the "Go!" button and (re)place the action zone. The button
+ * stands as long as a pick that can still be confirmed does: either a candidate
+ * tapped on our own turn (`selected`) or a pre-pick queued during someone
+ * else's turn that our turn has now come round to (`state.pending`). Both are
+ * drawn on the field, so hiding the button while one of them stands leaves a
+ * mark that can't be confirmed.
+ *
+ * Placement is refreshed on every call, including the hiding ones: the chip and
+ * the countdown button are on screen before any pick is made, so where they sit
+ * has to be decided as soon as the candidates are known.
  */
-function syncConfirmMove(): void {
+export function syncConfirmMove(): void {
   const pending = deps.state.phase === 'race' && deps.state.pending && deps.myTurn();
-  if (selected || pending) showConfirmMove(true, confirmAnchor());
-  else showConfirmMove(false);
+  showConfirmMove(!!(selected || pending));
+  updateConfirmPlacement();
 }
 
 // ── Double-tap (touch) → zoom the field camera toward a point ──────────────
@@ -282,7 +301,7 @@ function startPinch(): void {
   hover = null;
   selected = null;
   canvas.classList.remove('grabbing');
-  showConfirmMove(false);
+  syncConfirmMove();
 }
 
 /** Recompute scale/pan from the two fingers: the world point under the gesture
@@ -302,24 +321,151 @@ function updatePinch(): void {
   });
 }
 
-/**
- * Where to show the confirm button. Defaults to the bottom; only moves to the
- * top if the lowest candidate actually reaches into the button zone near the
- * bottom edge (otherwise a tap on the target would hit the button — wrong
- * move). Just "below center" doesn't count, so the button doesn't jump back
- * and forth for no reason.
- */
-export function confirmAnchor(): 'top' | 'bottom' {
+// Both placement decisions are sticky, because both are recomputed on every
+// frame of a pan and both have a threshold a drifting fan will sit right on.
+// The anchor gets a dead band (see actAnchor); the float remembers which side
+// of the fan it took and tries that one first, so it only switches sides when
+// the old one has actually become unusable. Reset per turn (clearSelection), so
+// a fresh fan starts from the preferred order again.
+let lastAnchor: 'top' | 'bottom' = 'bottom';
+let lastFloatSide = 0;
+
+/** Screen positions (css px) of the candidates a tap can still land on. */
+function candScreenPoints(): Vec[] {
   const cands = deps.state.cands;
+  if (!cands) return [];
   const view = vp.camera();
+  const pts: Vec[] = [];
+  for (const c of cands) {
+    if (c.blocked) continue;
+    pts.push(worldToScreen(view, c.target));
+  }
+  return pts;
+}
+
+/**
+ * Where to show the bottom action stack. Defaults to the bottom; only moves to
+ * the top if the lowest candidate actually reaches into the stack's zone near
+ * the bottom edge (otherwise a tap on the target would hit the chip or the
+ * button — wrong move). Just "below center" doesn't count, so the stack doesn't
+ * jump back and forth for no reason.
+ *
+ * The zone is the stack's real height when it has one (chip + button, and the
+ * chip is what covers candidates most often), grown by the tap radius: a target
+ * whose centre clears the stack by a few pixels is still half under it, and the
+ * tap lands on the chip. CONFIRM_BTN_ZONE_PX is the floor, for the first call
+ * before anything has been laid out.
+ *
+ * Coming back down takes a wider clearance than going up (CONFIRM_ANCHOR_HYST_PX):
+ * this runs on every frame of a pan, and a bare threshold makes the whole stack
+ * flicker between the two ends while the fan drifts across it.
+ */
+function actAnchor(pts: Vec[]): 'top' | 'bottom' {
   const { h } = vp.viewSize();
+  const zone = Math.max(CONFIRM_BTN_ZONE_PX, actZoneHeight() + TOUCH_TOL_PX);
   let maxY = -Infinity; // screen Y of the lowest unblocked candidate
-  if (cands)
-    for (const c of cands) {
-      if (c.blocked) continue;
-      maxY = Math.max(maxY, worldToScreen(view, c.target).y);
+  for (const p of pts) maxY = Math.max(maxY, p.y);
+  const limit = h - zone - (lastAnchor === 'top' ? CONFIRM_ANCHOR_HYST_PX : 0);
+  lastAnchor = maxY > limit ? 'top' : 'bottom';
+  return lastAnchor;
+}
+
+/**
+ * Desktop placement for the floating confirm button: its top-left corner in
+ * board css px, or null to leave it docked at the bottom.
+ *
+ * The button is placed strictly OUTSIDE the fan's bounding box — a player who
+ * changes their mind has to be able to reach every other candidate, so covering
+ * even one of them is not an option. Below the fan first (the reading order of
+ * the move), then above, then to either side; the first placement that fits on
+ * the board and touches no candidate wins. Along the fan it lines up with the
+ * picked point, so the button still travels to where the eye is.
+ *
+ * The status chip is a second, softer obstacle: parked across it the button
+ * cuts the turn's instruction in half. A placement that clears the chip too is
+ * preferred, but a placement that only clears the candidates still beats
+ * dropping back to the bottom of the window — which is the distance this whole
+ * thing exists to remove.
+ */
+function confirmFloatPos(
+  pts: Vec[],
+  pick: Candidate | null,
+): { x: number; y: number } | null {
+  const { w: vw, h: vh } = vp.viewSize();
+  if (vw < CONFIRM_FLOAT_MIN_W_PX || pts.length === 0) return null;
+  const { w, h } = confirmBtnSize();
+  if (!w || !h) return null;
+
+  // The fan, grown by the tap tolerance around each point: a button that merely
+  // touches the edge of a target's hit area is already in the way.
+  const r = Math.max(vp.scale() / 2, TOUCH_TOL_PX);
+  const box = {
+    x0: Math.min(...pts.map((p) => p.x)) - r,
+    x1: Math.max(...pts.map((p) => p.x)) + r,
+    y0: Math.min(...pts.map((p) => p.y)) - r,
+    y1: Math.max(...pts.map((p) => p.y)) + r,
+  };
+  const view = vp.camera();
+  const aim = pick ? worldToScreen(view, pick.target) : null;
+  const cx = aim ? aim.x : (box.x0 + box.x1) / 2;
+  const cy = aim ? aim.y : (box.y0 + box.y1) / 2;
+
+  const gap = CONFIRM_FLOAT_GAP_PX;
+  // `slide` is the axis the button may be nudged along to stay on the board:
+  // it runs parallel to the side of the fan the button sits on, so sliding can
+  // never bring it back over a candidate.
+  const places = [
+    { x: cx - w / 2, y: box.y1 + gap, slide: 'x' as const }, // below the fan
+    { x: cx - w / 2, y: box.y0 - gap - h, slide: 'x' as const }, // above it
+    { x: box.x1 + gap, y: cy - h / 2, slide: 'y' as const }, // to the right
+    { x: box.x0 - gap - w, y: cy - h / 2, slide: 'y' as const }, // to the left
+  ];
+  const minX = CONFIRM_FLOAT_PAD_PX;
+  const maxX = vw - CONFIRM_FLOAT_PAD_RIGHT_PX - w;
+  const minY = CONFIRM_FLOAT_PAD_TOP_PX;
+  const maxY = vh - CONFIRM_FLOAT_PAD_PX - h;
+  if (minX > maxX || minY > maxY) return null; // window too small to hold it anywhere
+
+  const chip = chipRect();
+  // The side used last frame is tried first: while it works the button stays
+  // put, instead of hopping back to a "better" side the moment a pan frees it.
+  const order = [lastFloatSide, ...places.keys()].filter((i, k, a) => a.indexOf(i) === k);
+  let fallback: { side: number; x: number; y: number } | null = null;
+  for (const i of order) {
+    const p = places[i];
+    const x = p.slide === 'x' ? Math.min(Math.max(p.x, minX), maxX) : p.x;
+    const y = p.slide === 'y' ? Math.min(Math.max(p.y, minY), maxY) : p.y;
+    if (x < minX || x > maxX || y < minY || y > maxY) continue;
+    if (pts.some((c) => c.x > x - r && c.x < x + w + r && c.y > y - r && c.y < y + h + r))
+      continue;
+    const onChip =
+      chip !== null &&
+      x < chip.x + chip.w + gap &&
+      x + w > chip.x - gap &&
+      y < chip.y + chip.h + gap &&
+      y + h > chip.y - gap;
+    if (!onChip) {
+      lastFloatSide = i;
+      return { x, y };
     }
-  return maxY > h - CONFIRM_BTN_ZONE_PX ? 'top' : 'bottom';
+    fallback ??= { side: i, x, y };
+  }
+  // Nothing clears both: the fan fills the board (deep zoom) or it sits right on
+  // the chip. Take the chip overlap if there was one, else stay docked — better
+  // far away than on top of a target.
+  if (fallback) lastFloatSide = fallback.side;
+  return fallback && { x: fallback.x, y: fallback.y };
+}
+
+/**
+ * Re-place the action zone and the floating button for the current camera and
+ * candidates, without touching whether the button is shown. Called from the
+ * redraw path, so both follow a pan, a pinch and the zoom buttons live.
+ */
+export function updateConfirmPlacement(): void {
+  const pts = candScreenPoints();
+  setActAnchor(actAnchor(pts));
+  setConfirmFloat(confirmFloatPos(pts, selected ?? deps.state.pending));
 }
 
 /** Nearest (unblocked) candidate to a screen point, in css px. */
@@ -525,7 +671,7 @@ function endGesture(e: PointerEvent): void {
       } else {
         selected = g.cand;
         deps.state.pending = null; // a fresh pick on our turn clears any queued move
-        showConfirmMove(true, confirmAnchor());
+        syncConfirmMove();
       }
       break;
     case 'aim': {
@@ -540,15 +686,16 @@ function endGesture(e: PointerEvent): void {
       } else {
         selected = cand;
         if (selected) deps.state.pending = null; // a fresh pick on our turn clears any queued move
-        showConfirmMove(!!selected, confirmAnchor());
+        syncConfirmMove();
       }
       break;
     }
     case 'pan':
-      // Panning keeps the selection: re-anchor the "Go!" button, since after
-      // moving the map the lowest candidate may have entered the button zone
-      // (confirmAnchor accounts for that).
-      if (selected) showConfirmMove(true, confirmAnchor());
+      // Panning keeps the selection, but the candidates are somewhere else on
+      // screen now — re-place the action zone and the floating button, whether
+      // or not a target has been picked (the chip can end up over the fan just
+      // as easily as the button can).
+      syncConfirmMove();
       break;
   }
   // A touch tap with no drag (other than the zoom gesture itself) is a candidate first tap of a double-tap.
@@ -619,7 +766,7 @@ export function initInput(d: InputDeps): void {
       loupe = null;
       hover = null;
       selected = null;
-      showConfirmMove(false);
+      syncConfirmMove();
       gesture = { kind: 'dtap', downX: scr.x, downY: scr.y, scale0: vp.scale() };
       activeId = e.pointerId;
       deps.redraw();
