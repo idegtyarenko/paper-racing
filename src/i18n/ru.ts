@@ -149,6 +149,7 @@ export const ru: Strings = {
     limit1m: '1 мин',
     limit2m: '2 мин',
     limit5m: '5 мин',
+    readOnlyNote: 'Это настройки создателя трассы — менять их\u00A0может только он.',
     done: 'Готово',
   },
 
@@ -203,6 +204,9 @@ export const ru: Strings = {
     raceCode: (code) => `Код игры ${code}`,
     resumeTitle: (code) => `Вернуться в игру ${code}?`,
     resumeYes: 'Вернуться в игру',
+    setupChanged: (what: string): string =>
+      `Создатель трассы изменил настройки: ${what}.`,
+    setupChangedMany: 'Создатель трассы изменил настройки гонки.',
     gameGone: 'Игра больше недоступна.',
   },
 

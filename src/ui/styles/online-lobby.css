@@ -15,15 +15,19 @@
   gap: 12px;
 }
 
+/* Same skeleton as the setup card: the strip stays put and the panes scroll —
+   the guest's Behaviour/Rules tabs are the setup screen's, read-only. */
 .pr-lobby__card {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 18px;
-  overflow-y: auto;
+  overflow: hidden;
   box-shadow: var(--pr-shadow-card);
+}
+/* The room pane keeps the gap the card used to set for its own children. */
+.pr-lobby__card .pr-pane:not([hidden]) {
+  gap: 16px;
 }
 
 /* Fixed height: the thumbnail is an identifier, not a view of the race — it
@@ -89,10 +93,12 @@ body.is-lobby .zoom-ctl {
     border: none;
     box-shadow: none;
     backdrop-filter: none;
-    /* 2px of left padding, cancelled by .pr-scroll-bleed's negative margin:
-       the content still starts at the panel's gutter, but the scroll box's
-       clip edge sits just outside it. */
-    padding: 0 0 0 2px;
+  }
+  /* 2px of left padding, cancelled by .pr-scroll-bleed's negative margin: the
+     content still starts at the panel's gutter, but the scroll box's clip edge
+     sits just outside it. */
+  .pr-lobby__card .pr-pane:not([hidden]) {
+    padding: 20px 0 0 2px;
   }
   .pr-lobby__foot {
     margin-top: auto;

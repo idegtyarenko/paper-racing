@@ -7,6 +7,10 @@
 // because they still have a race to configure. A guest has nothing to set: they
 // see the track they're about to race, the code to pass on, who else is in, and
 // a line telling them what's being waited for.
+//
+// They do, however, get the same Behaviour and Rules tabs — read-only. What the
+// host picked decides how the guest's car drives and what a crash costs, and
+// finding that out by driving into the gravel is a poor way to learn it.
 
 import { EditorState } from '../model/editor';
 import { strings } from '../i18n';
@@ -21,15 +25,20 @@ import {
   buildCode,
   buildRoster,
   buildStatus,
+  buildTabs,
   CodeBlock,
   LobbyView,
   Roster,
   StatusBanner,
+  Tabs,
 } from './pr-chrome';
+import { mountRulesEditor, RulesEditor } from './rules-editor';
 import { openMenu } from './menu';
 import { BURGER_SVG, CLOSE_SVG } from './icons';
 
 const board = document.querySelector('.app__board')!;
+
+type LobbyTab = 'room' | 'drive' | 'rules';
 
 export interface OnlineLobbyHandlers {
   onLobbyCopyCode: () => void;
@@ -49,6 +58,14 @@ let status: StatusBanner;
 let preview: HTMLCanvasElement;
 /** The track being previewed, kept so a resize can redraw it. */
 let previewEditor: EditorState | null = null;
+let tabbar: Tabs<LobbyTab>;
+/** The host's settings, shown read-only. A second instance of the same component
+ *  the setup screen mounts — it keeps its state in a closure, so two are fine. */
+let rulesEditor: RulesEditor;
+/** The rules currently loaded into it, so a re-render doesn't reopen the editor
+ *  (which would fold every expanded "?" back). Compared by value, not identity:
+ *  every incoming row brings a fresh object. */
+let shownRules = '';
 
 function build(): void {
   root = el('div', 'pr-layer pr-lobby');
@@ -61,23 +78,33 @@ function build(): void {
   }).title.textContent = strings.online.lobbyBadge;
 
   const body = el('div', 'pr-lobby__body', root);
-  const card = el('div', 'pr-card pr-card--lg pr-scroll-bleed pr-lobby__card', body);
+  const card = el('div', 'pr-card pr-card--lg pr-lobby__card', body);
+  tabbar = buildTabs<LobbyTab>(
+    card,
+    [
+      { key: 'room', label: strings.setup.tabLineup },
+      { key: 'drive', label: strings.setup.tabBehaviour },
+      { key: 'rules', label: strings.setup.tabRules },
+    ],
+    showTab,
+  );
+  const roomPane = tabbar.panes.room;
 
   // The track first: what you're here for, before the plumbing of the room.
-  const trackRow = el('div', 'pr-row', card);
+  const trackRow = el('div', 'pr-row', roomPane);
   el('span', 'pr-label', trackRow).textContent = strings.online.trackLabel;
   const previewBox = el('div', 'pr-preview pr-lobby__preview', trackRow);
   preview = el('canvas', 'pr-preview__canvas', previewBox);
   new ResizeObserver(() => drawPreview()).observe(previewBox);
 
-  const codeRow = el('div', 'pr-row', card);
+  const codeRow = el('div', 'pr-row', roomPane);
   el('span', 'pr-label', codeRow).textContent = strings.online.roomCode;
   code = buildCode(codeRow, {
     onCopy: () => handlers.onLobbyCopyCode(),
     onShare: () => handlers.onLobbyShare(),
   });
 
-  const rosterRow = el('div', 'pr-row', card);
+  const rosterRow = el('div', 'pr-row', roomPane);
   rosterLabel = el('span', 'pr-label', rosterRow);
   roster = buildRoster(
     rosterRow,
@@ -86,9 +113,16 @@ function build(): void {
       hostBadge: strings.online.hostBadge,
       youBadge: strings.online.you,
       offline: strings.online.offline,
+      botBadge: (d) => strings.aiSelect[d],
     },
     (name) => handlers.onRename(name),
   );
+
+  rulesEditor = mountRulesEditor({
+    drive: tabbar.panes.drive,
+    rules: tabbar.panes.rules,
+  });
+  tabbar.show('room');
 
   const foot = el('div', 'pr-lobby__foot', body);
   status = buildStatus(foot);
@@ -103,6 +137,13 @@ function build(): void {
 
   board.append(root);
   built = true;
+}
+
+function showTab(next: LobbyTab): void {
+  tabbar.show(next);
+  // The reachable-cells canvas has no width while its pane is hidden, so the
+  // render done then drew nothing — redraw once it's on screen.
+  if (next === 'drive') requestAnimationFrame(() => rulesEditor.refreshPreview());
 }
 
 /**
@@ -177,5 +218,22 @@ export function renderOnlineLobby(view: LobbyView | null, editor?: EditorState):
   if (editor && editor !== previewEditor) {
     previewEditor = editor;
     drawPreview();
+  }
+
+  // The settings tabs only exist once the host's settings have arrived: a room
+  // created by an older client carries none, and empty tabs would be worse than
+  // no tabs. Reopening the editor is skipped while the values are unchanged.
+  const hasRules = !!view.rules;
+  tabbar.tabs.drive.hidden = !hasRules;
+  tabbar.tabs.rules.hidden = !hasRules;
+  if (!hasRules) {
+    shownRules = '';
+    showTab('room');
+    return;
+  }
+  const key = JSON.stringify(view.rules);
+  if (key !== shownRules) {
+    shownRules = key;
+    rulesEditor.open(view.rules!, true, () => {}, true);
   }
 }

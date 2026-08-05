@@ -1124,6 +1124,31 @@ body.is-lobby .pr-conn {
 .pr-rules--rules {
   gap: 22px;
 }
+/* Read-only (the guest's lobby shows the host's settings): a readout, not a
+   disabled form. The chosen option keeps its accent plaque and everything else
+   drops the button skin, so the row reads as a value; the sliders go away
+   completely — a draggable thumb that doesn't drag is the one control nobody
+   believes is read-only. The numbers survive in .pr-row__value beside the label. */
+.pr-rules--ro .pr-seg__opt {
+  cursor: default;
+}
+.pr-rules--ro .pr-seg__opt:disabled {
+  opacity: 1;
+}
+.pr-rules--ro .pr-seg__opt:not(.pr-seg__opt--active) {
+  background: none;
+  border-color: transparent;
+  color: var(--pr-ink-dim);
+  font-weight: 600;
+}
+.pr-rules--ro .pr-seg__opt:active {
+  transform: none;
+}
+.pr-rules--ro .pr-slider,
+.pr-rules--ro .pr-slider__scale {
+  display: none;
+}
+
 .pr-rules__sliders {
   flex-direction: column;
   gap: 8px;

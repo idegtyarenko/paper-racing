@@ -206,6 +206,8 @@ export const en = {
     limit1m: '1\u00A0min',
     limit2m: '2\u00A0min',
     limit5m: '5\u00A0min',
+    readOnlyNote:
+      'These are the track creator’s settings\u00A0— only they can change them.',
     done: 'Done',
   },
 
@@ -293,6 +295,9 @@ export const en = {
     // Returning to the last online race after a disconnect/reload.
     resumeTitle: (code: string): string => `Return to game ${code}?`,
     resumeYes: 'Return to game',
+    setupChanged: (what: string): string =>
+      `The track creator changed the settings: ${what}.`,
+    setupChangedMany: 'The track creator changed the race settings.',
     gameGone: 'This game is no longer available.',
   },
 
