@@ -761,8 +761,15 @@ setVersionLabel(`${__COMMIT__} · ${buildLabel}`, () => {
 
 // If the commit changed since the last run, the app was updated: show a toast.
 // We compare the compiled-in commit to the saved one, without relying on SW mechanics.
+//
+// The key is per-app, not per-origin: production and the staging preview are two
+// builds on one GitHub Pages origin, so a single key made them overwrite each
+// other's last-seen commit — moving between them announced an "update" that never
+// happened, and a real update could go unannounced. Which makes the toast useless
+// as evidence when the actual question is whether the service worker picked up a
+// new version.
 try {
-  const BUILD_KEY = 'pr-build';
+  const BUILD_KEY = `pr-build:${import.meta.env.BASE_URL}`;
   const seen = localStorage.getItem(BUILD_KEY);
   if (seen && seen !== __COMMIT__) {
     showToast(strings.race.updated, 3000);
