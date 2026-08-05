@@ -105,8 +105,9 @@ function build(h: ResultHandlers): void {
   // guest isn't waiting on anything, they can still just leave.
   guestEl = el('div', 'pr-result__guest', inner);
   const waitEl = el('div', 'pr-result__wait', guestEl);
-  waitDotsEl = el('span', 'pr-result__dots', waitEl);
-  for (let i = 0; i < 3; i++) el('span', 'pr-result__dot', waitDotsEl);
+  // The shared waiting indicator — the same dots the race chip runs.
+  waitDotsEl = el('span', 'pr-dots', waitEl);
+  for (let i = 0; i < 3; i++) el('span', 'pr-dots__dot', waitDotsEl);
   waitTextEl = el('span', 'pr-result__waittext', waitEl);
   // ...but waiting is not the only thing they can do. Without this the screen is
   // a dead end: no buttons, and a reload just restores the finished race from

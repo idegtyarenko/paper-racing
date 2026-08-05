@@ -767,66 +767,51 @@ body.is-lobby .pr-conn {
   }
 }
 
-/* ── Animated ellipsis: waiting on someone else's online move ────────────────
-   Dots light up one by one, looping, so a non-interactive board reads as
-   "waiting" rather than "frozen" (m1). Three separate spans (`content` can't be
-   animated — we fade each dot's opacity with a phase offset). They always take
-   up space (inline-block), so the adjacent timer text doesn't jump around. */
+/* ── Waiting indicator: three pulsing dots ───────────────────────────────────
+   Someone else is on the clock and there is nothing to press: the dots run so a
+   frozen-looking screen reads as "waiting" (m1). Shared by the race chip and the
+   guest's rematch plate on the result screen — one indicator, not a per-screen
+   variant. Dots lead the line, so the wait is legible before the text is read.
+   `currentColor` lets each host set the tone with its own text colour. */
 .pr-dots {
-  display: inline-block;
-  min-width: 1.2em;
-  text-align: left;
+  flex: 0 0 auto;
+  gap: 3px;
+  vertical-align: middle;
 }
-
-/* A shared 1.4s timeline for all dots (no delay), but different lighting thresholds —
-   so all three go dark in sync at the start of the cycle (reset "…" → ""), then light
-   up in sequence: 1st at 25%, 2nd at 50%, 3rd at 75%. Exactly replicates the old
-   frame sequence '', '.', '..', '...'. */
+/* display under :not([hidden]) — the result plate hides the dots when there is
+   nothing left to wait for (see the convention at the top of this file). */
+.pr-dots:not([hidden]) {
+  display: inline-flex;
+}
+/* One 1.4s timeline, staggered by delay: the wave runs left to right. */
 .pr-dots__dot {
-  opacity: 0;
-  animation: 1.4s steps(1, end) infinite;
-}
-.pr-dots__dot:nth-child(1) {
-  animation-name: pr-dot-1;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pr-dot-pulse 1.4s infinite;
 }
 .pr-dots__dot:nth-child(2) {
-  animation-name: pr-dot-2;
+  animation-delay: 0.2s;
 }
 .pr-dots__dot:nth-child(3) {
-  animation-name: pr-dot-3;
+  animation-delay: 0.4s;
 }
-@keyframes pr-dot-1 {
-  0% {
-    opacity: 0;
-  }
-  25%,
+@keyframes pr-dot-pulse {
+  0%,
+  80%,
   100% {
+    opacity: 0.25;
+  }
+  40% {
     opacity: 1;
   }
 }
-@keyframes pr-dot-2 {
-  0% {
-    opacity: 0;
-  }
-  50%,
-  100% {
-    opacity: 1;
-  }
-}
-@keyframes pr-dot-3 {
-  0% {
-    opacity: 0;
-  }
-  75%,
-  100% {
-    opacity: 1;
-  }
-}
-/* Respect "reduce motion": a static ellipsis, all three dots visible. */
+/* Respect "reduce motion": three static dots, evenly lit. */
 @media (prefers-reduced-motion: reduce) {
   .pr-dots__dot {
     animation: none;
-    opacity: 1;
+    opacity: 0.6;
   }
 }
 

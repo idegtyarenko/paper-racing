@@ -348,6 +348,13 @@ body.is-early-exit .pr-race__chip:not([hidden]) {
   height: 9px;
   border-radius: 50%;
 }
+/* The waiting dots lead the line, inside the text span — hence a margin rather
+   than the chip's own flex gap. Dimmed: they set the mood, the text carries the
+   message, and at full ink they'd compete with the player's colour dot. */
+.pr-race__chipwait {
+  margin-right: 8px;
+  color: var(--pr-ink-dim);
+}
 
 .pr-race__act > .pr-btn {
   padding: 15px 30px;

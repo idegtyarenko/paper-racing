@@ -266,22 +266,18 @@ export function showConfirmMove(
 }
 
 /**
- * Render the "waiting for someone else's turn" chip: base text (with any
- * trailing "…" stripped) + an animated ellipsis + an optional "· m:ss" suffix.
- * Built via DOM rather than textContent because the ellipsis is CSS-animated
- * (three dot spans with staggered opacity); both the full render and the
- * ticking setTurnCountdown call this helper, so the tick doesn't wipe out the
- * animation.
+ * Render the "waiting for someone else's turn" chip: the shared pulsing-dots
+ * indicator (the same one the result screen's rematch plate uses), then the base
+ * text (with any trailing "…" stripped) and an optional "· m:ss" suffix. Built
+ * via DOM rather than textContent because the dots are CSS-animated elements;
+ * both the full render and the ticking setTurnCountdown call this helper, so the
+ * tick doesn't wipe out the animation.
  */
 function applyWaitingChip(base: string, msLeft: number | null): void {
-  const dots = el('span', 'pr-dots');
-  // Three separate dots: `content` can't be animated, so we fade each one's opacity instead.
-  for (let i = 0; i < 3; i++) {
-    el('span', 'pr-dots__dot', dots).textContent = '.';
-  }
-  const nodes: (Node | string)[] = [base.replace(/…$/, ''), dots];
-  if (msLeft !== null) nodes.push(` · ${msToClock(msLeft)}`);
-  chipText.replaceChildren(...nodes);
+  const dots = el('span', 'pr-dots pr-race__chipwait');
+  for (let i = 0; i < 3; i++) el('span', 'pr-dots__dot', dots);
+  const tail = msLeft !== null ? ` · ${msToClock(msLeft)}` : '';
+  chipText.replaceChildren(dots, `${base.replace(/…$/, '')}${tail}`);
 }
 
 /**

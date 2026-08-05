@@ -190,43 +190,8 @@
 .pr-result__wait:not([hidden]) {
   display: flex;
 }
-.pr-result__dots {
-  flex: 0 0 auto;
-  gap: 3px;
-}
-/* Hidden when there's nothing to wait for (the creator left) — see the convention
-   in pr-controls.css: display lives under :not([hidden]) so [hidden] still wins. */
-.pr-result__dots:not([hidden]) {
-  display: inline-flex;
-}
-.pr-result__dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--pr-ink-dim);
-  animation: pr-result-dot 1.4s infinite;
-}
-.pr-result__dot:nth-child(2) {
-  animation-delay: 0.2s;
-}
-.pr-result__dot:nth-child(3) {
-  animation-delay: 0.4s;
-}
-@keyframes pr-result-dot {
-  0%,
-  80%,
-  100% {
-    opacity: 0.25;
-  }
-  40% {
-    opacity: 1;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .pr-result__dot {
-    animation: none;
-  }
-}
+/* The waiting dots themselves are the shared `.pr-dots` (pr-controls.css) —
+   they take their tone from the plate's own dimmed text colour. */
 
 /* The result screen owns the board outright, so the zoom controls go away —
    there's nothing left to aim at. */
