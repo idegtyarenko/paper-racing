@@ -22,7 +22,7 @@ import { strings } from '../i18n';
 import { msToClock } from './format';
 import { renderRows, resetStandings } from './classification';
 import { bindTap } from './dom';
-import { el, button, icon, buildBrand, buildStatus, StatusBanner } from './pr-chrome';
+import { el, button, icon, buildStatus, StatusBanner } from './pr-chrome';
 import { openMenu } from './menu';
 import {
   BURGER_SVG,
@@ -70,12 +70,12 @@ function build(h: RaceChromeHandlers): void {
   root.hidden = true;
 
   // ── Top: burger + the classification card ──────────────────────────────────
-  // On a phone the burger floats beside the card; from 700px the pair becomes a
-  // rail, and the brand joins the burger on its top row — the same header the
-  // wizard rail carries, so the run-up and the race read as one screen.
+  // The burger floats beside the card at every width — on a wide screen the card
+  // stops stretching and hugs the right corner instead of becoming a rail. No
+  // brand here: the app's identity isn't in question mid-race, and a logo would
+  // only take board away.
   const top = el('div', 'pr-race__top', root);
   const bar = el('div', 'pr-race__bar', top);
-  buildBrand(bar, { cls: 'pr-brand--sm pr-race__brand', dashes: 6 });
   const burger = button('pr-btn pr-btn--icon pr-race__burger', bar);
   burger.setAttribute('aria-label', strings.menu.title);
   icon('pr-btn__ico', BURGER_SVG, burger);

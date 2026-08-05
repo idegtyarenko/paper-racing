@@ -1,8 +1,10 @@
 /* Race chrome (Blueprint): the floating HUD over the board while racing.
-   Built by ui/race-chrome.ts. Two layouts off one DOM — a phone stacks the
-   classification card at the top and the action zone at the bottom; from 700px
-   the same pieces become a left rail beside a full-height board, matching the
-   wizard rail so the run-up and the race read as one screen. */
+   Built by ui/race-chrome.ts. One layout at every width — the burger top left,
+   the classification card floating over the board, the action zone at the
+   bottom. The card used to become a left rail from 700px; the rail took a whole
+   240px column away from the track (and the fit doesn't know about it, so the
+   track slid under it), so on a wide screen the card just stops stretching and
+   hugs the top right corner instead. */
 
 .pr-race {
   flex-direction: column;
@@ -35,11 +37,6 @@
 }
 .pr-race__burger {
   height: 48px;
-}
-/* Phone: the bar is just the burger — the brand would only crowd the board, and
-   the app's identity isn't in question mid-race. It appears in the rail below. */
-.pr-race__brand {
-  display: none;
 }
 .pr-race__card {
   flex: 1;
@@ -462,78 +459,30 @@ body.is-racing .pr-conn {
   height: 14px;
 }
 
-/* ── Wide screens: the card becomes a left rail ────────────────────────────── */
+/* ── Wide screens: the card floats in the top right corner ─────────────────── */
 @media (min-width: 700px) {
-  /* :not([hidden]) per the hiding convention (pr-controls.css): this `display`
-     has to lose to the hidden attribute, or the HUD stays on screen outside the
-     race and covers the wizard's step rail. */
-  .pr-race:not([hidden]) {
-    display: grid;
-  }
-  .pr-race {
-    /* A touch wider than the wizard rail: these rows carry a name AND a speed,
-       and at 220px six-character names were already ellipsing. */
-    grid-template-columns: 240px 1fr;
-    grid-template-rows: 1fr;
-    gap: 0;
-    padding: 0;
-  }
+  /* Burger hard left, card hard right — the board keeps its full width, and the
+     two things that hover over it sit in opposite corners rather than lining up
+     into a strip. */
   .pr-race__top {
-    grid-column: 1;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-    padding: 16px;
-    background: var(--pr-panel);
-    border-right: 1px solid var(--pr-border-dim);
-    backdrop-filter: blur(6px);
-    pointer-events: auto;
-    overflow-y: auto;
-  }
-  /* The rail is the surface now, so the card stops being one of its own. */
-  .pr-race__card {
-    background: none;
-    border: 0;
-    backdrop-filter: none;
-    overflow: visible;
-  }
-  .pr-race__bar {
-    display: flex;
-    align-items: center;
     justify-content: space-between;
-    gap: 9px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid rgba(var(--pr-edge-rgb), 0.3);
   }
-  .pr-race__brand {
-    display: flex;
+  /* Fixed rather than content-sized: the rows carry live speeds and placings, so
+     a shrink-to-fit panel would jitter on every move. Wide enough that
+     six-character names don't ellipse next to a speed reading. */
+  .pr-race__card {
+    flex: 0 0 260px;
   }
-  .pr-race__burger {
-    height: 36px;
-    width: 36px;
-  }
-  .pr-race__next {
-    padding: 0 0 12px;
-    border-bottom: 0;
-  }
-  .pr-race__rows {
-    gap: 6px;
-    overflow: visible;
-  }
-  /* The action zone stays over the board, never over the rail. */
+  /* Symmetric side padding wide enough to clear the zoom column at the right
+     edge — the chip wraps rather than sliding under the buttons, and staying
+     symmetric keeps it centred over the board. */
   .pr-race__act {
-    grid-column: 2;
-    grid-row: 1;
-    margin: 0;
-    justify-content: flex-end;
-    /* Symmetric side padding wide enough to clear the zoom column at the right
-       edge — the chip wraps rather than sliding under the buttons, and staying
-       symmetric keeps it centred over the board. */
     padding: 24px 76px 32px;
   }
-  .pr-race--act-top .pr-race__act {
-    margin: 0;
-    justify-content: flex-start;
+  /* The reconnect banner is the only thing in this stack that stretches; capped
+     like the chip above it, or it would run the whole width of a desktop window. */
+  .pr-race__conn {
+    max-width: min(100%, 520px);
   }
   body.is-racing .zoom-ctl {
     bottom: 100px;
