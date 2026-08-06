@@ -23,10 +23,13 @@
 /* Map zoom controls: they belong to the board rather than to any one screen, so
    they live in the shared layer. Desktop only — touchscreens zoom via pinch.
    Lifting them clear of a screen's bottom action zone is still that screen's
-   business (each one sets its own `bottom`). */
+   business (each one sets its own `bottom`). The right edge is the shared
+   gutter, not a number of its own: the column stacks above a screen's action
+   bar (the editor's Join online, the race panel), and the two rows read as one
+   edge only if both are measured from the same margin. */
 .zoom-ctl {
   position: absolute;
-  right: 12px;
+  right: var(--pr-gutter);
   bottom: 12px;
   z-index: 5;
   display: none;
