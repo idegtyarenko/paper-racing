@@ -1,6 +1,8 @@
 // Full-bleed editor chrome (Blueprint redesign): the floating overlays that sit
 // over the board while drawing a track — a coach-mark that travels between
-// steps and a bottom action bar with the wizard's Back / Next / Join buttons.
+// steps (from step 2 on, pinned to the part of the track it talks about, see
+// view/coach-placement.ts) and a bottom action bar with the wizard's
+// Back / Next / Join buttons.
 // Built here (its owner module) and mounted into .app__board on first show,
 // rather than living statically in index.html.
 //
@@ -15,6 +17,7 @@ import { strings } from '../i18n';
 import { showErrorToast } from './dialogs';
 import { bindTap } from './dom';
 import { button, el, icon } from './pr-chrome';
+import { CoachPlacement, Rect } from '../view/coach-placement';
 import { wizardNavFoot } from './wizard-nav';
 import { ARROW_SVG, GLOBE_SVG, PENCIL_SVG, UNDO_SVG } from './icons';
 
@@ -56,8 +59,10 @@ function build(h: EditorChromeHandlers): void {
   icon('pr-coach__ico', PENCIL_SVG, coachEl);
   coachTextEl = el('span', 'pr-coach__text', coachEl);
 
-  // ── The same instruction for wide screens: a card in the step rail's bottom
-  //    slot, which wizard-nav.ts owns (the floating coach is phone-only). ─────
+  // ── The drawing step's instruction on wide screens: a card in the step rail's
+  //    bottom slot, which wizard-nav.ts owns. Only that step — from the width
+  //    step on, the floating coach above points at the track and the rail card
+  //    stands down (renderEditorChrome). ───────────────────────────────────────
   railCoachEl = el('div', 'pr-card pr-card--solid pr-edit__rail-coach', wizardNavFoot());
   icon('pr-coach__ico', PENCIL_SVG, railCoachEl);
   railCoachTextEl = el('span', 'pr-edit__rail-coach-text', railCoachEl);
@@ -93,6 +98,52 @@ export function initEditorChrome(h: EditorChromeHandlers): void {
   build(h);
 }
 
+/**
+ * Pin the coach-mark next to the feature it describes, pointer and all, or
+ * (null) send it back to the CSS position for the drawing step. The caller owns
+ * the geometry — it has the camera and the track; this only applies the result.
+ */
+export function setCoachFloat(p: CoachPlacement | null): void {
+  if (!built) return;
+  coachEl.classList.toggle('pr-coach--nose', p !== null);
+  if (!p) {
+    coachEl.style.left = '';
+    coachEl.style.top = '';
+    delete coachEl.dataset.nose;
+    return;
+  }
+  coachEl.style.left = `${p.left}px`;
+  coachEl.style.top = `${p.top}px`;
+  coachEl.style.setProperty('--pr-coach-nose', `${p.nose}px`);
+  coachEl.dataset.nose = p.side;
+}
+
+/** Size of the coach card as rendered, and the chrome it must not cover. */
+export function coachMetrics(): { card: { w: number; h: number }; keepOut: Rect[] } {
+  const box = coachEl.getBoundingClientRect();
+  const board = document.querySelector('.app__board')!.getBoundingClientRect();
+  // Board-local rectangles: the coach is positioned inside .app__board, so
+  // everything it has to dodge has to be measured in the same frame.
+  const local = (el: Element | null): Rect | null => {
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return r.width && r.height
+      ? { x: r.left - board.left, y: r.top - board.top, w: r.width, h: r.height }
+      : null;
+  };
+  const keepOut = [
+    local(document.querySelector('.pr-edit__bar')),
+    local(railEl()),
+  ].filter((r): r is Rect => r !== null);
+  return { card: { w: box.width, h: box.height }, keepOut };
+}
+
+/** The wizard's side rail, but only while it's actually on screen (wide layout). */
+function railEl(): Element | null {
+  const rail = document.querySelector('.pr-nav__rail');
+  return rail && getComputedStyle(rail).display !== 'none' ? rail : null;
+}
+
 /** Hide online entry points if the backend isn't configured (local play only). */
 export function setOnlineEnabled(enabled: boolean): void {
   onlineEnabled = enabled;
@@ -126,8 +177,11 @@ export function renderEditorChrome(editor: EditorState, phase: Phase): void {
   const editing = phase === 'edit';
   root.hidden = !editing;
   // The rail's coach card belongs to the rail, not to this layer — hide it
-  // separately once the wizard moves past the drawing steps.
-  railCoachEl.hidden = !editing;
+  // separately once the wizard moves past the drawing steps. Past the drawing
+  // step it goes too: from there on the instruction is about a specific part of
+  // the track, so it travels to that part with a pointer (setCoachFloat) rather
+  // than waiting in the rail, on every width.
+  railCoachEl.hidden = !editing || editor.step !== 'center';
   document.body.classList.toggle('is-editing', editing);
   if (!editing) {
     lastErrorToast = '';

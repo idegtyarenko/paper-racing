@@ -21,8 +21,14 @@
   color: var(--pr-ink);
   transition:
     top 0.55s cubic-bezier(0.34, 1.2, 0.64, 1),
+    left 0.55s cubic-bezier(0.34, 1.2, 0.64, 1),
     bottom 0.55s cubic-bezier(0.34, 1.2, 0.64, 1),
     transform 0.55s cubic-bezier(0.34, 1.2, 0.64, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .pr-coach {
+    transition: none;
+  }
 }
 .pr-coach__ico {
   color: var(--pr-accent);
@@ -35,20 +41,51 @@
   height: 16px;
   display: block;
 }
-/* Per-step anchor: draw sits low, just above the Join button (design 3A); the
-   later steps sit higher, nearer the feature being tuned. */
+/* The drawing step talks about the whole board, so its card parks low, just
+   above the Join button (design 3A). The later steps are each about one part of
+   the track: their position comes from the geometry (view/coach-placement.ts →
+   setCoachFloat writes left/top inline) and they grow a pointer. */
 .pr-edit[data-step='center'] .pr-coach {
   top: auto;
   bottom: calc(env(safe-area-inset-bottom, 0px) + 88px);
 }
-.pr-edit[data-step='adjust'] .pr-coach {
-  top: 22%;
+.pr-coach--nose {
+  left: 0;
+  transform: none;
+  /* Enough room for the feature under the pointer to stay visible. */
+  width: min(280px, calc(100% - 2 * var(--pr-gutter)));
 }
-.pr-edit[data-step='finish'] .pr-coach {
-  top: 28%;
+/* The pointer: a corner of the card itself — same fill and border, rotated so
+   two of its sides stick out past the edge, with the card's own background
+   covering where it meets the card. */
+.pr-coach--nose::after {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--pr-panel-solid);
+  border: 1px solid var(--pr-border);
+  transform: rotate(45deg);
 }
-.pr-edit[data-step='direction'] .pr-coach {
-  top: 24%;
+.pr-coach--nose[data-nose='top']::after {
+  top: -7px;
+  left: calc(var(--pr-coach-nose) - 6px);
+  border-width: 1px 0 0 1px;
+}
+.pr-coach--nose[data-nose='bottom']::after {
+  bottom: -7px;
+  left: calc(var(--pr-coach-nose) - 6px);
+  border-width: 0 1px 1px 0;
+}
+.pr-coach--nose[data-nose='left']::after {
+  left: -7px;
+  top: calc(var(--pr-coach-nose) - 6px);
+  border-width: 0 0 1px 1px;
+}
+.pr-coach--nose[data-nose='right']::after {
+  right: -7px;
+  top: calc(var(--pr-coach-nose) - 6px);
+  border-width: 1px 1px 0 0;
 }
 
 /* ── Bottom action bar (re-parented wizard buttons) ────────────────────────── */
@@ -135,7 +172,10 @@ body[data-edit-step='center'] #board.grabbing {
 }
 
 @media (min-width: 700px) {
-  .pr-edit .pr-coach {
+  /* Wide screens read the drawing step's instruction off the rail card, so the
+     floating one stands down — but only there. From the width step on it is the
+     only copy: it has to be over the board to point at the track. */
+  .pr-edit[data-step='center'] .pr-coach {
     display: none;
   }
   /* Action bar: clear the rail and hug the right, buttons sized to content. */
