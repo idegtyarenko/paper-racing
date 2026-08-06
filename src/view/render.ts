@@ -493,23 +493,30 @@ function drawCheckerCell(
   ctx.fill();
 }
 
+/**
+ * Arrow along a path: the shaft follows every vertex (so it can bend with the
+ * road), the head sits at the last one, aimed down the closing segment. A
+ * straight arrow is just a two-point path.
+ */
 function drawArrow(
   ctx: CanvasRenderingContext2D,
   s: number,
-  from: Vec,
-  tip: Vec,
+  path: Polyline,
   color: string,
   width: number,
 ): void {
-  const d = normalize(sub(tip, from));
+  const tip = path[path.length - 1];
+  const d = normalize(sub(tip, path[path.length - 2]));
   const n = { x: -d.y, y: d.x };
   const headBase = sub(tip, scale(d, 0.5));
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
   ctx.lineWidth = width;
   ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
   ctx.beginPath();
-  ctx.moveTo(from.x * s, from.y * s);
+  ctx.moveTo(path[0].x * s, path[0].y * s);
+  for (const p of path.slice(1, -1)) ctx.lineTo(p.x * s, p.y * s);
   ctx.lineTo(headBase.x * s, headBase.y * s);
   ctx.stroke();
   const l = add(headBase, scale(n, 0.24));
@@ -617,8 +624,8 @@ function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): 
         !!ed.forward &&
         arrow.forward.x === ed.forward.x &&
         arrow.forward.y === ed.forward.y;
-      if (chosen) drawArrow(ctx, s, arrow.from, arrow.tip, ACCENT, 3);
-      else drawArrow(ctx, s, arrow.from, arrow.tip, EDGE, 1.8);
+      if (chosen) drawArrow(ctx, s, arrow.path, ACCENT, 3);
+      else drawArrow(ctx, s, arrow.path, EDGE, 1.8);
     }
   }
 
@@ -626,7 +633,7 @@ function drawEditor(ctx: CanvasRenderingContext2D, s: number, ed: EditorState): 
     const chosen = ed.arrows.find(
       (a: Arrow) => a.forward.x === ed.forward!.x && a.forward.y === ed.forward!.y,
     );
-    if (chosen) drawArrow(ctx, s, chosen.from, chosen.tip, ACCENT, 2.5);
+    if (chosen) drawArrow(ctx, s, chosen.path, ACCENT, 2.5);
   }
 }
 
@@ -711,8 +718,7 @@ function drawTrackDecor(ctx: CanvasRenderingContext2D, s: number, track: Track):
   drawArrow(
     ctx,
     s,
-    add(m, scale(track.forward, 0.8)),
-    add(m, scale(track.forward, 2.0)),
+    [add(m, scale(track.forward, 0.8)), add(m, scale(track.forward, 2.0))],
     ACCENT,
     2.4,
   );

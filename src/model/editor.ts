@@ -9,9 +9,11 @@ import {
   sub,
   scale,
   normalize,
+  dot,
   dist,
   lerp,
-  distPointToSegment,
+  smoothClosed,
+  distPointToPath,
   selfIntersectsClosed,
   polygonArea,
 } from '../geometry';
@@ -30,9 +32,12 @@ import { MIN_CENTER_AREA } from '../config';
 export type EditorStep = 'center' | 'adjust' | 'finish' | 'direction' | 'ready';
 
 export interface Arrow {
+  /** Tail and head of the arrow — the ends of `path`, kept for hit-tests and dev helpers. */
   from: Vec;
   tip: Vec;
   forward: Vec;
+  /** The drawn shaft: it follows the road rather than cutting across it. */
+  path: Polyline;
 }
 
 export interface EditorState {
@@ -120,7 +125,7 @@ export function pointerDown(st: EditorState, p: Vec, tol = 1.2): void {
     // Direction is pre-selected; tapping an arrow only flips which way is
     // forward — advancing to the next screen is the explicit primary button.
     for (const arrow of st.arrows) {
-      if (distPointToSegment(p, arrow.from, arrow.tip) < tol) {
+      if (distPointToPath(p, arrow.path) < tol) {
         st.forward = arrow.forward;
         return;
       }
@@ -295,15 +300,93 @@ export function confirmDirection(st: EditorState): void {
   if (st.step === 'direction' && st.forward) setStep(st, 'ready');
 }
 
+/** Arc length from the finish where a direction arrow starts and ends, in cells. */
+const ARROW_NEAR = 1.2;
+const ARROW_FAR = 4;
+/** Spacing of the arrow's path vertices — fine enough to read as a curve. */
+const ARROW_STEP = 0.4;
+/** An arrow never eats more than this much of the loop (tiny tracks). */
+const ARROW_LOOP_FRAC = 1 / 6;
+
+/**
+ * The road's mid-lane: halfway between the two edges, so an arrow drawn on it
+ * stays in the middle of the asphalt even where the widths differ. Smoothed,
+ * because the centerline is a hand-drawn stroke and its wobble would show up as
+ * a zigzag over the arrow's few cells.
+ */
+function midLane(m: WidthModel): Polyline {
+  const raw = m.center.map((p, i) =>
+    add(p, scale(m.outNormal[i], (m.outW[i] - m.inW[i]) / 2)),
+  );
+  return smoothClosed(raw, 6, 0.5);
+}
+
+/** Total length of a closed polyline. */
+function ringLength(poly: Polyline): number {
+  let total = 0;
+  for (let i = 0; i < poly.length; i++)
+    total += dist(poly[i], poly[(i + 1) % poly.length]);
+  return total;
+}
+
+/** Index of the ring vertex nearest to p. */
+function nearestIndex(poly: Polyline, p: Vec): number {
+  let best = 0;
+  let bestD = Infinity;
+  for (let i = 0; i < poly.length; i++) {
+    const d = dist(p, poly[i]);
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  return best;
+}
+
+/** The point `target` cells along the ring from vertex i0, walking in `dir`. */
+function walkRing(poly: Polyline, i0: number, dir: 1 | -1, target: number): Vec {
+  const n = poly.length;
+  let acc = 0;
+  let i = i0;
+  for (let k = 0; k < n; k++) {
+    const j = (i + dir + n) % n;
+    const seg = dist(poly[i], poly[j]);
+    if (acc + seg >= target) {
+      return seg < 1e-9 ? poly[j] : lerp(poly[i], poly[j], (target - acc) / seg);
+    }
+    acc += seg;
+    i = j;
+  }
+  return poly[i];
+}
+
 function computeArrows(st: EditorState): void {
   const f = st.finish!;
   const m = lerp(f.a, f.b, 0.5);
   const d = normalize(sub(f.b, f.a));
   const n = { x: -d.y, y: d.x };
-  st.arrows = [
-    { from: add(m, scale(n, 1.2)), tip: add(m, scale(n, 4)), forward: n },
-    { from: add(m, scale(n, -1.2)), tip: add(m, scale(n, -4)), forward: scale(n, -1) },
-  ];
+  const lane = midLane(st.width!);
+  const i0 = nearestIndex(lane, m);
+  // Cap the reach so an arrow can't wrap around a very short loop.
+  const far = Math.min(ARROW_FAR, ringLength(lane) * ARROW_LOOP_FRAC);
+  const near = Math.min(ARROW_NEAR, far * 0.4);
+
+  const build = (forward: Vec): Arrow => {
+    // Which way round the ring is "forward" — decided by the lane's own tangent
+    // at the finish, since the ring's winding is whatever the user drew.
+    const ahead = sub(lane[(i0 + 1) % lane.length], lane[i0]);
+    const dir: 1 | -1 = dot(ahead, forward) >= 0 ? 1 : -1;
+    // Even spacing over a whole number of steps — a leftover sliver at the head
+    // would be a zero-length segment for the head's direction to be read from.
+    const steps = Math.max(2, Math.ceil((far - near) / ARROW_STEP));
+    const path: Polyline = [];
+    for (let k = 0; k <= steps; k++) {
+      path.push(walkRing(lane, i0, dir, near + ((far - near) * k) / steps));
+    }
+    return { from: path[0], tip: path[path.length - 1], forward, path };
+  };
+
+  st.arrows = [build(n), build(scale(n, -1))];
 }
 
 export function resetCenter(st: EditorState): void {

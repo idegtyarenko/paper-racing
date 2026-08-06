@@ -152,8 +152,9 @@ export function installDevHelpers(deps: DevHelperDeps): void {
       return (S.editor.arrows ?? []).map((a) => {
         const from = worldToScreen(cam, a.from);
         const tip = worldToScreen(cam, a.tip);
-        const midW = { x: (a.from.x + a.tip.x) / 2, y: (a.from.y + a.tip.y) / 2 };
-        const mid = worldToScreen(cam, midW);
+        // Middle *of the path*: on a curved arrow the midpoint of from→tip is
+        // off the shaft, and a tap there wouldn't flip the direction.
+        const mid = worldToScreen(cam, a.path[Math.floor(a.path.length / 2)]);
         return {
           forward: a.forward,
           mid: { x: r.left + mid.x, y: r.top + mid.y },

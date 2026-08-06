@@ -6,6 +6,7 @@ import {
   closestPointOnSegment,
   distPointToSegment,
   distPointToPolyline,
+  distPointToPath,
   pointInPolygon,
   signedArea,
   polygonArea,
@@ -126,6 +127,28 @@ describe('distPointToPolyline', () => {
   it('distance to the nearest edge', () => {
     expect(distPointToPolyline({ x: 2, y: 2 }, SQUARE)).toBeCloseTo(2);
     expect(distPointToPolyline({ x: 2, y: 6 }, SQUARE)).toBeCloseTo(2);
+  });
+});
+
+describe('distPointToPath', () => {
+  it('leaves an open path open — no closing edge from the last point back to the first', () => {
+    // An L: (0,0) → (4,0) → (4,4). The closing edge (4,4)→(0,0) would run right
+    // past (1,1); as an open path the nearest piece is the bottom leg, 1 away.
+    const path: Polyline = [
+      { x: 0, y: 0 },
+      { x: 4, y: 0 },
+      { x: 4, y: 4 },
+    ];
+    expect(distPointToPath({ x: 1, y: 1 }, path)).toBeCloseTo(1);
+    expect(distPointToPolyline({ x: 1, y: 1 }, path)).toBeLessThan(0.9);
+  });
+
+  it('measures from the ends, not past them', () => {
+    const path: Polyline = [
+      { x: 0, y: 0 },
+      { x: 4, y: 0 },
+    ];
+    expect(distPointToPath({ x: -3, y: 0 }, path)).toBeCloseTo(3);
   });
 });
 

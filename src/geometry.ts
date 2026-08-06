@@ -102,6 +102,15 @@ export function distPointToSegment(p: Vec, a: Vec, b: Vec): number {
   return dist(p, closestPointOnSegment(p, a, b));
 }
 
+/** Distance to an open path — unlike distPointToPolyline, no closing edge. */
+export function distPointToPath(p: Vec, path: Polyline): number {
+  let d = Infinity;
+  for (let i = 0; i + 1 < path.length; i++) {
+    d = Math.min(d, distPointToSegment(p, path[i], path[i + 1]));
+  }
+  return d;
+}
+
 export function distPointToPolyline(p: Vec, poly: Polyline): number {
   let d = Infinity;
   for (let i = 0; i < poly.length; i++) {

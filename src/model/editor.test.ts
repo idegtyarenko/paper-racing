@@ -1,5 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { Vec, Polyline, closedNormals, lerp } from '../geometry';
+import {
+  Vec,
+  Polyline,
+  closedNormals,
+  lerp,
+  sub,
+  dot,
+  dist,
+  normalize,
+  pointInPolygon,
+} from '../geometry';
 import { WidthModel, autoFinishIndex } from './centerline';
 import { strings } from '../i18n';
 import {
@@ -61,6 +71,14 @@ function ellipseStroke(cx = 60, cy = 60, rx = 24, ry = 18): Vec[] {
   for (let a = 0; a <= Math.PI * 2 + 0.01; a += 0.12)
     pts.push({ x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a) });
   return pts;
+}
+
+/** Wobble a stroke the way a finger does — deterministic, no random. */
+function noisy(stroke: Vec[], amp = 0.35): Vec[] {
+  return stroke.map((p, i) => ({
+    x: p.x + amp * Math.sin(i * 1.7),
+    y: p.y + amp * Math.cos(i * 2.3),
+  }));
 }
 
 /** Drive the editor through drawing a loop → adjust step. */
@@ -132,6 +150,89 @@ describe('editor auto-placed finish + pre-selected direction', () => {
     confirmDirection(st);
     expect(st.step).toBe('ready');
     expect(st.forward).not.toBeNull();
+  });
+});
+
+describe('direction arrows follow the road', () => {
+  /** A tight circular loop: curvature strong enough that a straight arrow of the
+   *  same length would leave the road. */
+  function circleStroke(cx = 60, cy = 60, r = 12): Vec[] {
+    const pts: Vec[] = [];
+    for (let a = 0; a <= Math.PI * 2 + 0.01; a += 0.1)
+      pts.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) });
+    return pts;
+  }
+
+  function atDirection(stroke: Vec[]) {
+    const st = drawLoop(stroke);
+    confirmEdges(st);
+    confirmFinish(st);
+    return st;
+  }
+
+  it('keeps both arrows on the road surface', () => {
+    const st = atDirection(circleStroke());
+    for (const arrow of st.arrows!) {
+      for (const p of arrow.path) {
+        expect(pointInPolygon(p, st.outer!)).toBe(true);
+        expect(pointInPolygon(p, st.inner!)).toBe(false);
+      }
+    }
+  });
+
+  it('actually bends with the loop (a straight arrow would pass this fixture)', () => {
+    // Guards the test above: on a straight arrow every point could still land on
+    // the road by luck of the width roll, so demand a real turn along the path.
+    const st = atDirection(circleStroke());
+    for (const arrow of st.arrows!) {
+      const head = normalize(sub(arrow.path[1], arrow.path[0]));
+      const tail = normalize(
+        sub(arrow.path[arrow.path.length - 1], arrow.path[arrow.path.length - 2]),
+      );
+      expect(Math.acos(Math.min(1, dot(head, tail)))).toBeGreaterThan(0.15);
+    }
+  });
+
+  it('exposes from/tip as the ends of the path', () => {
+    const st = atDirection(circleStroke());
+    for (const arrow of st.arrows!) {
+      expect(arrow.path.length).toBeGreaterThan(2);
+      expect(arrow.path[0]).toEqual(arrow.from);
+      expect(arrow.path[arrow.path.length - 1]).toEqual(arrow.tip);
+    }
+  });
+
+  it('leaves the finish line and heads the way forward', () => {
+    const st = atDirection(circleStroke());
+    const mid = lerp(st.finish!.a, st.finish!.b, 0.5);
+    for (const arrow of st.arrows!) {
+      // Starts clear of the line, ends about four cells down the road.
+      expect(dist(mid, arrow.from)).toBeGreaterThan(0.9);
+      expect(dist(mid, arrow.from)).toBeLessThan(1.6);
+      expect(dist(mid, arrow.tip)).toBeGreaterThan(2.5);
+      const head = normalize(sub(arrow.path[1], arrow.path[0]));
+      expect(dot(head, arrow.forward)).toBeGreaterThan(0.8);
+    }
+  });
+
+  it('bends smoothly — no zigzag between path segments', () => {
+    // A hand-drawn stroke is noisy; the arrow rides a smoothed mid-lane, so
+    // consecutive segments must never kink.
+    const st = atDirection(noisy(circleStroke()));
+    for (const arrow of st.arrows!) {
+      for (let i = 1; i < arrow.path.length - 1; i++) {
+        const din = normalize(sub(arrow.path[i], arrow.path[i - 1]));
+        const dout = normalize(sub(arrow.path[i + 1], arrow.path[i]));
+        expect(Math.acos(Math.min(1, dot(din, dout)))).toBeLessThan(0.3);
+      }
+    }
+  });
+
+  it('tapping anywhere along the curved arrow flips direction', () => {
+    const st = atDirection(circleStroke());
+    const other = st.arrows![1];
+    pointerDown(st, other.path[Math.floor(other.path.length / 2)]);
+    expect(st.forward).toEqual(other.forward);
   });
 });
 
