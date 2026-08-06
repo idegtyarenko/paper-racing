@@ -196,7 +196,13 @@ export function pointerUp(st: EditorState): void {
     st.dragStart = null;
     st.dragEnd = null;
     const res = clipPerpAt(st.width, p, st.outer!, st.inner!);
-    if (!('error' in res)) st.finish = res.finish;
+    if ('error' in res) {
+      // Say why nothing moved — silently leaving the old line there reads as a
+      // dead tap.
+      fail(st, strings.editor.errors.finishMiss);
+      return;
+    }
+    st.finish = res.finish;
     st.error = false;
   }
 }
@@ -230,10 +236,15 @@ function clipPerpAt(
   return clipFinishLine(sub(p, d), add(p, d), outer, inner);
 }
 
-/** Update the finish-line preview from the current pointer position. */
+/**
+ * Update the finish-line preview from the current pointer position. A position
+ * with no line to draw (off the road, or too narrow a spot) leaves the previous
+ * one standing: the step always arrives with a valid line, and a finger passing
+ * over the grass shouldn't wipe it out — the tap is a move, not a delete.
+ */
 function previewFinish(st: EditorState, p: Vec): void {
   const res = clipPerpAt(st.width!, p, st.outer!, st.inner!);
-  st.finish = 'error' in res ? null : res.finish;
+  if (!('error' in res)) st.finish = res.finish;
   st.error = false;
 }
 
@@ -245,7 +256,6 @@ export function pointerCancel(st: EditorState): void {
   st.dragEnd = null;
   st.dragEdge = null;
   st.dragIndex = null;
-  if (st.step === 'finish') st.finish = null;
   fail(st, strings.editor.gestureCancelled);
 }
 

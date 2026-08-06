@@ -236,6 +236,54 @@ describe('direction arrows follow the road', () => {
   });
 });
 
+describe('start/finish placement misses', () => {
+  /** The editor sitting on the finish step with a line already placed. */
+  function atFinish() {
+    const st = drawLoop(ellipseStroke());
+    confirmEdges(st);
+    expect(st.finish).not.toBeNull();
+    return st;
+  }
+
+  it('keeps the placed line when the tap lands off the track', () => {
+    const st = atFinish();
+    const placed = st.finish;
+    // Far outside the loop.
+    pointerDown(st, { x: 200, y: 200 });
+    expect(st.finish).toBe(placed); // not even transiently dropped
+    pointerUp(st);
+    expect(st.finish).toBe(placed);
+  });
+
+  it('says why the tap did nothing', () => {
+    const st = atFinish();
+    pointerDown(st, { x: 200, y: 200 });
+    pointerUp(st);
+    expect(st.error).toBe(true);
+    expect(st.message).toBe(strings.editor.errors.finishMiss);
+  });
+
+  it('still moves the line when the tap is on the road', () => {
+    const st = atFinish();
+    const placed = st.finish;
+    pointerDown(st, st.center![10]);
+    pointerUp(st);
+    expect(st.finish).not.toBe(placed);
+    expect(st.error).toBe(false);
+  });
+
+  it('keeps the line through a cancelled gesture', () => {
+    const st = atFinish();
+    const placed = st.finish;
+    pointerDown(st, st.center![10]);
+    pointerCancel(st);
+    expect(st.finish).not.toBeNull();
+    expect(st.error).toBe(true);
+    // The preview may have moved it, but there is still a line on the track.
+    expect(st.finish === placed || st.finish !== null).toBe(true);
+  });
+});
+
 describe('editor errors vs. step hints', () => {
   it('flags a cancelled gesture as an error (toast), not a step hint', () => {
     const st = drawLoop(ellipseStroke());
