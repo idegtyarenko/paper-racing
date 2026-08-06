@@ -94,18 +94,6 @@ const TRAIL_MID = 0.55;
 /** Glow radius (css px) at max speed — the blueprint "backlit line" idiom,
  *  and the channel that reads fastest in peripheral vision. */
 const TRAIL_GLOW_MAX = 7;
-/**
- * Lane separation between players' trails, in CELLS — see `trail-lanes.ts` for
- * how the offsets are worked out. Kept in world units so it scales with zoom
- * (and honestly disappears when zoomed far out, which is fine — so does every
- * other detail). Big enough to clear TRAIL_WIDTH_MAX at normal zoom, small
- * enough that the trail still reads as "through this node".
- */
-const TRAIL_LANE_STEP = 0.22;
-/** Widest the outermost lanes may sit apart, in cells. */
-const TRAIL_LANE_MAX_SPREAD = 0.66;
-/** Distance over which a trail slides between lanes, in cells. */
-const TRAIL_LANE_RAMP = 0.5;
 /** Cap on the miter at sharp corners, in multiples of the lane offset. */
 const TRAIL_MITER_MAX = 2.5;
 
@@ -707,14 +695,7 @@ function drawRace(
   drawTrackDecor(ctx, s, game.track);
   // Lanes need every trail at once (they depend on who overlaps whom), so they
   // are solved for the whole field before any of it is drawn.
-  const lanes = computeLanes(
-    game.players.map((p) => p.trail),
-    {
-      step: TRAIL_LANE_STEP,
-      maxSpread: TRAIL_LANE_MAX_SPREAD,
-      ramp: TRAIL_LANE_RAMP,
-    },
-  );
+  const lanes = computeLanes(game.players.map((p) => p.trail));
   game.players.forEach((p, i) => drawTrail(ctx, s, p, lanes[i]));
   drawCars(ctx, s, game);
   drawCandidates(ctx, s, game, cands, hover, pending, candSeat);
