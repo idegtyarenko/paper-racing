@@ -34,9 +34,21 @@ export interface LaneOpts {
   ramp?: number;
 }
 
+/**
+ * The geometry the renderer draws with — kept here rather than at the call site
+ * so the numbers the tests measure against are the numbers that ship.
+ *
+ * Everything is in CELLS, so the bundle scales with zoom (and honestly vanishes
+ * when zoomed far out, which is fine — so does every other detail). `step` is
+ * the width of one trail at full speed and no more: neighbouring lanes touch
+ * like lines on a transit map, which is what makes a shared line read as a
+ * bundle of routes rather than a smear. `maxSpread` fits a full starting grid
+ * (six cars = five gaps) without squeezing it, and still keeps the outermost
+ * trail close enough to read as "through this node".
+ */
 export const LANE_DEFAULTS = {
-  step: 0.22,
-  maxSpread: 0.66,
+  step: 0.13,
+  maxSpread: 0.65,
   ramp: 0.5,
 } as const;
 
