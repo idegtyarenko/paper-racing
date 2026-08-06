@@ -43,10 +43,14 @@ import { ARROW_SVG, CHIP_SVG, CLOSE_SVG, GLOBE_SVG, PHONE_SVG } from './icons';
 const board = document.querySelector('.app__board')!;
 
 const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard'];
-/** Bot counts offered on each screen (the grid capacity disables the rest). */
+/** Bot counts offered on each screen (the grid capacity disables the rest).
+ *  A full grid of bots is only ever reachable in "vs computer" — hotseat and
+ *  the online lobby always seat at least two people, so the sixth option would
+ *  be permanently out of reach and is simply not offered there. Both rows are
+ *  the same length: one set of buttons serves them by index. */
 const AI_BOTS = [1, 2, 3, 4, 5];
 const HOTSEAT_HUMANS = [2, 3, 4, 5, 6];
-const HOTSEAT_BOTS = [0, 1, 2, 3, 4, 5];
+const HOTSEAT_BOTS = [0, 1, 2, 3, 4];
 
 type SetupTab = 'lineup' | 'drive' | 'rules';
 
@@ -232,7 +236,7 @@ function build(): void {
     renderLineup();
   });
   const bots = optionRow(lineupPane, HOTSEAT_BOTS, (v) => {
-    // The hotseat screen offers 0..5 bots; "vs computer" reuses the same row
+    // The hotseat screen offers 0..4 bots; "vs computer" reuses the same row
     // with 1..5, and the lobby with however many seats are free (the option set
     // is rebuilt per screen in renderLineup).
     if (lobbyView) {
@@ -371,7 +375,6 @@ function renderLobbyLineup(v: LobbyView): void {
   lineup.botsLabel.textContent = strings.players.botsWithSeats(v.maxBots);
   lineup.botsOpts.forEach((b, i) => {
     const n = HOTSEAT_BOTS[i];
-    b.hidden = false;
     b.dataset.key = String(n);
     b.textContent = String(n);
     b.disabled = n > v.maxBots;
@@ -424,8 +427,6 @@ function renderLineup(): void {
     lineup.botsLabel.textContent = strings.aiSelect.botsLabel;
     lineup.botsOpts.forEach((b, i) => {
       const n = AI_BOTS[i];
-      b.hidden = n === undefined;
-      if (n === undefined) return;
       b.dataset.key = String(n);
       b.textContent = String(n);
       b.disabled = 1 + n > seatCapacity;
@@ -450,7 +451,6 @@ function renderLineup(): void {
     lineup.botsLabel.textContent = strings.players.botsWithSeats(seatsLeft);
     lineup.botsOpts.forEach((b, i) => {
       const n = HOTSEAT_BOTS[i];
-      b.hidden = false;
       b.dataset.key = String(n);
       b.textContent = String(n);
       b.disabled = setupHumans + n > seatCapacity;
