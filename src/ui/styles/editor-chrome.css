@@ -7,6 +7,10 @@
 /* ── Coach-mark: travels between steps (the motion is the attention cue) ────── */
 .pr-coach {
   position: absolute;
+  /* Nothing here is tappable, and it sits right next to the edge it points at:
+     let strokes and edge drags go through to the canvas (.pr-layer > * would
+     otherwise have it swallow them). */
+  pointer-events: none;
   left: 50%;
   width: min(340px, calc(100% - 2 * var(--pr-gutter)));
   transform: translateX(-50%);
