@@ -14,7 +14,11 @@
   bottom: calc(env(safe-area-inset-bottom, 0px) + var(--pr-gutter));
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  /* One rhythm for the column and for what a step stacks inside it, so the
+     card → hint → actions run reads as evenly spaced whichever level each
+     piece happens to live on. */
+  --pr-setup-gap: 12px;
+  gap: var(--pr-setup-gap);
 }
 
 /* One step's content. Scoped to :not([hidden]) so the flex display never
@@ -25,6 +29,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  gap: var(--pr-setup-gap);
 }
 .pr-setup__actions {
   flex: 0 0 auto;
@@ -116,7 +121,7 @@ body.is-setup .zoom-ctl {
     width: min(400px, 42vw);
     padding: calc(env(safe-area-inset-top, 0px) + 22px) 22px
       calc(env(safe-area-inset-bottom, 0px) + 22px);
-    gap: 14px;
+    --pr-setup-gap: 14px;
     background: var(--pr-panel);
     border-right: 1px solid var(--pr-border-dim);
     backdrop-filter: blur(6px);

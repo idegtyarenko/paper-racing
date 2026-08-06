@@ -199,6 +199,12 @@ function build(): void {
   // ── Race setup: the tabbed card ───────────────────────────────────────────
   setupScreen = el('div', 'pr-setup__screen pr-setup__screen--setup', body);
   const card = el('div', 'pr-card pr-card--lg pr-setup__card', setupScreen);
+  // Why the primary action is held back, when it is (an empty name, too few
+  // racers). Belongs to this screen rather than to the column: the action row
+  // below is shared with mode select, but Start — and so its excuse — is not.
+  // Last child, so it still sits right above the button it explains.
+  hintEl = el('div', 'pr-setup__hint', setupScreen);
+  hintEl.hidden = true;
   tabbar = buildTabs<SetupTab>(
     card,
     [
@@ -306,11 +312,6 @@ function build(): void {
   // ── Actions (aligned to the same gutter as everything else). Back lives here
   //    on every width: the top strip is the wizard's now, and its leading button
   //    is the burger. ─────────────────────────────────────────────────────────
-  // Why the primary action is held back, when it is (an empty name, too few
-  // racers). Sits right above the button it explains.
-  hintEl = el('div', 'pr-setup__hint', body);
-  hintEl.hidden = true;
-
   const actions = el('div', 'pr-setup__actions', body);
   backBtn = button('pr-btn pr-setup__back', actions);
   backBtn.textContent = strings.buttons.back;
