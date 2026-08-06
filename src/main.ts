@@ -29,9 +29,8 @@ import { buildNavField } from './model/nav';
 import { strings, localeTag, dateLocale } from './i18n';
 import { botMoveDelayMs } from './bot-pacing';
 import { render, AppView } from './view/render';
-import { Vec } from './geometry';
 import { Bounds, polylineBounds, worldToScreen } from './view/camera';
-import { coachAnchors, placeCoach } from './view/coach-placement';
+import { coachAnchors, coachAvoid, placeCoach } from './view/coach-placement';
 import * as vp from './view/viewport';
 import {
   initRaceChrome,
@@ -132,8 +131,6 @@ function redraw(): void {
 
 /** Gap between the coach-mark's pointer and the feature it points at, in px. */
 const COACH_GAP = 16;
-/** How densely the track is sampled for "don't sit on the road", in vertices. */
-const COACH_AVOID_STRIDE = 2;
 
 /**
  * Pin the editor's coach-mark to the part of the track its instruction is
@@ -154,12 +151,7 @@ function updateCoachPlacement(): void {
     setCoachFloat(null);
     return;
   }
-  const avoid: Vec[] = [];
-  for (const poly of [S.editor.outer, S.editor.inner]) {
-    for (let i = 0; poly && i < poly.length; i += COACH_AVOID_STRIDE) {
-      avoid.push(worldToScreen(cam, poly[i]));
-    }
-  }
+  const avoid = coachAvoid(S.editor).map((p) => worldToScreen(cam, p));
   const { card, keepOut } = coachMetrics();
   setCoachFloat(
     placeCoach({

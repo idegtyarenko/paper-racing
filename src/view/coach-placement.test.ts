@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { placeCoach, PlaceCoachOptions, Rect } from './coach-placement';
+import { coachAvoid, placeCoach, PlaceCoachOptions, Rect } from './coach-placement';
+import { EditorState } from '../model/editor';
 
 const base: PlaceCoachOptions = {
   anchors: [{ x: 500, y: 400 }],
@@ -20,6 +21,35 @@ function rect(o: PlaceCoachOptions): Rect {
 function overlaps(a: Rect, b: Rect): boolean {
   return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 }
+
+describe('coachAvoid', () => {
+  it('counts the direction arrows, not just the road', () => {
+    // The other arrow is what the direction step asks the player to tap, so the
+    // card must not be allowed to sit on it.
+    const arrow = (x: number) => ({
+      from: { x, y: 0 },
+      tip: { x, y: 3 },
+      forward: { x: 0, y: 1 },
+      path: [
+        { x, y: 0 },
+        { x, y: 1.5 },
+        { x, y: 3 },
+      ],
+    });
+    const ed = {
+      step: 'direction',
+      outer: null,
+      inner: null,
+      finish: { a: { x: -1, y: 0 }, b: { x: 1, y: 0 } },
+      arrows: [arrow(10), arrow(20)],
+    } as unknown as EditorState;
+    const pts = coachAvoid(ed);
+    for (const x of [10, 20])
+      expect(pts.some((p) => p.x === x && p.y === 1.5)).toBe(true);
+    // …and the start/finish line it sits on.
+    expect(pts.some((p) => p.x === 0 && p.y === 0)).toBe(true);
+  });
+});
 
 describe('placeCoach', () => {
   it('keeps the card inside the board whatever corner the anchor is in', () => {

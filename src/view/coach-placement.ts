@@ -103,6 +103,23 @@ export function coachAnchors(ed: EditorState): Vec[] {
   }
 }
 
+/**
+ * Everything on the board the card should keep off, in world coordinates: the
+ * road edges plus whatever the current step put on top of them. The direction
+ * step's arrows matter most — the instruction invites a tap on the other one, so
+ * burying it under the card makes the step unanswerable.
+ */
+export function coachAvoid(ed: EditorState): Vec[] {
+  const pts: Vec[] = [];
+  for (const poly of [ed.outer, ed.inner]) {
+    // Every other vertex is dense enough to catch a card laid over the road.
+    for (let i = 0; poly && i < poly.length; i += 2) pts.push(poly[i]);
+  }
+  if (ed.finish) pts.push(ed.finish.a, lerp(ed.finish.a, ed.finish.b, 0.5), ed.finish.b);
+  for (const a of ed.arrows ?? []) pts.push(...a.path);
+  return pts;
+}
+
 const SIDES: NoseSide[] = ['top', 'bottom', 'left', 'right'];
 /** How far along its edge the pointer may slide before it stops reading as one. */
 const NOSE_INSET = 18;
