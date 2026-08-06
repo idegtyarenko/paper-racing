@@ -72,7 +72,7 @@ function build(h: EditorChromeHandlers): void {
   backIcoEl = icon('pr-edit__back-ico', UNDO_SVG, backBtn);
   backTextEl = el('span', 'pr-edit__back-text', backBtn);
   bindTap(backBtn, h.onBack);
-  nextBtn = button('pr-btn pr-btn--primary pr-edit__next', bar);
+  nextBtn = button('pr-btn pr-btn--primary pr-btn--caps pr-edit__next', bar);
   // Text first, arrow after it: the label used to end in a "→" and the button
   // reads as "forward", so the mark stays on the trailing edge.
   nextTextEl = el('span', 'pr-edit__next-text', nextBtn);
