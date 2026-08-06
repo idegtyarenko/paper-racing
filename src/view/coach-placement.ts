@@ -30,8 +30,12 @@ export interface CoachPlacement {
 }
 
 export interface PlaceCoachOptions {
-  /** The point being pointed at, in board css px. */
-  anchor: Vec;
+  /**
+   * Points worth pointing at, in board css px — more than one where the step
+   * has a choice (either road edge). They compete on the same score, so the one
+   * that leaves the card on blank paper wins.
+   */
+  anchors: Vec[];
   card: { w: number; h: number };
   view: { w: number; h: number };
   /** Chrome the card must not cover: the wizard rail, the action bar. */
@@ -70,26 +74,32 @@ function farthestFrom(poly: Polyline, from: Vec): Vec {
 }
 
 /**
- * The world point the current step's instruction is about — or null on the
- * steps that talk about the whole board (drawing) and so have nothing to point
- * at. On the width step that's the outer edge at its farthest reach from the
- * middle of the track: it is the piece of edge with the most empty space around
- * it, so the card lands on blank paper rather than across the road.
+ * The world points the current step's instruction is about — empty on the steps
+ * that talk about the whole board (drawing) and so have nothing to point at.
+ *
+ * The width step offers two: both road edges are draggable, so both are worth
+ * pointing at, and which one wins is decided by where the card can sit. Each is
+ * taken at its farthest reach from the middle of the track, the stretch of edge
+ * with the most open space beside it — outside the loop for the outer edge, in
+ * the infield for the inner one.
  */
-export function coachAnchor(ed: EditorState): Vec | null {
+export function coachAnchors(ed: EditorState): Vec[] {
   switch (ed.step) {
-    case 'adjust':
-      return ed.outer && ed.center ? farthestFrom(ed.outer, centroid(ed.center)) : null;
+    case 'adjust': {
+      if (!ed.outer || !ed.inner || !ed.center) return [];
+      const middle = centroid(ed.center);
+      return [farthestFrom(ed.outer, middle), farthestFrom(ed.inner, middle)];
+    }
     case 'finish':
-      return ed.finish ? lerp(ed.finish.a, ed.finish.b, 0.5) : null;
+      return ed.finish ? [lerp(ed.finish.a, ed.finish.b, 0.5)] : [];
     case 'direction': {
       const chosen = ed.arrows?.find(
         (a) => a.forward.x === ed.forward?.x && a.forward.y === ed.forward?.y,
       );
-      return chosen ? chosen.tip : null;
+      return chosen ? [chosen.tip] : [];
     }
     default:
-      return null;
+      return [];
   }
 }
 
@@ -111,67 +121,72 @@ const clamp = (v: number, lo: number, hi: number): number =>
   hi < lo ? lo : Math.min(hi, Math.max(lo, v));
 
 /**
- * Seat the card next to the anchor. Every side is tried at a few slides along
- * it; a candidate is scored by how much of the track it covers, and covering
- * chrome (rail, action bar) outweighs any of that. Ties go to the side with the
- * most room, so the card drifts toward the empty half of the board.
+ * Seat the card next to one of the anchors. Every anchor is tried on every side
+ * at a few slides along it; a candidate is scored by how much of the track it
+ * covers, and covering chrome (rail, action bar) outweighs any of that. Ties go
+ * to the side with the most room, so the card drifts toward the empty half of
+ * the board — and, where the step offered a choice of anchor, to the one whose
+ * open space the card actually fits into.
  */
 export function placeCoach(o: PlaceCoachOptions): CoachPlacement {
-  const { anchor, card, view, gap, margin } = o;
-  // Sides ranked by the room behind the anchor — the first one to survive
-  // scoring wins a tie.
-  const room: Record<NoseSide, number> = {
-    top: view.h - anchor.y,
-    bottom: anchor.y,
-    left: view.w - anchor.x,
-    right: anchor.x,
-  };
-  const order = [...SIDES].sort((a, b) => room[b] - room[a]);
-  // The road right under the anchor is unavoidable — the card has to sit next to
-  // the feature it points at. Score only the rest of the track, so the choice is
-  // made on which *other* parts get covered.
-  const avoid = o.avoid.filter((p) => dist(p, anchor) > gap * 3);
+  const { card, view, gap, margin } = o;
 
   let best: CoachPlacement | null = null;
   let bestScore = Infinity;
 
-  for (const side of order) {
-    for (const slide of SLIDES) {
-      const vertical = side === 'top' || side === 'bottom';
-      const left = vertical
-        ? anchor.x - card.w * slide
-        : side === 'left'
-          ? anchor.x + gap
-          : anchor.x - gap - card.w;
-      const top = vertical
-        ? side === 'top'
-          ? anchor.y + gap
-          : anchor.y - gap - card.h
-        : anchor.y - card.h * slide;
-      const rect: Rect = {
-        x: clamp(left, margin, view.w - card.w - margin),
-        y: clamp(top, margin, view.h - card.h - margin),
-        w: card.w,
-        h: card.h,
-      };
+  for (const anchor of o.anchors) {
+    // Sides ranked by the room behind the anchor — the first one to survive
+    // scoring wins a tie.
+    const room: Record<NoseSide, number> = {
+      top: view.h - anchor.y,
+      bottom: anchor.y,
+      left: view.w - anchor.x,
+      right: anchor.x,
+    };
+    const order = [...SIDES].sort((a, b) => room[b] - room[a]);
+    // The road right under the anchor is unavoidable — the card has to sit next
+    // to the feature it points at. Score only the rest of the track, so the
+    // choice is made on which *other* parts get covered.
+    const avoid = o.avoid.filter((p) => dist(p, anchor) > gap * 3);
 
-      let score = order.indexOf(side) * 0.01;
-      for (const k of o.keepOut) if (overlaps(rect, k)) score += 1000;
-      for (const p of avoid) if (inside(p, rect)) score += 1;
-      // A pointer that had to slide to the very corner of its edge no longer
-      // reads as pointing; prefer candidates that didn't need the clamp.
-      const along = vertical ? anchor.x - rect.x : anchor.y - rect.y;
-      const span = vertical ? card.w : card.h;
-      if (along < NOSE_INSET || along > span - NOSE_INSET) score += 20;
-
-      if (score < bestScore) {
-        bestScore = score;
-        best = {
-          left: rect.x,
-          top: rect.y,
-          side,
-          nose: clamp(along, NOSE_INSET, span - NOSE_INSET),
+    for (const side of order) {
+      for (const slide of SLIDES) {
+        const vertical = side === 'top' || side === 'bottom';
+        const left = vertical
+          ? anchor.x - card.w * slide
+          : side === 'left'
+            ? anchor.x + gap
+            : anchor.x - gap - card.w;
+        const top = vertical
+          ? side === 'top'
+            ? anchor.y + gap
+            : anchor.y - gap - card.h
+          : anchor.y - card.h * slide;
+        const rect: Rect = {
+          x: clamp(left, margin, view.w - card.w - margin),
+          y: clamp(top, margin, view.h - card.h - margin),
+          w: card.w,
+          h: card.h,
         };
+
+        let score = order.indexOf(side) * 0.01;
+        for (const k of o.keepOut) if (overlaps(rect, k)) score += 1000;
+        for (const p of avoid) if (inside(p, rect)) score += 1;
+        // A pointer that had to slide to the very corner of its edge no longer
+        // reads as pointing; prefer candidates that didn't need the clamp.
+        const along = vertical ? anchor.x - rect.x : anchor.y - rect.y;
+        const span = vertical ? card.w : card.h;
+        if (along < NOSE_INSET || along > span - NOSE_INSET) score += 20;
+
+        if (score < bestScore) {
+          bestScore = score;
+          best = {
+            left: rect.x,
+            top: rect.y,
+            side,
+            nose: clamp(along, NOSE_INSET, span - NOSE_INSET),
+          };
+        }
       }
     }
   }

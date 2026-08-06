@@ -31,7 +31,7 @@ import { botMoveDelayMs } from './bot-pacing';
 import { render, AppView } from './view/render';
 import { Vec } from './geometry';
 import { Bounds, polylineBounds, worldToScreen } from './view/camera';
-import { coachAnchor, placeCoach } from './view/coach-placement';
+import { coachAnchors, placeCoach } from './view/coach-placement';
 import * as vp from './view/viewport';
 import {
   initRaceChrome,
@@ -141,17 +141,16 @@ const COACH_AVOID_STRIDE = 2;
  * the race's floating button does.
  */
 function updateCoachPlacement(): void {
-  const anchor = S.phase === 'edit' ? coachAnchor(S.editor) : null;
-  if (!anchor) {
-    setCoachFloat(null);
-    return;
-  }
+  const world = S.phase === 'edit' ? coachAnchors(S.editor) : [];
   const cam = vp.camera();
   const view = vp.viewSize();
-  const at = worldToScreen(cam, anchor);
-  // Panned or zoomed until the feature itself is off screen: there is nothing to
-  // point at, so the card drops the pointer and goes back to its resting place.
-  if (at.x < 0 || at.y < 0 || at.x > view.w || at.y > view.h) {
+  // Panned or zoomed until a feature is off screen: it's no longer something to
+  // point at. With none left the card drops the pointer and goes back to its
+  // resting place.
+  const anchors = world
+    .map((p) => worldToScreen(cam, p))
+    .filter((p) => p.x >= 0 && p.y >= 0 && p.x <= view.w && p.y <= view.h);
+  if (!anchors.length) {
     setCoachFloat(null);
     return;
   }
@@ -164,7 +163,7 @@ function updateCoachPlacement(): void {
   const { card, keepOut } = coachMetrics();
   setCoachFloat(
     placeCoach({
-      anchor: at,
+      anchors,
       card,
       view,
       keepOut,

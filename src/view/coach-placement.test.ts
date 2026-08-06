@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { placeCoach, PlaceCoachOptions, Rect } from './coach-placement';
 
 const base: PlaceCoachOptions = {
-  anchor: { x: 500, y: 400 },
+  anchors: [{ x: 500, y: 400 }],
   card: { w: 300, h: 90 },
   view: { w: 1000, h: 800 },
   keepOut: [],
@@ -30,7 +30,7 @@ describe('placeCoach', () => {
       { x: 996, y: 796 },
       { x: 500, y: 400 },
     ]) {
-      const r = rect({ ...base, anchor });
+      const r = rect({ ...base, anchors: [anchor] });
       expect(r.x).toBeGreaterThanOrEqual(16);
       expect(r.y).toBeGreaterThanOrEqual(16);
       expect(r.x + r.w).toBeLessThanOrEqual(1000 - 16);
@@ -39,8 +39,8 @@ describe('placeCoach', () => {
   });
 
   it('drops below an anchor near the top and above one near the bottom', () => {
-    expect(placeCoach({ ...base, anchor: { x: 500, y: 60 } }).side).toBe('top');
-    expect(placeCoach({ ...base, anchor: { x: 500, y: 740 } }).side).toBe('bottom');
+    expect(placeCoach({ ...base, anchors: [{ x: 500, y: 60 }] }).side).toBe('top');
+    expect(placeCoach({ ...base, anchors: [{ x: 500, y: 740 }] }).side).toBe('bottom');
   });
 
   it('stays off the chrome it was told to keep out of', () => {
@@ -50,7 +50,7 @@ describe('placeCoach', () => {
       { x: 0, y: 0, w: 220, h: 800 },
       { x: 0, y: 720, w: 1000, h: 80 },
     ];
-    const r = rect({ ...base, anchor: { x: 260, y: 700 }, keepOut });
+    const r = rect({ ...base, anchors: [{ x: 260, y: 700 }], keepOut });
     for (const k of keepOut) expect(overlaps(r, k)).toBe(false);
   });
 
@@ -59,7 +59,7 @@ describe('placeCoach', () => {
     const avoid = [];
     for (let x = 100; x < 900; x += 10)
       for (let y = 200; y < 700; y += 10) avoid.push({ x, y });
-    const p = placeCoach({ ...base, anchor: { x: 500, y: 180 }, avoid });
+    const p = placeCoach({ ...base, anchors: [{ x: 500, y: 180 }], avoid });
     expect(p.top + base.card.h).toBeLessThanOrEqual(180);
   });
 
@@ -75,15 +75,35 @@ describe('placeCoach', () => {
     expect(p.top + base.card.h).toBeLessThanOrEqual(430);
   });
 
+  it('picks the anchor whose open space the card fits into', () => {
+    // A ring of road with a roomy hole in the middle: pointing at the outer edge
+    // (left) would lay the card across the road, pointing at the inner one
+    // (right) puts it in the hole.
+    const avoid = [];
+    for (let x = 200; x < 800; x += 10)
+      for (let y = 300; y < 500; y += 10) if (x < 320 || x > 680) avoid.push({ x, y });
+    const p = placeCoach({
+      ...base,
+      anchors: [
+        { x: 200, y: 400 },
+        { x: 320, y: 400 },
+      ],
+      avoid,
+    });
+    // Seated in the hole, pointing back at the inner edge.
+    expect(p.side).toBe('left');
+    expect(p.left).toBeGreaterThanOrEqual(320);
+  });
+
   it('points the nose at the anchor, within the edge it sits on', () => {
-    const p = placeCoach({ ...base, anchor: { x: 500, y: 60 } });
+    const p = placeCoach({ ...base, anchors: [{ x: 500, y: 60 }] });
     expect(p.left + p.nose).toBeCloseTo(500);
     expect(p.nose).toBeGreaterThan(0);
     expect(p.nose).toBeLessThan(base.card.w);
   });
 
   it('keeps the nose on the card even when the anchor hugs the edge', () => {
-    const p = placeCoach({ ...base, anchor: { x: 2, y: 60 } });
+    const p = placeCoach({ ...base, anchors: [{ x: 2, y: 60 }] });
     expect(p.nose).toBeGreaterThanOrEqual(18);
     expect(p.nose).toBeLessThanOrEqual(base.card.w - 18);
   });
