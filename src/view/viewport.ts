@@ -118,6 +118,28 @@ export function zoomAt(factor: number, sx: number, sy: number): void {
   clamp();
 }
 
+/** Everything about the current framing, for putting it back later. */
+export interface ViewState {
+  cam: Camera;
+  userAdjusted: boolean;
+}
+
+/**
+ * Borrow and return the framing. The replay fits the whole track for the length
+ * of a race and then hands the view back exactly as it was — including whether
+ * the player had adjusted it, which applyUserCamera can't do (it always claims
+ * they did, and the next resize would then keep a zoom nobody chose).
+ */
+export function viewState(): ViewState {
+  return { cam: { ...cam }, userAdjusted: userAdjustedView };
+}
+
+export function restoreView(v: ViewState): void {
+  cam = { ...v.cam };
+  userAdjustedView = v.userAdjusted;
+  clamp();
+}
+
 /** Apply a user-driven camera (pinch/pan): set + mark adjusted + clamp. */
 export function applyUserCamera(next: Camera): void {
   cam = next;

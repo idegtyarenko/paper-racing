@@ -255,6 +255,8 @@ export const ru: Strings = {
     chooseMode: 'Выбрать режим',
     confirmMove: 'Едем!',
     sameTrack: 'Рематч',
+    replay: 'Повтор',
+    closeReplay: 'Закрыть повтор',
     sameTrackNewMode: 'Та же трасса, другой состав',
     newTrack: 'Нарисовать новую',
     cancel: 'Отмена',

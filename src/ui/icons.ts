@@ -61,6 +61,10 @@ export const BOT_SVG =
 export const SKIP_SVG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6l8 6-8 6zM18 5v14"/></svg>';
 /** Circular arrow — run the race back, and retry a move that failed to send. */
+/** Filled play triangle — watching the finished race back. Solid on purpose:
+ *  an outlined one at 13px (the small button) reads as a stray arrowhead. */
+export const PLAY_SVG =
+  '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5.4v13.2a.8.8 0 0 0 1.22.68l10.5-6.6a.8.8 0 0 0 0-1.36L9.22 4.72A.8.8 0 0 0 8 5.4Z"/></svg>';
 export const REMATCH_SVG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 3 6.7M3 20v-4h4"/></svg>';
 /** The same arrow the other way — wipe the drawn track and start it over. */

@@ -93,9 +93,16 @@
 .pr-result__card {
   overflow: hidden;
 }
+/* Section label on the left, the way into the replay on the right. The button
+   lives here rather than beside the three big ones below: it doesn't take you
+   anywhere, it shows you this classification being driven. */
 .pr-result__cardhead {
-  display: block;
-  padding: 9px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  /* Less at the right end than the left: the button carries its own padding. */
+  padding: 5px 6px 5px 12px;
   border-bottom: 1px solid var(--pr-border);
 }
 /* The winner's position gets the weight, the way the hi-fi's "1" does — it's
@@ -197,4 +204,18 @@
    there's nothing left to aim at. */
 body.is-result .zoom-ctl {
   display: none;
+}
+
+/* ── Replay ────────────────────────────────────────────────────────────────── */
+/* While the race drives itself again, the board is the screen: the result layer
+   and the race HUD step aside and leave a single way out. */
+body.is-replay .pr-result,
+body.is-replay .pr-race,
+body.is-replay .zoom-ctl {
+  display: none;
+}
+.pr-replay__close {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + var(--pr-gutter));
+  right: var(--pr-gutter);
 }

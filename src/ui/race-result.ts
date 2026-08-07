@@ -19,7 +19,7 @@ import { bindTap } from './dom';
 import { raceActionSlot } from './race-chrome';
 import { el, button, icon } from './pr-chrome';
 import { isPodium } from './format';
-import { PODIUM_SVG, REMATCH_SVG, TROPHY_SVG } from './icons';
+import { PLAY_SVG, PODIUM_SVG, REMATCH_SVG, TROPHY_SVG } from './icons';
 
 const board = document.querySelector('.app__board')!;
 
@@ -32,6 +32,8 @@ export interface ResultHandlers {
   onNewTrack: () => void;
   /** Online guest's exit from the rematch wait — frees the seat, leaves the room running. */
   onGuestLeave: () => void;
+  /** "Replay" — watch the finished race drive itself again. */
+  onReplay: () => void;
 }
 
 let root: HTMLElement;
@@ -46,6 +48,7 @@ let actionsEl: HTMLElement;
 let rematchBtn: HTMLButtonElement;
 let sameTrackBtn: HTMLButtonElement;
 let newTrackBtn: HTMLButtonElement;
+let replayBtn: HTMLButtonElement;
 let guestEl: HTMLElement;
 let waitDotsEl: HTMLElement;
 let waitTextEl: HTMLElement;
@@ -71,8 +74,14 @@ function build(h: ResultHandlers): void {
   // Only the full screen has a classification — the dock appears while the race
   // is still being decided, so there is no final one to show.
   const cardEl = el('div', 'pr-card pr-result__card', inner);
-  el('span', 'pr-label pr-result__cardhead', cardEl).textContent =
-    strings.race.classification;
+  const cardHead = el('div', 'pr-result__cardhead', cardEl);
+  el('span', 'pr-label', cardHead).textContent = strings.race.classification;
+  // Watching the race back belongs to the classification, not to the three ways
+  // on from here: it's this table happening, and it leaves you where you were.
+  replayBtn = button('pr-btn pr-btn--sm pr-btn--caps', cardHead);
+  icon('pr-btn__ico', PLAY_SVG, replayBtn);
+  el('span', 'pr-result__btntext', replayBtn).textContent = strings.buttons.replay;
+  bindTap(replayBtn, h.onReplay);
   rowsEl = el('div', 'pr-race__rows', cardEl);
   rowsEl.setAttribute('role', 'img');
   rowsEl.setAttribute('aria-label', strings.race.standingsLabel);
@@ -147,6 +156,9 @@ export interface ResultCtx {
   canRematch: boolean;
   /** Online: "same track, new lineup" runs the local wizard, which would desync the room. */
   isOnline: boolean;
+  /** Whether this race has anything to replay (a race resolved without a single
+   *  move driven has nothing to show). */
+  canReplay: boolean;
 }
 
 /**
@@ -250,6 +262,7 @@ export function renderRaceResult(ctx: ResultCtx): void {
     hostGone,
     canRematch,
     isOnline,
+    canReplay,
   } = ctx;
   const ready = !!game && !!nav;
   const fullscreen = over && ready;
@@ -280,6 +293,7 @@ export function renderRaceResult(ctx: ResultCtx): void {
 
   if (fullscreen) {
     labelEl.textContent = strings.race.raceComplete;
+    replayBtn.hidden = !canReplay;
     renderHead(game!, mySeat);
     renderRows(rowsEl, game!, nav!, { mySeat, soloSeat, final: true });
   }

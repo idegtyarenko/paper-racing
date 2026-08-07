@@ -31,6 +31,8 @@ import { strings, localeTag, dateLocale } from './i18n';
 import { botMoveDelayMs } from './bot-pacing';
 import { render, AppView, MotionFrame } from './view/render';
 import { startAnim, stopAnim, easeOutCubic, prefersReducedMotion } from './view/anim';
+import { buildTimeline, sampleTimeline } from './view/replay-timeline';
+import { computeLanes } from './view/trail-lanes';
 import { Bounds, polylineBounds, worldToScreen } from './view/camera';
 import {
   coachAnchors,
@@ -46,6 +48,7 @@ import {
   showConfirmMove,
 } from './ui/race-chrome';
 import { initRaceResult, renderRaceResult } from './ui/race-result';
+import { showReplayChrome, hideReplayChrome } from './ui/race-replay';
 import {
   initEditorChrome,
   renderEditorChrome,
@@ -145,7 +148,7 @@ function noteMoves(): void {
   const now = g.players.map((p) => p.trail.length);
   const seat = now.findIndex((n, i) => n > (seenSegs[i] ?? n));
   seenSegs = now;
-  if (seat < 0) return;
+  if (seat < 0 || replaying()) return;
   const seg = g.players[seat].trail[now[seat] - 1];
   // The teleport out of the gravel isn't a drive — it has no in-between.
   if (seg.jump || prefersReducedMotion()) return;
@@ -188,6 +191,72 @@ function stopMotion(): void {
   motion = null;
 }
 
+/**
+ * How long one round of the replay takes (ms) — one move by every car. Slow
+ * enough to follow six cars at once, fast enough that a long race doesn't turn
+ * into a sitting; a race long enough to exceed REPLAY_MAX_MS is played at a
+ * proportionally shorter beat rather than being cut off.
+ */
+const REPLAY_BEAT_MS = 320;
+const REPLAY_MAX_MS = 30000;
+/** A beat on the starting grid before anyone moves, so the eye can find its car. */
+const REPLAY_LEAD_MS = 500;
+
+/** The race being replayed, or null — also the "is the replay up" flag. */
+let replay: { view: vp.ViewState } | null = null;
+
+function replaying(): boolean {
+  return replay !== null;
+}
+
+/**
+ * Watch the finished race drive itself: the cars run their real trajectories at
+ * their real relative speeds, the trails they've already drawn dimmed behind
+ * them, and the whole track held in frame (nothing to aim at, so nothing to
+ * follow). Nothing about the game state is touched — this is the same board,
+ * drawn from a schedule.
+ */
+function enterReplay(): void {
+  const g = S.game;
+  if (!g || replay) return;
+  const tl = buildTimeline(g);
+  if (tl.rounds === 0) return; // nobody drove: nothing to watch
+
+  replay = { view: vp.viewState() };
+  vp.fitToContent();
+  showReplayChrome(exitReplay);
+  // Lane geometry depends on the finished trails, not on how much of them is
+  // showing, so it is solved once here instead of on every one of the frames.
+  const lanes = computeLanes(g.players.map((p) => p.trail));
+  const beat = Math.min(REPLAY_BEAT_MS, REPLAY_MAX_MS / tl.rounds);
+  startAnim(
+    (ms) => {
+      const t = Math.min(tl.rounds, Math.max(0, (ms - REPLAY_LEAD_MS) / beat));
+      motion = { ...sampleTimeline(tl, g, t), lanes };
+      redraw();
+      return t < tl.rounds;
+    },
+    () => {
+      // Over the line: the trails come back to full strength and the board is
+      // the one behind the result screen again. It stays up until it's closed —
+      // dropping the player back mid-glance would be its own kind of rude.
+      motion = null;
+      redraw();
+    },
+  );
+}
+
+function exitReplay(): void {
+  if (!replay) return;
+  const { view } = replay;
+  replay = null;
+  stopMotion();
+  hideReplayChrome();
+  vp.restoreView(view);
+  updateUI();
+  redraw();
+}
+
 function redraw(): void {
   // The player-selection step is drawn like the editor: shows the finished track as a preview.
   const viewMode = S.phase === 'race' ? 'race' : 'edit';
@@ -195,7 +264,8 @@ function redraw(): void {
     mode: viewMode,
     editor: S.editor,
     game: S.game,
-    cands: S.cands,
+    // The replay is watched, not played: no fan, no aim line, no pending pick.
+    cands: replaying() ? null : S.cands,
     hover: input.getHover(),
     selected: input.getSelected(),
     pending: S.pending,
@@ -373,6 +443,7 @@ function updateUI(): void {
     hostGone: session.active() && session.hostGone(),
     canRematch: (!!S.game && !!S.lastLocalRace) || online.canRematch(),
     isOnline: session.active(),
+    canReplay: !!S.game && S.game.players.some((p) => p.trail.length > 0),
   });
   renderEditorChrome(S.editor, S.phase);
   // The lobby view drives three renderers: the host's lobby is the setup screen
@@ -777,6 +848,8 @@ initRaceResult({
   // draw something. online.leave() lands a guest in the editor by itself, and
   // clears the resume breadcrumb so a reload doesn't drag us back in.
   onGuestLeave: () => online.leave(),
+  // "Replay": watch this classification being driven, then come back to it.
+  onReplay: enterReplay,
 });
 
 // The global menu's entries call the same intents the screens' own controls do.

@@ -16,7 +16,8 @@ import { setLocale as applyLocale, type LocaleCode } from './i18n';
 import { Track, finalizeTrack, clipFinishLine } from './model/track';
 import { editorFromTrack } from './model/editor';
 import { Candidate, isFinished, WIN_CROSSINGS } from './model/game';
-import { Difficulty } from './model/ai';
+import { Difficulty, chooseMove } from './model/ai';
+import { applyMove, coastMove } from './model/turns';
 import { worldToScreen } from './view/camera';
 import * as vp from './view/viewport';
 import * as input from './view/input';
@@ -268,6 +269,29 @@ export function installDevHelpers(deps: DevHelperDeps): void {
       updateUI();
       redraw();
       return snap();
+    },
+    /** Play the current race out to the flag with the AI at every wheel,
+     *  producing a REAL trail history — which `resultAt` does not: it writes
+     *  final places without anyone driving, so a replay of it has nothing to
+     *  show. Cheaper than tapAccel-ing a race to its end, and the outcome is
+     *  whatever the bots make of it (don't use it to reach a chosen place).
+     *  Returns { finished, turns } alongside the usual snapshot: `finished:
+     *  false` means the guard tripped rather than the race resolving. */
+    autoFinish(maxTurns = 800) {
+      const g = S.game;
+      if (!g || !S.raceNav) return { finished: false, turns: 0, ...snap() };
+      cancelAiMove(); // the bot loop must not be moving cars underneath us
+      let turns = 0;
+      while (g.phase === 'race' && turns < maxTurns) {
+        const cand = chooseMove(g, S.raceNav, g.players[g.current].bot ?? 'medium');
+        if (cand) applyMove(g, cand);
+        else coastMove(g); // every candidate taken by an opponent — coast
+        turns++;
+      }
+      refreshCands();
+      updateUI();
+      redraw();
+      return { finished: g.phase === 'over', turns, ...snap() };
     },
     /** Clear the saved local lineup (simulates "after an online race," where
      *  a one-tap rematch isn't available and the "Rematch" button is

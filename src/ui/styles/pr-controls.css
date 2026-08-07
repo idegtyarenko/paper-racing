@@ -226,6 +226,21 @@ body.is-lobby .pr-conn {
   text-transform: uppercase;
   letter-spacing: 1.5px;
 }
+/* Small button for a secondary action that sits INSIDE another surface (the
+   "Replay" in the head of the final classification). Same skin throughout — it
+   just gives up the weight of a full-width action, so the card's own content
+   stays the loudest thing on it. */
+.pr-btn--sm {
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: var(--pr-radius-sm);
+  font-size: var(--pr-text-xs);
+  letter-spacing: 1px;
+}
+.pr-btn--sm svg {
+  width: 13px;
+  height: 13px;
+}
 /* Square icon button (burger, back). Its `display` carries the same
    :not([hidden]) scope as the base's, or the base would outrank it. */
 .pr-btn--icon {

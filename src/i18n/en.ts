@@ -376,6 +376,11 @@ export const en = {
     // where it needs a glyph (the rematch button carries one), and these render
     // in caps, where an emoji reads as a smudge.
     sameTrack: 'Rematch',
+    // Sits in the head of the final classification, not among the big actions:
+    // it doesn't take you anywhere, it plays that classification back.
+    replay: 'Replay',
+    /** Label for the × that ends the replay (screen-reader only). */
+    closeReplay: 'Close the replay',
     sameTrackNewMode: 'Same track, new lineup',
     newTrack: 'Draw a new track',
     cancel: 'Cancel',
