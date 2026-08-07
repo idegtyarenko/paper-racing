@@ -226,7 +226,7 @@ export const be: Strings = {
     finished: (place) => `Фініш · ${place}-і`,
     moves: (n) => {
       const t = n % 100 > 10 && n % 100 < 20 ? 0 : n % 10;
-      return `${n} ${t === 1 ? 'ход' : t > 1 && t < 5 ? 'ходы' : 'хадоў'}`;
+      return `${n} ${t === 1 ? 'ход' : t > 1 && t < 5 ? 'хады' : 'хадоў'}`;
     },
     retired: 'Сышоў',
     raceComplete: 'Гонка завершана',
