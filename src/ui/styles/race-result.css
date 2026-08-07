@@ -214,8 +214,13 @@ body.is-replay .pr-race,
 body.is-replay .zoom-ctl {
   display: none;
 }
+/* `--icon` fixes the width and drops the padding, but the height belongs to
+   whoever places the button (the burger is 48, the roster's tick 40) — without
+   one it collapses onto the glyph and stops being square. Same 48 as the
+   burger it stands in for, and the same gutter on the opposite side. */
 .pr-replay__close {
   position: absolute;
   top: calc(env(safe-area-inset-top, 0px) + var(--pr-gutter));
   right: var(--pr-gutter);
+  height: 48px;
 }
