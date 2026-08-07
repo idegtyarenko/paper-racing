@@ -154,7 +154,7 @@ export function applyMove(state: GameState, cand: Candidate): void {
   if (state.phase !== 'race' || cand.blocked) return;
   const p = state.players[state.current];
   const outcome = computeOutcome(state.track, state.rules, p.pos, cand.target);
-  applyOutcome(state.track, p, outcome);
+  applyOutcome(state.track, p, outcome, state.turn);
   afterAction(state);
 }
 

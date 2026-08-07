@@ -5,7 +5,7 @@ import { computeLanes, LaneStop, LANE_DEFAULTS } from './trail-lanes';
 
 /** Trail from a run of points: p0->p1->p2... all normal (non-jump) moves. */
 const chain = (...pts: Vec[]): TrailSeg[] =>
-  pts.slice(1).map((p, i) => ({ from: pts[i], to: p, jump: false }));
+  pts.slice(1).map((p, i) => ({ from: pts[i], to: p, jump: false, turn: i }));
 
 const at = (stops: LaneStop[], t: number): number => {
   for (let i = 1; i < stops.length; i++) {
@@ -120,7 +120,7 @@ describe('computeLanes', () => {
     const trails = [
       [
         ...chain({ x: 10, y: 4 }, { x: 20, y: 4 }),
-        { from: { x: 20, y: 4 }, to: { x: 22, y: 6 }, jump: true },
+        { from: { x: 20, y: 4 }, to: { x: 22, y: 6 }, jump: true, turn: 1 },
         ...chain({ x: 22, y: 6 }, { x: 26, y: 6 }),
       ],
       chain({ x: 10, y: 4 }, { x: 20, y: 4 }),
@@ -133,7 +133,7 @@ describe('computeLanes', () => {
     const trails = [
       [
         ...chain({ x: 10, y: 4 }, { x: 20, y: 4 }),
-        { from: { x: 20, y: 4 }, to: { x: 20, y: 4 }, jump: false },
+        { from: { x: 20, y: 4 }, to: { x: 20, y: 4 }, jump: false, turn: 1 },
       ],
       chain({ x: 10, y: 4 }, { x: 20, y: 4 }),
     ];

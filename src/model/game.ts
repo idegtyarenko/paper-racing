@@ -22,6 +22,14 @@ export interface TrailSeg {
   to: Vec;
   /** true means a "teleport" jump to the return point after a crash (drawn as a dashed line). */
   jump: boolean;
+  /**
+   * Turn slot (GameState.turn) this segment was driven on — the one piece of
+   * timing the trail alone can't recover. Turns burned in the gravel show up as
+   * gaps in a car's stamps, which is what the replay needs to put every car back
+   * on its own clock (the crash penalty is computed from the *intended* target,
+   * and that target is not kept anywhere).
+   */
+  turn: number;
 }
 
 export interface Player {
@@ -412,7 +420,9 @@ export interface MoveOutcome {
   skipTurns: number;
   /** Change to the finish-crossing counter: -1 / 0 / +1. */
   crossingDelta: number;
-  trailSeg: TrailSeg;
+  /** Without the turn stamp: computeOutcome is pure and knows nothing about the
+   *  running turn — applyOutcome stamps it. */
+  trailSeg: Omit<TrailSeg, 'turn'>;
 }
 
 /**
@@ -483,11 +493,17 @@ export function computeOutcome(
  * Apply a computed outcome to a car: update the finish counter, trail, crash list,
  * position/velocity/penalty, and (once the win condition is reached) overshoot
  * depth. Advancing the turn order and determining the winner are the caller's
- * responsibility (see turns.ts).
+ * responsibility (see turns.ts) — which is also why the turn slot comes in as an
+ * argument: it's the caller who owns the running turn.
  */
-export function applyOutcome(track: Track, p: Player, o: MoveOutcome): void {
+export function applyOutcome(
+  track: Track,
+  p: Player,
+  o: MoveOutcome,
+  turn: number,
+): void {
   p.crossings += o.crossingDelta;
-  p.trail.push(o.trailSeg);
+  p.trail.push({ ...o.trailSeg, turn });
   if (o.crashAt) {
     // The car stays at the crash point while serving its penalty — it only gets
     // returned to the track (returnFromPenalty) once the penalty is served,
@@ -580,7 +596,12 @@ export function returnFromPenalty(state: GameState, seat: number): void {
   if (p.crossings >= WIN_CROSSINGS && p.finishOvershoot === null) {
     p.finishOvershoot = sideOfFinish(track, resetTo);
   }
-  p.trail.push({ from: { ...p.pos }, to: { ...resetTo }, jump: true });
+  p.trail.push({
+    from: { ...p.pos },
+    to: { ...resetTo },
+    jump: true,
+    turn: state.turn,
+  });
   p.pos = resetTo;
 }
 

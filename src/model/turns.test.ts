@@ -439,6 +439,32 @@ describe('turn order and serving a penalty', () => {
     // Three slots burned in the gravel — none of them pushed a trail segment.
     expect(crashed.penaltyTurns).toBe(3);
   });
+
+  it('stamps every trail segment with its turn, so the gravel reads as a gap', () => {
+    // The stamps are the only record of WHEN each segment was driven: the crash
+    // penalty is computed from the intended target, which nothing keeps, so a
+    // replay can't otherwise tell a car that sat out three rounds from one that
+    // drove them. Rounds, not slots — a round is one move by everybody.
+    const g = newGame(ringTrack(), 2);
+    const round = (t: number) => Math.floor(t / g.players.length);
+    place(g.players[0], [10, 1]);
+    applyMove(g, cand(10, -2)); // p0 into the gravel, skip = 3
+    const crashed = g.players[0];
+    expect(crashed.trail[0].turn).toBe(0);
+
+    let guard = 0;
+    while (crashed.skipTurns > 0 && guard++ < 20) {
+      place(g.players[g.current], [20, 4], [0, 0]);
+      applyMove(g, cand(20, 4));
+    }
+
+    // Nothing was pushed while the penalty burned, and the teleport back onto the
+    // track is stamped exactly three rounds after the crash.
+    expect(crashed.trail).toHaveLength(2);
+    const jump = crashed.trail[1];
+    expect(jump.jump).toBe(true);
+    expect(round(jump.turn) - round(crashed.trail[0].turn)).toBe(3);
+  });
 });
 
 describe('fair turn rotation', () => {

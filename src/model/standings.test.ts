@@ -54,6 +54,7 @@ describe('turnsTaken', () => {
     from: { x: n, y: 0 },
     to: { x: n + 1, y: 0 },
     jump: false,
+    turn: n,
   });
 
   it('counts one per driven segment', () => {
