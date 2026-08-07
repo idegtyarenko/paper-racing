@@ -5,7 +5,7 @@
 // separate get/set adapters per field anymore.
 
 import './ui/styles/index.css';
-import { Vec } from './geometry';
+import { Vec, lerp } from './geometry';
 import { newAppState, Phase } from './app-state';
 import { finalizeTrack } from './model/track';
 import {
@@ -29,7 +29,8 @@ import { Difficulty, chooseMove } from './model/ai';
 import { buildNavField } from './model/nav';
 import { strings, localeTag, dateLocale } from './i18n';
 import { botMoveDelayMs } from './bot-pacing';
-import { render, AppView } from './view/render';
+import { render, AppView, MotionFrame } from './view/render';
+import { startAnim, stopAnim, easeOutCubic, prefersReducedMotion } from './view/anim';
 import { Bounds, polylineBounds, worldToScreen } from './view/camera';
 import {
   coachAnchors,
@@ -112,6 +113,81 @@ function resize(): void {
   redraw();
 }
 
+/**
+ * How long a car takes to slide into the point it just moved to (ms). Short
+ * enough that it's over before anyone can act on the next turn — the move
+ * itself is applied instantly, this is only the picture catching up.
+ */
+const TWEEN_MS = 220;
+
+/** Current animated frame (post-move tween or replay), or null when still. */
+let motion: MotionFrame | null = null;
+/** Trail length per seat as of the last screen update — how a new move is spotted. */
+let seenSegs: number[] = [];
+
+/**
+ * Spot the move that just happened and slide the car into it. Called from
+ * updateUI, which is the one place every path funnels through — our own move,
+ * a bot's, and an opponent's arriving over the network — so no mover is missed
+ * and none is animated twice.
+ *
+ * Deliberately cosmetic: the state has already moved on, and nothing waits for
+ * the animation. Queueing the next turn behind it would mean holding back bot
+ * moves and incoming online state for 220ms, which is a race condition bought
+ * at the price of a smaller one.
+ */
+function noteMoves(): void {
+  const g = S.game;
+  if (!g) {
+    seenSegs = [];
+    return;
+  }
+  const now = g.players.map((p) => p.trail.length);
+  const seat = now.findIndex((n, i) => n > (seenSegs[i] ?? n));
+  seenSegs = now;
+  if (seat < 0) return;
+  const seg = g.players[seat].trail[now[seat] - 1];
+  // The teleport out of the gravel isn't a drive — it has no in-between.
+  if (seg.jump || prefersReducedMotion()) return;
+
+  const nil = g.players.map(() => null);
+  const segsShown = g.players.map(() => null as number | null);
+  const crashesShown = g.players.map(() => null as number | null);
+  segsShown[seat] = now[seat] - 1;
+  // A crash mark belongs to the moment of impact, not to the move that ends in
+  // it: hold the newest one back until the car gets there.
+  const crashes = g.players[seat].crashes;
+  const crashed =
+    crashes.length > 0 &&
+    crashes[crashes.length - 1].x === seg.to.x &&
+    crashes[crashes.length - 1].y === seg.to.y;
+  if (crashed) crashesShown[seat] = crashes.length - 1;
+
+  startAnim(
+    (ms) => {
+      const u = Math.min(1, ms / TWEEN_MS);
+      const at = lerp(seg.from, seg.to, easeOutCubic(u));
+      const pos = [...nil] as (Vec | null)[];
+      const partialTo = [...nil] as (Vec | null)[];
+      pos[seat] = at;
+      partialTo[seat] = at;
+      motion = { pos, segsShown, partialTo, crashesShown, trailDim: 0 };
+      redraw();
+      return u < 1;
+    },
+    () => {
+      motion = null;
+      redraw();
+    },
+  );
+}
+
+/** Drop any running animation and the frame it was drawing (leaving a race). */
+function stopMotion(): void {
+  stopAnim();
+  motion = null;
+}
+
 function redraw(): void {
   // The player-selection step is drawn like the editor: shows the finished track as a preview.
   const viewMode = S.phase === 'race' ? 'race' : 'edit';
@@ -126,6 +202,7 @@ function redraw(): void {
     candSeat: candOwner(),
     loupe: input.getLoupe(),
     cam: vp.camera(),
+    motion: motion ?? undefined,
   };
   render(ctx, app);
   // The action zone and the floating "Go!" button are pinned to where the
@@ -250,6 +327,7 @@ function canRetire(): boolean {
 }
 
 function updateUI(): void {
+  noteMoves();
   const net = online.netTurn(S.game);
   const aiTurn = !!S.game && isBotSeat(S.game.current);
   renderRaceChrome({
@@ -482,6 +560,7 @@ function goToMode(from: 'edit' | 'race'): void {
   }
   S.playersReturn = from;
   cancelAiMove(); // a game with bots is paused while setup screens are open
+  stopMotion();
   S.phase = 'modeSelect';
   commit();
 }
@@ -543,6 +622,7 @@ function goToWizardStep(target: number): void {
 function startRace(humans: number, bots: number, difficulty: Difficulty): void {
   if (!S.raceTrack) return;
   cancelAiMove();
+  stopMotion();
   S.pending = null;
   S.game = newGame(S.raceTrack, humans + bots, S.rules, shuffledIndices(humans + bots));
   for (let i = humans; i < S.game.players.length; i++) {
@@ -562,6 +642,7 @@ function resetToEdit(): void {
   // race and yank us out of the editor.
   if (session.active()) session.leave();
   cancelAiMove();
+  stopMotion();
   // This is a real exit, not a rematch — without this, an abandoned race
   // would come back on the next reload (persist.load() picks up any
   // snapshot on disk regardless of how we got to the editor).
@@ -590,6 +671,7 @@ online.initOnline({
     // online games, the host drives bots through online-controller). Bot-ness
     // of the seats themselves lives in state g (Player.bot).
     cancelAiMove();
+    stopMotion();
     S.game = g;
     S.raceNav = g ? buildNavField(g.track) : null; // needed by bots (chooseMove) and the standings strip
     S.lastLocalRace = null; // an online race isn't a local rematch — clear "same track"

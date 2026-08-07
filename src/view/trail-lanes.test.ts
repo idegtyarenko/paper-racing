@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Vec } from '../geometry';
 import { TrailSeg } from '../model/game';
-import { computeLanes, LaneStop, LANE_DEFAULTS } from './trail-lanes';
+import { computeLanes, clipLaneStops, LaneStop, LANE_DEFAULTS } from './trail-lanes';
 
 /** Trail from a run of points: p0->p1->p2... all normal (non-jump) moves. */
 const chain = (...pts: Vec[]): TrailSeg[] =>
@@ -139,5 +139,34 @@ describe('computeLanes', () => {
     ];
     const lanes = computeLanes(trails);
     expect(lanes[0][1].every((s) => s.offset === 0)).toBe(true);
+  });
+});
+
+describe('clipLaneStops', () => {
+  const stops: LaneStop[] = [
+    { t: 0, offset: 0 },
+    { t: 0.5, offset: 0.2 },
+    { t: 1, offset: 0.2 },
+  ];
+
+  it('leaves a whole segment alone', () => {
+    expect(clipLaneStops(stops, 1)).toBe(stops);
+  });
+
+  it('rescales the kept stops to the shorter segment', () => {
+    // Cut at 0.5: the ramp's midpoint stop becomes this segment's end.
+    const cut = clipLaneStops(stops, 0.5);
+    expect(cut[cut.length - 1]).toEqual({ t: 1, offset: 0.2 });
+    expect(cut[0]).toEqual({ t: 0, offset: 0 });
+  });
+
+  it('interpolates the offset at the cut', () => {
+    const cut = clipLaneStops(stops, 0.25);
+    expect(cut[cut.length - 1].t).toBe(1);
+    expect(cut[cut.length - 1].offset).toBeCloseTo(0.1); // halfway up the ramp
+  });
+
+  it('a car that has not moved yet keeps a single stop', () => {
+    expect(clipLaneStops(stops, 0)).toEqual([{ t: 0, offset: 0 }]);
   });
 });

@@ -304,3 +304,30 @@ function resolveChain(
     out[k] = stops;
   }
 }
+
+/**
+ * The lane stops of a segment cut short at `u` (0..1 of its length), rescaled to
+ * the shorter segment's own 0..1. Used when a car is mid-segment — during the
+ * replay or the post-move tween the trail is drawn only as far as the car has
+ * got, and its lane has to end where the car is, not where the move ends.
+ */
+export function clipLaneStops(stops: LaneStop[], u: number): LaneStop[] {
+  if (u >= 1 || stops.length === 0) return stops;
+  if (u <= 0) return [{ t: 0, offset: stops[0].offset }];
+  const offsetAt = (t: number): number => {
+    for (let i = 1; i < stops.length; i++) {
+      if (t <= stops[i].t) {
+        const a = stops[i - 1];
+        const b = stops[i];
+        const d = b.t - a.t;
+        return d <= EPS ? b.offset : a.offset + ((b.offset - a.offset) * (t - a.t)) / d;
+      }
+    }
+    return stops[stops.length - 1].offset;
+  };
+  const out = stops
+    .filter((st) => st.t < u)
+    .map((st) => ({ t: st.t / u, offset: st.offset }));
+  out.push({ t: 1, offset: offsetAt(u) });
+  return out;
+}

@@ -3,10 +3,10 @@
 import { Vec, Polyline, add, sub, scale, normalize, lerp } from '../geometry';
 import { Track } from '../model/track';
 import { EditorState, Arrow } from '../model/editor';
-import { GameState, Candidate, Drive, TrailSeg } from '../model/game';
+import { GameState, Candidate, Drive, Player, TrailSeg } from '../model/game';
 import { aeroFactor, forwardCap } from '../model/turns';
 import { Camera } from './camera';
-import { computeLanes, LaneStop } from './trail-lanes';
+import { computeLanes, clipLaneStops, LaneStop } from './trail-lanes';
 
 export interface AppView {
   mode: 'edit' | 'race';
@@ -27,6 +27,33 @@ export interface AppView {
   loupe: Vec | null;
   /** Camera: the single world↔screen transform (scale + offset). */
   cam: Camera;
+  /** Cars caught mid-move: the post-move tween and the race replay. */
+  motion?: MotionFrame;
+}
+
+/**
+ * One animated frame: where each car is right now and how much of its trail has
+ * been driven by then. Everything is per seat and nullable — the tween only
+ * overrides the car that just moved, while the replay overrides them all.
+ */
+export interface MotionFrame {
+  /** Car position, overriding the player's own; null draws it as usual. */
+  pos: (Vec | null)[];
+  /** How many whole trail segments to draw; null draws the whole trail. */
+  segsShown: (number | null)[];
+  /** Where the segment after those ends right now (the car's own position). */
+  partialTo: (Vec | null)[];
+  /** How many crash marks have happened by now; null shows them all. */
+  crashesShown: (number | null)[];
+  /** How far to dim the trails (0..1) — the replay pushes the already-driven
+   *  race behind the cars re-driving it. */
+  trailDim: number;
+  /**
+   * Lanes for the whole field, solved once by the caller. Lane geometry depends
+   * on the FULL trails (who overlaps whom) and doesn't change as a trail is
+   * revealed, so the replay solves it at the start instead of every frame.
+   */
+  lanes?: LaneStop[][][];
 }
 
 // Canvas render palette — the "blueprint" direction: dark blue field, cyan
@@ -191,6 +218,7 @@ export function render(ctx: CanvasRenderingContext2D, app: AppView): void {
       app.hover ?? app.selected,
       app.pending,
       app.candSeat,
+      app.motion,
     );
   }
   ctx.restore();
@@ -236,6 +264,7 @@ function drawLoupe(
     app.hover ?? app.selected,
     app.pending,
     app.candSeat,
+    app.motion,
   );
   ctx.restore();
 
@@ -698,16 +727,60 @@ function drawRace(
   hover: Candidate | null,
   pending: Candidate | null,
   candSeat: number,
+  motion?: MotionFrame,
 ): void {
   drawTrackDecor(ctx, s, game.track);
   // Lanes need every trail at once (they depend on who overlaps whom), so they
   // are solved for the whole field before any of it is drawn.
-  const lanes = computeLanes(game.players.map((p) => p.trail));
-  game.players.forEach((p, i) =>
-    drawTrail(ctx, s, p.trail, p.crashes, p.color, lanes[i]),
-  );
-  drawCars(ctx, s, game);
+  const lanes = motion?.lanes ?? computeLanes(game.players.map((p) => p.trail));
+  game.players.forEach((p, i) => {
+    const shown = drivenSoFar(p, lanes[i], motion, i);
+    drawTrail(
+      ctx,
+      s,
+      shown.segs,
+      shown.crashes,
+      p.color,
+      shown.lanes,
+      motion?.trailDim ?? 0,
+    );
+  });
+  drawCars(ctx, s, game, motion);
   drawCandidates(ctx, s, game, cands, hover, pending, candSeat);
+}
+
+/**
+ * The part of a player's trail driven by this frame: whole segments, then the
+ * one the car is currently on, cut where the car has got to (its lane cut with
+ * it, or the ribbon would run on ahead of the car). Without a motion frame this
+ * is simply the whole trail.
+ */
+function drivenSoFar(
+  p: Player,
+  lanes: LaneStop[][],
+  motion: MotionFrame | undefined,
+  seat: number,
+): { segs: TrailSeg[]; lanes: LaneStop[][]; crashes: Vec[] } {
+  const cut = motion?.segsShown[seat] ?? null;
+  const crashCut = motion?.crashesShown[seat] ?? null;
+  const crashes = crashCut === null ? p.crashes : p.crashes.slice(0, crashCut);
+  if (cut === null) return { segs: p.trail, lanes, crashes };
+
+  const segs = p.trail.slice(0, cut);
+  const outLanes = lanes.slice(0, cut);
+  const partial = motion?.partialTo[seat] ?? null;
+  const seg = p.trail[cut];
+  // A jump is instant by meaning — it's never half-drawn.
+  if (partial && seg && !seg.jump) {
+    const full = Math.hypot(seg.to.x - seg.from.x, seg.to.y - seg.from.y);
+    const done = Math.hypot(partial.x - seg.from.x, partial.y - seg.from.y);
+    const u = full === 0 ? 1 : Math.min(1, done / full);
+    if (u > 0) {
+      segs.push({ ...seg, to: partial });
+      outLanes.push(clipLaneStops(lanes[cut], u));
+    }
+  }
+  return { segs, lanes: outLanes, crashes };
 }
 
 /** Static track decoration: road surface, finish line, and direction arrow. */
@@ -751,8 +824,12 @@ function drawTrackDecor(ctx: CanvasRenderingContext2D, s: number, track: Track):
  *
  * Takes the trail apart from the player it belongs to, because the replay and
  * the post-move tween draw a PREFIX of a trail (plus a half-driven last
- * segment) rather than a player's current one; `alpha` is how the replay pushes
- * the finished race into the background while the cars re-drive it.
+ * segment) rather than a player's current one.
+ *
+ * `dim` (0..1) is how the replay pushes the already-driven race behind the cars
+ * re-driving it. It slides the whole speed ramp down rather than using
+ * globalAlpha — a translucent ribbon shows every place its quads and node discs
+ * overlap, which is the seam problem the ramp was built to avoid.
  */
 export function drawTrail(
   ctx: CanvasRenderingContext2D,
@@ -761,7 +838,7 @@ export function drawTrail(
   crashes: Vec[],
   color: string,
   lanes: LaneStop[][],
-  alpha = 1,
+  dim = 0,
 ): void {
   // Move speed normalized to 0..1 by segment length (exponent >1 stretches
   // the slow↔fast gap).
@@ -837,27 +914,27 @@ export function drawTrail(
   };
   // Piecewise ramp through the pure car color at TRAIL_MID: below it we
   // darken (recede into the field), above it we lighten (pop out of it).
-  const speedColor = (f: number): string =>
-    shade(
-      color,
+  const speedColor = (f: number): string => {
+    const t =
       f < TRAIL_MID
         ? -(1 - TRAIL_DIM_MIN) * (1 - f / TRAIL_MID)
-        : (TRAIL_LIGHTEN_MAX * (f - TRAIL_MID)) / (1 - TRAIL_MID),
-    );
+        : (TRAIL_LIGHTEN_MAX * (f - TRAIL_MID)) / (1 - TRAIL_MID);
+    // Dimming slides the whole ramp down: the fast end gives up its lightening
+    // first, the slow end bottoms out just short of black.
+    return shade(color, Math.max(-0.92, t - dim));
+  };
 
   /** Half-thickness (css px) of the ribbon at a node of the given factor. */
   const halfW = (f: number): number =>
     (TRAIL_WIDTH_MIN + (TRAIL_WIDTH_MAX - TRAIL_WIDTH_MIN) * f) / 2;
 
-  ctx.save();
-  ctx.globalAlpha = alpha;
   for (let i = 0; i < trail.length; i++) {
     const seg = trail[i];
 
     ctx.save();
     if (seg.jump) {
       // Jumps never take a lane: a dashed line straight between the nodes.
-      ctx.strokeStyle = MUTED;
+      ctx.strokeStyle = dim > 0 ? shade(MUTED, -dim) : MUTED;
       ctx.lineWidth = 1.5;
       ctx.setLineDash([4, 4]);
       ctx.beginPath();
@@ -899,7 +976,7 @@ export function drawTrail(
       // Glow only on the fast half, so slow segments stay flat and quiet.
       const fg = (fa + fb) / 2;
       ctx.shadowBlur = 0;
-      if (fg > TRAIL_MID) {
+      if (fg > TRAIL_MID && dim === 0) {
         ctx.shadowColor = color;
         ctx.shadowBlur = (TRAIL_GLOW_MAX * (fg - TRAIL_MID)) / (1 - TRAIL_MID);
       }
@@ -929,8 +1006,8 @@ export function drawTrail(
     }
     ctx.restore();
   }
-  for (const c of crashes) drawCrashMark(ctx, s, c, color);
-  ctx.restore();
+  const crashColor = dim > 0 ? shade(color, -dim) : color;
+  for (const c of crashes) drawCrashMark(ctx, s, c, crashColor);
 }
 
 /**
@@ -938,11 +1015,19 @@ export function drawTrail(
  * left the track — we don't draw their marker (and they don't block cells
  * either, see otherPositions). The trail stays behind as a record of their run.
  */
-function drawCars(ctx: CanvasRenderingContext2D, s: number, game: GameState): void {
-  for (const p of game.players) {
-    if (p.place !== null || p.retired) continue;
-    drawCarAt(ctx, s, p.pos, p.color);
-  }
+function drawCars(
+  ctx: CanvasRenderingContext2D,
+  s: number,
+  game: GameState,
+  motion?: MotionFrame,
+): void {
+  game.players.forEach((p, i) => {
+    // An animated position wins over both the player's own node and the "out of
+    // the race" rule: a replay re-drives cars that have long since finished.
+    const at = motion?.pos[i] ?? null;
+    if (at) drawCarAt(ctx, s, at, p.color);
+    else if (p.place === null && !p.retired) drawCarAt(ctx, s, p.pos, p.color);
+  });
 }
 
 /**
