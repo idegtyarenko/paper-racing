@@ -38,10 +38,20 @@ export interface PlaceCoachOptions {
   anchors: Vec[];
   card: { w: number; h: number };
   view: { w: number; h: number };
-  /** Chrome the card must not cover: the wizard rail, the action bar. */
+  /**
+   * Chrome the card must not cover: the phone's top strip, the wizard rail on
+   * wide screens (the two are mutually exclusive), the action bar.
+   */
   keepOut: Rect[];
-  /** Track points (board css px) the card should avoid sitting on. */
+  /** Road points (board css px) the card should avoid sitting on. */
   avoid: Vec[];
+  /**
+   * The marks the wizard drew on the road — start/finish, direction arrows —
+   * in board css px. Unlike the road these are never written off as
+   * unavoidable: a card laid along the start/finish hides the very thing the
+   * step is about, and the arrows are what the step asks the player to tap.
+   */
+  feature: Vec[];
   /** Clearance between the anchor and the card, in px. */
   gap: number;
   /** Keep-off from the edges of the board. */
@@ -104,10 +114,9 @@ export function coachAnchors(ed: EditorState): Vec[] {
 }
 
 /**
- * Everything on the board the card should keep off, in world coordinates: the
- * road edges plus whatever the current step put on top of them. The direction
- * step's arrows matter most — the instruction invites a tap on the other one, so
- * burying it under the card makes the step unanswerable.
+ * The road itself, in world coordinates — the surface the card would rather not
+ * sit on, but next to a road edge some of it always ends up under the card.
+ * Scored softly, and ignored right around the anchor (see placeCoach).
  */
 export function coachAvoid(ed: EditorState): Vec[] {
   const pts: Vec[] = [];
@@ -115,7 +124,25 @@ export function coachAvoid(ed: EditorState): Vec[] {
     // Every other vertex is dense enough to catch a card laid over the road.
     for (let i = 0; poly && i < poly.length; i += 2) pts.push(poly[i]);
   }
-  if (ed.finish) pts.push(ed.finish.a, lerp(ed.finish.a, ed.finish.b, 0.5), ed.finish.b);
+  return pts;
+}
+
+/** How many points a straight feature (the start/finish) is sampled at. */
+const FEATURE_SAMPLES = 8;
+
+/**
+ * What the wizard drew on top of the road, in world coordinates: the
+ * start/finish and the direction arrows. These get the hard treatment — the
+ * card must not lie along them, however short they are. The direction step's
+ * arrows matter most: the instruction invites a tap on the other one, so
+ * burying it makes the step unanswerable.
+ */
+export function coachFeature(ed: EditorState): Vec[] {
+  const pts: Vec[] = [];
+  if (ed.finish) {
+    for (let i = 0; i <= FEATURE_SAMPLES; i++)
+      pts.push(lerp(ed.finish.a, ed.finish.b, i / FEATURE_SAMPLES));
+  }
   for (const a of ed.arrows ?? []) pts.push(...a.path);
   return pts;
 }
@@ -125,6 +152,17 @@ const SIDES: NoseSide[] = ['top', 'bottom', 'left', 'right'];
 const NOSE_INSET = 18;
 /** Fractions of the card slid past the anchor — tried in this order. */
 const SLIDES = [0.5, 0.3, 0.7, 0.12, 0.88];
+
+// Scoring tiers, worst first. A card over the chrome swallows a button; a card
+// over the start/finish or an arrow hides what the step is about (and every
+// covered point adds a little on top, so "less of it" still wins when nothing
+// is clear); the gap is lost when the viewport clamp drags the card back over
+// the very feature it points at. Below those, each covered road point counts 1
+// — a card this size never gathers hundreds of them, so the tiers hold.
+const COVERS_CHROME = 1000;
+const COVERS_FEATURE = 200;
+const LOST_GAP = 200;
+const NOSE_CLAMPED = 20;
 
 function overlaps(a: Rect, b: Rect): boolean {
   return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
@@ -140,7 +178,8 @@ const clamp = (v: number, lo: number, hi: number): number =>
 /**
  * Seat the card next to one of the anchors. Every anchor is tried on every side
  * at a few slides along it; a candidate is scored by how much of the track it
- * covers, and covering chrome (rail, action bar) outweighs any of that. Ties go
+ * covers, and covering chrome or the step's own feature outweighs any of that
+ * (see the tier constants above). Ties go
  * to the side with the most room, so the card drifts toward the empty half of
  * the board — and, where the step offered a choice of anchor, to the one whose
  * open space the card actually fits into.
@@ -187,13 +226,27 @@ export function placeCoach(o: PlaceCoachOptions): CoachPlacement {
         };
 
         let score = order.indexOf(side) * 0.01;
-        for (const k of o.keepOut) if (overlaps(rect, k)) score += 1000;
+        for (const k of o.keepOut) if (overlaps(rect, k)) score += COVERS_CHROME;
         for (const p of avoid) if (inside(p, rect)) score += 1;
+        let onFeature = 0;
+        for (const p of o.feature) if (inside(p, rect)) onFeature++;
+        if (onFeature) score += COVERS_FEATURE + onFeature;
+        // Clamping to the board can drag a candidate back across its own
+        // anchor — on a phone the card is nearly as wide as the screen, so
+        // "beside" never fits and would end up on top instead.
+        const clear = vertical
+          ? side === 'top'
+            ? rect.y >= anchor.y + gap
+            : rect.y + card.h <= anchor.y - gap
+          : side === 'left'
+            ? rect.x >= anchor.x + gap
+            : rect.x + card.w <= anchor.x - gap;
+        if (!clear) score += LOST_GAP;
         // A pointer that had to slide to the very corner of its edge no longer
         // reads as pointing; prefer candidates that didn't need the clamp.
         const along = vertical ? anchor.x - rect.x : anchor.y - rect.y;
         const span = vertical ? card.w : card.h;
-        if (along < NOSE_INSET || along > span - NOSE_INSET) score += 20;
+        if (along < NOSE_INSET || along > span - NOSE_INSET) score += NOSE_CLAMPED;
 
         if (score < bestScore) {
           bestScore = score;

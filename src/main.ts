@@ -5,6 +5,7 @@
 // separate get/set adapters per field anymore.
 
 import './ui/styles/index.css';
+import { Vec } from './geometry';
 import { newAppState, Phase } from './app-state';
 import { finalizeTrack } from './model/track';
 import {
@@ -30,7 +31,12 @@ import { strings, localeTag, dateLocale } from './i18n';
 import { botMoveDelayMs } from './bot-pacing';
 import { render, AppView } from './view/render';
 import { Bounds, polylineBounds, worldToScreen } from './view/camera';
-import { coachAnchors, coachAvoid, placeCoach } from './view/coach-placement';
+import {
+  coachAnchors,
+  coachAvoid,
+  coachFeature,
+  placeCoach,
+} from './view/coach-placement';
 import * as vp from './view/viewport';
 import {
   initRaceChrome,
@@ -141,18 +147,24 @@ function updateCoachPlacement(): void {
   const world = S.phase === 'edit' ? coachAnchors(S.editor) : [];
   const cam = vp.camera();
   const view = vp.viewSize();
-  // Panned or zoomed until a feature is off screen: it's no longer something to
-  // point at. With none left the card drops the pointer and goes back to its
-  // resting place.
+  const { card, keepOut } = coachMetrics();
+  // Panned or zoomed until a feature is off screen — or slid under the top
+  // strip / action bar, which hides it just as well: it's no longer something
+  // to point at. With none left the card drops the pointer and goes back to its
+  // resting place, instead of huddling against chrome it can't get clear of.
+  const onScreen = (p: Vec): boolean =>
+    p.x >= 0 && p.y >= 0 && p.x <= view.w && p.y <= view.h;
+  const underChrome = (p: Vec): boolean =>
+    keepOut.some((k) => p.x >= k.x && p.x <= k.x + k.w && p.y >= k.y && p.y <= k.y + k.h);
   const anchors = world
     .map((p) => worldToScreen(cam, p))
-    .filter((p) => p.x >= 0 && p.y >= 0 && p.x <= view.w && p.y <= view.h);
+    .filter((p) => onScreen(p) && !underChrome(p));
   if (!anchors.length) {
     setCoachFloat(null);
     return;
   }
   const avoid = coachAvoid(S.editor).map((p) => worldToScreen(cam, p));
-  const { card, keepOut } = coachMetrics();
+  const feature = coachFeature(S.editor).map((p) => worldToScreen(cam, p));
   setCoachFloat(
     placeCoach({
       anchors,
@@ -160,6 +172,7 @@ function updateCoachPlacement(): void {
       view,
       keepOut,
       avoid,
+      feature,
       gap: COACH_GAP,
       margin: 12,
     }),

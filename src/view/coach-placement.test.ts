@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { coachAvoid, placeCoach, PlaceCoachOptions, Rect } from './coach-placement';
+import { coachFeature, placeCoach, PlaceCoachOptions, Rect } from './coach-placement';
 import { EditorState } from '../model/editor';
 
 const base: PlaceCoachOptions = {
@@ -8,6 +8,7 @@ const base: PlaceCoachOptions = {
   view: { w: 1000, h: 800 },
   keepOut: [],
   avoid: [],
+  feature: [],
   gap: 14,
   margin: 16,
 };
@@ -22,8 +23,12 @@ function overlaps(a: Rect, b: Rect): boolean {
   return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 }
 
-describe('coachAvoid', () => {
-  it('counts the direction arrows, not just the road', () => {
+function inside(p: { x: number; y: number }, r: Rect): boolean {
+  return p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+}
+
+describe('coachFeature', () => {
+  it('counts the direction arrows and the whole start/finish', () => {
     // The other arrow is what the direction step asks the player to tap, so the
     // card must not be allowed to sit on it.
     const arrow = (x: number) => ({
@@ -43,11 +48,14 @@ describe('coachAvoid', () => {
       finish: { a: { x: -1, y: 0 }, b: { x: 1, y: 0 } },
       arrows: [arrow(10), arrow(20)],
     } as unknown as EditorState;
-    const pts = coachAvoid(ed);
+    const pts = coachFeature(ed);
     for (const x of [10, 20])
       expect(pts.some((p) => p.x === x && p.y === 1.5)).toBe(true);
-    // …and the start/finish line it sits on.
+    // …and the start/finish line it sits on, sampled along its length rather
+    // than at the ends: a card laid across the middle of it has to be caught.
+    expect(pts.some((p) => p.x === -1 && p.y === 0)).toBe(true);
     expect(pts.some((p) => p.x === 0 && p.y === 0)).toBe(true);
+    expect(pts.some((p) => Math.abs(p.x - 0.5) < 1e-9 && p.y === 0)).toBe(true);
   });
 });
 
@@ -123,6 +131,53 @@ describe('placeCoach', () => {
     // Seated in the hole, pointing back at the inner edge.
     expect(p.side).toBe('left');
     expect(p.left).toBeGreaterThanOrEqual(320);
+  });
+
+  it('goes above or below a horizontal feature instead of lying along it', () => {
+    // A phone, a horizontal start/finish, and the action bar under it: seating
+    // the card "beside" the line puts it on the line's other half.
+    const line = [];
+    for (let x = 140; x <= 220; x += 10) line.push({ x, y: 540 });
+    const p = placeCoach({
+      ...base,
+      view: { w: 390, h: 844 },
+      card: { w: 280, h: 90 },
+      anchors: [{ x: 180, y: 540 }],
+      keepOut: [{ x: 12, y: 720, w: 366, h: 100 }],
+      feature: line,
+      gap: 16,
+    });
+    expect(['top', 'bottom']).toContain(p.side);
+    for (const q of line)
+      expect(inside(q, { x: p.left, y: p.top, w: 280, h: 90 })).toBe(false);
+  });
+
+  it('goes above or below when there is no room for it beside the anchor', () => {
+    // Phone width: a card seated to the side gets clamped back over the anchor,
+    // so the horizontal start/finish (or an arrow) it points at ends up under
+    // the card. Vertical is the only honest answer.
+    const phone: PlaceCoachOptions = {
+      ...base,
+      view: { w: 360, h: 780 },
+      card: { w: 280, h: 90 },
+      anchors: [{ x: 180, y: 400 }],
+    };
+    const p = placeCoach(phone);
+    expect(['top', 'bottom']).toContain(p.side);
+    const r = { x: p.left, y: p.top, w: phone.card.w, h: phone.card.h };
+    expect(overlaps(r, { x: 180, y: 400, w: 1, h: 1 })).toBe(false);
+  });
+
+  it('keeps off the phone top strip when the anchor sits right under it', () => {
+    const strip: Rect = { x: 0, y: 0, w: 360, h: 96 };
+    const r = rect({
+      ...base,
+      view: { w: 360, h: 780 },
+      card: { w: 280, h: 90 },
+      anchors: [{ x: 180, y: 120 }],
+      keepOut: [strip],
+    });
+    expect(overlaps(r, strip)).toBe(false);
   });
 
   it('points the nose at the anchor, within the edge it sits on', () => {

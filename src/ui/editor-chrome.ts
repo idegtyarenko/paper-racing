@@ -131,17 +131,20 @@ export function coachMetrics(): { card: { w: number; h: number }; keepOut: Rect[
       ? { x: r.left - board.left, y: r.top - board.top, w: r.width, h: r.height }
       : null;
   };
+  // The wizard's step navigation is one or the other: the top strip on a phone,
+  // the side rail from 700px up. Ask for both, take whichever is on screen.
   const keepOut = [
     local(document.querySelector('.pr-edit__bar')),
-    local(railEl()),
+    local(shownEl('.pr-nav__rail')),
+    local(shownEl('.pr-nav__top')),
   ].filter((r): r is Rect => r !== null);
   return { card: { w: box.width, h: box.height }, keepOut };
 }
 
-/** The wizard's side rail, but only while it's actually on screen (wide layout). */
-function railEl(): Element | null {
-  const rail = document.querySelector('.pr-nav__rail');
-  return rail && getComputedStyle(rail).display !== 'none' ? rail : null;
+/** The element, but only while the layout actually shows it. */
+function shownEl(sel: string): Element | null {
+  const el = document.querySelector(sel);
+  return el && getComputedStyle(el).display !== 'none' ? el : null;
 }
 
 /** Hide online entry points if the backend isn't configured (local play only). */
