@@ -3,7 +3,7 @@
 import { Vec, Polyline, add, sub, scale, normalize, lerp } from '../geometry';
 import { Track } from '../model/track';
 import { EditorState, Arrow } from '../model/editor';
-import { GameState, Candidate, Drive, Player } from '../model/game';
+import { GameState, Candidate, Drive, TrailSeg } from '../model/game';
 import { aeroFactor, forwardCap } from '../model/turns';
 import { Camera } from './camera';
 import { computeLanes, LaneStop } from './trail-lanes';
@@ -703,7 +703,9 @@ function drawRace(
   // Lanes need every trail at once (they depend on who overlaps whom), so they
   // are solved for the whole field before any of it is drawn.
   const lanes = computeLanes(game.players.map((p) => p.trail));
-  game.players.forEach((p, i) => drawTrail(ctx, s, p, lanes[i]));
+  game.players.forEach((p, i) =>
+    drawTrail(ctx, s, p.trail, p.crashes, p.color, lanes[i]),
+  );
   drawCars(ctx, s, game);
   drawCandidates(ctx, s, game, cands, hover, pending, candSeat);
 }
@@ -746,14 +748,21 @@ function drawTrackDecor(ctx: CanvasRenderingContext2D, s: number, track: Track):
  * own "lane" so the two don't paint over each other; `lanes` carries that
  * offset (in cells) as stops along each segment, and a segment is subdivided
  * at those stops. Cars, crash marks, and candidates stay on the true nodes.
+ *
+ * Takes the trail apart from the player it belongs to, because the replay and
+ * the post-move tween draw a PREFIX of a trail (plus a half-driven last
+ * segment) rather than a player's current one; `alpha` is how the replay pushes
+ * the finished race into the background while the cars re-drive it.
  */
-function drawTrail(
+export function drawTrail(
   ctx: CanvasRenderingContext2D,
   s: number,
-  p: Player,
+  trail: TrailSeg[],
+  crashes: Vec[],
+  color: string,
   lanes: LaneStop[][],
+  alpha = 1,
 ): void {
-  const trail = p.trail;
   // Move speed normalized to 0..1 by segment length (exponent >1 stretches
   // the slow↔fast gap).
   const segFactor = (i: number): number => {
@@ -830,7 +839,7 @@ function drawTrail(
   // darken (recede into the field), above it we lighten (pop out of it).
   const speedColor = (f: number): string =>
     shade(
-      p.color,
+      color,
       f < TRAIL_MID
         ? -(1 - TRAIL_DIM_MIN) * (1 - f / TRAIL_MID)
         : (TRAIL_LIGHTEN_MAX * (f - TRAIL_MID)) / (1 - TRAIL_MID),
@@ -840,6 +849,8 @@ function drawTrail(
   const halfW = (f: number): number =>
     (TRAIL_WIDTH_MIN + (TRAIL_WIDTH_MAX - TRAIL_WIDTH_MIN) * f) / 2;
 
+  ctx.save();
+  ctx.globalAlpha = alpha;
   for (let i = 0; i < trail.length; i++) {
     const seg = trail[i];
 
@@ -889,7 +900,7 @@ function drawTrail(
       const fg = (fa + fb) / 2;
       ctx.shadowBlur = 0;
       if (fg > TRAIL_MID) {
-        ctx.shadowColor = p.color;
+        ctx.shadowColor = color;
         ctx.shadowBlur = (TRAIL_GLOW_MAX * (fg - TRAIL_MID)) / (1 - TRAIL_MID);
       }
 
@@ -918,7 +929,8 @@ function drawTrail(
     }
     ctx.restore();
   }
-  for (const c of p.crashes) drawCrashMark(ctx, s, c, p.color);
+  for (const c of crashes) drawCrashMark(ctx, s, c, color);
+  ctx.restore();
 }
 
 /**
@@ -929,14 +941,28 @@ function drawTrail(
 function drawCars(ctx: CanvasRenderingContext2D, s: number, game: GameState): void {
   for (const p of game.players) {
     if (p.place !== null || p.retired) continue;
-    ctx.beginPath();
-    ctx.arc(p.pos.x * s, p.pos.y * s, Math.max(4, s * 0.28), 0, Math.PI * 2);
-    ctx.fillStyle = p.color;
-    ctx.fill();
-    ctx.strokeStyle = HALO;
-    ctx.lineWidth = CAR_STROKE_LW;
-    ctx.stroke();
+    drawCarAt(ctx, s, p.pos, p.color);
   }
+}
+
+/**
+ * One car marker at an arbitrary point — the position is a parameter rather
+ * than read off the player, because during a replay or a post-move tween a car
+ * sits between two nodes.
+ */
+export function drawCarAt(
+  ctx: CanvasRenderingContext2D,
+  s: number,
+  pos: Vec,
+  color: string,
+): void {
+  ctx.beginPath();
+  ctx.arc(pos.x * s, pos.y * s, Math.max(4, s * 0.28), 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.strokeStyle = HALO;
+  ctx.lineWidth = CAR_STROKE_LW;
+  ctx.stroke();
 }
 
 /** Current player's move candidates: traction zone, aim line, and points. */
