@@ -74,6 +74,19 @@ export const UNDO_SVG =
 /** Laurel cup — you won. */
 export const TROPHY_SVG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10v4a5 5 0 0 1-10 0zM7 6H4v1.5a3.5 3.5 0 0 0 3.4 3.5M17 6h3v1.5a3.5 3.5 0 0 1-3.4 3.5M9 19h6M8.5 21h7M12 15v4"/></svg>';
+/** Chequered flag — a piece of the finish-line confetti. Filled squares rather
+ *  than an outline: at confetti size (14–26px) an outlined chequer turns to mush. */
+export const CHEQUER_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v18"/><path d="M5 4h14v10H5z"/><path d="M5 4h4.7v3.3H5zM14.3 4H19v3.3h-4.7zM9.7 7.3h4.6v3.4H9.7zM5 10.7h4.7V14H5zM14.3 10.7H19V14h-4.7z" fill="currentColor" stroke="none"/></svg>';
+/** Champagne bottle — a piece of the finish-line confetti. Read at 20px it is
+ *  the proportions that carry it: a long neck, shoulders sloping wide, and the
+ *  foil collar. A cork in mid-air was tried and merges into a blob at this
+ *  size — the details have to be few and far apart. */
+export const CHAMPAGNE_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 3.2h3v6c0 1.8 2.7 2.7 2.7 5V19a2.6 2.6 0 0 1-2.6 2.6h-3.2A2.6 2.6 0 0 1 7.8 19v-4.8c0-2.3 2.7-3.2 2.7-5V3.2z"/><path d="M10.1 5.6h3.8"/></svg>';
+/** Steering wheel — a piece of the finish-line confetti. */
+export const WHEEL_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v6M4.2 16.5l5.2-3M19.8 16.5l-5.2-3"/></svg>';
 /** Podium bars — someone else took it. */
 export const PODIUM_SVG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="15" width="6" height="6"/><rect x="9" y="10" width="6" height="11"/><rect x="16" y="17" width="6" height="4"/></svg>';

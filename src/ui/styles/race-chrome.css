@@ -181,6 +181,28 @@
   background: rgba(var(--pr-accent-rgb), 0.14);
   box-shadow: inset 3px 0 0 var(--pr-accent);
 }
+/* ...and while it's your turn it breathes, like the confirm button and the
+   queue's current dot — the row is a call to act, not a label. Only in the live
+   HUD: on the result screen `--mine` means "you won" and stays put. */
+.pr-race__row--acting {
+  animation: pr-race-row-pulse 1.8s ease-in-out infinite;
+}
+@keyframes pr-race-row-pulse {
+  0%,
+  100% {
+    background: rgba(var(--pr-accent-rgb), 0.14);
+    box-shadow: inset 3px 0 0 var(--pr-accent);
+  }
+  50% {
+    background: rgba(var(--pr-accent-rgb), 0.26);
+    box-shadow: inset 3px 0 0 var(--pr-accent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pr-race__row--acting {
+    animation: none;
+  }
+}
 .pr-race__row--offline {
   opacity: 0.45;
 }

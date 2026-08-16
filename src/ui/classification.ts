@@ -137,6 +137,10 @@ export function buildRow(
   if (highlight) {
     const mine = seat === ctx.mySeat;
     row.classList.add(mine ? 'pr-race__row--mine' : 'pr-race__row--current');
+    // Your own live turn breathes — the row is the "act now" signal, and on the
+    // result screen `--mine` means "you won" instead, which must sit still. A
+    // modifier of its own rather than un-animating it there by specificity.
+    if (mine && !ctx.final) row.classList.add('pr-race__row--acting');
     // The other-car tint is that car's own colour, so it can't be a class.
     if (!mine) row.style.setProperty('--pr-row-tint', p.color);
   }

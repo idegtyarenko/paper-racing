@@ -15,13 +15,14 @@ import { GameState } from '../model/game';
 import { NavField } from '../model/nav';
 import { strings } from '../i18n';
 import { renderRows } from './classification';
+import { burstConfetti, clearConfetti } from './confetti';
 import { bindTap } from './dom';
 import { raceActionSlot } from './race-chrome';
 import { el, button, icon } from './pr-chrome';
 import { isPodium } from './format';
 import { PLAY_SVG, PODIUM_SVG, REMATCH_SVG, TROPHY_SVG } from './icons';
 
-const board = document.querySelector('.app__board')!;
+const board = document.querySelector<HTMLElement>('.app__board')!;
 
 export interface ResultHandlers {
   /** "Rematch" — same lineup, same track, no wizard. */
@@ -52,7 +53,16 @@ let replayBtn: HTMLButtonElement;
 let guestEl: HTMLElement;
 let waitDotsEl: HTMLElement;
 let waitTextEl: HTMLElement;
+let confettiEl: HTMLElement;
 let built = false;
+/** Was the full screen up on the previous render — the entrance runs on the
+ *  false→true edge, and renderRaceResult runs on every render. */
+let wasFullscreen = false;
+let enterTimer = 0;
+/** The burst has been fired for the race now on screen. Rearmed by state — a
+ *  race with nobody home yet — rather than by object identity, because online
+ *  replaces the whole GameState on every message from the room. */
+let celebrated = false;
 
 function build(h: ResultHandlers): void {
   root = el('div', 'pr-layer pr-result');
@@ -126,6 +136,13 @@ function build(h: ResultHandlers): void {
   bindTap(guestLeaveBtn, h.onGuestLeave);
 
   board.append(root);
+
+  // A layer of the board's own, not a child of this screen: the poppers go off
+  // when the winner crosses the line, and at that moment the race is still up —
+  // the result screen may be seconds away, or (hot-seat) never come at all.
+  // Deaf to the pointer, so it never comes between a tap and a button.
+  confettiEl = el('div', 'pr-confetti', board);
+  confettiEl.setAttribute('aria-hidden', 'true');
   built = true;
 }
 
@@ -230,6 +247,49 @@ function loserSub(game: GameState, winner: number, mySeat: number): string | nul
   return allBeaten ? strings.race.someoneWonSub : null;
 }
 
+/** How long the entrance runs, ms — after this the class comes off, so a later
+ *  re-render (an online guest's wait ticking over) doesn't replay it. */
+const ENTER_MS = 900;
+
+/**
+ * Is there something to celebrate for whoever is reading this screen? Same line
+ * the headline draws (see renderHead/loserSub): your own win, a dead heat you
+ * were in, or — hot-seat, where there is no "you" — a win by one of the people
+ * at this device. Being beaten, and a race nobody finished, get the entrance
+ * without the confetti.
+ */
+function worthCelebrating(game: GameState, mySeat: number): boolean {
+  const { winner } = game;
+  if (winner === null) return false;
+  if (mySeat >= 0) {
+    return winner === 'draw' ? game.players[mySeat].place === 1 : winner === mySeat;
+  }
+  return winner === 'draw' || !game.players[winner].bot;
+}
+
+/**
+ * Has the win already happened, whatever the rest of the field is still doing?
+ * Winning is the moment you cross the line — the poppers go off then, not
+ * minutes later when the last bot parks and the result screen opens. Same
+ * addressee as worthCelebrating: your seat, or (hot-seat) any of the people
+ * sharing this device.
+ */
+function firstPlaceLanded(game: GameState, mySeat: number): boolean {
+  return mySeat >= 0
+    ? game.players[mySeat].place === 1
+    : game.players.some((p) => !p.bot && p.place === 1);
+}
+
+/** One burst per race, whichever moment gets there first. */
+function celebrate(game: GameState): void {
+  if (celebrated) return;
+  celebrated = true;
+  burstConfetti(
+    confettiEl,
+    game.players.map((p) => p.color),
+  );
+}
+
 /**
  * Show the ways on from here, in one of two shapes.
  *
@@ -268,6 +328,14 @@ export function renderRaceResult(ctx: ResultCtx): void {
   const fullscreen = over && ready;
   const docked = !over && earlyExit && ready;
 
+  // The celebration is judged against the race, not against this screen: it can
+  // fire while the board is still live, and it must be rearmed by the next race
+  // even if the result screen never opened (a hot-seat race abandoned mid-way).
+  if (ready) {
+    if (game!.players.every((p) => p.place === null)) celebrated = false;
+    else if (firstPlaceLanded(game!, mySeat)) celebrate(game!);
+  }
+
   root.hidden = !fullscreen;
   // Not for the dock: `is-result` says the layer owns the board, and it takes
   // the zoom controls away with it (race-result.css). The dock leaves the race
@@ -289,6 +357,16 @@ export function renderRaceResult(ctx: ResultCtx): void {
   }
   dockEl.classList.toggle('pr-result__dock--live', docked);
 
+  // Leaving the screen (a rematch, a new track): take the celebration down and
+  // arm the entrance again, so the next race gets its own.
+  if (!fullscreen && wasFullscreen) {
+    wasFullscreen = false;
+    if (enterTimer) clearTimeout(enterTimer);
+    enterTimer = 0;
+    root.classList.remove('pr-result--enter');
+    clearConfetti(confettiEl);
+  }
+
   if (!fullscreen && !docked) return;
 
   if (fullscreen) {
@@ -296,6 +374,19 @@ export function renderRaceResult(ctx: ResultCtx): void {
     replayBtn.hidden = !canReplay;
     renderHead(game!, mySeat);
     renderRows(rowsEl, game!, nav!, { mySeat, soloSeat, final: true });
+    // The flag has just fallen — the one moment in the app worth marking.
+    if (!wasFullscreen) {
+      wasFullscreen = true;
+      root.classList.add('pr-result--enter');
+      enterTimer = window.setTimeout(() => {
+        enterTimer = 0;
+        root.classList.remove('pr-result--enter');
+      }, ENTER_MS);
+      // Usually already fired at the finish line; this catches the outcomes
+      // that only exist once the whole field is home — a dead heat, and a
+      // hot-seat race whose winner was decided by the last car parking.
+      if (worthCelebrating(game!, mySeat)) celebrate(game!);
+    }
   }
 
   // A guest waits for the host only for the real end-of-race rematch — during
