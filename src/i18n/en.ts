@@ -315,7 +315,11 @@ export const en = {
      *  redesign, a desktop click picks a target and Go! commits it, exactly as
      *  on touch. */
     hintPick: 'Pick a point and confirm with Go!',
-    finalWarn: ' Try to finish further past the line than your rival.',
+    /** Appended to your own turn's line once someone has finished and the round
+     *  is closing — but only on turns where the line is actually within reach.
+     *  Places in a round go by how far past the line a car ends up, so this is
+     *  true for the fight over any place, not just the win. */
+    finalWarn: ' Whoever gets furthest past the line comes out ahead.',
     /** Heading of the final classification card on the result screen. Caps by CSS. */
     classification: 'Classification',
     /** Label over the turn-order dots, opening the HUD card. Caps by CSS. */

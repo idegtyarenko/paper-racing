@@ -17,7 +17,7 @@
 import { Phase } from '../app-state';
 import { GameState } from '../model/game';
 import { NavField } from '../model/nav';
-import { upcomingSlots } from '../model/turns';
+import { upcomingSlots, canFinishThisTurn } from '../model/turns';
 import { strings } from '../i18n';
 import { msToClock } from './format';
 import { renderRows, resetStandings } from './classification';
@@ -538,6 +538,15 @@ function renderChip(
   chipAiWaiting = false;
   const cur = game.players[game.current];
 
+  // Endgame advice for the car on the clock. Two gates: the round has to be
+  // closing at all, and the finish has to be reachable this very turn —
+  // otherwise the line asks for something the fan can't do. canFinishThisTurn
+  // walks the whole fan, so it only runs once the cheap check has passed.
+  const warn =
+    game.finalTurnsLeft !== null && canFinishThisTurn(game, game.current)
+      ? strings.race.finalWarn
+      : '';
+
   if (net) {
     if (net.canSkip) {
       // No countdown suffix here: the turn timer has already run out — that's
@@ -547,8 +556,10 @@ function renderChip(
       // The move didn't reach the server — a prominent error until they retry.
       setChip(strings.online.sendFailed, null, true);
     } else if (net.yourTurn) {
-      // My turn: the timer lives on the confirm button, so no suffix here.
-      setChip(strings.online.yourTurn, cur.color);
+      // My turn: the timer lives on the confirm button, so the line is free for
+      // the endgame advice — it never competes with the "· m:ss" countdown,
+      // which only ever decorates someone else's turn.
+      setChip(strings.online.yourTurn + warn, cur.color);
     } else {
       // Someone else's turn: remember the base text — the ticking countdown
       // appends "· m:ss". The ellipsis animates so a non-interactive board
@@ -561,14 +572,13 @@ function renderChip(
     return;
   }
 
-  const warn = game.finalTurnsLeft !== null ? strings.race.finalWarn : '';
   if (aiTurn) {
     // Bots are moving: ONE line for their whole run rather than each bot's name
     // in turn — naming them rewrote the chip several times a second, which is
     // unreadable and useless, since the human has nothing to do until it's their
     // turn again. Same waiting ellipsis as the online branch, and no dot: the
-    // line is about the field, not about one car. finalWarn is left off too —
-    // it's advice on the human's own driving, and it comes back with the hint.
+    // line is about the field, not about one car. The endgame advice is left off
+    // too — it's about the human's own driving, and comes back with the hint.
     if (!wasAiWaiting) {
       setChip('', null);
       applyWaitingChip(strings.race.rivalsMoving, null);

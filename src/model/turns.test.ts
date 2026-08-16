@@ -11,6 +11,7 @@ import {
   retireSeat,
   reachableTargets,
   forwardCap,
+  canFinishThisTurn,
 } from './turns';
 import { WIN_CROSSINGS, DRIVE_PRESETS } from '../config';
 import { key } from './track';
@@ -749,5 +750,56 @@ describe('coastMove', () => {
     coastMove(a);
     coastMove(b);
     expect(JSON.stringify(a.players)).toBe(JSON.stringify(b.players));
+  });
+});
+
+describe('canFinishThisTurn', () => {
+  // Classic handling (3×3 square fan) so the reachable set is obvious by hand.
+  const classicGame = (players = 2) =>
+    newGame(ringTrack(), players, {
+      ...DEFAULT_RULES,
+      drive: { ...DRIVE_PRESETS.classic },
+    });
+
+  it('true on the last lap when the fan reaches past the line', () => {
+    const g = classicGame();
+    g.players[0].crossings = WIN_CROSSINGS - 1;
+    place(g.players[0], [5, 4], [1, 0]); // coasts to x=6, the finish line itself
+    place(g.players[1], [20, 20]); // out of the way
+    expect(canFinishThisTurn(g, 0)).toBe(true);
+  });
+
+  it('false when the same fan still leaves laps to run', () => {
+    const g = classicGame();
+    g.players[0].crossings = WIN_CROSSINGS - 2;
+    place(g.players[0], [5, 4], [1, 0]);
+    place(g.players[1], [20, 20]);
+    expect(canFinishThisTurn(g, 0)).toBe(false);
+  });
+
+  it('false when the line is nowhere near the fan', () => {
+    const g = classicGame();
+    g.players[0].crossings = WIN_CROSSINGS - 1;
+    place(g.players[0], [20, 20], [1, 0]); // far side of the ring
+    place(g.players[1], [5, 4]);
+    expect(canFinishThisTurn(g, 0)).toBe(false);
+  });
+
+  it('false when every candidate past the line is blocked by another car', () => {
+    const g = classicGame(4);
+    g.players[0].crossings = WIN_CROSSINGS - 1;
+    place(g.players[0], [4, 4], [1, 0]); // fan spans x = 4..6; only x=6 crosses
+    place(g.players[1], [6, 3]);
+    place(g.players[2], [6, 4]);
+    place(g.players[3], [6, 5]);
+    expect(canFinishThisTurn(g, 0)).toBe(false);
+  });
+
+  it('false for a car that has already finished', () => {
+    const g = classicGame();
+    g.players[0].crossings = WIN_CROSSINGS;
+    place(g.players[0], [7, 4], [1, 0]);
+    place(g.players[1], [20, 20]);
+    expect(canFinishThisTurn(g, 0)).toBe(false);
   });
 });

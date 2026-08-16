@@ -150,6 +150,24 @@ export function candidates(state: GameState): Candidate[] {
   return candidatesForSeat(state, state.current);
 }
 
+/**
+ * Can this seat cross the finish for good on this very move — is there an
+ * unblocked candidate in the fan that brings crossings up to WIN_CROSSINGS?
+ * Drives the endgame hint: telling a player to get as far past the line as they
+ * can is worse than useless when the line is out of reach this turn.
+ */
+export function canFinishThisTurn(state: GameState, seat: number): boolean {
+  const p = state.players[seat];
+  if (p.crossings >= WIN_CROSSINGS) return false; // already across — no move to make
+  return candidatesForSeat(state, seat).some((c) => {
+    if (c.blocked) return false;
+    // A crash doesn't disqualify the move: computeOutcome still counts a
+    // crossing that happened before the impact.
+    const { crossingDelta } = computeOutcome(state.track, state.rules, p.pos, c.target);
+    return p.crossings + crossingDelta >= WIN_CROSSINGS;
+  });
+}
+
 export function applyMove(state: GameState, cand: Candidate): void {
   if (state.phase !== 'race' || cand.blocked) return;
   const p = state.players[state.current];
