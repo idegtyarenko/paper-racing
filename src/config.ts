@@ -171,6 +171,13 @@ export const AI_MOVE_DELAY_MS = 600;
 export const AI_STREAK_DECAY = 0.6;
 export const AI_MOVE_DELAY_MIN_MS = 180;
 
+/** How long a bot's move may wait for the player to let go of the map, ms.
+ *  Planning a move owns the thread for a while, so it waits out a drag or a
+ *  pinch instead of stuttering it. The cap is the way out of a gesture that
+ *  never ends: iOS Safari sometimes drops the final `pointerup`, and without
+ *  it the race would stay frozen for good. */
+export const AI_GESTURE_MAX_DEFER_MS = 2000;
+
 // ── World / grid ─────────────────────────────────────────
 /**
  * Side length of the square "effectively infinite" field, in cells. The grid

@@ -29,6 +29,7 @@ import { Difficulty, chooseMove } from './model/ai';
 import { buildNavField } from './model/nav';
 import { strings, localeTag, dateLocale } from './i18n';
 import { botMoveDelayMs } from './bot-pacing';
+import { AI_GESTURE_MAX_DEFER_MS } from './config';
 import { render, AppView, MotionFrame } from './view/render';
 import { startAnim, stopAnim, easeOutCubic, prefersReducedMotion } from './view/anim';
 import { buildTimeline, sampleTimeline } from './view/replay-timeline';
@@ -95,6 +96,10 @@ let aiTimer: number | null = null;
  *  shrinks with each one (botMoveDelayMs). Reset the moment the turn is back
  *  with a human, and on any exit from the race. */
 let aiStreak = 0;
+/** Timer that lets a bot move through even though the field is still under a
+ *  finger — the way out of a gesture whose end never arrived (see
+ *  AI_GESTURE_MAX_DEFER_MS). Null whenever nothing is being held back. */
+let aiDeferTimer: number | null = null;
 
 /** Is this seat a bot (and at what difficulty)? Bot-ness lives in state (Player.bot). */
 function isBotSeat(i: number): boolean {
@@ -463,11 +468,40 @@ function myTurn(): boolean {
 }
 
 function cancelAiMove(): void {
+  clearAiTimers();
+  aiStreak = 0;
+}
+
+/** Drop both ways into the next bot move — the pause and the gesture safety
+ *  net — without touching the run counter. */
+function clearAiTimers(): void {
   if (aiTimer !== null) {
     clearTimeout(aiTimer);
     aiTimer = null;
   }
-  aiStreak = 0;
+  if (aiDeferTimer !== null) {
+    clearTimeout(aiDeferTimer);
+    aiDeferTimer = null;
+  }
+}
+
+/**
+ * Play one bot move: plan it, apply it, bring the screen up to date. Split out
+ * of the timer below because the move has two ways in — the pause running out,
+ * and the safety timer that lets it through when a gesture won't end. Whichever
+ * gets here first drops the other, or a hand let go a moment before the safety
+ * timer would fire buys two moves back to back with no pause between them.
+ * Either way commit() schedules the next one properly.
+ */
+function runBotMove(): void {
+  clearAiTimers();
+  if (!S.game || S.game.phase !== 'race' || !isBotSeat(S.game.current) || !S.raceNav)
+    return;
+  aiStreak++; // counted here, not when the pause was set: a move held back by a gesture hasn't been made yet
+  const cand = chooseMove(S.game, S.raceNav, S.game.players[S.game.current].bot!);
+  if (cand) applyMove(S.game, cand);
+  else coastMove(S.game); // all candidates are taken by opponents — coast instead
+  commit();
 }
 
 /**
@@ -496,16 +530,30 @@ function scheduleAiMove(): void {
     aiStreak = 0; // the run is over (or never started) — the next bot waits the full pause
     return;
   }
-  const delay = botMoveDelayMs(aiStreak++);
+  const delay = botMoveDelayMs(aiStreak);
   aiTimer = window.setTimeout(() => {
     aiTimer = null;
-    if (!S.game || S.game.phase !== 'race' || !isBotSeat(S.game.current) || !S.raceNav)
+    // The map is under a finger: planning the move would own the thread for
+    // long enough to tear the drag, so the bot waits its turn out. Once the
+    // hand comes off, gestureEnded schedules it again.
+    if (input.isGesturing()) {
+      if (aiDeferTimer === null) {
+        aiDeferTimer = window.setTimeout(runBotMove, AI_GESTURE_MAX_DEFER_MS);
+      }
       return;
-    const cand = chooseMove(S.game, S.raceNav, S.game.players[S.game.current].bot!);
-    if (cand) applyMove(S.game, cand);
-    else coastMove(S.game); // all candidates are taken by opponents — coast instead
-    commit();
+    }
+    runBotMove();
   }, delay);
+}
+
+/**
+ * The player's hand is off the field — anything held back while it was on can
+ * run now: the bot's move locally, the deferred board sync online. Each half is
+ * a no-op where it doesn't apply, so both are simply called.
+ */
+function gestureEnded(): void {
+  scheduleAiMove();
+  online.syncAfterGesture();
 }
 
 /**
@@ -752,6 +800,7 @@ online.initOnline({
   updateUI,
   setTurnCountdown,
   redraw,
+  isGesturing: input.isGesturing,
   resetToEdit,
 });
 
@@ -772,6 +821,7 @@ input.initInput({
   },
   updateUI,
   redraw,
+  gestureEnded,
 });
 
 // Overlay dismissal (backdrop tap / Escape) for every sheet mounted into it.

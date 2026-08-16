@@ -60,6 +60,9 @@ export interface InputDeps {
   setPending(cand: Candidate): void;
   updateUI(): void;
   redraw(): void;
+  /** The field is no longer under a finger — whatever was put off can run now
+   *  (see isGesturing). Called on every path that can end a gesture. */
+  gestureEnded(): void;
 }
 
 let deps: InputDeps;
@@ -140,6 +143,24 @@ type Gesture =
   | { kind: 'pan'; ox0: number; oy0: number; sx0: number; sy0: number };
 let gesture: Gesture | null = null;
 let activeId: number | null = null;
+
+/**
+ * Is the player's hand on the field right now (dragging, pinching, aiming)?
+ *
+ * The app asks this before starting work that would make the next frames
+ * stutter — above all a bot's move, which plans its route synchronously and
+ * for a few dozen milliseconds owns the thread the gesture needs to keep the
+ * map under the finger. Held work resumes from `gestureEnded`.
+ */
+export function isGesturing(): boolean {
+  return gesture !== null || pinch !== null;
+}
+
+/** Announce the end of a gesture — but only once the last one is really over
+ *  (lifting one finger of a pinch leaves the other still driving the map). */
+function releaseIfIdle(): void {
+  if (!isGesturing()) deps.gestureEnded();
+}
 
 /**
  * Full reset of input state back to a clean slate. This is a safety net
@@ -820,14 +841,17 @@ export function initInput(d: InputDeps): void {
       // pinch does NOT pick a move/finish (no single-pointer gesture starts).
       if (activePointers.size < 2) pinch = null;
       deps.redraw();
+      releaseIfIdle();
       return;
     }
     if (activeId === null || e.pointerId !== activeId) {
       deps.redraw();
+      releaseIfIdle();
       return;
     }
     endGesture(e);
     deps.redraw();
+    releaseIfIdle();
   });
 
   canvas.addEventListener('pointercancel', (e) => {
@@ -836,6 +860,7 @@ export function initInput(d: InputDeps): void {
     if (pinch) {
       if (activePointers.size < 2) pinch = null;
       deps.redraw();
+      releaseIfIdle();
       return;
     }
     if (activeId === null || e.pointerId !== activeId) return;
@@ -846,6 +871,7 @@ export function initInput(d: InputDeps): void {
     }
     resetGestureState();
     deps.redraw();
+    releaseIfIdle();
   });
 
   // Cursor left the field: clear hover and forget the position, so reaimHover
@@ -894,6 +920,7 @@ export function initInput(d: InputDeps): void {
   const parkGestures = (): void => {
     resetGestureState({ keepPick: true });
     deps.redraw();
+    releaseIfIdle();
   };
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) parkGestures();

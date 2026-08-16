@@ -64,6 +64,9 @@ export interface OnlineDeps {
   /** Show time left on the current turn (mine goes on the button, others' in the status). */
   setTurnCountdown(msLeft: number | null, mine: boolean): void;
   redraw(): void;
+  /** Is the player dragging/pinching the map right now? Their own board waits
+   *  for them to let go before it catches up (see syncAfterGesture). */
+  isGesturing(): boolean;
   /** Full reset back to a clean editor (leaving online mode). */
   resetToEdit(): void;
 }
@@ -155,6 +158,27 @@ function commitOnline(): void {
   deps.updateUI();
   deps.redraw();
   turnWatch.armTurnWatch();
+}
+
+/** An opponent's move arrived while the player was dragging the map, and their
+ *  own board hasn't been brought up to date yet. */
+let syncPending = false;
+
+/** Bring our own screen up to the current state: fan, panel, canvas. */
+function syncBoard(): void {
+  syncPending = false;
+  deps.refreshCands();
+  deps.updateUI();
+  deps.redraw();
+}
+
+/**
+ * The hand is off the map — show what came in while it was on. Called from
+ * main's gestureEnded for every game, so it must be a no-op when there was
+ * nothing to catch up on.
+ */
+export function syncAfterGesture(): void {
+  if (syncPending) syncBoard();
 }
 
 /**
@@ -418,13 +442,17 @@ const handlers: OnlineHandlers = {
       closeOverlay();
       deps.fitToContent();
     }
-    deps.refreshCands();
     // armTurnWatch before updateUI: it resets skipVisible for the new turn, otherwise a
     // stale skip flag from the previous turn would leak into the render (a "hasn't
     // moved in a while" button showing on our own turn).
     turnWatch.armTurnWatch();
-    deps.updateUI();
-    deps.redraw();
+    // Everything above is the race itself and happens on time — nobody else's
+    // game may wait on our finger. What waits is only OUR board: rebuilding the
+    // fan and repainting under a drag is work stolen from the drag's own
+    // frames, and several moves arriving during one long gesture then cost one
+    // catch-up instead of several.
+    if (deps.isGesturing()) syncPending = true;
+    else syncBoard();
     // A setting changed in the last seconds of the lobby: the announcement is still
     // waiting out its window, and the race has started meanwhile. Say it now, against
     // the rules the race actually runs on — there's nothing left to wait for.
