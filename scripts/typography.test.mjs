@@ -50,6 +50,29 @@ describe('typography() — English', () => {
   });
 });
 
+describe('typography() — apostrophes (every locale)', () => {
+  it('turns a typewriter apostrophe inside a word into the typographic one', () => {
+    expect(typography("can't", LOCALE_RULES.en)).toBe('can’t');
+    expect(typography("the creator's settings", LOCALE_RULES.en)).toBe(
+      'the creator’s settings',
+    );
+    expect(typography("сям'я", LOCALE_RULES.be)).toBe('сям’я');
+  });
+
+  it('handles a possessive plural, where nothing follows the apostrophe', () => {
+    expect(typography("the cars' places", LOCALE_RULES.en)).toBe('the cars’ places');
+  });
+
+  it('leaves an escaped quote alone (it delimits, it is not punctuation)', () => {
+    expect(typography("don\\'t", LOCALE_RULES.en)).toBe("don\\'t");
+  });
+
+  it('is idempotent', () => {
+    const once = typography("It's the creator's", LOCALE_RULES.en);
+    expect(typography(once, LOCALE_RULES.en)).toBe(once);
+  });
+});
+
 describe('transform() over locale source', () => {
   it('preserves ${…} substitutions in template literals', () => {
     const src = 'export const x = { online: { roster: (n) => `Игроки: ${n} из 6` } };';

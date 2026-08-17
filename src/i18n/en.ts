@@ -56,13 +56,13 @@ export const en = {
     /** Compact step counter for the top strip, e.g. "Step 2/4" (rendered caps). */
     stepCounter: (n: number, total: number): string => `Step ${n}/${total}`,
     errors: {
-      selfCross: "The track can't cross itself\u00A0— draw it again.",
-      tooSmall: "That loop's too small\u00A0— draw a bigger one.",
+      selfCross: 'The track can’t cross itself\u00A0— draw it again.',
+      tooSmall: 'That loop’s too small\u00A0— draw a bigger one.',
       finishNarrow:
-        "It's too narrow here for a start\u00A0— pick another spot, or go back and widen it.",
+        'It’s too narrow here for a start\u00A0— pick another spot, or go back and widen it.',
       finishMiss: 'The start line has to sit on the track.',
     },
-    gestureCancelled: "That didn't take\u00A0— try again.",
+    gestureCancelled: 'That didn’t take\u00A0— try again.',
   },
 
   // The step navigation shared by track drawing and race preparation
@@ -92,9 +92,9 @@ export const en = {
   track: {
     strokeShort: 'Draw it in one stroke, without lifting your finger.',
     notClosed: 'The track has to be a loop\u00A0— close it up.',
-    tooNarrow: "The track's too narrow\u00A0— widen it.",
+    tooNarrow: 'The track’s too narrow\u00A0— widen it.',
     noStartRoom:
-      "There's no room on the grid for the cars to line up\u00A0— pick a wider spot for the start.",
+      'There’s no room on the grid for the cars to line up\u00A0— pick a wider spot for the start.',
   },
 
   centerline: {
@@ -115,7 +115,7 @@ export const en = {
   // Game-mode step (after the track is ready).
   modeSelect: {
     /** Screen title. */
-    title: "Who's playing?",
+    title: 'Who’s playing?',
     /** The three ways to play — title + what it means. */
     local: 'With friends on one device',
     localSub: 'Pass the phone between racers',
@@ -165,7 +165,7 @@ export const en = {
     driveModeClassic: 'Classic',
     driveModeCustom: 'Custom',
     driveExplainSports:
-      "The car brakes harder than it accelerates and won't let you add speed and " +
+      'The car brakes harder than it accelerates and won’t let you add speed and ' +
       'turn in the same move\u00A0— you have to set up for a corner in advance.',
     driveExplainGt:
       'More grip and braking than a sports car, plus light downforce that tightens ' +
@@ -189,7 +189,7 @@ export const en = {
     penaltyLabel: 'Off-track penalty',
     penaltyHint:
       'Penalty turns for flying off the track. Punish by exit speed (the faster you ' +
-      "fly off, the longer you're stuck in the gravel) or by a fixed number of turns.",
+      'fly off, the longer you’re stuck in the gravel) or by a fixed number of turns.',
     // Penalty type.
     dynamic: 'By exit speed',
     static: 'Fixed',
@@ -262,15 +262,15 @@ export const en = {
     notFound: 'No game found with that code.',
     full: 'This race is already full (6\u00A0players max).',
     started: 'This race has already started.',
-    error: "Couldn't connect. Try again.",
+    error: 'Couldn’t connect. Try again.',
     closed: 'The game has ended or was closed by the track creator.',
     // Sending a move / start (confirm-first: write first, then switch locally).
     sending: 'Sending move…',
-    sendFailed: "Couldn't send your move. Check your connection and try again.",
+    sendFailed: 'Couldn’t send your move. Check your connection and try again.',
     retrySend: 'Send again',
     joining: 'Connecting…',
     starting: 'Starting…',
-    startFailed: "Couldn't start the race. Try again.",
+    startFailed: 'Couldn’t start the race. Try again.',
     // Guest hint on the online results screen: a rematch is started by the track creator.
     rematchWaiting:
       'The track creator can start a rematch\u00A0— everyone continues on the same track.',
@@ -283,10 +283,10 @@ export const en = {
     leaveRace: 'Leave the game',
     /** Online host with bots still driving: only this client works out their moves, so
      *  walking out ends the race for everyone else. Asked, not forbidden. */
-    leaveBotsConfirm: "If you leave, everyone else's race is over.",
+    leaveBotsConfirm: 'If you leave, everyone else’s race is over.',
     /** What those guests are then told, with the way out as the only button. */
     hostLeftStalled:
-      "The track creator has left. This race can't go on\u00A0\u2014\u00A0nobody is driving the bots.",
+      'The track creator has left. This race can’t go on\u00A0\u2014\u00A0nobody is driving the bots.',
     /** Someone else walked out of the room for good — announced to everyone still
      *  in it, in the lobby and mid-race alike. Distinct from `playerRetired`: that
      *  one is still here watching, this one is gone and won't be in the next race. */
@@ -361,7 +361,7 @@ export const en = {
     allRetiredSub: 'No cars finished\u00A0— no result this time',
     /** A dead heat for first place. */
     drawTitle: 'Photo finish',
-    draw: "Too close to call\u00A0— the photo finish couldn't split them!",
+    draw: 'Too close to call\u00A0— the photo finish couldn’t split them!',
     /** "Retire from race" — a row in the global menu, shown only mid-race. */
     retire: 'Retire from race',
     /** Retire-confirmation dialog title. */
@@ -373,7 +373,7 @@ export const en = {
     /** Label for the turn-order strip (who's moving now and who's next). */
     queueLabel: 'Turn order',
     /** Toast when a preselected move ("aim") became impossible after someone's move. */
-    preselectCleared: "Your planned move won't work now",
+    preselectCleared: 'Your planned move won’t work now',
     /** Toast after the PWA auto-updated to a fresh build. */
     updated: 'Updated to the latest version',
   },
@@ -402,12 +402,13 @@ export const en = {
 
   rules: {
     // Paragraphs separated by \n\n; .rules__text renders them via white-space: pre-line.
-    // NBSP ( ) are maintained by scripts/typography.mjs — run `npm run typo`, don't hand-edit.
+    // NBSP ( ) and apostrophes (’) are maintained by scripts/typography.mjs —
+    // run `npm run typo`, don't hand-edit.
     body:
       'Paper Racing is a pen-and-paper racing game on graph paper. Draw a loop track and lap it faster than your rivals.\n\n' +
-      "Your car rolls with momentum\u00A0— it keeps drifting the same way on its own. Each turn you can only nudge it a little: pick one of the highlighted cells. You can't swerve or stop on a dime, so brake and set up your corners early.\n\n" +
-      "Fly off the track and you're stuck in the gravel. The faster you were going, the longer it takes to dig out\u00A0— and once you're free, you start from a standstill.\n\n" +
-      "You can't drive through or onto another car: rivals hold their ground, just like in a real race.\n\n" +
+      'Your car rolls with momentum\u00A0— it keeps drifting the same way on its own. Each turn you can only nudge it a little: pick one of the highlighted cells. You can’t swerve or stop on a dime, so brake and set up your corners early.\n\n' +
+      'Fly off the track and you’re stuck in the gravel. The faster you were going, the longer it takes to dig out\u00A0— and once you’re free, you start from a standstill.\n\n' +
+      'You can’t drive through or onto another car: rivals hold their ground, just like in a real race.\n\n' +
       'First one back to the start/finish line wins. And if several cars cross it at almost the same moment, whoever went furthest past the line comes out ahead.\n\n' +
       'Car handling and off-track penalties can be tuned to taste\u00A0— check the settings.',
   },
@@ -415,7 +416,7 @@ export const en = {
   install: {
     title: 'Install the game on your home screen',
     /** Shown in both branches: why installing is worth it. */
-    body: "It'll open full-screen and work offline.",
+    body: 'It’ll open full-screen and work offline.',
     action: 'Install',
     /** iOS Safari has no install button, so we spell out the menu path.
         The three fragments wrap around the "⋯" and "Share" icons. */

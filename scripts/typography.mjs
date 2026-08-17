@@ -1,12 +1,13 @@
-// Typography build tool: inserts non-breaking spaces (U+00A0) into the string
-// literals of the locale files `src/i18n/{ru,be,en}.ts`, so the layout never
-// leaves a dangling short preposition/conjunction, a dangling dash, or a break
-// between a number and its unit.
+// Typography build tool over the string literals of the locale files
+// `src/i18n/{ru,be,en}.ts`. It inserts non-breaking spaces (U+00A0), so the
+// layout never leaves a dangling short preposition/conjunction, a dangling
+// dash, or a break between a number and its unit; and it replaces the
+// typewriter apostrophe with the typographic ’ (U+2019).
 //
 // Rules are per-locale (see LOCALE_RULES): Russian and Belarusian glue short
 // words to the following word (the Belarusian letter class also includes
 // `і`/`ў`); English doesn't glue short prepositions (only "number+unit" and a
-// non-breaking space before a dash).
+// non-breaking space before a dash). The apostrophe rule is locale-independent.
 //
 // Not a runtime step: the fix is baked straight into the source as the escape
 // sequence ` ` (visible in diffs, so it's reviewable) — the app never computes
@@ -67,6 +68,14 @@ export function typography(text, rules = LOCALE_RULES.ru) {
   out = out.replace(/ —/g, `${NBSP}—`);
   // 3. Don't break a number from the word/unit that follows it ("30 сек" / "30 sec").
   out = out.replace(new RegExp(`(\\d) (?=[${wordClass}])`, 'gu'), `$1${NBSP}`);
+  // 4. The typewriter apostrophe is not punctuation — the typographic one is
+  //    ’ (U+2019): "can't" → "can’t", "сям'я" → "сям’я". Applies to every
+  //    locale, so the letter test is Unicode-wide rather than the locale's
+  //    class. A `'` right after a backslash is an escaped string delimiter,
+  //    not an apostrophe — the lookbehind (a LETTER must precede) skips it.
+  //    Written as the raw glyph: unlike a non-breaking space it is visible in
+  //    the source, so escaping it would only make the strings harder to read.
+  out = out.replace(/(?<=\p{L})'/gu, '’');
   return out;
 }
 
