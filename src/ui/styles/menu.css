@@ -176,7 +176,10 @@
   display: block;
 }
 
-/* ── Build stamp ────────────────────────────────────────────────────────────── */
+/* ── Build stamp ──────────────────────────────────────────────────────────────
+   The only place the running build is shown. Five quick taps on it toggle the
+   SW debug overlay (see menu.ts) — hence no text selection: on a phone the
+   repeated taps otherwise raise the selection handles instead. */
 .pr-menu__foot {
   margin-top: auto;
   padding: 16px 24px 24px;
@@ -184,6 +187,8 @@
   font-family: var(--pr-mono);
   font-size: var(--pr-text-sm);
   color: var(--pr-ink-faint);
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* ── Retire from race ───────────────────────────────────────────────────────

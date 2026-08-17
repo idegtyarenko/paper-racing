@@ -8,7 +8,6 @@
 // the close × as a floating button outside the drawer, mirroring the burger.
 
 import { strings, setLocale, locale, LocaleCode } from '../i18n';
-import { versionLabel } from './dialogs';
 import { el, button, icon, buildItem, buildBrand } from './pr-chrome';
 import { CHECK_SVG, CLOSE_SVG, FLAG_SVG, GLOBE_SVG, LANG_SVG, RULES_SVG } from './icons';
 
@@ -45,6 +44,41 @@ let root: HTMLElement | null = null;
 let footEl: HTMLElement;
 let retireItem: HTMLButtonElement;
 let closeTimer = 0;
+
+/** Build label ("<commit> · <date>") for the drawer's foot. Published by main.ts
+ *  at startup, long before the drawer is built — hence a value here rather than
+ *  a node the menu would have to scrape text out of. */
+let version = '';
+/** Five quick taps on the build label toggle the SW debug overlay (see main.ts). */
+let onVersionTaps: () => void = () => {};
+
+/**
+ * Publish the build label. The stamp lives here alone: repeating it in the rules
+ * sheet gave the same fact two homes, and the drawer is reachable from every
+ * screen. `onTaps` fires on five quick taps on it.
+ */
+export function setVersionLabel(label: string, onTaps: () => void): void {
+  version = label;
+  onVersionTaps = onTaps;
+  if (footEl) footEl.textContent = label;
+}
+
+/** Window within which taps count as part of the same burst. */
+const VERSION_TAP_MS = 600;
+const VERSION_TAPS = 5;
+
+function bindVersionTaps(elem: HTMLElement): void {
+  let taps = 0;
+  let last = 0;
+  elem.addEventListener('click', () => {
+    const now = performance.now();
+    taps = now - last < VERSION_TAP_MS ? taps + 1 : 1;
+    last = now;
+    if (taps < VERSION_TAPS) return;
+    taps = 0;
+    onVersionTaps();
+  });
+}
 
 function build(): HTMLElement {
   const menu = el('div', 'pr-menu');
@@ -120,6 +154,8 @@ function build(): HTMLElement {
   });
 
   footEl = el('div', 'pr-menu__foot', panel);
+  footEl.setAttribute('aria-hidden', 'true');
+  bindVersionTaps(footEl);
 
   document.body.append(menu);
   return menu;
@@ -139,7 +175,7 @@ export function openMenu(): void {
   root.classList.remove('pr-menu--closing');
   // Read at open time, not at build time: main.ts publishes the label on its
   // own schedule, so a value captured once could still be the empty default.
-  footEl.textContent = versionLabel();
+  footEl.textContent = version;
   retireItem.hidden = !handlers.canRetire();
   root.hidden = false;
   document.addEventListener('keydown', onKeyDown);

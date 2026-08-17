@@ -948,15 +948,6 @@ body.is-lobby .pr-conn {
   color: var(--pr-ink-soft);
   white-space: pre-line;
 }
-/* Build label at the foot of the rules sheet — a subtle sign the PWA updated. */
-.pr-sheet__version {
-  margin-top: 4px;
-  text-align: center;
-  font-family: var(--pr-mono);
-  font-size: var(--pr-text-sm);
-  color: var(--pr-ink-dim);
-  font-variant-numeric: tabular-nums;
-}
 /* Phone: the sheet is a bottom sheet, full width, with a sliver of backdrop
    left visible above it. */
 @media (max-width: 700px) {

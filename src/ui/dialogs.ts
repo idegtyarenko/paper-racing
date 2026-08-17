@@ -22,13 +22,6 @@ connBanner.textContent = strings.online.reconnecting;
 // ── Rules ("how to play") ───────────────────────────────────────────────────
 
 let rulesSheet: HTMLElement | null = null;
-let versionEl: HTMLElement | null = null;
-
-/** Build label ("<commit> · <date>"), shown at the foot of the rules sheet and
- *  read back by the global menu for its footer. */
-let version = '';
-/** Five quick taps on the build label toggle the SW debug overlay (see main.ts). */
-let onVersionTaps: () => void = () => {};
 
 function buildRules(): HTMLElement {
   const sheet = buildSheet(strings.buttons.rulesTitle);
@@ -36,10 +29,8 @@ function buildRules(): HTMLElement {
   const close = button('pr-btn', sheet);
   close.textContent = strings.buttons.toWheel;
   bindTap(close, closeOverlay);
-  versionEl = el('p', 'pr-sheet__version', sheet);
-  versionEl.setAttribute('aria-hidden', 'true');
-  versionEl.textContent = version;
-  bindVersionTaps(versionEl);
+  // The build stamp is NOT repeated here: it lives once, at the foot of the
+  // burger drawer (src/ui/menu.ts), which is reachable from every screen.
   return sheet;
 }
 
@@ -47,40 +38,6 @@ function buildRules(): HTMLElement {
 export function openRules(): void {
   if (!rulesSheet) rulesSheet = buildRules();
   openSheet(rulesSheet);
-}
-
-/**
- * Publish the build label. Called at startup, long before the sheet that shows
- * it exists — hence a value here rather than a node in index.html that both
- * main.ts and the menu had to scrape text out of. `onTaps` fires on five quick
- * taps on the label.
- */
-export function setVersionLabel(label: string, onTaps: () => void): void {
-  version = label;
-  onVersionTaps = onTaps;
-  if (versionEl) versionEl.textContent = label;
-}
-
-/** The build label, for the menu's footer. */
-export function versionLabel(): string {
-  return version;
-}
-
-/** Window within which taps count as part of the same burst. */
-const VERSION_TAP_MS = 600;
-const VERSION_TAPS = 5;
-
-function bindVersionTaps(elem: HTMLElement): void {
-  let taps = 0;
-  let last = 0;
-  elem.addEventListener('click', () => {
-    const now = performance.now();
-    taps = now - last < VERSION_TAP_MS ? taps + 1 : 1;
-    last = now;
-    if (taps < VERSION_TAPS) return;
-    taps = 0;
-    onVersionTaps();
-  });
 }
 
 // ── Join by code ────────────────────────────────────────────────────────────

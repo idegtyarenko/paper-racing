@@ -58,7 +58,7 @@ import {
 } from './ui/editor-chrome';
 import { initWizardNav, renderWizardNav, wizardSteps } from './ui/wizard-nav';
 import { openConfirm } from './ui/confirm';
-import { initMenu } from './ui/menu';
+import { initMenu, setVersionLabel } from './ui/menu';
 import {
   initSetupChrome,
   renderSetupChrome,
@@ -70,7 +70,7 @@ import * as session from './online/online';
 import * as online from './online/online-controller';
 import * as input from './view/input';
 import { initInstallPrompt } from './ui/install-prompt';
-import { openRules, setVersionLabel, showToast } from './ui/dialogs';
+import { openRules, showToast } from './ui/dialogs';
 import { bindOverlayClose } from './ui/dom';
 import { initPwa } from './pwa';
 import { toggleSwDebug } from './sw-debug';
@@ -1003,10 +1003,10 @@ document.addEventListener('visibilitychange', () => {
 // The document language follows the active locale (markup defaults to lang="en").
 document.documentElement.lang = localeTag;
 
-// Build label at the bottom of the "Rules" sheet — an honest indicator of
-// which code is actually running (the string is compiled into the bundle):
-// commit + build time. Time is formatted in the local hour so "just now"
-// matches the wall clock.
+// Build label at the foot of the burger drawer — an honest indicator of which
+// code is actually running (the string is compiled into the bundle): commit +
+// build time. Time is formatted in the local hour so "just now" matches the
+// wall clock.
 const buildLabel = new Date(__BUILD_TIME__).toLocaleString(dateLocale, {
   day: '2-digit',
   month: '2-digit',
@@ -1017,7 +1017,7 @@ const buildLabel = new Date(__BUILD_TIME__).toLocaleString(dateLocale, {
 // Hidden activation of SW debug from inside the app: a standalone PWA has
 // its own localStorage bucket (the `?swdebug` flag from Safari doesn't carry
 // over) and no address bar — toggle the overlay with 5 quick taps on the
-// build label in "Rules".
+// build label in the burger drawer.
 setVersionLabel(`${__COMMIT__} · ${buildLabel}`, () => {
   const on = toggleSwDebug();
   showToast(on ? 'SW debug ON' : 'SW debug OFF', 1500);
