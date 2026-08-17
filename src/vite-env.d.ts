@@ -8,6 +8,9 @@ declare const __BUILD_TIME__: number;
 /** Whether a waiting SW update is applied immediately (staging preview) rather
  *  than only at a safe, not-mid-race moment (production). */
 declare const __PWA_EAGER_UPDATE__: boolean;
+/** Commits in this build that aren't on production yet, newest first. Empty for
+ *  a production build. */
+declare const __UNRELEASED__: { sha: string; subject: string }[];
 
 interface ImportMetaEnv {
   /** Supabase project URL (online mode). See .env.example. */

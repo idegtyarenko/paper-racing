@@ -30,6 +30,11 @@ jobs:
         with:
           ref: staging
           path: staging
+          # Full history (and with it `origin/main`) — the staging build lists the
+          # commits that aren't on production yet, which needs `main..HEAD` to be
+          # computable. A shallow checkout has neither, and the list would silently
+          # come out empty. See `unreleased` in vite.config.ts.
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -75,7 +80,11 @@ jobs:
         uses: actions/cache@v6
         with:
           path: staging/dist
-          key: staging-dist-${{ steps.shas.outputs.staging }}
+          # Main's commit is part of the key because the staging bundle contains the
+          # `main..staging` commit list: after a release, a cached staging dist would
+          # keep advertising as "not on prod" what just shipped. Cost is one extra
+          # staging rebuild per release.
+          key: staging-dist-${{ steps.shas.outputs.staging }}-${{ steps.shas.outputs.main }}
       # Гейт деплоя отдельными шагами — чтобы в логах CI было видно, ЧТО упало
       # (тайпчек / тесты / сборка), а не один общий `npm run build`. Провал любого
       # шага роняет job `build` → job `deploy` (needs: build) не запускается.

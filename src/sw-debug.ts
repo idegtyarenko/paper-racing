@@ -192,12 +192,41 @@ const CSS = `
 .swdbg__t {
   color: #6f9c88;
 }
+/* "Not on prod yet": a fixed-height block above the log, so a long list of
+   commits can't push the log itself out of the panel. */
+.swdbg__rel {
+  flex: 0 0 auto;
+  max-height: 30vh;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 4px;
+}
+.swdbg__relhead {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #ffd166;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.swdbg__rellist {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  word-break: break-word;
+}
+.swdbg__relsha {
+  color: #6f9c88;
+}
 /* The hidden attribute by itself only gives display:none from UA styles,
    which gets overridden by our own .swdbg__panel{display:flex} — so we
    suppress it explicitly. */
 .swdbg[hidden],
 .swdbg__panel[hidden],
-.swdbg__badge[hidden] {
+.swdbg__badge[hidden],
+.swdbg__rellist[hidden] {
   display: none;
 }
 `;
@@ -381,11 +410,53 @@ class SwDebugImpl implements SwDebug {
     this.logEl = document.createElement('div');
     this.logEl.className = 'swdbg__log';
 
-    this.panel.append(head, this.logEl);
+    const unreleased = this.buildUnreleased();
+
+    this.panel.append(head, ...(unreleased ? [unreleased] : []), this.logEl);
     this.root.append(this.badge, this.panel);
     document.body.appendChild(this.root);
 
     this.refreshState();
+  }
+
+  /**
+   * The commits this build has over production, so that opening the staging app
+   * says what's there to test. Returns null on production, where the list
+   * compiled in is empty (see `unreleased` in vite.config.ts).
+   *
+   * Expanded by default — being seen without being looked for is the point.
+   */
+  private buildUnreleased(): HTMLElement | null {
+    if (__UNRELEASED__.length === 0) return null;
+
+    const box = document.createElement('div');
+    box.className = 'swdbg__rel';
+
+    const list = document.createElement('div');
+    list.className = 'swdbg__rellist';
+
+    const head = document.createElement('button');
+    head.type = 'button';
+    head.className = 'swdbg__relhead';
+    const setOpen = (open: boolean) => {
+      list.hidden = !open;
+      head.textContent = `${open ? '▾' : '▸'} not on prod (${__UNRELEASED__.length})`;
+    };
+    head.addEventListener('click', () => setOpen(list.hidden));
+    setOpen(true);
+
+    for (const c of __UNRELEASED__) {
+      const row = document.createElement('div');
+      row.className = 'swdbg__row';
+      const sha = document.createElement('span');
+      sha.className = 'swdbg__relsha';
+      sha.textContent = `${c.sha} `;
+      row.append(sha, document.createTextNode(c.subject));
+      list.appendChild(row);
+    }
+
+    box.append(head, list);
+    return box;
   }
 
   /** Turn debugging off entirely: clear the saved flag and remove the overlay
@@ -431,9 +502,15 @@ class SwDebugImpl implements SwDebug {
     this.render();
   }
 
-  /** Full text for export: a header (build id + state snapshot) plus the whole log. */
+  /** Full text for export: a header (build id + state snapshot, plus what this
+   *  build has over production) and the whole log. A log shared from a phone
+   *  should say by itself which revision it came from and what's new in it. */
   private fullLogText(): string {
-    const header = `SW log · build ${__COMMIT__} · ${fmtDateTime(__BUILD_TIME__)}\nstate: ${this.stateEl.textContent}`;
+    const unreleased = __UNRELEASED__.length
+      ? `\nnot on prod (${__UNRELEASED__.length}):\n` +
+        __UNRELEASED__.map((c) => `  ${c.sha} ${c.subject}`).join('\n')
+      : '';
+    const header = `SW log · build ${__COMMIT__} · ${fmtDateTime(__BUILD_TIME__)}\nstate: ${this.stateEl.textContent}${unreleased}`;
     const body = this.entries.map((e) => `${fmtTime(e.t)} ${e.msg}`).join('\n');
     return `${header}\n${body}`;
   }

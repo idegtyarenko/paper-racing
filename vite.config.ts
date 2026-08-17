@@ -33,12 +33,46 @@ const commitTime = (() => {
   }
 })();
 
+// Commits that are in this build but not on production yet — the debug overlay
+// lists them so that opening the staging app answers "what is there to test here".
+// No isStaging gate: on `main` the range is empty by itself, and leaving it open
+// means the list also shows in a local `npm run dev` on the staging branch.
+const unreleased = (() => {
+  try {
+    // CI checks each branch out into its own directory, so a local `main` branch
+    // doesn't exist next to `staging` — the remote-tracking ref is what's there
+    // (deploy.yml fetches full history for staging so that this resolves).
+    const base = ['origin/main', 'main'].find((ref) => {
+      try {
+        execSync(`git rev-parse --verify --quiet ${ref}`, { stdio: 'pipe' });
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    if (!base) return [];
+    // %x1f (unit separator) can't occur inside a commit subject, unlike any
+    // printable delimiter.
+    const out = execSync(`git log --format=%h%x1f%s ${base}..HEAD`).toString();
+    return out
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        const [sha, subject] = line.split('\x1f');
+        return { sha, subject };
+      });
+  } catch {
+    return [];
+  }
+})();
+
 export default defineConfig({
   base,
   // Build label for the version indicator in the "Rules" popup.
   define: {
     __COMMIT__: JSON.stringify(commit),
     __BUILD_TIME__: JSON.stringify(commitTime),
+    __UNRELEASED__: JSON.stringify(unreleased),
     // Staging applies a waiting SW update immediately; production waits for a
     // safe (not mid-race) moment. See src/pwa.ts.
     __PWA_EAGER_UPDATE__: JSON.stringify(isStaging),
