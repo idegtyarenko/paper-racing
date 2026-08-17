@@ -120,7 +120,7 @@ export const en = {
     local: 'With friends on one device',
     localSub: 'Pass the phone between racers',
     online: 'With friends online',
-    onlineSub: 'Host or join a game',
+    onlineSub: 'Create a race and send friends the code',
     ai: 'You versus the computer',
     aiSub: 'Race with up to 5\u00A0bots',
   },
