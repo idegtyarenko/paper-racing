@@ -15,6 +15,7 @@ import {
   dist,
   closedNormals,
   distPointToSegment,
+  distPointToPolyline,
   closestPointOnSegment,
   selfIntersectsClosed,
   pointInPolygon,
@@ -23,13 +24,17 @@ import {
   smoothClosed,
 } from '../geometry';
 import { strings } from '../i18n';
-import { WIDTH_MIN, WIDTH_MAX, WORLD_SIZE, GAP_MIN } from '../config';
+import { WIDTH_MIN, WIDTH_MAX, WORLD_SIZE, GAP_MIN, ROAD_MIN } from '../config';
 
 // Range of overall track width (cells) — re-exported from config for external imports.
 export { WIDTH_MIN, WIDTH_MAX };
 
-/** Lower bound on half-width: any narrower and the road wouldn't have room for cells. */
-const HALF_MIN = 0.7;
+/** Lower bound on half-width: any narrower and the road wouldn't have room for cells.
+ *  Derived from ROAD_MIN so the offsets, the emergency shrink and the edge drag all
+ *  aim at the same floor — but it's only what the offsets ASK for: the smoothing in
+ *  offsetEdges shaves the road further, so the realized width is what edgesValid
+ *  actually checks (hasNarrowRoad). */
+const HALF_MIN = ROAD_MIN / 2;
 /** Grass gap between closely-passing parts of the track, in cells. */
 const SELF_GAP = 1.0;
 /** Fraction of the curvature radius up to which a concave edge may be offset. */
@@ -39,6 +44,11 @@ const WORLD_MARGIN = 0.3;
 /** Smoothing of the final edge: number of passes and strength (0..1). */
 const EDGE_SMOOTH_ITERS = 4;
 const EDGE_SMOOTH_FACTOR = 0.5;
+/** Aim a hair above the road floor: width is measured at the vertices, and the true
+ *  minimum can sit just between two of them. */
+const FLOOR_MARGIN = 0.03;
+/** Passes of the widening repair — each one measures the edges it just produced. */
+const WIDEN_PASSES = 6;
 /** Target resampling step for the centerline: keeps vertex count within reasonable bounds. */
 const CENTER_MAX_VERTS = 380;
 
@@ -57,6 +67,13 @@ export interface WidthModel {
 export interface OffsetCaps {
   maxOut: number[];
   maxIn: number[];
+  /** The same bounds without the curvature term. Curvature is a shape guard — go past
+   *  it and the concave edge starts folding on itself, which edgesValid catches
+   *  anyway — whereas proximity and the world edge protect the grass median and the
+   *  playfield, and must hold. Widening a too-narrow neck (widenToFloor) is allowed
+   *  up to these, so a tight corner can't pin the road below ROAD_MIN. */
+  hardOut: number[];
+  hardIn: number[];
 }
 
 /** Cumulative arc length over the vertices of a closed polyline, plus total length. */
@@ -140,6 +157,8 @@ export function offsetCaps(center: Polyline, outNormal: Vec[]): OffsetCaps {
   const { cum, total } = arcLengths(center);
   const maxOut = new Array(n).fill(Infinity);
   const maxIn = new Array(n).fill(Infinity);
+  const hardOut = new Array(n).fill(Infinity);
+  const hardIn = new Array(n).fill(Infinity);
   // Segments closer than this along the arc aren't counted as "another part"
   // (they're just this vertex's own neighbors).
   const nearArc = WIDTH_MAX * 1.5;
@@ -150,14 +169,31 @@ export function offsetCaps(center: Polyline, outNormal: Vec[]): OffsetCaps {
     // 1. Proximity to non-adjacent parts of the centerline: both edges split the gap in half.
     let dSelf = Infinity;
     for (let j = 0; j < n; j++) {
-      const midArc = (cum[j] + cum[(j + 1) % n]) / 2;
+      // The closing segment ends at `total`, not at cum[0] = 0 — averaging with 0
+      // would put its midpoint at the middle of the ring, and vertex 0 would take its
+      // own neighbour for a distant pass of the track (same trap as in
+      // neckThinnerThan). It read as "the loop touches itself here" and pinned the
+      // width down to the floor at the seam of every drawing.
+      const midArc = (cum[j] + (j + 1 < n ? cum[j + 1] : total)) / 2;
       if (arcGap(cum[i], midArc, total) < nearArc) continue;
       dSelf = Math.min(dSelf, distPointToSegment(p, center[j], center[(j + 1) % n]));
     }
     if (dSelf < Infinity) {
-      const half = Math.max(HALF_MIN, (dSelf - SELF_GAP) / 2);
+      // The gap between the two passes is shared: grass in the middle, road on either
+      // side. Normally the grass takes SELF_GAP and the road gets the rest — but a
+      // road narrower than the floor is unnavigable (see ROAD_MIN), while thinner
+      // grass is merely thinner grass, all the way down to the correctness limit
+      // GAP_MIN. So when the two compete, the grass gives way first.
+      const grass = Math.max(GAP_MIN, Math.min(SELF_GAP, dSelf - 2 * HALF_MIN));
+      const half = Math.max(HALF_MIN, (dSelf - grass) / 2);
       maxOut[i] = Math.min(maxOut[i], half);
       maxIn[i] = Math.min(maxIn[i], half);
+      // The hard limit is where the grass would thin past GAP_MIN and cars could
+      // drive between the two passes — not the polite floor above, which is a target
+      // the widening repair is allowed to overshoot.
+      const room = Math.max(0, (dSelf - GAP_MIN) / 2);
+      hardOut[i] = Math.min(hardOut[i], room);
+      hardIn[i] = Math.min(hardIn[i], room);
     }
 
     // 2. Curvature: offset on the concave side is limited by the turn radius.
@@ -182,10 +218,14 @@ export function offsetCaps(center: Polyline, outNormal: Vec[]): OffsetCaps {
     }
 
     // 3. World edge.
-    maxOut[i] = Math.min(maxOut[i], worldCap(p, outNormal[i]));
-    maxIn[i] = Math.min(maxIn[i], worldCap(p, scale(outNormal[i], -1)));
+    const wOut = worldCap(p, outNormal[i]);
+    const wIn = worldCap(p, scale(outNormal[i], -1));
+    maxOut[i] = Math.min(maxOut[i], wOut);
+    maxIn[i] = Math.min(maxIn[i], wIn);
+    hardOut[i] = Math.min(hardOut[i], wOut);
+    hardIn[i] = Math.min(hardIn[i], wIn);
   }
-  return { maxOut, maxIn };
+  return { maxOut, maxIn, hardOut, hardIn };
 }
 
 /**
@@ -222,14 +262,14 @@ function withinWorld(poly: Polyline): boolean {
 }
 
 /**
- * Whether there's a grass strip thinner than minGap between non-adjacent parts
- * of edge target (probe is the ring whose vertices we're checking). For each
- * probe vertex we take the closest point on a non-adjacent segment of target;
- * if the midpoint of that gap lies off the road, it's a grass strip, not just
- * the narrow band of road between the outer and inner edge. Arc neighbors are
- * skipped (sameRing), same as in offsetCaps. The "off the road" check
- * (O(n) via pointInPolygon) is gated by the minGap threshold, so it only fires
- * on the rare close approaches — overall complexity is ~O(n^2).
+ * Whether there's a strip thinner than minGap between non-adjacent parts of edge
+ * target (probe is the ring whose vertices we're checking). For each probe vertex we
+ * take the closest point on a non-adjacent segment of target and look at the midpoint
+ * of that gap: `middle` says which kind of strip we're hunting — 'grass' counts a gap
+ * whose middle is off the road, 'road' one whose middle is on it. Arc neighbors are
+ * skipped (sameRing), same as in offsetCaps. The on-road check (O(n) via
+ * pointInPolygon) is gated by the minGap threshold, so it only fires on the rare close
+ * approaches — overall complexity is ~O(n^2).
  */
 function neckThinnerThan(
   probe: Polyline,
@@ -238,6 +278,7 @@ function neckThinnerThan(
   inner: Polyline,
   sameRing: boolean,
   minGap: number,
+  middle: 'grass' | 'road',
 ): boolean {
   const nearArc = WIDTH_MAX * 1.5;
   const { cum: pc, total: pt } = arcLengths(probe);
@@ -257,7 +298,7 @@ function neckThinnerThan(
       if (dist(p, c) >= minGap) continue; // not thinner than the threshold — not a strip
       const mid = { x: (p.x + c.x) / 2, y: (p.y + c.y) / 2 };
       const onRoad = pointInPolygon(mid, outer) && !pointInPolygon(mid, inner);
-      if (!onRoad) return true;
+      if (onRoad === (middle === 'road')) return true;
     }
   }
   return false;
@@ -276,15 +317,40 @@ export function hasNarrowGrassNeck(
   minGap: number,
 ): boolean {
   return (
-    neckThinnerThan(outer, outer, outer, inner, true, minGap) ||
-    neckThinnerThan(inner, inner, outer, inner, true, minGap) ||
-    neckThinnerThan(outer, inner, outer, inner, false, minGap)
+    neckThinnerThan(outer, outer, outer, inner, true, minGap, 'grass') ||
+    neckThinnerThan(inner, inner, outer, inner, true, minGap, 'grass') ||
+    neckThinnerThan(outer, inner, outer, inner, false, minGap, 'grass')
+  );
+}
+
+/**
+ * Whether the road itself is anywhere narrower than minWidth — measured between the
+ * FINAL edges, which is the only measurement that means anything: the width model's
+ * offsets say what was asked for, and the smoothing pass in offsetEdges then shaves
+ * the result (a neck asked to be 1.4 wide has been observed coming out at 0.75).
+ *
+ * A road too narrow doesn't stop a car — the engine only cares about walls — but it
+ * starves the lattice the bots navigate on: with no node clearing WALL_CLEARANCE on
+ * both sides, buildNavField can't get past the neck, and every bot beyond it drives
+ * blind. Both directions are probed, since either edge can be the one bulging in.
+ */
+export function hasNarrowRoad(
+  outer: Polyline,
+  inner: Polyline,
+  minWidth: number,
+): boolean {
+  return (
+    neckThinnerThan(outer, inner, outer, inner, false, minWidth, 'road') ||
+    neckThinnerThan(inner, outer, outer, inner, false, minWidth, 'road')
   );
 }
 
 /** Whether the edges are valid: within the world, each is simple, the inner one
- *  nests without intersections, and there's no thin grass strip between passes
- *  (which would let a car drive straight through). */
+ *  nests without intersections, there's no thin grass strip between passes (which
+ *  would let a car drive straight through), and the road is nowhere narrower than
+ *  ROAD_MIN (which would cut the bots' navigation lattice in two). This is the single
+ *  gate both generateEdges and applyEdgeDrag go through, so the drag's bisection
+ *  clamps a pinch against the floor on its own. */
 export function edgesValid(outer: Polyline, inner: Polyline): boolean {
   if (!withinWorld(outer) || !withinWorld(inner)) return false;
   if (selfIntersectsClosed(outer) || selfIntersectsClosed(inner)) return false;
@@ -295,6 +361,7 @@ export function edgesValid(outer: Polyline, inner: Polyline): boolean {
     if (segmentPolylineIntersections(a, b, outer).length > 0) return false;
   }
   if (hasNarrowGrassNeck(outer, inner, GAP_MIN)) return false;
+  if (hasNarrowRoad(outer, inner, ROAD_MIN)) return false;
   return true;
 }
 
@@ -335,15 +402,61 @@ export function generateEdges(centerRaw: Polyline): GenerateResult {
 
   const model: WidthModel = { center, outNormal, outW, inW };
   for (let attempt = 0; attempt < 5; attempt++) {
+    // Repair narrow spots before judging: the offsets alone can't predict how much
+    // road the edge smoothing will eat, so the fix has to be measured on the result.
+    widenToFloor(model, caps);
     const { outer, inner } = rebuildEdges(model);
     if (edgesValid(outer, inner)) return { model, outer, inner };
-    // Try shrinking further — globally, but gently.
+    // Still narrow after widening means the offset caps are holding it there — the
+    // drawing itself has no room for a road, and shrinking would only make it worse.
+    if (hasNarrowRoad(outer, inner, ROAD_MIN)) break;
+    // Overlapping somewhere: try shrinking — globally, but gently.
     for (let i = 0; i < n; i++) {
       model.outW[i] = Math.max(HALF_MIN, model.outW[i] * 0.85);
       model.inW[i] = Math.max(HALF_MIN, model.inW[i] * 0.85);
     }
   }
   return { error: strings.centerline.selfOverlap };
+}
+
+/**
+ * Push the offsets back out wherever the finished road came out below ROAD_MIN, as
+ * far as the hard caps allow (the grass median and the world edge — see OffsetCaps).
+ *
+ * Iterative because the thing being fixed is only visible after the fact: offsetEdges
+ * smooths the edges, so widening by a deficit doesn't recover exactly that deficit.
+ * The correction is spread along the ring before it's applied, so a repaired neck
+ * stays a smooth piece of road rather than a bulge at one vertex.
+ */
+function widenToFloor(m: WidthModel, caps: OffsetCaps): void {
+  const n = m.center.length;
+  for (let pass = 0; pass < WIDEN_PASSES; pass++) {
+    const { outer, inner } = rebuildEdges(m);
+    const deficit = new Array<number>(n).fill(0);
+    let worst = 0;
+    for (let i = 0; i < n; i++) {
+      const w = Math.min(
+        distPointToPolyline(outer[i], inner),
+        distPointToPolyline(inner[i], outer),
+      );
+      const short = ROAD_MIN + FLOOR_MARGIN - w;
+      if (short <= 0) continue;
+      deficit[i] = short;
+      worst = Math.max(worst, short);
+    }
+    if (worst === 0) return;
+    const spread = smoothRing(deficit, 1);
+    for (let i = 0; i < n; i++) {
+      if (spread[i] <= 0) continue;
+      // Widening only: a cap below the current offset means this vertex has no room
+      // to give, not that the road there should be taken away.
+      m.outW[i] = Math.max(
+        m.outW[i],
+        Math.min(caps.hardOut[i], m.outW[i] + spread[i] / 2),
+      );
+      m.inW[i] = Math.max(m.inW[i], Math.min(caps.hardIn[i], m.inW[i] + spread[i] / 2));
+    }
+  }
 }
 
 /** Rebuild the model's edges (after editing outW/inW). */

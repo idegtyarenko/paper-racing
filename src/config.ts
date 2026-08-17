@@ -237,6 +237,25 @@ export const KMH_PER_CELL = 50;
 export const MIN_ROAD_CELLS = 30;
 /** Minimum centerline loop area (cells²) — otherwise "too tight for a race." */
 export const MIN_CENTER_AREA = 60;
+/**
+ * Hard floor on the width of the road, in cells — measured on the FINAL edges, after
+ * the smoothing pass, not on the offsets the width model asked for.
+ *
+ * The floor is about the lattice, not about comfort. A node counts as road only when
+ * it is further than WALL_CLEARANCE from both walls (isRoadLatticePoint in track.ts),
+ * so a corridor needs 1 + 2·WALL_CLEARANCE = 1.3 to be sure of holding a node whatever
+ * phase the lattice happens to fall in. Where a neck holds none, the road lattice is
+ * cut in two: the navigation field (nav.ts) can't reach past the cut, bots lose their
+ * gradient and mill about at the start, while a human flies over the same neck at speed
+ * and never notices — the engine is happy until a car is OFFROAD_FORGIVE past a wall.
+ * The margin over 1.3 covers wall curvature: a node's distance to a bending wall is
+ * shorter than the corridor is wide. Measured, not guessed — generated tracks came
+ * out connected down to 1.19 and holed at 1.12, while raising the floor to 1.6 made
+ * ordinary loops undrawable (there isn't that much room beside a tight corner). 1.4
+ * is also what the width model always meant to hold (HALF_MIN per side); what was
+ * missing is anyone checking that it held after the edges were smoothed.
+ */
+export const ROAD_MIN = 1.4;
 /** Minimum track ribbon width, in cells. */
 export const WIDTH_MIN = 2;
 /** Maximum track ribbon width, in cells. */
