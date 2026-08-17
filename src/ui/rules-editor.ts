@@ -1,8 +1,8 @@
 // Race-rules editor (Blueprint redesign): car handling (Sports/GT/F1/Classic
 // presets, or a manual "Custom" mode with accel/brake/grip/downforce sliders and
-// a live preview of the reachable-moves cloud) and race rules (crash-penalty
-// type, dynamic-formula strictness, static-penalty size, per-turn time limit —
-// online only).
+// a live preview of the reachable-moves cloud) and race rules (race length in
+// laps, crash-penalty type, dynamic-formula strictness, static-penalty size,
+// per-turn time limit — online only).
 //
 // A mountable component rather than a screen: it builds its controls into the
 // hosts it's given, so the same implementation serves the race-setup screen's
@@ -25,6 +25,8 @@ import {
   KMH_PER_CELL,
   STATIC_TURNS_MIN,
   STATIC_TURNS_MAX,
+  LAP_OPTIONS,
+  DEFAULT_WIN_CROSSINGS,
 } from '../config';
 import { strings } from '../i18n';
 import { bindTap } from './dom';
@@ -220,6 +222,24 @@ export function mountRulesEditor(hosts: RulesEditorHosts): RulesEditor {
   const rulesNote = el('p', 'pr-note pr-rules__ro-note', rulesRoot);
   rulesNote.textContent = strings.settings.readOnlyNote;
 
+  // Laps come first: it's the setting that decides how long the race is, and on
+  // a single lap the finishing order mostly repeats the starting grid.
+  const lapsRow = settingRow(
+    rulesRoot,
+    strings.settings.lapsLabel,
+    strings.settings.lapsHint,
+  );
+  const laps = seg(
+    lapsRow.body,
+    '',
+    LAP_OPTIONS.map((n) => ({ key: String(n), label: strings.settings.lapsOption(n) })),
+    (key) => {
+      // The start crossing is counted right away, so N laps = N + 1 crossings.
+      rules.winCrossings = Number(key) + 1;
+      commit();
+    },
+  );
+
   const penaltyRow = settingRow(
     rulesRoot,
     strings.settings.penaltyLabel,
@@ -308,7 +328,7 @@ export function mountRulesEditor(hosts: RulesEditorHosts): RulesEditor {
     }
     driveNote.hidden = !readOnly;
     rulesNote.hidden = !readOnly;
-    const segs = [presetsTop, presetsBottom, penalty, exponent, turnLimit];
+    const segs = [presetsTop, presetsBottom, laps, penalty, exponent, turnLimit];
     for (const s of segs) {
       for (const b of s.opts) b.disabled = readOnly;
     }
@@ -340,6 +360,7 @@ export function mountRulesEditor(hosts: RulesEditorHosts): RulesEditor {
     }
     drawPreview(preview, rules.drive);
 
+    markSeg(laps, String(rules.winCrossings - 1));
     markSeg(penalty, rules.penalty);
     markSeg(
       exponent,
@@ -373,6 +394,7 @@ export function mountRulesEditor(hosts: RulesEditorHosts): RulesEditor {
 /** Placeholder until open() supplies the real rules (the controls are built
  *  before any screen shows them). */
 const DEFAULT_PREVIEW_RULES = {
+  winCrossings: DEFAULT_WIN_CROSSINGS,
   penalty: 'dynamic',
   dynamicExponent: CRASH_EXPONENT_STANDARD,
   staticTurns: STATIC_TURNS_MIN,

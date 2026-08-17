@@ -34,6 +34,16 @@ describe('describeSetupChanges', () => {
     expect(describeSetupChanges(setup(), setup())).toEqual([]);
   });
 
+  it('reports a changed race length in laps, not in crossings', () => {
+    const changes = describeSetupChanges(
+      setup({ winCrossings: 2 }),
+      setup({ winCrossings: 4 }),
+    );
+    expect(changes).toHaveLength(1);
+    expect(changes[0].label).toBe(strings.settings.lapsLabel);
+    expect(changes[0].value).toBe(strings.settings.lapsOption(3));
+  });
+
   it('reports the new handling preset by name', () => {
     const changes = describeSetupChanges(
       setup({ drive: { ...DRIVE_PRESETS.sports } }),

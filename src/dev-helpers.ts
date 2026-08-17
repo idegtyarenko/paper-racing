@@ -15,7 +15,7 @@ import { AppState } from './app-state';
 import { setLocale as applyLocale, type LocaleCode } from './i18n';
 import { Track, finalizeTrack, clipFinishLine } from './model/track';
 import { editorFromTrack } from './model/editor';
-import { Candidate, isFinished, WIN_CROSSINGS } from './model/game';
+import { Candidate, isFinished } from './model/game';
 import { Difficulty, chooseMove } from './model/ai';
 import { applyMove, coastMove } from './model/turns';
 import { worldToScreen } from './view/camera';
@@ -165,9 +165,12 @@ export function installDevHelpers(deps: DevHelperDeps): void {
       });
     },
     /** Ready-made track plus an immediate local race: `humans` human players,
-     *  `bots` bot players. */
-    race(humans = 1, bots = 1, difficulty: Difficulty = 'medium') {
+     *  `bots` bot players. `laps` sets the race length without going through
+     *  the settings tab (it lands in S.rules, so it also sticks for the next
+     *  race started from the UI). */
+    race(humans = 1, bots = 1, difficulty: Difficulty = 'medium', laps?: number) {
       S.raceTrack = devTrack();
+      if (laps !== undefined) S.rules = { ...S.rules, winCrossings: laps + 1 };
       startRace(humans, bots, difficulty);
       return snap();
     },
@@ -180,7 +183,7 @@ export function installDevHelpers(deps: DevHelperDeps): void {
     nearFinish(humans = 1, bots = 1, laps = 1, difficulty: Difficulty = 'medium') {
       S.raceTrack = devTrack();
       startRace(humans, bots, difficulty);
-      for (const p of S.game!.players) p.crossings = WIN_CROSSINGS - laps;
+      for (const p of S.game!.players) p.crossings = S.game!.rules.winCrossings - laps;
       refreshCands();
       updateUI();
       redraw();
@@ -197,7 +200,7 @@ export function installDevHelpers(deps: DevHelperDeps): void {
       S.raceTrack = devTrack();
       startRace(1, bots, difficulty);
       const h = S.game!.players[0];
-      h.crossings = WIN_CROSSINGS - 1;
+      h.crossings = S.game!.rules.winCrossings - 1;
       h.pos = { x: 18, y: 4 };
       h.vel = { x: 2, y: 0 };
       // Opponents wait on the top straight, out of the finisher's way — but
@@ -239,7 +242,7 @@ export function installDevHelpers(deps: DevHelperDeps): void {
         players[i].place = rest.shift()!;
       players[0].place = place;
       players.forEach((p) => {
-        p.crossings = WIN_CROSSINGS;
+        p.crossings = S.game!.rules.winCrossings;
       });
       const first = players.findIndex((p) => p.place === 1);
       S.game!.winner = first;

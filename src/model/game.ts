@@ -8,7 +8,7 @@ import type { Difficulty } from './ai/difficulty';
 import { strings } from '../i18n';
 import {
   MIN_PLAYERS,
-  WIN_CROSSINGS,
+  DEFAULT_WIN_CROSSINGS,
   CRASH_SKIP_TURNS,
   CRASH_PENALTY_MAX,
   OFFROAD_FORGIVE,
@@ -80,9 +80,6 @@ export interface Player {
   bot?: Difficulty;
 }
 
-// Number of finish crossings needed to win (see WIN_CROSSINGS in config) — re-exported.
-export { WIN_CROSSINGS };
-
 /**
  * Car handling: the three mechanical semi-axes of the "traction ellipse" (cells per
  * move) — forward acceleration (accel), braking (brake), lateral grip (grip) —
@@ -103,6 +100,12 @@ export interface Drive {
  * serialized), so every player ends up applying the same rules.
  */
 export interface Rules {
+  /**
+   * How many finish-line crossings win the race. The 1st is counted right after
+   * the start (cars line up behind the line), so the race is winCrossings - 1
+   * laps long — that's the number the settings screen shows and edits.
+   */
+  winCrossings: number;
   /** How to compute the off-track penalty: 'dynamic' scales with speed, 'static' is fixed. */
   penalty: 'dynamic' | 'static';
   /** Penalty size in turns for the static penalty mode. */
@@ -130,6 +133,7 @@ export interface Rules {
 
 /** Default rules: dynamic penalty at standard (linear) harshness, realistic handling. */
 export const DEFAULT_RULES: Rules = {
+  winCrossings: DEFAULT_WIN_CROSSINGS,
   penalty: 'dynamic',
   staticTurns: CRASH_SKIP_TURNS,
   dynamicExponent: 1,
@@ -511,6 +515,7 @@ export function applyOutcome(
   p: Player,
   o: MoveOutcome,
   turn: number,
+  winCrossings: number,
 ): void {
   p.crossings += o.crossingDelta;
   p.trail.push({ ...o.trailSeg, turn });
@@ -523,7 +528,7 @@ export function applyOutcome(
   p.pos = { ...o.end };
   p.vel = { ...o.vel };
   p.skipTurns = o.skipTurns;
-  if (p.crossings >= WIN_CROSSINGS && p.finishOvershoot === null) {
+  if (p.crossings >= winCrossings && p.finishOvershoot === null) {
     p.finishOvershoot = sideOfFinish(track, o.end);
   }
 }
@@ -603,7 +608,7 @@ export function returnFromPenalty(state: GameState, seat: number): void {
   // change is computed the same way as in computeOutcome (afterAction then picks
   // up the finish).
   p.crossings += finishCrossingDelta(track, p.pos, resetTo);
-  if (p.crossings >= WIN_CROSSINGS && p.finishOvershoot === null) {
+  if (p.crossings >= state.rules.winCrossings && p.finishOvershoot === null) {
     p.finishOvershoot = sideOfFinish(track, resetTo);
   }
   p.trail.push({

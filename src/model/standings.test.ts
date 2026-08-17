@@ -4,7 +4,6 @@ import { buildNavField } from './nav';
 import { computeStandings, turnsTaken } from './standings';
 import { applyMove, coastMove } from './turns';
 import { chooseMove } from './ai';
-import { WIN_CROSSINGS } from '../config';
 import { ringTrack } from './test-fixtures';
 
 /** Shared fixture: 4 cars on a ring + the track's navigation field. */
@@ -26,7 +25,7 @@ describe('computeStandings', () => {
   it('among those still racing, the one with fewer laps left ranks higher', () => {
     const { g, nav } = setup();
     // p2 has completed one more lap — closer to winning, so ranks higher.
-    g.players[2].crossings = WIN_CROSSINGS - 1;
+    g.players[2].crossings = g.rules.winCrossings - 1;
     // The others are at the start (crossings 0). Put them all at the same spot so the
     // difference comes only from the lap counter, not track position.
     const spot = { ...g.players[2].pos };
@@ -45,7 +44,7 @@ describe('computeStandings', () => {
   it('a car that crossed the finish in an unresolved round ranks ahead of those still racing', () => {
     const { g, nav } = setup();
     // p1 has already crossed the finish the required number of times (place not yet assigned — round is still open).
-    g.players[1].crossings = WIN_CROSSINGS;
+    g.players[1].crossings = g.rules.winCrossings;
     expect(computeStandings(g, nav)[0]).toBe(1);
   });
 });

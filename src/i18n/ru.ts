@@ -129,6 +129,11 @@ export const ru: Strings = {
     driveBrake: 'Торможение',
     driveGrip: 'Маневренность',
     driveDownforce: 'Прижимная сила',
+    lapsLabel: 'Кругов',
+    lapsHint:
+      'Сколько кругов длится гонка. На\u00A0одном круге исход почти решает стартовый ' +
+      'порядок, на\u00A0нескольких есть чем отыграться.',
+    lapsOption: (n: number): string => String(n),
     penaltyLabel: 'Штраф за вылет',
     penaltyHint:
       'Штрафные ходы за вылет с трассы. Можно наказывать по скорости ' +
@@ -220,6 +225,7 @@ export const ru: Strings = {
     finalWarn: ' Кто\u00A0заедет за\u00A0черту дальше, тот и\u00A0впереди.',
     classification: 'Классификация',
     upNext: 'Очередь ходов',
+    lapOf: (lap: number, total: number): string => `Круг ${lap}/${total}`,
     speedUnit: 'км/ч',
     stalled: 'Не ходит',
     finished: (place) => `Финиш · ${place}-й`,

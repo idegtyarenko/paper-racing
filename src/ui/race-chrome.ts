@@ -42,6 +42,7 @@ let root: HTMLElement;
 let codeBtn: HTMLButtonElement;
 let codeText: HTMLElement;
 let nextEl: HTMLElement;
+let lapEl: HTMLElement;
 let dotsEl: HTMLElement;
 let rowsEl: HTMLElement;
 let actEl: HTMLElement;
@@ -88,6 +89,11 @@ function build(h: RaceChromeHandlers): void {
   nextEl = el('div', 'pr-race__next', card);
   const nextHead = el('div', 'pr-race__nexthead', nextEl);
   el('span', 'pr-race__nextlabel', nextHead).textContent = strings.race.upNext;
+  // Which lap the race is on — only worth the space when there's more than one
+  // (see renderRaceChrome); on a single-lap race it would say the same thing all
+  // race long.
+  lapEl = el('span', 'pr-race__lap', nextHead);
+  lapEl.hidden = true;
   // A share glyph, not the lobby's copy one: this button opens the share sheet
   // (onShare) rather than copying — the reconnect banner below is the one that
   // copies, and the two must not promise the same thing.
@@ -485,6 +491,16 @@ export function renderRaceChrome(ctx: RaceCtx): void {
   // Room code: online only, so a disconnected player can be handed the link.
   codeBtn.hidden = !net;
   if (net) codeText.textContent = net.code;
+
+  // Lap counter, for the car on the clock — the card is about the running turn.
+  // crossings counts the start crossing too, so it doubles as the lap number
+  // once the car is under way (0 before it reaches the line = still lap 1).
+  const totalLaps = game!.rules.winCrossings - 1;
+  lapEl.hidden = totalLaps < 2;
+  if (totalLaps >= 2) {
+    const lap = Math.min(Math.max(game!.players[game!.current].crossings, 1), totalLaps);
+    lapEl.textContent = strings.race.lapOf(lap, totalLaps);
+  }
 
   renderQueue(game!);
 

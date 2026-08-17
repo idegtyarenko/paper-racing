@@ -2,7 +2,7 @@
 // F1-style standings bar. Pure logic, no DOM; reuses the bot navigation field
 // (buildNavField/navAt) as an estimate of "how far is there still left to the finish".
 
-import { GameState, Player, WIN_CROSSINGS } from './game';
+import { GameState, Player } from './game';
 import { NavField, navAt } from './nav';
 
 /**
@@ -14,7 +14,7 @@ import { NavField, navAt } from './nav';
  */
 function remaining(state: GameState, nav: NavField, seat: number): number {
   const p = state.players[seat];
-  return (WIN_CROSSINGS - 1 - p.crossings) * nav.lap + navAt(nav, p.pos);
+  return (state.rules.winCrossings - 1 - p.crossings) * nav.lap + navAt(nav, p.pos);
 }
 
 /**

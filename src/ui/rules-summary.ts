@@ -100,6 +100,10 @@ export function describeSetupChanges(
 ): SettingChange[] {
   const s = strings.settings;
   const out: SettingChange[] = [];
+  // Race length first — it changes what the whole race is, not how a corner drives.
+  if (before.rules.winCrossings !== after.rules.winCrossings) {
+    out.push({ label: s.lapsLabel, value: s.lapsOption(after.rules.winCrossings - 1) });
+  }
   // Compared by the values, not by the mode name: two "Custom" sets with
   // different numbers are a real change, and the guest is racing the numbers.
   if (!isPreset(before.rules.drive, after.rules.drive)) {

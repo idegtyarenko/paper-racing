@@ -14,7 +14,7 @@
 
 import { Vec, dist, segSegIntersection } from '../../geometry';
 import { Track, sideOfFinish } from '../track';
-import { GameState, Candidate, WIN_CROSSINGS, computeOutcome } from '../game';
+import { GameState, Candidate, computeOutcome } from '../game';
 import { NavField, navAt } from '../nav';
 import { reachableTargets } from '../turns';
 import { Clearance, buildClearance, segClear } from './clearance';
@@ -135,7 +135,7 @@ export function scoreByPlan(
   let winKey = -Infinity;
   open.forEach((c, i) => {
     const o = rootOutcome[i];
-    if (me.crossings + o.crossingDelta >= WIN_CROSSINGS) {
+    if (me.crossings + o.crossingDelta >= rules.winCrossings) {
       const key = sideOfFinish(track, o.end) + (o.crash ? -1e3 : 0);
       if (key > winKey) {
         winKey = key;

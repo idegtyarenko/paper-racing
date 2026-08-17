@@ -14,7 +14,7 @@ import {
   canFinishThisTurn,
 } from './turns';
 import { turnsTaken } from './standings';
-import { WIN_CROSSINGS, DRIVE_PRESETS } from '../config';
+import { DRIVE_PRESETS } from '../config';
 import { key } from './track';
 import { ringTrack } from './test-fixtures';
 
@@ -614,9 +614,9 @@ describe('multi-round finish, placements, and retiring', () => {
   it('the first to finish gets place 1 and is named winner, but the race continues', () => {
     const g = newGame(ringTrack(), 2);
     place(g.players[0], [5, 4]);
-    g.players[0].crossings = WIN_CROSSINGS - 1; // finishes on this move
+    g.players[0].crossings = g.rules.winCrossings - 1; // finishes on this move
     applyMove(g, cand(7, 4)); // crossings → WIN, overshoot = 1
-    expect(g.players[0].crossings).toBe(WIN_CROSSINGS);
+    expect(g.players[0].crossings).toBe(g.rules.winCrossings);
     expect(g.finalTurnsLeft).toBe(1); // round is open: the second player still has a move
     expect(g.phase).toBe('race');
 
@@ -628,13 +628,36 @@ describe('multi-round finish, placements, and retiring', () => {
     expect(g.phase).toBe('race'); // race continues until p1 finishes or retires
   });
 
+  it('in a three-lap race, crossing the line early is just a lap — nobody finishes', () => {
+    const g = newGame(ringTrack(), 2, { ...DEFAULT_RULES, winCrossings: 4 });
+    place(g.players[0], [5, 4]);
+    g.players[0].crossings = 1; // the start crossing only: two laps still to drive
+    applyMove(g, cand(7, 4));
+    expect(g.players[0].crossings).toBe(2);
+    expect(g.players[0].finishOvershoot).toBeNull();
+    expect(g.finalTurnsLeft).toBeNull(); // no final round opened
+    expect(g.phase).toBe('race');
+    expect(canFinishThisTurn(g, 0)).toBe(false);
+  });
+
+  it('in a three-lap race, the last crossing finishes the car as usual', () => {
+    const g = newGame(ringTrack(), 2, { ...DEFAULT_RULES, winCrossings: 4 });
+    place(g.players[0], [5, 4]);
+    g.players[0].crossings = 3; // final lap
+    expect(canFinishThisTurn(g, 0)).toBe(true);
+    applyMove(g, cand(7, 4));
+    expect(g.players[0].crossings).toBe(4);
+    expect(g.players[0].finishOvershoot).toBe(1);
+    expect(g.finalTurnsLeft).toBe(1);
+  });
+
   it('placements within a round go by overshoot depth, not move order', () => {
     const g = newGame(ringTrack(), 2);
     place(g.players[0], [5, 4]);
-    g.players[0].crossings = WIN_CROSSINGS - 1;
+    g.players[0].crossings = g.rules.winCrossings - 1;
     applyMove(g, cand(7, 4)); // p0 moves first, overshoot 1
     place(g.players[1], [5, 4]);
-    g.players[1].crossings = WIN_CROSSINGS - 1;
+    g.players[1].crossings = g.rules.winCrossings - 1;
     applyMove(g, cand(9, 4)); // p1 overshoots deeper, overshoot 3
     expect(g.phase).toBe('over');
     expect(g.players[1].place).toBe(1); // deeper past the line → better place
@@ -646,7 +669,7 @@ describe('multi-round finish, placements, and retiring', () => {
     const g = newGame(ringTrack(), 4);
     [0, 1, 2, 3].forEach((i) => {
       place(g.players[i], [5, 4]);
-      g.players[i].crossings = WIN_CROSSINGS - 1;
+      g.players[i].crossings = g.rules.winCrossings - 1;
     });
     applyMove(g, cand(11, 4)); // p0 overshoot 5 → place 1
     applyMove(g, cand(9, 4)); // p1 overshoot 3
@@ -661,7 +684,7 @@ describe('multi-round finish, placements, and retiring', () => {
     const g = newGame(ringTrack(), 2);
     [0, 1].forEach((i) => {
       place(g.players[i], [5, 4]);
-      g.players[i].crossings = WIN_CROSSINGS - 1;
+      g.players[i].crossings = g.rules.winCrossings - 1;
     });
     applyMove(g, cand(7, 4)); // p0 overshoot 1
     applyMove(g, cand(7, 4)); // p1 overshoot 1 — tied
@@ -703,7 +726,7 @@ describe('multi-round finish, placements, and retiring', () => {
   it('after another player finishes, the remaining one can retire — race ends, winner is preserved', () => {
     const g = newGame(ringTrack(), 2);
     place(g.players[0], [5, 4]);
-    g.players[0].crossings = WIN_CROSSINGS - 1;
+    g.players[0].crossings = g.rules.winCrossings - 1;
     applyMove(g, cand(7, 4)); // p0 finishes, round is open
     place(g.players[1], [10, 4]);
     applyMove(g, cand(13, 4)); // p1 without finishing → p0 place 1, winner 0, race continues
@@ -767,7 +790,7 @@ describe('canFinishThisTurn', () => {
 
   it('true on the last lap when the fan reaches past the line', () => {
     const g = classicGame();
-    g.players[0].crossings = WIN_CROSSINGS - 1;
+    g.players[0].crossings = g.rules.winCrossings - 1;
     place(g.players[0], [5, 4], [1, 0]); // coasts to x=6, the finish line itself
     place(g.players[1], [20, 20]); // out of the way
     expect(canFinishThisTurn(g, 0)).toBe(true);
@@ -775,7 +798,7 @@ describe('canFinishThisTurn', () => {
 
   it('false when the same fan still leaves laps to run', () => {
     const g = classicGame();
-    g.players[0].crossings = WIN_CROSSINGS - 2;
+    g.players[0].crossings = g.rules.winCrossings - 2;
     place(g.players[0], [5, 4], [1, 0]);
     place(g.players[1], [20, 20]);
     expect(canFinishThisTurn(g, 0)).toBe(false);
@@ -783,7 +806,7 @@ describe('canFinishThisTurn', () => {
 
   it('false when the line is nowhere near the fan', () => {
     const g = classicGame();
-    g.players[0].crossings = WIN_CROSSINGS - 1;
+    g.players[0].crossings = g.rules.winCrossings - 1;
     place(g.players[0], [20, 20], [1, 0]); // far side of the ring
     place(g.players[1], [5, 4]);
     expect(canFinishThisTurn(g, 0)).toBe(false);
@@ -791,7 +814,7 @@ describe('canFinishThisTurn', () => {
 
   it('false when every candidate past the line is blocked by another car', () => {
     const g = classicGame(4);
-    g.players[0].crossings = WIN_CROSSINGS - 1;
+    g.players[0].crossings = g.rules.winCrossings - 1;
     place(g.players[0], [4, 4], [1, 0]); // fan spans x = 4..6; only x=6 crosses
     place(g.players[1], [6, 3]);
     place(g.players[2], [6, 4]);
@@ -801,7 +824,7 @@ describe('canFinishThisTurn', () => {
 
   it('false for a car that has already finished', () => {
     const g = classicGame();
-    g.players[0].crossings = WIN_CROSSINGS;
+    g.players[0].crossings = g.rules.winCrossings;
     place(g.players[0], [7, 4], [1, 0]);
     place(g.players[1], [20, 20]);
     expect(canFinishThisTurn(g, 0)).toBe(false);

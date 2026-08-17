@@ -14,9 +14,13 @@ export const MIN_PLAYERS = 2;
 /**
  * How many times a car must cross the finish line to win: the 1st crossing is
  * counted right after the start (cars line up behind the line), the 2nd is a
- * full lap completed.
+ * full lap completed. The live value is per-race (Rules.winCrossings, chosen in
+ * the settings as a number of laps) — this is only the default.
  */
-export const WIN_CROSSINGS = 2;
+export const DEFAULT_WIN_CROSSINGS = 2;
+/** Lap counts offered by the settings; crossings = laps + 1 (see above). One lap
+ *  is a sprint decided mostly by the starting slot, three give room to catch up. */
+export const LAP_OPTIONS = [1, 2, 3];
 /** How many turns a car sits "in the pits" for repairs after going off track.
  *  Used as the default value for the static penalty (see Rules). */
 export const CRASH_SKIP_TURNS = 3;

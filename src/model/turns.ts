@@ -10,7 +10,6 @@ import {
   Candidate,
   BlockReason,
   Drive,
-  WIN_CROSSINGS,
   computeOutcome,
   applyOutcome,
   otherPositions,
@@ -152,19 +151,19 @@ export function candidates(state: GameState): Candidate[] {
 
 /**
  * Can this seat cross the finish for good on this very move — is there an
- * unblocked candidate in the fan that brings crossings up to WIN_CROSSINGS?
+ * unblocked candidate in the fan that brings crossings up to the winning count?
  * Drives the endgame hint: telling a player to get as far past the line as they
  * can is worse than useless when the line is out of reach this turn.
  */
 export function canFinishThisTurn(state: GameState, seat: number): boolean {
   const p = state.players[seat];
-  if (p.crossings >= WIN_CROSSINGS) return false; // already across — no move to make
+  if (p.crossings >= state.rules.winCrossings) return false; // already across — no move to make
   return candidatesForSeat(state, seat).some((c) => {
     if (c.blocked) return false;
     // A crash doesn't disqualify the move: computeOutcome still counts a
     // crossing that happened before the impact.
     const { crossingDelta } = computeOutcome(state.track, state.rules, p.pos, c.target);
-    return p.crossings + crossingDelta >= WIN_CROSSINGS;
+    return p.crossings + crossingDelta >= state.rules.winCrossings;
   });
 }
 
@@ -172,7 +171,7 @@ export function applyMove(state: GameState, cand: Candidate): void {
   if (state.phase !== 'race' || cand.blocked) return;
   const p = state.players[state.current];
   const outcome = computeOutcome(state.track, state.rules, p.pos, cand.target);
-  applyOutcome(state.track, p, outcome, state.turn);
+  applyOutcome(state.track, p, outcome, state.turn, state.rules.winCrossings);
   afterAction(state);
 }
 
@@ -284,7 +283,7 @@ function afterAction(state: GameState): void {
   // The car just crossed the finish the required number of times and isn't in
   // this round yet — count it toward the current round.
   const finished =
-    cur.crossings >= WIN_CROSSINGS &&
+    cur.crossings >= state.rules.winCrossings &&
     cur.place === null &&
     !state.roundFinishers.includes(state.current);
   if (finished) state.roundFinishers.push(state.current);

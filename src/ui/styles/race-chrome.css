@@ -104,6 +104,16 @@
   text-transform: uppercase;
   color: var(--pr-ink-dim);
 }
+/* Lap counter beside the label: a reading, not a caption, so it keeps the ink
+   colour. margin-right:auto keeps it next to the label while the room code
+   stays pinned to the right end of the head row. */
+.pr-race__lap:not([hidden]) {
+  display: inline-block;
+  margin-right: auto;
+  font-size: var(--pr-text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--pr-ink);
+}
 .pr-race__dots {
   display: flex;
   align-items: center;

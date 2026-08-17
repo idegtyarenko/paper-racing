@@ -130,6 +130,11 @@ export const be: Strings = {
     driveBrake: 'Тармажэнне',
     driveGrip: 'Манеўранасць',
     driveDownforce: 'Прыціскная сіла',
+    lapsLabel: 'Колаў',
+    lapsHint:
+      'Колькі колаў доўжыцца гонка. На\u00A0адным коле вынік амаль вырашае стартавы ' +
+      'парадак, на\u00A0некалькіх ёсць чым адыграцца.',
+    lapsOption: (n: number): string => String(n),
     penaltyLabel: 'Штраф за\u00A0вылет',
     penaltyHint:
       'Штрафныя хады за\u00A0вылет з\u00A0трасы. Можна караць па\u00A0хуткасці ' +
@@ -221,6 +226,7 @@ export const be: Strings = {
     finalWarn: ' Хто\u00A0заедзе за\u00A0рысу далей, той і\u00A0наперадзе.',
     classification: 'Класіфікацыя',
     upNext: 'Чарга хадоў',
+    lapOf: (lap: number, total: number): string => `Кола ${lap}/${total}`,
     speedUnit: 'км/г',
     stalled: 'Не ходзіць',
     finished: (place) => `Фініш · ${place}-і`,

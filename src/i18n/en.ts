@@ -180,6 +180,12 @@ export const en = {
     driveBrake: 'Braking',
     driveGrip: 'Grip',
     driveDownforce: 'Downforce',
+    // Race length, in laps (the engine counts finish crossings — see Rules.winCrossings).
+    lapsLabel: 'Laps',
+    lapsHint:
+      'How many laps the race is. On a single lap the start order mostly decides the ' +
+      'finish; more laps give room to fight back.',
+    lapsOption: (n: number): string => String(n),
     penaltyLabel: 'Off-track penalty',
     penaltyHint:
       'Penalty turns for flying off the track. Punish by exit speed (the faster you ' +
@@ -324,6 +330,8 @@ export const en = {
     classification: 'Classification',
     /** Label over the turn-order dots, opening the HUD card. Caps by CSS. */
     upNext: 'Up next',
+    /** Lap counter in the HUD card — shown only in races longer than one lap. */
+    lapOf: (lap: number, total: number): string => `Lap ${lap}/${total}`,
     /** Speed unit in a classification row (caps by CSS). */
     speedUnit: 'km/h',
     /** Right slot of a row whose driver is past the turn timer and can be skipped. */

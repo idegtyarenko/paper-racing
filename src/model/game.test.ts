@@ -10,7 +10,6 @@ import {
   isFinished,
   humansAllDone,
   hasLiveBots,
-  WIN_CROSSINGS,
 } from './game';
 import { CRASH_PENALTY_MAX } from '../config';
 import { ringTrack } from './test-fixtures';
@@ -116,10 +115,18 @@ describe('returnFromPenalty — crossing the finish via the return teleport', ()
     expect(g.players[0].crossings).toBe(0);
   });
 
-  it('a return that completes the winning lap sets finishOvershoot', () => {
-    const g = crashedBehindFinish(WIN_CROSSINGS - 1);
+  it('a return across the line with laps still to go does not finish the car', () => {
+    const g = crashedBehindFinish(1);
+    g.rules.winCrossings = 4; // three-lap race: crossing #2 is only a lap
     returnFromPenalty(g, 0);
-    expect(g.players[0].crossings).toBe(WIN_CROSSINGS);
+    expect(g.players[0].crossings).toBe(2);
+    expect(g.players[0].finishOvershoot).toBeNull();
+  });
+
+  it('a return that completes the winning lap sets finishOvershoot', () => {
+    const g = crashedBehindFinish(DEFAULT_RULES.winCrossings - 1);
+    returnFromPenalty(g, 0);
+    expect(g.players[0].crossings).toBe(g.rules.winCrossings);
     expect(g.players[0].finishOvershoot).toBe(1); // sideOfFinish(7,1) = 1
   });
 });
@@ -133,7 +140,7 @@ describe('isFinished — the window between crossing the finish and getting a pl
   it('a car that crossed the finish (finishOvershoot set, place still null) has already finished', () => {
     // Exactly the round's play-out window: resolveRound hasn't set place yet.
     const g = newGame(ringTrack(), 2);
-    g.players[0].crossings = WIN_CROSSINGS;
+    g.players[0].crossings = g.rules.winCrossings;
     g.players[0].finishOvershoot = 1;
     expect(g.players[0].place).toBeNull();
     expect(isFinished(g.players[0])).toBe(true);

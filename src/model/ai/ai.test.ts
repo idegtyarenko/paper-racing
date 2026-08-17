@@ -12,14 +12,7 @@ import { describe, it, expect } from 'vitest';
 import { chooseMove, Difficulty } from './index';
 import { buildNavField, navAt } from '../nav';
 import { candidates, applyMove, coastMove } from '../turns';
-import {
-  GameState,
-  Player,
-  Rules,
-  DEFAULT_RULES,
-  computeOutcome,
-  WIN_CROSSINGS,
-} from '../game';
+import { GameState, Player, Rules, DEFAULT_RULES, computeOutcome } from '../game';
 import { Track, key, unkey, finalizeTrack } from '../track';
 import { DRIVE_PRESETS } from '../../config';
 import { Vec, dist } from '../../geometry';
@@ -380,7 +373,8 @@ describe('chooseMove', () => {
       if (cand) applyMove(state, cand);
       else coastMove(state);
       const sp = state.players[seat];
-      if (lap[seat] === null && sp.crossings >= WIN_CROSSINGS) lap[seat] = my[seat];
+      if (lap[seat] === null && sp.crossings >= state.rules.winCrossings)
+        lap[seat] = my[seat];
       if (sp.crossings === crossBefore && sp.skipTurns === 0) {
         if (navAt(wnav, sp.pos) > navBefore + 3) backward += 1;
       }
