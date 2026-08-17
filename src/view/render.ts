@@ -3,7 +3,14 @@
 import { Vec, Polyline, add, sub, scale, normalize, lerp } from '../geometry';
 import { Track } from '../model/track';
 import { EditorState, Arrow } from '../model/editor';
-import { GameState, Candidate, Drive, Player, TrailSeg } from '../model/game';
+import {
+  GameState,
+  Candidate,
+  Drive,
+  Player,
+  TrailSeg,
+  lapStartIndex,
+} from '../model/game';
 import { aeroFactor, forwardCap } from '../model/turns';
 import { Camera } from './camera';
 import { computeLanes, clipLaneStops, LaneStop } from './trail-lanes';
@@ -48,12 +55,6 @@ export interface MotionFrame {
   /** How far to dim the trails (0..1) — the replay pushes the already-driven
    *  race behind the cars re-driving it. */
   trailDim: number;
-  /**
-   * Lanes for the whole field, solved once by the caller. Lane geometry depends
-   * on the FULL trails (who overlaps whom) and doesn't change as a trail is
-   * revealed, so the replay solves it at the start instead of every frame.
-   */
-  lanes?: LaneStop[][][];
 }
 
 // Canvas render palette — the "blueprint" direction: dark blue field, cyan
@@ -730,11 +731,22 @@ function drawRace(
   motion?: MotionFrame,
 ): void {
   drawTrackDecor(ctx, s, game.track);
+  // Only the lap being driven is on the board: over three laps the trails would
+  // otherwise pile up into a scribble, and every frame would pay for redrawing
+  // laps nobody can read anymore.
+  const laps = game.players.map((p, i) =>
+    lapStartIndex(
+      game.track,
+      p.trail,
+      motion?.segsShown[i] ?? p.trail.length,
+      game.rules.winCrossings,
+    ),
+  );
   // Lanes need every trail at once (they depend on who overlaps whom), so they
   // are solved for the whole field before any of it is drawn.
-  const lanes = motion?.lanes ?? computeLanes(game.players.map((p) => p.trail));
+  const lanes = fieldLanes(game.players, laps);
   game.players.forEach((p, i) => {
-    const shown = drivenSoFar(p, lanes[i], motion, i);
+    const shown = drivenSoFar(p, lanes[i], motion, i, laps[i]);
     drawTrail(
       ctx,
       s,
@@ -750,24 +762,46 @@ function drawRace(
 }
 
 /**
- * The part of a player's trail driven by this frame: whole segments, then the
- * one the car is currently on, cut where the car has got to (its lane cut with
- * it, or the ribbon would run on ahead of the car). Without a motion frame this
- * is simply the whole trail.
+ * Lanes for the current lap of every car, kept between frames. Lane geometry
+ * depends on the whole field at once and on the laps on show — neither of which
+ * changes while a car merely slides along a segment — so recomputing it per
+ * frame was pure waste. The key is what the geometry is made of: how much trail
+ * each car has and which lap of it is being drawn.
+ */
+let laneMemo: { key: string; lanes: LaneStop[][][] } | null = null;
+
+function fieldLanes(players: Player[], laps: number[]): LaneStop[][][] {
+  const key = players.map((p, i) => `${laps[i]}/${p.trail.length}`).join(',');
+  if (laneMemo && laneMemo.key === key) return laneMemo.lanes;
+  const lanes = computeLanes(players.map((p, i) => p.trail.slice(laps[i])));
+  laneMemo = { key, lanes };
+  return lanes;
+}
+
+/**
+ * The part of a player's trail on show this frame: the current lap up to the
+ * car, so whole segments from `lapStart`, then the one the car is on, cut where
+ * it has got to (its lane cut with it, or the ribbon would run on ahead of the
+ * car). Without a motion frame the cut is simply the end of the trail.
+ *
+ * `lanes` is indexed from `lapStart`, the same window it was solved on.
  */
 function drivenSoFar(
   p: Player,
   lanes: LaneStop[][],
   motion: MotionFrame | undefined,
   seat: number,
+  lapStart: number,
 ): { segs: TrailSeg[]; lanes: LaneStop[][]; crashes: Vec[] } {
   const cut = motion?.segsShown[seat] ?? null;
   const crashCut = motion?.crashesShown[seat] ?? null;
-  const crashes = crashCut === null ? p.crashes : p.crashes.slice(0, crashCut);
-  if (cut === null) return { segs: p.trail, lanes, crashes };
+  const end = cut ?? p.trail.length;
+  const crashes = lapCrashes(p, lapStart, crashCut ?? p.crashes.length);
 
-  const segs = p.trail.slice(0, cut);
-  const outLanes = lanes.slice(0, cut);
+  const segs = p.trail.slice(lapStart, end);
+  const outLanes = lanes.slice(0, end - lapStart);
+  if (cut === null) return { segs, lanes: outLanes, crashes };
+
   const partial = motion?.partialTo[seat] ?? null;
   const seg = p.trail[cut];
   // A jump is instant by meaning — it's never half-drawn.
@@ -777,10 +811,30 @@ function drivenSoFar(
     const u = full === 0 ? 1 : Math.min(1, done / full);
     if (u > 0) {
       segs.push({ ...seg, to: partial });
-      outLanes.push(clipLaneStops(lanes[cut], u));
+      outLanes.push(clipLaneStops(lanes[cut - lapStart], u));
     }
   }
   return { segs, lanes: outLanes, crashes };
+}
+
+/**
+ * The crash marks belonging to the lap on show, out of the first `shown` of
+ * them. A mark left on an earlier lap would otherwise hang in the middle of the
+ * gravel with no trail leading to it.
+ *
+ * Which crash goes with which segment isn't recorded, so it's recovered the way
+ * it was written: crashes are pushed in order, each at the end of the segment
+ * that ran into the gravel.
+ */
+function lapCrashes(p: Player, lapStart: number, shown: number): Vec[] {
+  if (p.crashes.length === 0) return p.crashes;
+  let done = 0;
+  for (let i = 0; i < lapStart && done < p.crashes.length; i++) {
+    const seg = p.trail[i];
+    const c = p.crashes[done];
+    if (!seg.jump && seg.to.x === c.x && seg.to.y === c.y) done++;
+  }
+  return p.crashes.slice(done, shown);
 }
 
 /** Static track decoration: road surface, finish line, and direction arrow. */

@@ -466,6 +466,45 @@ function finishCrossingDelta(
   return 0;
 }
 
+/**
+ * Index of the first trail segment of the lap the car is on after driving
+ * `count` of its segments — everything before it belongs to laps already
+ * completed. The segment that crosses the line counts as the FIRST of the new
+ * lap, so the trail starts at the line instead of a few cells past it.
+ *
+ * Laps are recovered from the trail rather than stamped on it: the crossings
+ * counter alone can't say WHERE a lap began, and a stamp would have to be
+ * carried through save files and online state for something the geometry
+ * already knows. Going backwards over the line drops back into the previous
+ * lap, the same way it takes the counter back down.
+ *
+ * `winCrossings` keeps the checkered flag from opening a lap of its own: there
+ * is none to drive, and the car would be left with the stub of trail it coasted
+ * past the line — exactly when its finishing lap is the thing worth looking at.
+ */
+export function lapStartIndex(
+  track: Track,
+  trail: TrailSeg[],
+  count = trail.length,
+  winCrossings = Infinity,
+): number {
+  const starts = [0];
+  let crossings = 0;
+  for (let i = 0; i < count; i++) {
+    const delta = finishCrossingDelta(track, trail[i].from, trail[i].to);
+    if (delta > 0) {
+      crossings++;
+      if (crossings < winCrossings) starts.push(i);
+    } else if (delta < 0) {
+      // Only undo a lap that was actually opened — the winning crossing wasn't.
+      const opened = crossings < winCrossings;
+      crossings--;
+      if (opened && starts.length > 1) starts.pop();
+    }
+  }
+  return starts[starts.length - 1];
+}
+
 export function computeOutcome(
   track: Track,
   rules: Rules,

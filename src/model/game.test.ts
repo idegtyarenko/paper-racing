@@ -10,6 +10,7 @@ import {
   isFinished,
   humansAllDone,
   hasLiveBots,
+  lapStartIndex,
 } from './game';
 import { CRASH_PENALTY_MAX } from '../config';
 import { ringTrack } from './test-fixtures';
@@ -208,5 +209,66 @@ describe('cloneState', () => {
     c.players[0].pos.x = 999;
     expect(g.players[0].pos.x).not.toBe(999);
     expect(c.track).toBe(g.track);
+  });
+});
+
+describe('lapStartIndex', () => {
+  // The fixture's finish line is x=6 crossed in +x, so a segment from x<6 to
+  // x>=6 is a lap; the way back over it is a lap given up.
+  const seg = (x0: number, x1: number, jump = false) => ({
+    from: { x: x0, y: 4 },
+    to: { x: x1, y: 4 },
+    jump,
+    turn: 0,
+  });
+
+  it('is 0 while the car has not reached the line yet', () => {
+    const trail = [seg(1, 3), seg(3, 5)];
+    expect(lapStartIndex(ringTrack(), trail)).toBe(0);
+  });
+
+  it('starts the lap at the crossing segment itself', () => {
+    const trail = [seg(1, 3), seg(3, 5), seg(5, 8), seg(8, 12)];
+    expect(lapStartIndex(ringTrack(), trail)).toBe(2);
+  });
+
+  it('moves on with every further crossing', () => {
+    const track = ringTrack();
+    const trail = [seg(4, 7), seg(2, 5), seg(5, 9), seg(9, 12)];
+    expect(lapStartIndex(track, trail)).toBe(2);
+  });
+
+  it('drops back into the previous lap when the line is crossed backwards', () => {
+    const track = ringTrack();
+    const trail = [seg(4, 7), seg(7, 9), seg(9, 5), seg(5, 3)];
+    expect(lapStartIndex(track, trail)).toBe(0);
+  });
+
+  it('counts the teleport out of the gravel as a crossing, like the rules do', () => {
+    const trail = [seg(1, 3), seg(3, 5), seg(5, 9, true)];
+    expect(lapStartIndex(ringTrack(), trail)).toBe(2);
+  });
+
+  it('keeps the finishing lap on show: the winning crossing opens no lap', () => {
+    const track = ringTrack();
+    // Two crossings, the second of them the winning one: the lap on show is
+    // still the one that was driven to get there.
+    const trail = [seg(1, 3), seg(3, 7), seg(7, 9), seg(2, 5), seg(5, 9)];
+    expect(lapStartIndex(track, trail, trail.length, 2)).toBe(1);
+    // Same trail with the flag further off is an ordinary lap change.
+    expect(lapStartIndex(track, trail, trail.length, 3)).toBe(4);
+  });
+
+  it('a lap given up after the flag does not eat the lap before it', () => {
+    const track = ringTrack();
+    const trail = [seg(4, 7), seg(7, 9), seg(9, 4)];
+    expect(lapStartIndex(track, trail, trail.length, 1)).toBe(0);
+  });
+
+  it('only looks at the first `count` segments, for a car mid-replay', () => {
+    const track = ringTrack();
+    const trail = [seg(1, 3), seg(3, 5), seg(5, 8), seg(8, 12)];
+    expect(lapStartIndex(track, trail, 2)).toBe(0);
+    expect(lapStartIndex(track, trail, 3)).toBe(2);
   });
 });

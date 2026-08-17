@@ -33,7 +33,6 @@ import { AI_GESTURE_MAX_DEFER_MS } from './config';
 import { render, AppView, MotionFrame } from './view/render';
 import { startAnim, stopAnim, easeOutCubic, prefersReducedMotion } from './view/anim';
 import { buildTimeline, sampleTimeline } from './view/replay-timeline';
-import { computeLanes } from './view/trail-lanes';
 import { Bounds, polylineBounds, worldToScreen } from './view/camera';
 import {
   coachAnchors,
@@ -230,14 +229,11 @@ function enterReplay(): void {
   replay = { view: vp.viewState() };
   vp.fitToContent();
   showReplayChrome(exitReplay);
-  // Lane geometry depends on the finished trails, not on how much of them is
-  // showing, so it is solved once here instead of on every one of the frames.
-  const lanes = computeLanes(g.players.map((p) => p.trail));
   const beat = Math.min(REPLAY_BEAT_MS, REPLAY_MAX_MS / tl.rounds);
   startAnim(
     (ms) => {
       const t = Math.min(tl.rounds, Math.max(0, (ms - REPLAY_LEAD_MS) / beat));
-      motion = { ...sampleTimeline(tl, g, t), lanes };
+      motion = sampleTimeline(tl, g, t);
       redraw();
       return t < tl.rounds;
     },
