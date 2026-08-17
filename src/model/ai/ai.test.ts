@@ -57,6 +57,7 @@ function playerAt(pos: Vec, vel: Vec = { x: 0, y: 0 }): Player {
     crashes: [],
     skipTurns: 0,
     penaltyTurns: 0,
+    stationaryTurns: 0,
     crossings: 0,
     finishOvershoot: null,
     place: null,

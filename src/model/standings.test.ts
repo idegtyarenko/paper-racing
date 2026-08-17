@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { newGame } from './game';
 import { buildNavField } from './nav';
 import { computeStandings, turnsTaken } from './standings';
+import { applyMove, coastMove } from './turns';
+import { chooseMove } from './ai';
 import { WIN_CROSSINGS } from '../config';
 import { ringTrack } from './test-fixtures';
 
@@ -86,6 +88,17 @@ describe('turnsTaken', () => {
     expect(turnsTaken(p)).toBe(5);
   });
 
+  it('counts a turn passed standing still — it burned a slot like any other', () => {
+    const { g } = setup();
+    // A pass (nowhere for inertia to carry the car, or the inertial cell taken)
+    // pushes no segment either: without stationaryTurns the car would look
+    // faster than the one that actually drove those turns.
+    const p = g.players[0];
+    p.trail = [seg(0), seg(1)];
+    p.stationaryTurns = 2;
+    expect(turnsTaken(p)).toBe(4);
+  });
+
   it("doesn't count a penalty that hasn't been served yet", () => {
     const { g } = setup();
     // skipTurns is what's still owed; only turns actually burned add up.
@@ -93,5 +106,34 @@ describe('turnsTaken', () => {
     p.trail = [seg(0), seg(1)];
     p.skipTurns = 2;
     expect(turnsTaken(p)).toBe(2);
+  });
+
+  // The number on the final screen has to agree with the order of the rows it
+  // sits in: whoever finished earlier cannot have spent more turns doing it.
+  // Every car is offered exactly one slot per lap, so this only holds while
+  // every burned slot is counted — the invariant that a silently passed turn
+  // used to break.
+  it('never contradicts the finishing order in a full race', () => {
+    const track = ringTrack();
+    const nav = buildNavField(track);
+    for (let run = 0; run < 5; run++) {
+      let seed = 1000 + run * 7919;
+      const rng = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+      const g = newGame(track, 3);
+      let guard = 0;
+      while (g.phase === 'race' && guard++ < 500) {
+        const cand = chooseMove(g, nav, 'easy', rng);
+        if (cand) applyMove(g, cand);
+        else coastMove(g);
+      }
+      expect(g.phase).toBe('over');
+      const byPlace = [...g.players].sort((a, b) => (a.place ?? 99) - (b.place ?? 99));
+      byPlace.forEach((p, i) => {
+        for (const later of byPlace.slice(i + 1)) {
+          if (later.place !== p.place)
+            expect(turnsTaken(later)).toBeGreaterThanOrEqual(turnsTaken(p));
+        }
+      });
+    }
   });
 });

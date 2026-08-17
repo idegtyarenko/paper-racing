@@ -350,7 +350,9 @@ export function retireSeat(state: GameState, seat: number): void {
  * Skip the turn of an absent/stalling player: the car keeps traveling straight
  * at the same speed (pure inertia, zero acceleration). If the inertial cell is
  * occupied by another car, the car just stays put at zero speed and the turn
- * simply moves on. Crashes/finish crossings/penalties are all handled normally
+ * simply moves on. Either way the turn still counts toward the car's score
+ * (stationaryTurns): it left no mark, but it cost a slot like any other.
+ * Crashes/finish crossings/penalties are all handled normally
  * through applyMove. Deterministic: two clients applying coastMove to the same
  * state get an identical result (safe under last-write-wins in online play).
  */
@@ -361,12 +363,14 @@ export function coastMove(state: GameState): void {
   // inertia to carry it, so just pass, without pushing a degenerate zero-length
   // trail segment on every skip.
   if (p.vel.x === 0 && p.vel.y === 0) {
+    p.stationaryTurns += 1; // no mark left, but the slot is spent — see stationaryTurns
     afterAction(state);
     return;
   }
   const inertial = candidates(state).find((c) => c.inertial)!;
   if (inertial.blocked) {
     p.vel = { x: 0, y: 0 };
+    p.stationaryTurns += 1;
     afterAction(state);
   } else {
     applyMove(state, inertial);

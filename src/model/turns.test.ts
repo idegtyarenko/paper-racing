@@ -13,6 +13,7 @@ import {
   forwardCap,
   canFinishThisTurn,
 } from './turns';
+import { turnsTaken } from './standings';
 import { WIN_CROSSINGS, DRIVE_PRESETS } from '../config';
 import { key } from './track';
 import { ringTrack } from './test-fixtures';
@@ -723,6 +724,8 @@ describe('coastMove', () => {
     coastMove(g);
     expect(g.players[0].trail).toHaveLength(0);
     expect(g.current).toBe(1);
+    // The slot burned all the same — the classification has to know about it.
+    expect(turnsTaken(g.players[0])).toBe(1);
   });
 
   it('a moving car coasts on by inertia (pos += vel)', () => {
@@ -740,6 +743,7 @@ describe('coastMove', () => {
     expect(g.players[0].pos).toEqual({ x: 10, y: 4 }); // stayed in place
     expect(g.players[0].vel).toEqual({ x: 0, y: 0 });
     expect(g.current).toBe(1);
+    expect(turnsTaken(g.players[0])).toBe(1);
   });
 
   it('is deterministic: two copies of the same state give identical results', () => {

@@ -43,11 +43,20 @@ export interface Player {
   /**
    * How many turns this car has already burned sitting in the gravel — counted
    * as they burn (see afterAction), never derived from the penalties handed out,
-   * so a car that retired mid-penalty still reports the truth. Together with the
-   * driven trail this is the car's total time in turns, which is what the final
-   * classification shows (turnsTaken in standings).
+   * so a car that retired mid-penalty still reports the truth. Kept separate from
+   * stationaryTurns so the two costs stay tellable apart.
    */
   penaltyTurns: number;
+  /**
+   * How many turns this car gave up standing still: it had no speed to coast on,
+   * or the cell inertia would carry it into was taken (see coastMove). Such a turn
+   * leaves no trail segment, so without this counter it would vanish from the
+   * score — and a car that stalled in the pack would read as quicker than the one
+   * that actually drove those turns. Trail + penaltyTurns + stationaryTurns is the
+   * car's total time in turns, which is what the final classification shows
+   * (turnsTaken in standings).
+   */
+  stationaryTurns: number;
   /** Signed count of finish-line crossings: +1 going forward, -1 going backward. */
   crossings: number;
   finishOvershoot: number | null;
@@ -311,6 +320,7 @@ export function newGame(
     crashes: [],
     skipTurns: 0,
     penaltyTurns: 0,
+    stationaryTurns: 0,
     crossings: 0,
     finishOvershoot: null,
     place: null,
