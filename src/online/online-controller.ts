@@ -131,6 +131,18 @@ export function initOnline(d: OnlineDeps): void {
       forgetSession(); // seat is freed — nothing to come back to
     }
   });
+  // Coming back: re-announce ourselves, or the others keep skipping our turns while
+  // we sit and watch. Both events are needed — which one a browser fires on return
+  // from the background differs (iOS standalone is the awkward one) — and re-tracking
+  // an already-tracked client is harmless, so firing both changes nothing.
+  window.addEventListener('pageshow', retrackIfActive);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') retrackIfActive();
+  });
+}
+
+function retrackIfActive(): void {
+  if (session.active()) session.retrack();
 }
 
 // ── Duplicate-call guarding and confirm-first sending ─────────────────────────────

@@ -362,6 +362,20 @@ export function untrack(): void {
 }
 
 /**
+ * Announce our presence again after coming back from the background — best-effort.
+ * `untrack()` runs on every `pagehide`, but the matching `track()` lives in the
+ * SUBSCRIBED branch, i.e. it only fires on a reconnect. A background long enough to
+ * kill the socket therefore heals itself; one the socket survives would leave us
+ * invisible to everyone else for the rest of the game, with our turns auto-skipped.
+ */
+export function retrack(): void {
+  // Fire-and-forget: track() reports failure by resolving to 'error'/'timed out'
+  // rather than rejecting, and there is nothing useful to do about it here — a
+  // reconnect re-tracks us through the SUBSCRIBED branch.
+  void channel?.track({ clientId: clientId() });
+}
+
+/**
  * Free our seat on the server while staying subscribed. Called before retiring on the
  * way out of a running race, so the others learn we're gone *before* the retirement
  * lands and can announce the departure instead of a surrender. Idempotent: `leave()`
