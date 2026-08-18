@@ -19,6 +19,12 @@ export function closeOverlay(): void {
   overlay.hidden = true;
 }
 
+/** Whether this sheet is the one on screen right now. Both halves are needed:
+ *  closeOverlay only hides the overlay, so a sheet stays un-hidden after it. */
+export function sheetOpen(sheet: HTMLElement): boolean {
+  return !overlay.hidden && !sheet.hidden;
+}
+
 /** Wire up overlay dismissal via the backdrop and Escape. Sheets are built by
  *  their owners on first open, so this can't hold references to their contents —
  *  it listens on the overlay itself, which is there from the first frame. */

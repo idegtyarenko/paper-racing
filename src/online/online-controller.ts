@@ -31,9 +31,9 @@ import {
   setConnBanner,
 } from '../ui/dialogs';
 import { closeOverlay } from '../ui/dom';
-import { openConfirm, openNotice } from '../ui/confirm';
+import { openConfirm, openNotice, closeNoticeIfOpen } from '../ui/confirm';
 import { AppState } from '../app-state';
-import { RENAME_DEBOUNCE_MS } from '../config';
+import { RENAME_DEBOUNCE_MS, HOST_AWAY_MIN_GRACE_MS, TURN_TIMEOUT_MS } from '../config';
 import { setMoveSendState } from '../ui/race-chrome';
 import { describeSetupChanges } from '../ui/rules-summary';
 import type { SettingChange, SetupSummary } from '../ui/rules-summary';
@@ -382,33 +382,91 @@ function joinErrorText(e: unknown): string {
 
 /** Whether the notice below is already up, so a stream of events doesn't re-raise it. */
 let stallNoticed = false;
+/** Pending re-check while the creator's grace period runs (see below). */
+let stallTimer: number | null = null;
+/** When we first saw the creator drop out of presence (fallback for `leftAt`). */
+let hostAbsentSince: number | null = null;
+
+/** Drop the pending re-check — leaving the room, or the creator came back. */
+function clearStallWatch(): void {
+  if (stallTimer !== null) {
+    clearTimeout(stallTimer);
+    stallTimer = null;
+  }
+}
 
 /**
- * A guest's race that can no longer be finished: the creator has walked out, and bots
- * are still driving — and only the creator's client works out their moves, so the queue
- * stops at the first bot and never moves again. Nothing can be done in the room from
- * here, so say it plainly and hand over the way out rather than leaving everyone to
- * work out why nobody is moving. Without bots the race carries on without its creator,
- * which is the whole point of not deleting the room when they leave.
+ * How the creator's absence looks from a guest's seat, for the notice below:
+ * 'here' — nothing to say; 'gone' — they left the room for good; a number — how many
+ * ms of the grace period their offline tab still has left (0 = it's up).
+ *
+ * Closing the tab is the ordinary way to leave a race, and it doesn't flag the seat:
+ * `leave()` only runs from the lobby, so mid-race the roster still shows them seated.
+ * Presence is the only thing that knows, and presence flickers — a lost signal or a
+ * minimised PWA drops it for a few seconds — hence the grace period before we call it.
+ * The grace never ends before the race's own turn limit: up to that point a seat that
+ * isn't moving is just someone taking their time, which is not news worth a modal.
+ */
+function hostAbsence(game: GameState): 'here' | 'gone' | number {
+  if (session.hostGone()) return 'gone';
+  const seat = session.hostSeat();
+  if (seat < 0) return 'gone'; // no longer in the roster at all
+  if (session.isPresent(seat)) {
+    hostAbsentSince = null;
+    return 'here';
+  }
+  // When they dropped out. Presence knows it if it saw them go; if it doesn't (we
+  // joined a race already under way, or the first presence sync hasn't landed yet),
+  // count from the moment we first noticed — otherwise an empty presence set the
+  // instant we subscribe would read as "the creator is gone" and raise the notice
+  // over a race nobody has left.
+  if (hostAbsentSince === null) hostAbsentSince = Date.now();
+  const since = session.leftAtOf(seat) ?? hostAbsentSince;
+  const grace = Math.max(
+    HOST_AWAY_MIN_GRACE_MS,
+    game.rules.turnLimitMs ?? TURN_TIMEOUT_MS, // old states predate the per-race limit
+  );
+  return Math.max(0, grace - (Date.now() - since));
+}
+
+/**
+ * A guest's race that has nowhere to go: the creator is away and bots are still
+ * driving — and only the creator's client works out their moves, so the queue stops at
+ * the first bot and doesn't move again while they're gone. Nothing can be done in the
+ * room from here, so say it plainly and hand over the way out rather than leaving
+ * everyone to work out why nobody is moving. Without bots the race carries on without
+ * its creator, which is the whole point of not deleting the room when they leave.
+ *
+ * Called on every state change and every presence event. An absence that's still
+ * inside its grace period schedules its own re-check, so the notice arrives even
+ * though nothing else will happen in the room to trigger one.
  */
 function noticeHostStall(): void {
+  clearStallWatch();
   const game = deps.state.game;
-  const stalled =
+  const racingBots =
     session.active() &&
     !session.isHost() &&
-    session.hostGone() &&
     !!game &&
     game.phase === 'race' &&
     hasLiveBots(game);
-  if (!stalled) {
+  const absence = racingBots ? hostAbsence(game!) : 'here';
+  if (absence === 'here') {
+    // Back (or never away): a notice still on screen is now false — it offers to walk
+    // out of a race that has just resumed — so take it down rather than wait for a tap.
+    if (stallNoticed) closeNoticeIfOpen();
     stallNoticed = false;
+    return;
+  }
+  if (typeof absence === 'number' && absence > 0) {
+    stallTimer = window.setTimeout(noticeHostStall, absence);
     return;
   }
   if (stallNoticed) return;
   stallNoticed = true;
-  openNotice(strings.online.hostLeftStalled, strings.online.leaveRace, () =>
-    leaveSession(),
-  );
+  const text =
+    absence === 'gone' ? strings.online.hostLeftStalled : strings.online.hostOffline;
+  openNotice(text, strings.online.leaveRace, () => leaveSession());
 }
 
 const handlers: OnlineHandlers = {
@@ -465,6 +523,8 @@ const handlers: OnlineHandlers = {
     turnWatch.clearWatches();
     forgetSession(); // the game was deleted/closed by the host — nothing to come back to
     stallNoticed = false;
+    hostAbsentSince = null;
+    clearStallWatch();
     pendingCand = null;
     setMoveSendState('idle');
     setConnBanner(false);
@@ -493,6 +553,9 @@ const handlers: OnlineHandlers = {
     // Presence affects "wait or skip" decisions and the offline markers in the
     // panel/lobby; in the lobby it also prunes abandoned seats.
     turnWatch.armTurnWatch();
+    // A creator who closed their tab shows up here and nowhere else: no row is
+    // written, so onState never fires and the stall would go unannounced.
+    noticeHostStall();
     if (deps.state.phase === 'lobby') {
       turnWatch.pruneAbsentLobby();
     }
@@ -756,6 +819,8 @@ function leaveSession(): Promise<void> {
     turnWatch.clearWatches();
     forgetSession(); // deliberate leave — nothing to come back to
     stallNoticed = false;
+    hostAbsentSince = null;
+    clearStallWatch();
     pendingCand = null;
     setMoveSendState('idle');
     setConnBanner(false);

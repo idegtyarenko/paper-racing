@@ -2,7 +2,7 @@
 // DOM: builds a shared .pr-sheet and mounts it into #overlay on first call —
 // there's no markup for it in index.html (we keep index.html lean, see roadmap).
 
-import { bindTap, openSheet, closeOverlay } from './dom';
+import { bindTap, openSheet, closeOverlay, sheetOpen } from './dom';
 import { button, buildSheet } from './pr-chrome';
 import { strings } from '../i18n';
 
@@ -11,6 +11,8 @@ let titleEl: HTMLElement;
 let yesBtn: HTMLButtonElement;
 let cancelBtn: HTMLButtonElement;
 let onYes: () => void = () => {};
+/** Title of the last notice opened, so it can be recognised on screen later. */
+let noticeTitle: string | null = null;
 
 /** Build the confirmation sheet and mount it into the overlay (once). */
 function build(): HTMLElement {
@@ -63,6 +65,20 @@ export function openNotice(title: string, okLabel: string, onOk: () => void): vo
   yesBtn.classList.remove('pr-btn--danger');
   yesBtn.classList.add('pr-btn--primary');
   onYes = onOk;
+  noticeTitle = title;
   cancelBtn.hidden = true;
   openSheet(sheet);
+}
+
+/**
+ * Take this sheet off screen if it's the one showing — for news that has expired
+ * while it was up (the creator came back, so "the bots have stopped" is no longer
+ * true). Any other sheet is left alone: it belongs to something else the player
+ * opened, and closing it would eat their tap.
+ */
+export function closeNoticeIfOpen(): void {
+  // Title check, not just "the sheet is up": openConfirm reuses this very sheet, so
+  // without it a notice expiring would swallow a confirmation the player had opened
+  // in the meantime.
+  if (sheet && sheetOpen(sheet) && titleEl.textContent === noticeTitle) closeOverlay();
 }

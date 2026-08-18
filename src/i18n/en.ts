@@ -287,6 +287,10 @@ export const en = {
     /** What those guests are then told, with the way out as the only button. */
     hostLeftStalled:
       'The track creator has left. This race can’t go on\u00A0\u2014\u00A0nobody is driving the bots.',
+    /** Same stall, but the creator only dropped offline (closed the tab, lost
+     *  signal) — they may yet come back, so this one is worded as a wait and is
+     *  taken off screen by itself once they return. */
+    hostOffline: 'The track creator is offline. The bots won’t move until they are back.',
     /** Someone else walked out of the room for good — announced to everyone still
      *  in it, in the lobby and mid-race alike. Distinct from `playerRetired`: that
      *  one is still here watching, this one is gone and won't be in the next race. */

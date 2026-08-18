@@ -156,6 +156,12 @@ export const LOBBY_PRUNE_MS = 10_000;
 export const NET_TIMEOUT_MS = 10_000;
 /** Delay before a silent retry of auto-skip after a failed write, ms. */
 export const SKIP_RETRY_MS = 5_000;
+/** Least time the creator's tab may be offline before we tell the others that the
+ *  bots have stopped, ms. A blip of connection or a minimised PWA comes back well
+ *  inside this, and raising the notice for those would cost more than it explains.
+ *  The actual wait is never shorter than the race's own turn limit either — until
+ *  that has run out, a silent seat is just someone thinking. */
+export const HOST_AWAY_MIN_GRACE_MS = 30_000;
 /** How stale a turn's start stamp may be before we stop believing it, ms. The stamp
  *  comes off another device's wall clock, and turns run in minutes — an hour's worth
  *  of "elapsed" means the two clocks disagree, not that anyone thought that long. */

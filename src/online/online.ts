@@ -119,6 +119,12 @@ export function hostGone(): boolean {
   return hostClient !== null && !roster.some((r) => r.clientId === hostClient && !r.left);
 }
 
+/** The creator's seat (index) in the roster; −1 if they're no longer in it. Their
+ *  presence is what the others' race hangs on — only their client moves the bots. */
+export function hostSeat(): number {
+  return hostClient === null ? -1 : roster.findIndex((r) => r.clientId === hostClient);
+}
+
 export function getTrack(): Track | null {
   return track;
 }
