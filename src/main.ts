@@ -42,8 +42,13 @@ import {
 } from './view/coach-placement';
 import * as vp from './view/viewport';
 import {
+  actZoneHeight,
+  chipRect,
+  confirmBtnSize,
   initRaceChrome,
   renderRaceChrome,
+  setActAnchor,
+  setConfirmFloat,
   setMoveSendState,
   setTurnCountdown,
   showConfirmMove,
@@ -854,6 +859,16 @@ online.initOnline({
 input.initInput({
   canvas,
   state: S,
+  // Input decides where the confirm button and the status chip sit (it has the
+  // camera and the candidate fan); this is its only hand on their DOM.
+  chrome: {
+    showConfirm: showConfirmMove,
+    setActAnchor,
+    setConfirmFloat,
+    confirmSize: confirmBtnSize,
+    chipRect,
+    actZoneHeight,
+  },
   commitMove,
   // Pre-pick mode: not our turn right now, but our seat can still queue a move (online/vs-bots).
   isPreselect: () => !myTurn() && candOwner() >= 0,

@@ -3,8 +3,9 @@
 // buttons). Extracted out of main.ts.
 // The module owns only input state (current gesture, active pointers, pinch)
 // and derived visual highlighting (hover/selected/loupe) that render reads;
-// game state (mode/editor/game/cands) is read and mutated through the
-// InputDeps passed in at init. Exactly one set of handlers per app instance.
+// game state (mode/editor/game/cands) is read and mutated, and the race chrome
+// placed, through the InputDeps passed in at init. Exactly one set of handlers
+// per app instance.
 
 import { Vec, dist } from '../geometry';
 import { pointerDown, pointerMove, pointerUp, pointerCancel } from '../model/editor';
@@ -12,14 +13,6 @@ import { Candidate } from '../model/game';
 import { AppState } from '../app-state';
 import { worldToScreen, screenToWorld, clampScale } from './camera';
 import * as vp from './viewport';
-import {
-  showConfirmMove,
-  setActAnchor,
-  setConfirmFloat,
-  confirmBtnSize,
-  actZoneHeight,
-  chipRect,
-} from '../ui/race-chrome';
 import {
   TOUCH_LIFT,
   TOUCH_TOL_PX,
@@ -42,6 +35,27 @@ import {
 } from '../config';
 
 /**
+ * The race chrome as gestures see it: a confirm button and a status chip
+ * somewhere over the board. Input decides *where* those go — it owns the camera
+ * and the candidate fan — but never touches their DOM; main.ts wires this to
+ * ui/race-chrome.
+ */
+export interface InputChrome {
+  /** Show/hide the "Go!" button. */
+  showConfirm(show: boolean): void;
+  /** Move the action stack (chip + button) to the half of the field free of candidates. */
+  setActAnchor(anchor: 'top' | 'bottom'): void;
+  /** Float the confirm button at this top-left corner in board css px; null docks it back. */
+  setConfirmFloat(pos: { x: number; y: number } | null): void;
+  /** Size of the confirm button as currently rendered; zero while it's hidden. */
+  confirmSize(): { w: number; h: number };
+  /** The status chip's box in board coordinates, or null when it isn't on screen. */
+  chipRect(): { x: number; y: number; w: number; h: number } | null;
+  /** How far up from the bottom edge the action stack reaches. */
+  actZoneHeight(): number;
+}
+
+/**
  * Bridge to the main module: input doesn't hold game state itself. It reads
  * it by reference through `state` (`state.phase`, `state.editor`,
  * `state.game`, `state.cands`) and applies moves/pending picks via callbacks.
@@ -50,6 +64,8 @@ export interface InputDeps {
   canvas: HTMLCanvasElement;
   /** Single shared app state (by reference, see app-state.ts). */
   state: AppState;
+  /** The confirm button and the status chip — see InputChrome. */
+  chrome: InputChrome;
   /** Apply the chosen move (mouse click or touch confirmation). */
   commitMove(cand: Candidate): void;
   /** Not our turn right now, but we can pre-pick a move for later (online/vs bots). */
@@ -112,7 +128,7 @@ export function clearSelection(): void {
   selected = null;
   loupe = null;
   lastFloatSide = 0; // a new fan starts from the preferred side again
-  showConfirmMove(false);
+  deps.chrome.showConfirm(false);
 }
 
 // ── Gesture state ────────────────────────────────────────────────────────────
@@ -203,7 +219,7 @@ function resetGestureState(opts: { keepPick?: boolean } = {}): void {
  */
 export function syncConfirmMove(): void {
   const pending = deps.state.phase === 'race' && deps.state.pending && deps.myTurn();
-  showConfirmMove(!!(selected || pending));
+  deps.chrome.showConfirm(!!(selected || pending));
   updateConfirmPlacement();
 }
 
@@ -383,7 +399,7 @@ function candScreenPoints(): Vec[] {
  */
 function actAnchor(pts: Vec[]): 'top' | 'bottom' {
   const { h } = vp.viewSize();
-  const zone = Math.max(CONFIRM_BTN_ZONE_PX, actZoneHeight() + TOUCH_TOL_PX);
+  const zone = Math.max(CONFIRM_BTN_ZONE_PX, deps.chrome.actZoneHeight() + TOUCH_TOL_PX);
   let maxY = -Infinity; // screen Y of the lowest unblocked candidate
   for (const p of pts) maxY = Math.max(maxY, p.y);
   const limit = h - zone - (lastAnchor === 'top' ? CONFIRM_ANCHOR_HYST_PX : 0);
@@ -414,7 +430,7 @@ function confirmFloatPos(
 ): { x: number; y: number } | null {
   const { w: vw, h: vh } = vp.viewSize();
   if (vw < CONFIRM_FLOAT_MIN_W_PX || pts.length === 0) return null;
-  const { w, h } = confirmBtnSize();
+  const { w, h } = deps.chrome.confirmSize();
   if (!w || !h) return null;
 
   // The fan, grown by the tap tolerance around each point: a button that merely
@@ -447,7 +463,7 @@ function confirmFloatPos(
   const maxY = vh - CONFIRM_FLOAT_PAD_PX - h;
   if (minX > maxX || minY > maxY) return null; // window too small to hold it anywhere
 
-  const chip = chipRect();
+  const chip = deps.chrome.chipRect();
   // The side used last frame is tried first: while it works the button stays
   // put, instead of hopping back to a "better" side the moment a pan frees it.
   const order = [lastFloatSide, ...places.keys()].filter((i, k, a) => a.indexOf(i) === k);
@@ -485,8 +501,8 @@ function confirmFloatPos(
  */
 export function updateConfirmPlacement(): void {
   const pts = candScreenPoints();
-  setActAnchor(actAnchor(pts));
-  setConfirmFloat(confirmFloatPos(pts, selected ?? deps.state.pending));
+  deps.chrome.setActAnchor(actAnchor(pts));
+  deps.chrome.setConfirmFloat(confirmFloatPos(pts, selected ?? deps.state.pending));
 }
 
 /** Nearest (unblocked) candidate to a screen point, in css px. */
