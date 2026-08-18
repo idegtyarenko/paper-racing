@@ -6,7 +6,7 @@
 // own layout and state.
 
 import { Difficulty } from '../model/ai';
-import { Rules } from '../model/game';
+import { RosterPlayer } from '../app-state';
 import { bindTap } from './dom';
 import { CHECK_SVG, CHEVRON_SVG, COPY_SVG, SHARE_SVG } from './icons';
 
@@ -152,21 +152,6 @@ export function buildCode(
   return { root, set: (code) => (text.textContent = code) };
 }
 
-/** One racer as the roster shows them. `name` may be empty — see renderRoster. */
-export interface RosterPlayer {
-  name: string;
-  color: string;
-  /** This client's own seat: its name is editable in place. */
-  you: boolean;
-  /** Marked with the HOST badge (the client that owns the track). */
-  host: boolean;
-  /** Not currently connected — the row dims and says so. */
-  offline: boolean;
-  /** A bot seat the host has filled: badged with its difficulty instead of a
-   *  status. Only a guest's roster shows these — see lobbyView in host-bots.ts. */
-  bot?: Difficulty;
-}
-
 export interface Roster {
   root: HTMLElement;
   /**
@@ -309,34 +294,6 @@ export function buildRoster(
   };
 
   return { root, render };
-}
-
-/**
- * Everything a lobby screen draws. Assembled in one place (online/host-bots.ts)
- * from the session, and rendered by whichever screen is showing: the host's
- * lobby is the race-setup card's Lineup tab, the guest's is its own screen.
- */
-export interface LobbyView {
-  code: string;
-  players: RosterPlayer[];
-  /** The race settings chosen by the host, for the guest's read-only tabs. Null
-   *  when none have arrived (a host on an older client). */
-  rules: Rules | null;
-  /** Seats on this track's starting grid — the roster's capacity. */
-  seats: number;
-  isHost: boolean;
-  /** Enough racers have joined for the host to start. */
-  canStart: boolean;
-  /** Our own name is still empty — the one thing holding the host back. */
-  needsName: boolean;
-  /** Host-local bot fill (only the host sets these). */
-  botCount: number;
-  maxBots: number;
-  botDifficulty: Difficulty;
-  /** Realtime channel is up — false puts the status banner into its error skin. */
-  connected: boolean;
-  /** The host's start write is in flight. */
-  starting: boolean;
 }
 
 /**

@@ -5,6 +5,11 @@
 // redraws/recalculations via that same object's callbacks. Exactly one controller
 // per app.
 //
+// It also doesn't draw: every dialog, toast and banner goes out through
+// deps.ui (OnlineUi), which main.ts implements over the ui/ modules. Nothing in
+// online/ imports ui/ — that's what keeps a lobby redesign out of here and lets
+// this layer be reasoned about without a DOM.
+//
 // Two self-contained subsystems have been split out into sibling modules (this used
 // to be a god-module):
 //   • turn-watch.ts — turn watching, countdown, manual/auto-skip, lobby pruning;
@@ -22,21 +27,8 @@ import {
 } from '../model/game';
 import { applyMove, retireSeat } from '../model/turns';
 import { editorFromTrack } from '../model/editor';
-import {
-  openJoinDialog,
-  showJoinError,
-  showErrorToast,
-  showToast,
-  setJoinBusy,
-  setConnBanner,
-} from '../ui/dialogs';
-import { closeOverlay } from '../ui/dom';
-import { openConfirm, openNotice, closeNoticeIfOpen } from '../ui/confirm';
-import { AppState } from '../app-state';
+import { AppState, SendState } from '../app-state';
 import { RENAME_DEBOUNCE_MS, HOST_AWAY_MIN_GRACE_MS, TURN_TIMEOUT_MS } from '../config';
-import { setMoveSendState } from '../ui/race-chrome';
-import { describeSetupChanges } from '../ui/rules-summary';
-import type { SettingChange, SetupSummary } from '../ui/rules-summary';
 import { strings } from '../i18n';
 import * as session from './online';
 import { OnlineHandlers } from './online';
@@ -44,6 +36,46 @@ import type { LobbySetup } from './online';
 import type { SerializedSetup } from './net';
 import * as hostBots from './host-bots';
 import * as turnWatch from './turn-watch';
+
+/**
+ * Everything `online/` asks to be SHOWN. Implemented in main.ts on top of
+ * ui/dialogs, ui/confirm, ui/dom and ui/race-chrome, so the network layer never
+ * touches the DOM itself — a lobby or settings redesign stops here instead of
+ * reaching into the controller.
+ */
+export interface OnlineUi {
+  /** Transient message; ms overrides the default dwell. */
+  toast(msg: string, ms?: number): void;
+  /** Transient message in the error skin. */
+  errorToast(msg: string): void;
+  /** Show/hide the "connection lost" banner. */
+  connBanner(lost: boolean): void;
+  /** How the confirm-move button reads while a move is in flight. */
+  moveSendState(s: SendState): void;
+  /** Ask before something irreversible; danger styling unless opts says otherwise. */
+  confirm(
+    title: string,
+    confirmLabel: string,
+    onOk: () => void,
+    opts?: { danger?: boolean },
+  ): void;
+  /** State the player has to acknowledge (it outlives a toast). */
+  notice(title: string, okLabel: string, onOk: () => void): void;
+  closeNotice(): void;
+  /** Dismiss whatever sheet is in the overlay. */
+  closeOverlay(): void;
+  /** The "enter a race code" sheet. */
+  joinDialog(defaultCode: string, onConfirm: (code: string) => void): void;
+  /** Error text inside the open join sheet. */
+  joinError(msg: string): void;
+  /** Spinner state of the join sheet's button. */
+  joinBusy(busy: boolean): void;
+  /**
+   * Say out loud what the host changed. The controller owns the timing and the
+   * baseline (see announceSetupChange); the wording is the UI's business.
+   */
+  saySetupChange(before: LobbySetup, after: LobbySetup): void;
+}
 
 /**
  * Bridge to the main module: the controller doesn't hold state itself. It reads
@@ -55,6 +87,8 @@ import * as turnWatch from './turn-watch';
 export interface OnlineDeps {
   /** Single shared app state (by reference, see app-state.ts). */
   state: AppState;
+  /** Dialogs, toasts and banners — see OnlineUi. */
+  ui: OnlineUi;
   /** Swap in a new game: stops the local bot loop, rebuilds nav, clears rematch state. */
   setGame(g: GameState): void;
   /** Fit the current content (track) centered in the viewport. */
@@ -194,21 +228,21 @@ export async function sendMove(cand: Candidate): Promise<void> {
   if (session.mySeat() !== game.current) return; // no longer our turn
   sending = true;
   pendingCand = cand;
-  setMoveSendState('sending');
+  deps.ui.moveSendState('sending');
   try {
     const r = await confirmFirst(game, (next) => applyMove(next, cand));
     sending = false;
     pendingCand = null;
-    setMoveSendState('idle');
+    deps.ui.moveSendState('idle');
     if (r === 'applied') commitOnline();
   } catch {
     sending = false;
     if (deps.state.game !== game) {
       pendingCand = null;
-      setMoveSendState('idle');
+      deps.ui.moveSendState('idle');
       return;
     }
-    setMoveSendState('failed');
+    deps.ui.moveSendState('failed');
     deps.updateUI(); // status → "failed to send…"
   }
 }
@@ -233,16 +267,16 @@ export async function sendRetire(): Promise<void> {
   const me = game.players[seat];
   if (!me || isFinished(me) || me.retired) return; // already finished/retired
   sending = true;
-  setMoveSendState('sending');
+  deps.ui.moveSendState('sending');
   try {
     const r = await confirmFirst(game, (next) => retireSeat(next, seat));
     sending = false;
-    setMoveSendState('idle');
+    deps.ui.moveSendState('idle');
     if (r === 'applied') commitOnline();
   } catch {
     sending = false;
-    setMoveSendState('idle');
-    showErrorToast(strings.online.error);
+    deps.ui.moveSendState('idle');
+    deps.ui.errorToast(strings.online.error);
   }
 }
 
@@ -311,7 +345,7 @@ function announceRetirements(before: GameState | null, after: GameState): void {
     if (seat === mine || p.bot) return;
     if (!p.retired || before.players[seat].retired) return;
     if (roster[seat]?.left) return; // they didn't give up, they walked out
-    showToast(strings.online.playerRetired(p.name));
+    deps.ui.toast(strings.online.playerRetired(p.name));
   });
 }
 
@@ -328,21 +362,7 @@ const SETUP_NOTICE_MS = 3_000;
 
 let noticeTimer: number | null = null;
 /** The setup as last announced (the baseline for the next diff), while a window is open. */
-let noticedSetup: SetupSummary | null = null;
-
-function sayChanges(changes: SettingChange[]): void {
-  if (!changes.length) return;
-  // More than a couple of settings at once stops being informative and starts
-  // being a wall of text — then just say that something moved.
-  if (changes.length > 2) {
-    showToast(strings.online.setupChangedMany, 3_000);
-    return;
-  }
-  showToast(
-    strings.online.setupChanged(changes.map((c) => `${c.label} — ${c.value}`).join(', ')),
-    3_000,
-  );
-}
+let noticedSetup: LobbySetup | null = null;
 
 function announceSetupChange(before: LobbySetup, after: LobbySetup): void {
   if (!noticedSetup) noticedSetup = before;
@@ -351,7 +371,7 @@ function announceSetupChange(before: LobbySetup, after: LobbySetup): void {
     noticeTimer = null;
     const base = noticedSetup;
     noticedSetup = null;
-    if (base) sayChanges(describeSetupChanges(base, after));
+    if (base) deps.ui.saySetupChange(base, after);
   }, SETUP_NOTICE_MS);
 }
 
@@ -368,7 +388,7 @@ function flushSetupNotice(raced: Rules): void {
   noticedSetup = null;
   if (!base) return;
   // Bots are already visible on the grid by now — only the rules still need saying.
-  sayChanges(describeSetupChanges(base, { rules: raced, bots: base.bots }));
+  deps.ui.saySetupChange(base, { rules: raced, bots: base.bots });
 }
 
 /** Turn a join error into user-facing text. */
@@ -454,7 +474,7 @@ function noticeHostStall(): void {
   if (absence === 'here') {
     // Back (or never away): a notice still on screen is now false — it offers to walk
     // out of a race that has just resumed — so take it down rather than wait for a tap.
-    if (stallNoticed) closeNoticeIfOpen();
+    if (stallNoticed) deps.ui.closeNotice();
     stallNoticed = false;
     return;
   }
@@ -466,7 +486,7 @@ function noticeHostStall(): void {
   stallNoticed = true;
   const text =
     absence === 'gone' ? strings.online.hostLeftStalled : strings.online.hostOffline;
-  openNotice(text, strings.online.leaveRace, () => leaveSession());
+  deps.ui.notice(text, strings.online.leaveRace, () => leaveSession());
 }
 
 const handlers: OnlineHandlers = {
@@ -480,7 +500,7 @@ const handlers: OnlineHandlers = {
     // the pending state (a late resolve of our own send becomes a no-op thanks to the
     // identity guard in sendMove, and the DB applies last-write-wins anyway).
     pendingCand = null;
-    setMoveSendState('idle');
+    deps.ui.moveSendState('idle');
     // Resume breadcrumb: keep it while the race is ongoing, clear it once the race is
     // over (no point resuming to the winner screen). This is the single place that
     // owns "remember/forget" based on authoritative state — called on every applyRow.
@@ -494,10 +514,10 @@ const handlers: OnlineHandlers = {
     deps.setGame(g);
     if (deps.state.phase !== 'race') {
       deps.state.phase = 'race';
-      closeOverlay();
+      deps.ui.closeOverlay();
       deps.fitToContent();
     } else if (wasOver && g.phase === 'race') {
-      closeOverlay();
+      deps.ui.closeOverlay();
       deps.fitToContent();
     }
     // armTurnWatch before updateUI: it resets skipVisible for the new turn, otherwise a
@@ -526,10 +546,10 @@ const handlers: OnlineHandlers = {
     hostAbsentSince = null;
     clearStallWatch();
     pendingCand = null;
-    setMoveSendState('idle');
-    setConnBanner(false);
+    deps.ui.moveSendState('idle');
+    deps.ui.connBanner(false);
     hostBots.setLobbyStarting(false);
-    showErrorToast(strings.online.closed);
+    deps.ui.errorToast(strings.online.closed);
     deps.resetToEdit();
   },
   onPlayerLeft: (name) => {
@@ -537,7 +557,7 @@ const handlers: OnlineHandlers = {
     // a seat frees up, and in a race a car goes quiet for a reason no one would guess.
     // Leaving outranks the retirement it implies mid-race; announceRetirements stays
     // quiet for a seat that's flagged gone, so a departure is announced once, as itself.
-    showToast(strings.online.playerLeft(name));
+    deps.ui.toast(strings.online.playerLeft(name));
   },
   onSetupChanged: (before, after) => {
     // The guest's lobby draws the host's settings (read-only tabs) and their bots
@@ -546,7 +566,7 @@ const handlers: OnlineHandlers = {
     announceSetupChange(before, after);
   },
   onConnection: (ok) => {
-    setConnBanner(!ok);
+    deps.ui.connBanner(!ok);
     deps.updateUI();
   },
   onPresence: () => {
@@ -639,7 +659,7 @@ function hostOnline(name: string): Promise<void> {
       deps.updateUI();
       deps.redraw();
     } catch {
-      showErrorToast(strings.online.error);
+      deps.ui.errorToast(strings.online.error);
     }
   });
 }
@@ -653,10 +673,10 @@ function hostOnline(name: string): Promise<void> {
  */
 function joinOnline(code: string, name: string, inJoinDialog: boolean): Promise<void> {
   return guarded(async () => {
-    if (inJoinDialog) setJoinBusy(true);
+    if (inJoinDialog) deps.ui.joinBusy(true);
     try {
       await session.join(code, name, handlers);
-      closeOverlay();
+      deps.ui.closeOverlay();
       const t = session.getTrack();
       if (t) {
         deps.state.editor = editorFromTrack(t); // preview of the host's track in the lobby
@@ -674,13 +694,13 @@ function joinOnline(code: string, name: string, inJoinDialog: boolean): Promise<
       if (deps.state.phase === 'lobby') deps.updateUI();
     } catch (e) {
       if (inJoinDialog) {
-        showJoinError(joinErrorText(e));
+        deps.ui.joinError(joinErrorText(e));
       } else {
-        openJoinDialog(code, (code2) => joinOnline(code2, name, true));
-        showJoinError(joinErrorText(e));
+        deps.ui.joinDialog(code, (code2) => joinOnline(code2, name, true));
+        deps.ui.joinError(joinErrorText(e));
       }
     } finally {
-      if (inJoinDialog) setJoinBusy(false);
+      if (inJoinDialog) deps.ui.joinBusy(false);
     }
   });
 }
@@ -709,7 +729,7 @@ function startOnline(): Promise<void> {
         commitOnline();
       }
     } catch {
-      showErrorToast(strings.online.startFailed);
+      deps.ui.errorToast(strings.online.startFailed);
     } finally {
       hostBots.setLobbyStarting(false);
     }
@@ -750,7 +770,7 @@ function rematchOnline(): Promise<void> {
     // moved under us (the last guest left, someone's state arrived late). Say so —
     // a visible button that silently does nothing is the worst of both.
     if (!raceTrack || !canRematch()) {
-      showErrorToast(strings.online.startFailed);
+      deps.ui.errorToast(strings.online.startFailed);
       return;
     }
     const g = hostBots.buildStartState(raceTrack);
@@ -763,12 +783,12 @@ function rematchOnline(): Promise<void> {
       // we started from is what tells the two apart: the echo replaces the object.
       if (deps.state.game === prev) {
         deps.setGame(g);
-        closeOverlay();
+        deps.ui.closeOverlay();
         deps.fitToContent();
         commitOnline();
       }
     } catch {
-      showErrorToast(strings.online.startFailed);
+      deps.ui.errorToast(strings.online.startFailed);
     }
   });
 }
@@ -822,8 +842,8 @@ function leaveSession(): Promise<void> {
     hostAbsentSince = null;
     clearStallWatch();
     pendingCand = null;
-    setMoveSendState('idle');
-    setConnBanner(false);
+    deps.ui.moveSendState('idle');
+    deps.ui.connBanner(false);
     hostBots.setLobbyStarting(false);
     const wasHost = deps.state.raceTrack !== null;
     await session.leave();
@@ -851,9 +871,9 @@ async function shareLink(): Promise<void> {
   } else {
     try {
       await navigator.clipboard.writeText(url);
-      showToast(strings.online.copied);
+      deps.ui.toast(strings.online.copied);
     } catch {
-      showToast(url);
+      deps.ui.toast(url);
     }
   }
 }
@@ -864,7 +884,7 @@ async function copyCode(): Promise<void> {
   if (!code) return;
   try {
     await navigator.clipboard.writeText(code);
-    showToast(strings.online.codeCopied);
+    deps.ui.toast(strings.online.codeCopied);
   } catch {
     // Clipboard unavailable — the code is already visible on screen anyway.
   }
@@ -883,7 +903,7 @@ export function promptCreate(): void {
 
 /** "Join by code": the code dialog (the name is typed in the lobby), errors in place. */
 export function promptJoin(): void {
-  openJoinDialog('', (code) => joinOnline(code, savedName(), true));
+  deps.ui.joinDialog('', (code) => joinOnline(code, savedName(), true));
 }
 
 // ── Renaming yourself in the lobby ──────────────────────────────────────────────
@@ -937,13 +957,13 @@ export function promptResume(): void {
   const code = savedSession();
   if (!code) return;
   forgetSession();
-  openConfirm(
+  deps.ui.confirm(
     strings.online.resumeTitle(code),
     strings.online.resumeYes,
     async () => {
       const known = await session.memberName(code);
       if (!known) {
-        showErrorToast(strings.online.gameGone);
+        deps.ui.errorToast(strings.online.gameGone);
         return;
       }
       rememberName(known);

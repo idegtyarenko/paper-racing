@@ -14,8 +14,7 @@
 
 import { GameState, isFinished } from '../model/game';
 import { coastMove } from '../model/turns';
-import { showErrorToast } from '../ui/dialogs';
-import type { NetTurn } from '../ui/race-chrome';
+import type { NetTurn } from '../app-state';
 import { strings } from '../i18n';
 import { TURN_TIMEOUT_MS, LOBBY_PRUNE_MS, SKIP_RETRY_MS } from '../config';
 import * as session from './online';
@@ -234,7 +233,7 @@ async function applySkip(game: GameState): Promise<void> {
       commitOnline();
     }
   } catch {
-    showErrorToast(strings.online.error);
+    deps.ui.errorToast(strings.online.error);
     // Auto-skip: retry silently — autoSkip will re-check (same turn, player still
     // offline, I'm still designated). Manual skip: skipVisible stays true, button is available again.
     if (!session.isPresent(game.current)) {

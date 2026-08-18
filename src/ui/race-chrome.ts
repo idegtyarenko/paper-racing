@@ -14,7 +14,7 @@
 // The confirm-move button and the skip button are built here too, in the action
 // zone, along with the four inputs that decide how the confirm button looks.
 
-import { Phase } from '../app-state';
+import { Phase, NetTurn, SendState } from '../app-state';
 import { GameState } from '../model/game';
 import { NavField } from '../model/nav';
 import { upcomingSlots, canFinishThisTurn } from '../model/turns';
@@ -188,9 +188,6 @@ export function raceActionSlot(): HTMLElement {
 // on whether it's my turn and how much time is left (setTurnCountdown). Those
 // inputs come from different modules, so we keep them here and assemble the
 // button in one place — refreshConfirmBtn().
-
-/** State of sending a move online: idle / sending / send failed. */
-export type SendState = 'idle' | 'sending' | 'failed';
 
 let sendState: SendState = 'idle';
 let confirmSelected = false; // a candidate is selected (touch aiming) — can be committed
@@ -411,21 +408,6 @@ function renderQueue(game: GameState): void {
     children.push(dot);
   });
   dotsEl.replaceChildren(...children);
-}
-
-/** Online context for the current turn — the same object the panel used. */
-export interface NetTurn {
-  yourTurn: boolean;
-  /** Show the skip button: the active player is online but hasn't moved past the timeout. */
-  canSkip: boolean;
-  /** Name of the player whose turn it is (for the skip-related status). */
-  currentName: string;
-  /** Presence by seat (index = seat); false means that tab is offline. */
-  present: boolean[];
-  /** Code of the current online race — the chip lets a disconnected player back in. */
-  code: string;
-  /** Whether this client is the track's creator (can trigger a rematch). */
-  isHost: boolean;
 }
 
 export interface RaceCtx {

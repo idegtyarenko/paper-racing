@@ -27,11 +27,11 @@ import {
   buildStatus,
   buildTabs,
   CodeBlock,
-  LobbyView,
   Roster,
   StatusBanner,
   Tabs,
 } from './pr-chrome';
+import { LobbyView } from '../app-state';
 import { mountRulesEditor, RulesEditor } from './rules-editor';
 import { openMenu } from './menu';
 import { BURGER_SVG, CLOSE_SVG } from './icons';

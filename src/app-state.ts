@@ -80,3 +80,71 @@ export function newAppState(): AppState {
     raceNav: null,
   };
 }
+
+// ── Online view-models ────────────────────────────────────────────────────────
+// The lobby and the race's online strip are filled in by `online/` and drawn by
+// `ui/`. Declaring them in the UI module that happens to draw them made the
+// network layer import `ui/` for a type, so a lobby redesign reached into the
+// controller. They live here for the same reason Phase does: a neutral house
+// both sides can read from.
+
+/** One racer as the roster shows them. `name` may be empty — see renderRoster. */
+export interface RosterPlayer {
+  name: string;
+  color: string;
+  /** This client's own seat: its name is editable in place. */
+  you: boolean;
+  /** Marked with the HOST badge (the client that owns the track). */
+  host: boolean;
+  /** Not currently connected — the row dims and says so. */
+  offline: boolean;
+  /** A bot seat the host has filled: badged with its difficulty instead of a
+   *  status. Only a guest's roster shows these — see lobbyView in host-bots.ts. */
+  bot?: Difficulty;
+}
+
+/**
+ * Everything a lobby screen draws. Assembled in one place (online/host-bots.ts)
+ * from the session, and rendered by whichever screen is showing: the host's
+ * lobby is the race-setup card's Lineup tab, the guest's is its own screen.
+ */
+export interface LobbyView {
+  code: string;
+  players: RosterPlayer[];
+  /** The race settings chosen by the host, for the guest's read-only tabs. Null
+   *  when none have arrived (a host on an older client). */
+  rules: Rules | null;
+  /** Seats on this track's starting grid — the roster's capacity. */
+  seats: number;
+  isHost: boolean;
+  /** Enough racers have joined for the host to start. */
+  canStart: boolean;
+  /** Our own name is still empty — the one thing holding the host back. */
+  needsName: boolean;
+  /** Host-local bot fill (only the host sets these). */
+  botCount: number;
+  maxBots: number;
+  botDifficulty: Difficulty;
+  /** Realtime channel is up — false puts the status banner into its error skin. */
+  connected: boolean;
+  /** The host's start write is in flight. */
+  starting: boolean;
+}
+
+/** Online context for the current turn — the same object the panel used. */
+export interface NetTurn {
+  yourTurn: boolean;
+  /** Show the skip button: the active player is online but hasn't moved past the timeout. */
+  canSkip: boolean;
+  /** Name of the player whose turn it is (for the skip-related status). */
+  currentName: string;
+  /** Presence by seat (index = seat); false means that tab is offline. */
+  present: boolean[];
+  /** Code of the current online race — the chip lets a disconnected player back in. */
+  code: string;
+  /** Whether this client is the track's creator (can trigger a rematch). */
+  isHost: boolean;
+}
+
+/** State of sending a move online: idle / sending / send failed. */
+export type SendState = 'idle' | 'sending' | 'failed';

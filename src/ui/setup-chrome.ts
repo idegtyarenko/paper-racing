@@ -34,10 +34,10 @@ import {
   buildRoster,
   buildTabs,
   CodeBlock,
-  LobbyView,
   Roster,
   Tabs,
 } from './pr-chrome';
+import { LobbyView } from '../app-state';
 import { ARROW_SVG, CHIP_SVG, CLOSE_SVG, GLOBE_SVG, PHONE_SVG } from './icons';
 
 const board = document.querySelector('.app__board')!;

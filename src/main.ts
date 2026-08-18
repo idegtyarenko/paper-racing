@@ -44,6 +44,7 @@ import * as vp from './view/viewport';
 import {
   initRaceChrome,
   renderRaceChrome,
+  setMoveSendState,
   setTurnCountdown,
   showConfirmMove,
 } from './ui/race-chrome';
@@ -57,7 +58,7 @@ import {
   setOnlineEnabled,
 } from './ui/editor-chrome';
 import { initWizardNav, renderWizardNav, wizardSteps } from './ui/wizard-nav';
-import { openConfirm } from './ui/confirm';
+import { openConfirm, openNotice, closeNoticeIfOpen } from './ui/confirm';
 import { initMenu, setVersionLabel } from './ui/menu';
 import {
   initSetupChrome,
@@ -70,8 +71,18 @@ import * as session from './online/online';
 import * as online from './online/online-controller';
 import * as input from './view/input';
 import { initInstallPrompt } from './ui/install-prompt';
-import { openRules, showToast } from './ui/dialogs';
-import { bindOverlayClose } from './ui/dom';
+import {
+  openJoinDialog,
+  openRules,
+  setConnBanner,
+  setJoinBusy,
+  showErrorToast,
+  showJoinError,
+  showToast,
+} from './ui/dialogs';
+import { bindOverlayClose, closeOverlay } from './ui/dom';
+import { describeSetupChanges } from './ui/rules-summary';
+import type { SettingChange } from './ui/rules-summary';
 import { initPwa } from './pwa';
 import { toggleSwDebug } from './sw-debug';
 import { initAppHeight } from './ui/app-height';
@@ -779,8 +790,45 @@ function resetToEdit(): void {
 // it reads and mutates app state S by reference, and does redraws/resets
 // through callbacks. setGame is a callback (not a direct S.game write)
 // because it has side effects.
+/**
+ * What the online layer is allowed to put on screen (OnlineUi). Mostly one-line
+ * pass-throughs — the point is that online/ asks for them instead of importing
+ * ui/ itself, so a redesign of the lobby or the settings screen stops here.
+ */
+const onlineUi: online.OnlineUi = {
+  toast: showToast,
+  errorToast: showErrorToast,
+  connBanner: setConnBanner,
+  moveSendState: setMoveSendState,
+  confirm: (title, confirmLabel, onOk, opts) =>
+    openConfirm(title, confirmLabel, onOk, opts),
+  notice: openNotice,
+  closeNotice: closeNoticeIfOpen,
+  closeOverlay,
+  joinDialog: openJoinDialog,
+  joinError: showJoinError,
+  joinBusy: setJoinBusy,
+  saySetupChange: (before, after) => sayChanges(describeSetupChanges(before, after)),
+};
+
+/** The host's settings change, said out loud. */
+function sayChanges(changes: SettingChange[]): void {
+  if (!changes.length) return;
+  // More than a couple of settings at once stops being informative and starts
+  // being a wall of text — then just say that something moved.
+  if (changes.length > 2) {
+    showToast(strings.online.setupChangedMany, 3_000);
+    return;
+  }
+  showToast(
+    strings.online.setupChanged(changes.map((c) => `${c.label} — ${c.value}`).join(', ')),
+    3_000,
+  );
+}
+
 online.initOnline({
   state: S,
+  ui: onlineUi,
   setGame: (g) => {
     // An online race replaces the local one: stop the local bot loop (in
     // online games, the host drives bots through online-controller). Bot-ness
