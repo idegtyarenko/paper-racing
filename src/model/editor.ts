@@ -221,19 +221,99 @@ function perpDirAt(width: WidthModel, p: Vec): Vec {
   return width.outNormal[best];
 }
 
+/** Directions tried across a half-turn when hunting for the narrowest crossing. */
+const FINISH_SWEEP_STEPS = 36;
+/** Rounds of narrowing down around the best direction of the coarse sweep. */
+const FINISH_REFINE_ROUNDS = 2;
+/** A crossing at most this much longer than the narrowest one still counts as
+ *  just as good, so the centerline normal can win the tie. */
+const FINISH_TIE_SLACK = 1.05;
+
+interface Crossing {
+  /** The line itself, without the 0.25 clipFinishLine sticks out past each wall. */
+  len: number;
+  angle: number;
+  finish: FinishLine;
+}
+
+/** Angle between two undirected directions, in [0, PI/2]. */
+function angleGap(a: number, b: number): number {
+  const d = Math.abs(a - b) % Math.PI;
+  return d > Math.PI / 2 ? Math.PI - d : d;
+}
+
 /**
- * Finish line through point p, perpendicular to the centerline: take the
- * normal of the nearest centerline vertex and clip a short segment along it
- * to the edges.
+ * Finish line through point p: the SHORTEST segment joining the two walls
+ * through it. Across is by definition the narrowest way through the road, so
+ * the shortest crossing is the one that runs square across it.
+ *
+ * The centerline normal alone can't do this job: where the road doubles back on
+ * itself, the centerline vertex nearest to p belongs to the neighbouring stretch,
+ * and its normal points along p's own road rather than across it — the line then
+ * ran for tens of cells down the tarmac. It stays on as a hint for the tie-break
+ * below, which is all it can be trusted with.
  */
-function clipPerpAt(
+export function clipPerpAt(
   width: WidthModel,
   p: Vec,
   outer: Polyline,
   inner: Polyline,
 ): ReturnType<typeof clipFinishLine> {
-  const d = perpDirAt(width, p);
-  return clipFinishLine(sub(p, d), add(p, d), outer, inner);
+  const hint = perpDirAt(width, p);
+  const hintAngle = Math.atan2(hint.y, hint.x);
+  const found: Crossing[] = [];
+  let miss: ReturnType<typeof clipFinishLine> = { error: 'no-cross' };
+
+  const measure = (angle: number): Crossing | null => {
+    const d = { x: Math.cos(angle), y: Math.sin(angle) };
+    const res = clipFinishLine(sub(p, d), add(p, d), outer, inner);
+    if ('error' in res) {
+      miss = res;
+      return null;
+    }
+    const c = { len: dist(res.finish.a, res.finish.b) - 0.5, angle, finish: res.finish };
+    found.push(c);
+    return c;
+  };
+
+  // A direction and its opposite give the same line, so half a turn covers them
+  // all. Starting from the hint keeps the centerline normal itself among the
+  // candidates, whatever the step size.
+  const step = Math.PI / FINISH_SWEEP_STEPS;
+  let best: Crossing | null = null;
+  for (let k = 0; k < FINISH_SWEEP_STEPS; k++) {
+    const c = measure(hintAngle + k * step);
+    if (c && (!best || c.len < best.len)) best = c;
+  }
+  if (!best) return miss;
+
+  // The coarse step is far too wide to place the line accurately on a narrow
+  // road, so close in on the winner.
+  let half = step;
+  for (let round = 0; round < FINISH_REFINE_ROUNDS; round++) {
+    half /= 4;
+    for (const side of [-2, -1, 1, 2]) {
+      const c = measure(best.angle + side * half);
+      if (c && c.len < best.len) best = c;
+    }
+  }
+
+  // On a bend the true narrowest crossing tilts a little toward the apex, which
+  // reads as a crooked line. Among the directions that are as good as the best,
+  // prefer the one closest to the centerline normal — on a folded-back road the
+  // hint is nowhere near this good, so it can't win the tie there.
+  const cutoff = best.len * FINISH_TIE_SLACK;
+  let pick = best;
+  let pickGap = angleGap(best.angle, hintAngle);
+  for (const c of found) {
+    if (c.len > cutoff) continue;
+    const gap = angleGap(c.angle, hintAngle);
+    if (gap < pickGap) {
+      pick = c;
+      pickGap = gap;
+    }
+  }
+  return { finish: pick.finish };
 }
 
 /**

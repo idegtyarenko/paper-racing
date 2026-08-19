@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   Vec,
   Polyline,
@@ -10,7 +10,8 @@ import {
   normalize,
   pointInPolygon,
 } from '../geometry';
-import { WidthModel, autoFinishIndex } from './centerline';
+import { WidthModel, autoFinishIndex, generateEdges, rebuildEdges } from './centerline';
+import { processStroke } from './track';
 import { strings } from '../i18n';
 import {
   newEditor,
@@ -21,6 +22,7 @@ import {
   confirmFinish,
   confirmDirection,
   pointerCancel,
+  clipPerpAt,
 } from './editor';
 
 /** A closed "stadium" centerline: two horizontal straights joined by semicircle
@@ -281,6 +283,108 @@ describe('start/finish placement misses', () => {
     expect(st.error).toBe(true);
     // The preview may have moved it, but there is still a line on the track.
     expect(st.finish === placed || st.finish !== null).toBe(true);
+  });
+});
+
+// The start/finish line must go ACROSS the road. Taking the normal of the nearest
+// centerline vertex isn't enough: where the road doubles back on itself the nearest
+// vertex belongs to the neighbouring stretch, and its normal points along the road
+// rather than across it — the line then ran for tens of cells down the tarmac
+// instead of the three or four it takes to span it.
+describe('finish line goes across the road, not along it', () => {
+  /** Deterministic Math.random, so the random width profile doesn't make this flaky. */
+  function seedRandom(seed: number): void {
+    let a = seed;
+    vi.spyOn(Math, 'random').mockImplementation(() => {
+      a |= 0;
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    });
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** A hand-drawn-looking loop: a circle with a few harmonics on the radius. The
+   *  wobble is what folds the road back on itself; `seed`/`amp` below are a shape
+   *  the generator accepts and that used to produce lines 8x too long. */
+  function wobblyStroke(seed: number, amp: number): Vec[] {
+    let a = seed;
+    const rnd = (): number => {
+      a = (a * 1103515245 + 12345) & 0x7fffffff;
+      return a / 0x7fffffff;
+    };
+    const harmonics = Array.from({ length: 5 }, () => ({
+      a: rnd() * amp,
+      ph: rnd() * 6.28,
+    }));
+    const pts: Vec[] = [];
+    for (let i = 0; i <= 240; i++) {
+      const t = (Math.PI * 2 * i) / 240;
+      let r = 30;
+      harmonics.forEach((h, n) => (r += h.a * Math.cos((n + 2) * t + h.ph)));
+      pts.push({ x: 60 + r * Math.cos(t), y: 60 + r * Math.sin(t) });
+    }
+    return pts;
+  }
+
+  /** The wobbly track, run through the real pipeline the editor uses. */
+  function wobblyTrack() {
+    seedRandom(3);
+    const ps = processStroke(wobblyStroke(3, 8));
+    if ('error' in ps) throw new Error(`stroke rejected: ${ps.error}`);
+    const gen = generateEdges(ps.poly);
+    if ('error' in gen) throw new Error(`edges rejected: ${gen.error}`);
+    return gen;
+  }
+
+  /** Length of the line itself: clipFinishLine pushes the ends 0.25 past each wall. */
+  function span(finish: { a: Vec; b: Vec }): number {
+    return dist(finish.a, finish.b) - 0.5;
+  }
+
+  it('never runs much longer than the road is wide, anywhere on the track', () => {
+    const { model, outer, inner } = wobblyTrack();
+    for (let i = 0; i < model.center.length; i++) {
+      const width = model.outW[i] + model.inW[i];
+      const n = model.outNormal[i];
+      for (const f of [-0.45, -0.25, 0, 0.25, 0.45]) {
+        const p = {
+          x: model.center[i].x + n.x * f * width,
+          y: model.center[i].y + n.y * f * width,
+        };
+        const res = clipPerpAt(model, p, outer, inner);
+        if ('error' in res) continue;
+        // Some slack: the walls aren't parallel, so a crossing can legitimately
+        // outrun the nominal width a little on a bend.
+        expect(span(res.finish)).toBeLessThan(1.4 * width);
+      }
+    }
+  });
+
+  it('crosses the road where the neighbouring stretch used to hijack the direction', () => {
+    const { model, outer, inner } = wobblyTrack();
+    const p = { x: 47.4, y: 55.4 };
+    const res = clipPerpAt(model, p, outer, inner);
+    if ('error' in res) throw new Error('no line at the sample point');
+    expect(span(res.finish)).toBeLessThan(5);
+  });
+
+  it('still crosses square on a plain bend, not tilted toward the apex', () => {
+    const center = stadium();
+    const m = uniformModel(center);
+    // A vertex in the middle of a curved end.
+    const i = center.findIndex((p) => p.x > 100 && Math.abs(p.y - 60) < 2);
+    expect(i).toBeGreaterThan(-1);
+    const { outer, inner } = rebuildEdges(m);
+    const res = clipPerpAt(m, center[i], outer, inner);
+    if ('error' in res) throw new Error('no line on the bend');
+    const dir = normalize(sub(res.finish.b, res.finish.a));
+    // Within a few degrees of the centerline normal.
+    expect(Math.abs(dot(dir, m.outNormal[i]))).toBeGreaterThan(Math.cos(0.1));
   });
 });
 
