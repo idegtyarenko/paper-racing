@@ -30,6 +30,15 @@ import {
   hasLiveBots,
 } from './model/game';
 import { candidatesForSeat, applyMove, retireSeat } from './model/turns';
+import {
+  SeatCtx,
+  isBotSeat,
+  soloHumanSeat,
+  myTurn,
+  candOwner,
+  localHumanSeat,
+  canRetire,
+} from './seats';
 import { Difficulty } from './model/ai';
 import { buildNavField } from './model/nav';
 import { initBotScheduler, scheduleBotMove, cancelBotMoves } from './bots/scheduler';
@@ -102,11 +111,17 @@ const wrap = document.querySelector('.app__board')!;
 /** Single shared app state (see app-state.ts). Online/input get it by
  *  reference and read/write its fields directly. */
 const S = newAppState();
-/** Is this seat a bot (and at what difficulty)? Bot-ness lives in state (Player.bot). */
-function isBotSeat(i: number): boolean {
-  return !!S.game?.players[i]?.bot;
-}
 
+/** Who this client is at the controls of, for the seat predicates (seats.ts).
+ *  The one place the online/local difference is turned into data: our own seat
+ *  in a room, null when the game is local. */
+function seats(): SeatCtx {
+  return {
+    game: S.game,
+    phase: S.phase,
+    mySeat: session.active() ? session.mySeat() : null,
+  };
+}
 /** Bbox of the content for fit/clamp: the race track or the track being
  *  edited. The bounds provider for the viewport — the app knows "what's
  *  currently on screen". */
@@ -152,7 +167,7 @@ function redraw(): void {
     hover: input.getHover(),
     selected: input.getSelected(),
     pending: S.pending,
-    candSeat: candOwner(),
+    candSeat: candOwner(seats()),
     loupe: input.getLoupe(),
     cam: vp.camera(),
     motion: motion ?? undefined,
@@ -171,80 +186,10 @@ function redraw(): void {
     });
 }
 
-/**
- * The one human seat in a local game (all others are bots): this is who we
- * show the candidate fan/pre-pick to during a bot's turn. −1 if there isn't
- * exactly one human (hotseat with multiple humans doesn't get pre-picking).
- * Online doesn't look at this.
- */
-function soloHumanSeat(): number {
-  if (!S.game) return -1;
-  let seat = -1;
-  for (let i = 0; i < S.game.players.length; i++) {
-    if (S.game.players[i].bot) continue;
-    if (seat !== -1) return -1; // a second human means hotseat, not vs-bots
-    seat = i;
-  }
-  return seat;
-}
-
-/**
- * The seat we show the candidate fan for and allow pre-picking on —
- * regardless of whose turn it currently is: online → our own seat; local
- * vs-bots → the one human. Requires the seat to be active (not in gravel,
- * not finished, not retired). −1 means pre-picking is unavailable (including
- * hotseat). On our own turn this matches game.current, so normal play
- * follows the same path.
- */
-function preselectSeat(): number {
-  if (S.phase !== 'race' || !S.game || S.game.phase !== 'race') return -1;
-  const seat = session.active() ? session.mySeat() : soloHumanSeat();
-  if (seat < 0) return -1;
-  const p = S.game.players[seat];
-  if (isFinished(p) || p.retired || p.skipTurns !== 0) return -1;
-  return seat;
-}
-
-/**
- * The seat whose candidate fan we currently show/interact with: on our turn
- * it's whoever's moving (`game.current`) in any mode (hotseat/vs-bots/
- * online); on someone else's turn it's the pre-pick seat (`preselectSeat`,
- * online/vs-bots only). −1 means there are no candidates (someone else's
- * turn in hotseat, a penalty, or outside the race). On our own turn this
- * gives the same fan as before.
- */
-function candOwner(): number {
-  if (!S.game || S.game.phase !== 'race') return -1;
-  if (myTurn())
-    return S.game.players[S.game.current].skipTurns === 0 ? S.game.current : -1;
-  return preselectSeat();
-}
-
-/**
- * The local player's seat for the "Retire" button: in online it's our own
- * seat; locally it's the current mover if they're human (nobody to retire
- * during a bot's turn — the button is hidden). −1 if there's no race or a
- * bot is currently moving.
- */
-function localHumanSeat(): number {
-  if (!S.game) return -1;
-  if (session.active()) return session.mySeat();
-  return isBotSeat(S.game.current) ? -1 : S.game.current;
-}
-
-/** Whether the "Retire" button is currently available: the race is running
- *  and the local player is still in it (not finished, not retired). Retiring
- *  is allowed at any time, not just on our turn. */
-function canRetire(): boolean {
-  if (!S.game || S.phase !== 'race' || S.game.phase !== 'race') return false;
-  const seat = localHumanSeat();
-  return seat >= 0 && !isFinished(S.game.players[seat]) && !S.game.players[seat].retired;
-}
-
 function updateUI(): void {
   noteMoves();
   const net = online.netTurn(S.game);
-  const aiTurn = !!S.game && isBotSeat(S.game.current);
+  const aiTurn = !!S.game && isBotSeat(S.game, S.game.current);
   renderRaceChrome({
     phase: S.phase,
     game: S.game,
@@ -253,11 +198,11 @@ function updateUI(): void {
     aiTurn,
     // Whose row gets the amber "you're up" treatment: our own seat online, the
     // human at the controls locally (hot-seat players share this client).
-    mySeat: localHumanSeat(),
+    mySeat: localHumanSeat(seats()),
     // Alone against bots there is exactly one addressee, so the chip and their
     // row say "you" instead of naming a car colour. Online and hot-seat keep
     // names — there the name is what tells two people apart.
-    soloSeat: session.active() ? -1 : soloHumanSeat(),
+    soloSeat: session.active() ? -1 : soloHumanSeat(S.game),
     connected: session.isConnected(),
   });
   const over = S.phase === 'race' && S.game?.phase === 'over';
@@ -282,8 +227,8 @@ function updateUI(): void {
     // race against bots. Hot-seat is the only mode with no single "you" (every
     // player shares this screen), so there it stays −1 and nobody gets the
     // personal treatment.
-    mySeat: session.active() ? session.mySeat() : soloHumanSeat(),
-    soloSeat: session.active() ? -1 : soloHumanSeat(),
+    mySeat: session.active() ? session.mySeat() : soloHumanSeat(S.game),
+    soloSeat: session.active() ? -1 : soloHumanSeat(S.game),
     onlineGuest: !!net && !net.isHost,
     hostGone: session.active() && session.hostGone(),
     canRematch: (!!S.game && !!S.lastLocalRace) || online.canRematch(),
@@ -297,14 +242,6 @@ function updateUI(): void {
   renderSetupChrome(S.phase, S.raceTrack?.startPoints.length ?? 6, lobby);
   renderOnlineLobby(lobby?.isHost ? null : lobby, S.editor);
   renderWizardNav(S.phase, S.editor.step, S.playersReturn, !!lobby?.isHost);
-}
-
-/** Can this client move right now: in a local game, always (except during a
- *  bot's turn); in online, only on our own seat. */
-function myTurn(): boolean {
-  if (S.game && isBotSeat(S.game.current)) return false;
-  if (!session.active()) return true;
-  return S.game !== null && session.mySeat() === S.game.current;
 }
 
 /**
@@ -344,7 +281,7 @@ function commit(opts: { fit?: boolean } = {}): void {
  * it to the other players. Refuses to move outside our turn or outside the race phase.
  */
 function commitMove(cand: Candidate): void {
-  if (!S.game || S.game.phase !== 'race' || !myTurn()) return;
+  if (!S.game || S.game.phase !== 'race' || !myTurn(seats())) return;
   S.pending = null; // move made — the pending pick is spent
   if (session.active()) {
     // Online: confirm-first — local state only advances after a successful
@@ -363,18 +300,18 @@ function commitMove(cand: Candidate): void {
  * state and redraw. The button is shown/hidden based on canRetire().
  */
 function retire(): void {
-  if (!canRetire()) return;
+  if (!canRetire(seats())) return;
   if (session.active()) {
     online.sendRetire();
     return;
   }
-  retireSeat(S.game!, localHumanSeat());
+  retireSeat(S.game!, localHumanSeat(seats()));
   commit(); // after a human retires, the turn may move on to bots
 }
 
 function refreshCands(): void {
   input.clearSelection();
-  const seat = candOwner();
+  const seat = candOwner(seats());
   if (seat < 0) {
     S.cands = null;
     S.pending = null;
@@ -625,8 +562,8 @@ input.initInput({
   },
   commitMove,
   // Pre-pick mode: not our turn right now, but our seat can still queue a move (online/vs-bots).
-  isPreselect: () => !myTurn() && candOwner() >= 0,
-  myTurn,
+  isPreselect: () => !myTurn(seats()) && candOwner(seats()) >= 0,
+  myTurn: () => myTurn(seats()),
   setPending: (cand) => {
     S.pending = cand;
     showConfirmMove(false); // not our turn — don't show the button, the pending pick is visible on the field
@@ -674,7 +611,7 @@ initRaceChrome({
     const sel = input.getSelected();
     if (sel) commitMove(sel);
     // Our turn with a pending pick that survived: "Go!" commits it without a second tap.
-    else if (S.pending && myTurn()) commitMove(S.pending);
+    else if (S.pending && myTurn(seats())) commitMove(S.pending);
     else online.retryMove(); // desktop: no stored selection — retry the last move instead
   },
   onSkip: () => online.skip(),
@@ -689,7 +626,6 @@ initMoveTween({ game: () => S.game, showFrame });
 // game (where the host moves the bots instead).
 initBotScheduler({
   state: S,
-  isBotSeat,
   isGesturing: input.isGesturing,
   onlineActive: session.active,
   commit: () => commit(),
@@ -746,7 +682,7 @@ initRaceResult({
 initMenu({
   onRules: () => openRules(),
   onJoin: () => online.promptJoin(),
-  canRetire,
+  canRetire: () => canRetire(seats()),
   onRetire: () =>
     openConfirm(strings.race.retireConfirmTitle, strings.race.retireConfirmYes, retire),
 });
@@ -906,10 +842,10 @@ if (import.meta.env.DEV) {
       refreshCands,
       updateUI,
       redraw,
-      candOwner,
+      candOwner: () => candOwner(seats()),
       cancelBotMoves,
       commitMove,
-      myTurn,
+      myTurn: () => myTurn(seats()),
     }),
   );
 }

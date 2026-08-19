@@ -18,7 +18,8 @@ import type { NetTurn } from '../app-state';
 import { strings } from '../i18n';
 import { TURN_TIMEOUT_MS, LOBBY_PRUNE_MS, SKIP_RETRY_MS } from '../config';
 import * as session from './online';
-import { isBotSeat, scheduleBotMove, clearBotTimer, resetBotStreak } from './host-bots';
+import { scheduleBotMove, clearBotTimer, resetBotStreak } from './host-bots';
+import { isBotSeat } from '../seats';
 import type { OnlineDeps } from './online-controller';
 
 /** Result of confirm-first (see the controller): either we applied our copy

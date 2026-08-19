@@ -15,14 +15,13 @@
 import type { AppState } from '../app-state';
 import { applyMove, coastMove } from '../model/turns';
 import { chooseMove } from '../model/ai';
+import { isBotSeat } from '../seats';
 import { AI_GESTURE_MAX_DEFER_MS } from '../config';
 import { botMoveDelayMs } from './pacing';
 
 export interface BotSchedulerDeps {
   /** The shared app state, by reference (read and mutated in place). */
   state: AppState;
-  /** Is this seat a bot? Owned by the caller — the predicate has an online twin. */
-  isBotSeat: (seat: number) => boolean;
   /** Is the board under a finger right now (view/input)? */
   isGesturing: () => boolean;
   /** Is this an online game? There the host commits bot moves, not us. */
@@ -79,7 +78,12 @@ function clearAiTimers(): void {
 function runBotMove(): void {
   clearAiTimers();
   const S = deps.state;
-  if (!S.game || S.game.phase !== 'race' || !deps.isBotSeat(S.game.current) || !S.raceNav)
+  if (
+    !S.game ||
+    S.game.phase !== 'race' ||
+    !isBotSeat(S.game, S.game.current) ||
+    !S.raceNav
+  )
     return;
   aiStreak++; // counted here, not when the pause was set: a move held back by a gesture hasn't been made yet
   const cand = chooseMove(S.game, S.raceNav, S.game.players[S.game.current].bot!);
@@ -110,7 +114,7 @@ export function scheduleBotMove(): void {
     S.phase !== 'race' ||
     !S.game ||
     S.game.phase !== 'race' ||
-    !deps.isBotSeat(S.game.current)
+    !isBotSeat(S.game, S.game.current)
   ) {
     aiStreak = 0; // the run is over (or never started) — the next bot waits the full pause
     return;

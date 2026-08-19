@@ -22,6 +22,7 @@ import type { LobbyView, RosterPlayer } from '../app-state';
 import { strings } from '../i18n';
 import { SKIP_RETRY_MS } from '../config';
 import { botMoveDelayMs } from '../bots/pacing';
+import { isBotSeat } from '../seats';
 import * as session from './online';
 import type { OnlineDeps } from './online-controller';
 
@@ -102,11 +103,6 @@ function seatCapacity(): number {
  *  left a race gives their seat back — the next race is built without them. */
 function freeSeats(): number {
   return Math.max(0, seatCapacity() - session.activeRoster().length);
-}
-
-/** Is this seat occupied by a bot (in a running race)? Bot-ness lives in the state (Player.bot). */
-export function isBotSeat(game: GameState, seat: number): boolean {
-  return !!game.players[seat]?.bot;
 }
 
 /** The bot run is over — the next bot waits the full pause again. Called from
