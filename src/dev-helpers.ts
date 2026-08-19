@@ -101,6 +101,11 @@ export function installDevHelpers(deps: DevHelperDeps): void {
         pos: p.pos,
         vel: p.vel,
         crossings: p.crossings,
+        // The two keys that order a finishing round (resolveRound): when the car
+        // cut the line, and how deep it went past it. Nothing on screen shows
+        // them, so without this a place can only be taken on faith.
+        finishCrossAt: p.finishCrossAt,
+        finishOvershoot: p.finishOvershoot,
         finished: isFinished(p),
       })) ?? null,
     lastLocalRace: S.lastLocalRace,

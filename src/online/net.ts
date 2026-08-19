@@ -134,6 +134,10 @@ export function deserializeState(s: SerializedState, track: Track): GameState {
       ...p,
       penaltyTurns: p.penaltyTurns ?? 0,
       stationaryTurns: p.stationaryTurns ?? 0,
+      // When the car cut the finish line: absent on rows written before places
+      // were decided by it. Null there means the round falls back to overshoot
+      // depth — the old behavior, and the only one such a row has data for.
+      finishCrossAt: p.finishCrossAt ?? null,
     })),
     track,
   };

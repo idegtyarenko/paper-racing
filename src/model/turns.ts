@@ -268,7 +268,7 @@ export function upcomingTurns(state: GameState, count: number): number[] {
  * cars on that same lap (those after the current seat) get to finish out their
  * turns — cars that already moved earlier in the lap already had their chance.
  * Once the round runs out, resolveRound assigns places to that round's finishers
- * by overshoot depth. Unlike the old logic, the race doesn't end here — remaining
+ * by when each of them cut the line. Unlike the old logic, the race doesn't end here — remaining
  * cars keep racing over subsequent laps until everyone has finished or retired
  * (at which point resolveRound/retireCurrent sets phase='over'). Cars that are
  * out of the race (place assigned or retired) are skipped automatically in the

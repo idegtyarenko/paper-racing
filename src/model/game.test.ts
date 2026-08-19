@@ -11,7 +11,12 @@ import {
   humansAllDone,
   hasLiveBots,
   lapStartIndex,
+  computeOutcome,
+  applyOutcome,
+  resolveRound,
+  GameState,
 } from './game';
+import { Vec } from '../geometry';
 import { CRASH_PENALTY_MAX } from '../config';
 import { ringTrack } from './test-fixtures';
 
@@ -270,5 +275,87 @@ describe('lapStartIndex', () => {
     const trail = [seg(1, 3), seg(3, 5), seg(5, 8), seg(8, 12)];
     expect(lapStartIndex(track, trail, 2)).toBe(0);
     expect(lapStartIndex(track, trail, 3)).toBe(2);
+  });
+});
+
+describe('resolveRound — places inside the finishing round', () => {
+  /**
+   * Drive `seat` from `from` to `to` as its finishing move (one crossing short
+   * of the win beforehand) and enter it in the round. The fixture's finish is
+   * the vertical line x=6, so a move along a row crosses it at a predictable
+   * fraction.
+   */
+  function finishWith(g: GameState, seat: number, from: Vec, to: Vec): void {
+    const p = g.players[seat];
+    p.pos = { ...from };
+    p.crossings = g.rules.winCrossings - 1;
+    applyOutcome(
+      g.track,
+      p,
+      computeOutcome(g.track, g.rules, from, to),
+      g.turn,
+      g.rules.winCrossings,
+    );
+    g.roundFinishers.push(seat);
+  }
+
+  it('ranks by when the line was cut, not by how far past it the car ended', () => {
+    const g = newGame(ringTrack(), 2);
+    // Slow car: cuts the line halfway through a short move, stops just past it.
+    finishWith(g, 0, { x: 5, y: 3 }, { x: 7, y: 3 });
+    // Fast car: covers more ground in the same turn and ends deeper, but only
+    // reaches the line four sevenths of the way through its move.
+    finishWith(g, 1, { x: 2, y: 5 }, { x: 9, y: 5 });
+    expect(g.players[1].finishOvershoot).toBeGreaterThan(g.players[0].finishOvershoot!);
+
+    resolveRound(g);
+    expect(g.players[0].place).toBe(1);
+    expect(g.players[1].place).toBe(2);
+  });
+
+  it('falls back to overshoot depth when the line was cut at the same moment', () => {
+    const g = newGame(ringTrack(), 2);
+    finishWith(g, 0, { x: 5, y: 3 }, { x: 7, y: 3 }); // halfway, depth 1
+    finishWith(g, 1, { x: 4, y: 5 }, { x: 8, y: 5 }); // halfway, depth 2
+
+    resolveRound(g);
+    expect(g.players[1].place).toBe(1);
+    expect(g.players[0].place).toBe(2);
+  });
+
+  it('same moment and same depth is a tie, and the next car gets the shifted place', () => {
+    const g = newGame(ringTrack(), 3);
+    finishWith(g, 0, { x: 4, y: 3 }, { x: 8, y: 3 }); // halfway, depth 2
+    finishWith(g, 1, { x: 4, y: 5 }, { x: 8, y: 5 }); // halfway, depth 2
+    finishWith(g, 2, { x: 2, y: 6 }, { x: 9, y: 6 }); // four sevenths in, depth 3
+
+    resolveRound(g);
+    expect(g.players[0].place).toBe(1);
+    expect(g.players[1].place).toBe(1);
+    expect(g.players[2].place).toBe(3); // "1224" scoring: two firsts, then third
+    expect(g.winner).toBe('draw');
+  });
+
+  it('a car dragged out of the gravel across the line loses to one that drove across', () => {
+    // Same setup as the returnFromPenalty fixture above: the cells behind and on
+    // the line are taken, so the return teleport lands seat 0 at (7,1), past it.
+    const g = newGame(ringTrack(), 4);
+    g.players[1].pos = { x: 4, y: 1 };
+    g.players[2].pos = { x: 5, y: 1 };
+    g.players[3].pos = { x: 6, y: 1 };
+    g.players[0].pos = { x: 5.5, y: 0.4 };
+    g.players[0].crossings = g.rules.winCrossings - 1;
+    returnFromPenalty(g, 0);
+    expect(g.players[0].crossings).toBe(g.rules.winCrossings);
+    g.roundFinishers.push(0);
+
+    // Seat 1 drives across under its own power and stops SHALLOWER than the
+    // teleported car — under the old depth rule it would have lost.
+    finishWith(g, 1, { x: 5, y: 3 }, { x: 6.5, y: 3 });
+    expect(g.players[1].finishOvershoot!).toBeLessThan(g.players[0].finishOvershoot!);
+
+    resolveRound(g);
+    expect(g.players[1].place).toBe(1);
+    expect(g.players[0].place).toBe(2);
   });
 });

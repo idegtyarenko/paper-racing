@@ -53,6 +53,7 @@ function playerAt(pos: Vec, vel: Vec = { x: 0, y: 0 }): Player {
     stationaryTurns: 0,
     crossings: 0,
     finishOvershoot: null,
+    finishCrossAt: null,
     place: null,
     retired: false,
   };

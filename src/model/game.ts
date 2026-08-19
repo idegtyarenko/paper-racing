@@ -61,10 +61,20 @@ export interface Player {
   crossings: number;
   finishOvershoot: number | null;
   /**
+   * How far into its move the car cut the finish line (0..1), null until it
+   * does. This is what ranks the cars inside the finishing round: every move in
+   * a lap covers the same amount of time, so an earlier fraction means the line
+   * was reached earlier — which is exactly what the replay shows, since it plays
+   * a round as one beat with all the cars moving at once. Depth past the line
+   * (finishOvershoot) only breaks ties on it: a fast car covers more ground per
+   * turn and can end up deeper having crossed later.
+   */
+  finishCrossAt: number | null;
+  /**
    * Final position (1-based), assigned once the round in which this car finished
    * gets resolved; null while still racing / retired / finished-but-round-not-resolved
-   * yet. Ties are shared when cars cross the line at the same overshoot depth
-   * ("1224" scoring: two seconds are followed by a fourth).
+   * yet. Ties are shared when cars cut the line at the same moment and at the
+   * same depth ("1224" scoring: two seconds are followed by a fourth).
    */
   place: number | null;
   /** Player has retired — out of the race, doesn't occupy a place and doesn't take turns. */
@@ -327,6 +337,7 @@ export function newGame(
     stationaryTurns: 0,
     crossings: 0,
     finishOvershoot: null,
+    finishCrossAt: null,
     place: null,
     retired: false,
   });
@@ -434,36 +445,40 @@ export interface MoveOutcome {
   skipTurns: number;
   /** Change to the finish-crossing counter: -1 / 0 / +1. */
   crossingDelta: number;
+  /** How far into the move the finish line was cut (0..1), null without a
+   *  crossing — the moment that decides places in the finishing round. */
+  crossAt: number | null;
   /** Without the turn stamp: computeOutcome is pure and knows nothing about the
    *  running turn — applyOutcome stamps it. */
   trailSeg: Omit<TrailSeg, 'turn'>;
 }
 
 /**
- * Compute the outcome of a car's move from point from to cell target — the crash
- * and its location, finish crossing, new velocity/trail. A pure function that
- * mutates nothing; applyOutcome applies the result.
+ * The finish crossing of segment from->to: its direction (+1 forward, -1
+ * backward, 0 none) and `at` — how far along the segment the line was cut, as a
+ * fraction of the move (null when there's no crossing). A point exactly on the
+ * line counts as the "ahead" side (sideOfFinish >= 0) so the same crossing never
+ * gets counted twice. tCrashCutoff excludes crossings that happen after a crash
+ * (for a clean move; a crash's return teleport has no cutoff — Infinity).
+ *
+ * `at` is what decides places inside the finishing round (resolveRound): every
+ * car's move in a lap takes the same amount of time, so the fraction of the move
+ * IS the moment the line was crossed.
  */
-/**
- * Sign of the finish crossing for segment from->to: +1 (forward), -1 (backward),
- * or 0. A point exactly on the line counts as the "ahead" side (sideOfFinish >= 0)
- * so the same crossing never gets counted twice. tCrashCutoff excludes crossings
- * that happen after a crash (for a clean move; a crash's return teleport has no
- * cutoff — Infinity).
- */
-function finishCrossingDelta(
+function finishCrossing(
   track: Track,
   from: Vec,
   to: Vec,
   tCrashCutoff = Infinity,
-): number {
+): { delta: number; at: number | null } {
+  const none = { delta: 0, at: null };
   const fin = segSegIntersection(from, to, track.finish.a, track.finish.b);
-  if (!fin || fin.t >= tCrashCutoff) return 0;
+  if (!fin || fin.t >= tCrashCutoff) return none;
   const sFrom = sideOfFinish(track, from);
   const sTo = sideOfFinish(track, to);
-  if (sFrom < 0 && sTo >= 0) return 1;
-  if (sFrom >= 0 && sTo < 0) return -1;
-  return 0;
+  if (sFrom < 0 && sTo >= 0) return { delta: 1, at: fin.t };
+  if (sFrom >= 0 && sTo < 0) return { delta: -1, at: fin.t };
+  return none;
 }
 
 /**
@@ -491,7 +506,7 @@ export function lapStartIndex(
   const starts = [0];
   let crossings = 0;
   for (let i = 0; i < count; i++) {
-    const delta = finishCrossingDelta(track, trail[i].from, trail[i].to);
+    const { delta } = finishCrossing(track, trail[i].from, trail[i].to);
     if (delta > 0) {
       crossings++;
       if (crossings < winCrossings) starts.push(i);
@@ -505,6 +520,11 @@ export function lapStartIndex(
   return starts[starts.length - 1];
 }
 
+/**
+ * Compute the outcome of a car's move from point from to cell target — the crash
+ * and its location, finish crossing, new velocity/trail. A pure function that
+ * mutates nothing; applyOutcome applies the result.
+ */
 export function computeOutcome(
   track: Track,
   rules: Rules,
@@ -516,7 +536,7 @@ export function computeOutcome(
 
   // A finish-line crossing only counts if it happened before the crash
   // (tCrash excludes crossings that occur after the point of impact).
-  const crossingDelta = finishCrossingDelta(track, from, to, tCrash);
+  const { delta: crossingDelta, at: crossAt } = finishCrossing(track, from, to, tCrash);
 
   if (crashAt) {
     return {
@@ -528,6 +548,7 @@ export function computeOutcome(
       // you were going, the deeper into the gravel and the longer it takes to get back.
       skipTurns: crashPenalty(rules, dist(from, to)),
       crossingDelta,
+      crossAt,
       trailSeg: { from: { ...from }, to: { ...crashAt }, jump: false },
     };
   }
@@ -538,6 +559,7 @@ export function computeOutcome(
     crashAt: null,
     skipTurns: 0,
     crossingDelta,
+    crossAt,
     trailSeg: { from: { ...from }, to: { ...to }, jump: false },
   };
 }
@@ -569,6 +591,9 @@ export function applyOutcome(
   p.skipTurns = o.skipTurns;
   if (p.crossings >= winCrossings && p.finishOvershoot === null) {
     p.finishOvershoot = sideOfFinish(track, o.end);
+    // Reaching the win condition takes a forward crossing, so crossAt is set —
+    // the fallback only guards a car nudged over the line by something else.
+    p.finishCrossAt = o.crossAt ?? 1;
   }
 }
 
@@ -646,9 +671,15 @@ export function returnFromPenalty(state: GameState, seat: number): void {
   // crossing, or a lap "completed" right up to the crash would get lost. The side
   // change is computed the same way as in computeOutcome (afterAction then picks
   // up the finish).
-  p.crossings += finishCrossingDelta(track, p.pos, resetTo);
+  p.crossings += finishCrossing(track, p.pos, resetTo).delta;
   if (p.crossings >= state.rules.winCrossings && p.finishOvershoot === null) {
     p.finishOvershoot = sideOfFinish(track, resetTo);
+    // A teleport has no moment inside the turn, so it counts as the last thing
+    // to happen in it: anyone who drove across the line under their own power
+    // finishes ahead of a car the gravel spat out over it. (The replay draws the
+    // teleport as standing past the line for the whole beat — deliberately not
+    // matched here, the penalty is the point.)
+    p.finishCrossAt = 1;
   }
   p.trail.push({
     from: { ...p.pos },
@@ -660,9 +691,29 @@ export function returnFromPenalty(state: GameState, seat: number): void {
 }
 
 /**
+ * Order of two cars that finished in the same round: whoever cut the line
+ * earlier in their move is ahead, and only if that moment is the same does the
+ * depth past the line decide. Negative means `a` finishes ahead of `b`, 0 means
+ * a dead heat — sorting and the tie detection below both go through here, so
+ * "ranked next to each other" and "tied" can't drift apart.
+ *
+ * Cars from a snapshot written before crossing moments were recorded have no
+ * finishCrossAt; treating that as the end of the move puts them all on equal
+ * footing, so such a round resolves on depth alone, exactly as it used to.
+ */
+function finishRankDelta(a: Player, b: Player): number {
+  const ta = a.finishCrossAt ?? 1;
+  const tb = b.finishCrossAt ?? 1;
+  if (Math.abs(ta - tb) > 1e-9) return ta - tb;
+  const oa = a.finishOvershoot ?? -Infinity;
+  const ob = b.finishOvershoot ?? -Infinity;
+  return Math.abs(oa - ob) > 1e-9 ? ob - oa : 0;
+}
+
+/**
  * Resolve the current round: assign places to cars that crossed the finish in it
- * (state.roundFinishers), ranked by overshoot depth (finishOvershoot) — whoever
- * went farther past the line gets the better place. Uses "1224" sports scoring:
+ * (state.roundFinishers), ranked by when each cut the line (finishRankDelta) —
+ * earlier is better, depth past the line only breaks ties. Uses "1224" sports scoring:
  * ties get the same place, and whoever comes right after a tied pair gets a
  * shifted place (two seconds are followed by a fourth). The race winner (place 1)
  * is locked in on the first resolved round that has any finishers; if 1st place
@@ -670,18 +721,16 @@ export function returnFromPenalty(state: GameState, seat: number): void {
  * the race is over.
  */
 export function resolveRound(state: GameState): void {
-  const ranked = [...state.roundFinishers].sort(
-    (a, b) =>
-      (state.players[b].finishOvershoot ?? -Infinity) -
-      (state.players[a].finishOvershoot ?? -Infinity),
+  const ranked = [...state.roundFinishers].sort((a, b) =>
+    finishRankDelta(state.players[a], state.players[b]),
   );
   const already = state.players.filter((p) => p.place !== null).length;
   let place = already + 1;
   ranked.forEach((seat, i) => {
     if (i > 0) {
-      const prev = state.players[ranked[i - 1]].finishOvershoot ?? 0;
-      const cur = state.players[seat].finishOvershoot ?? 0;
-      if (Math.abs(cur - prev) > 1e-9) place = already + i + 1;
+      const prev = state.players[ranked[i - 1]];
+      const cur = state.players[seat];
+      if (finishRankDelta(prev, cur) !== 0) place = already + i + 1;
     }
     state.players[seat].place = place;
   });

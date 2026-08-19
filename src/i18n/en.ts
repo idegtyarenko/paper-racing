@@ -327,9 +327,11 @@ export const en = {
     hintPick: 'Pick a point and confirm with Go!',
     /** Appended to your own turn's line once someone has finished and the round
      *  is closing — but only on turns where the line is actually within reach.
-     *  Places in a round go by how far past the line a car ends up, so this is
-     *  true for the fight over any place, not just the win. */
-    finalWarn: ' Whoever gets furthest past the line comes out ahead.',
+     *  Places in a round go by when each car cut the line, so this is true for
+     *  the fight over any place, not just the win. Still worth driving hard: the
+     *  faster you cover the ground to the line, the earlier in the turn you
+     *  reach it. */
+    finalWarn: ' Whoever crosses the line first comes out ahead.',
     /** Heading of the final classification card on the result screen. Caps by CSS. */
     classification: 'Classification',
     /** Label over the turn-order dots, opening the HUD card. Caps by CSS. */
@@ -409,11 +411,11 @@ export const en = {
     // NBSP ( ) and apostrophes (’) are maintained by scripts/typography.mjs —
     // run `npm run typo`, don't hand-edit.
     body:
-      'Paper Racing is a pen-and-paper racing game on graph paper. Draw a loop track and lap it faster than your rivals.\n\n' +
+      'Paper Racing is a pen-and-paper racing game on graph paper. Draw a loop track and beat your rivals around it.\n\n' +
       'Your car rolls with momentum\u00A0— it keeps drifting the same way on its own. Each turn you can only nudge it a little: pick one of the highlighted cells. You can’t swerve or stop on a dime, so brake and set up your corners early.\n\n' +
       'Fly off the track and you’re stuck in the gravel. The faster you were going, the longer it takes to dig out\u00A0— and once you’re free, you start from a standstill.\n\n' +
       'You can’t drive through or onto another car: rivals hold their ground, just like in a real race.\n\n' +
-      'First one back to the start/finish line wins. And if several cars cross it at almost the same moment, whoever went furthest past the line comes out ahead.\n\n' +
+      'First to complete every lap wins. And if several cars finish on the same turn, whoever crossed the line first comes out ahead.\n\n' +
       'Car handling and off-track penalties can be tuned to taste\u00A0— check the settings.',
   },
 
