@@ -183,8 +183,8 @@ export const en = {
     // Race length, in laps (the engine counts finish crossings — see Rules.winCrossings).
     lapsLabel: 'Laps',
     lapsHint:
-      'How many laps the race is. On a single lap the start order mostly decides the ' +
-      'finish; more laps give room to fight back.',
+      'How many laps the race is. One lap is a short scrap; more laps give you time to ' +
+      'recover from a mistake.',
     lapsOption: (n: number): string => String(n),
     penaltyLabel: 'Off-track penalty',
     penaltyHint:
