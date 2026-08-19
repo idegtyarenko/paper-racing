@@ -11,7 +11,7 @@
 // (pwa.ts). Each of those arrives wired through an init* call below.
 
 import './ui/styles/index.css';
-import { newAppState, Phase } from './app-state';
+import { newAppState } from './app-state';
 import { finalizeTrack } from './model/track';
 import {
   newEditor,
@@ -20,25 +20,9 @@ import {
   confirmFinish,
   confirmDirection,
 } from './model/editor';
-import {
-  Candidate,
-  normalizeRules,
-  newGame,
-  shuffledIndices,
-  isFinished,
-  humansAllDone,
-  hasLiveBots,
-} from './model/game';
+import { Candidate, newGame, shuffledIndices, hasLiveBots } from './model/game';
 import { candidatesForSeat, applyMove, retireSeat } from './model/turns';
-import {
-  SeatCtx,
-  isBotSeat,
-  soloHumanSeat,
-  myTurn,
-  candOwner,
-  localHumanSeat,
-  canRetire,
-} from './seats';
+import { SeatCtx, myTurn, candOwner, localHumanSeat, canRetire } from './seats';
 import { Difficulty } from './model/ai';
 import { buildNavField } from './model/nav';
 import { initBotScheduler, scheduleBotMove, cancelBotMoves } from './bots/scheduler';
@@ -63,6 +47,7 @@ import {
   showConfirmMove,
 } from './ui/race-chrome';
 import { initRaceResult, renderRaceResult } from './ui/race-result';
+import { ScreenInput, raceChromeProps, raceResultProps } from './ui/screen-props';
 import { showReplayChrome, hideReplayChrome } from './ui/race-replay';
 import {
   initEditorChrome,
@@ -116,11 +101,13 @@ const S = newAppState();
  *  The one place the online/local difference is turned into data: our own seat
  *  in a room, null when the game is local. */
 function seats(): SeatCtx {
-  return {
-    game: S.game,
-    phase: S.phase,
-    mySeat: session.active() ? session.mySeat() : null,
-  };
+  return { game: S.game, phase: S.phase, mySeat: mySeat() };
+}
+
+/** Our own seat in an online room, or null when the game is local — the one
+ *  place the online/local difference is turned into data. */
+function mySeat(): number | null {
+  return session.active() ? session.mySeat() : null;
 }
 /** Bbox of the content for fit/clamp: the race track or the track being
  *  edited. The bounds provider for the viewport — the app knows "what's
@@ -186,55 +173,24 @@ function redraw(): void {
     });
 }
 
+/** Everything the online layer knows that the screens need — fetched here so
+ *  the presenters (ui/screen-props.ts) can stay pure. */
+function screenInput(): ScreenInput {
+  return {
+    state: S,
+    mySeat: mySeat(),
+    net: online.netTurn(S.game),
+    connected: session.isConnected(),
+    hostGone: session.hostGone(),
+    onlineCanRematch: online.canRematch(),
+  };
+}
+
 function updateUI(): void {
   noteMoves();
-  const net = online.netTurn(S.game);
-  const aiTurn = !!S.game && isBotSeat(S.game, S.game.current);
-  renderRaceChrome({
-    phase: S.phase,
-    game: S.game,
-    nav: S.raceNav,
-    net,
-    aiTurn,
-    // Whose row gets the amber "you're up" treatment: our own seat online, the
-    // human at the controls locally (hot-seat players share this client).
-    mySeat: localHumanSeat(seats()),
-    // Alone against bots there is exactly one addressee, so the chip and their
-    // row say "you" instead of naming a car colour. Online and hot-seat keep
-    // names — there the name is what tells two people apart.
-    soloSeat: session.active() ? -1 : soloHumanSeat(S.game),
-    connected: session.isConnected(),
-  });
-  const over = S.phase === 'race' && S.game?.phase === 'over';
-  // No human has anything left to do, but the race hasn't resolved yet (bots
-  // may still be racing it out): online, that's judged per our own seat (every
-  // client has its own screen); locally (solo-vs-bots or hotseat) it's judged
-  // across every human seat, since they all share this one screen.
-  const earlyExit =
-    !over &&
-    !!S.game &&
-    (session.active()
-      ? session.mySeat() !== -1 &&
-        (S.game.players[session.mySeat()].retired ||
-          isFinished(S.game.players[session.mySeat()]))
-      : humansAllDone(S.game));
-  renderRaceResult({
-    game: S.game,
-    nav: S.raceNav,
-    over,
-    earlyExit,
-    // Whose result this is, personally: our own seat online, the one human in a
-    // race against bots. Hot-seat is the only mode with no single "you" (every
-    // player shares this screen), so there it stays −1 and nobody gets the
-    // personal treatment.
-    mySeat: session.active() ? session.mySeat() : soloHumanSeat(S.game),
-    soloSeat: session.active() ? -1 : soloHumanSeat(S.game),
-    onlineGuest: !!net && !net.isHost,
-    hostGone: session.active() && session.hostGone(),
-    canRematch: (!!S.game && !!S.lastLocalRace) || online.canRematch(),
-    isOnline: session.active(),
-    canReplay: !!S.game && S.game.players.some((p) => p.trail.length > 0),
-  });
+  const screens = screenInput();
+  renderRaceChrome(raceChromeProps(screens));
+  renderRaceResult(raceResultProps(screens));
   renderEditorChrome(S.editor, S.phase);
   // The lobby view drives three renderers: the host's lobby is the setup screen
   // (so the wizard keeps its step), the guest's is a screen of its own.
@@ -732,47 +688,11 @@ initSetupChrome({
 // The guest's lobby: the same room, without anything to set up.
 initOnlineLobby(lobbyHandlers);
 
-/**
- * Save local game state so reloading/the back gesture/backgrounding the tab
- * doesn't reset the game to the first screen. We don't save the online
- * session (it lives on the server) — instead we clear any previous local
- * snapshot. persist itself only takes the persistent subset of S
- * (cands/pending/raceNav are not written).
- */
-function saveState(): void {
-  if (session.active()) {
-    persist.clear();
-    return;
-  }
-  persist.save(S);
-}
-
-/** Restore local state from a snapshot. Returns the restored phase (or null if there was no snapshot). */
-function restoreState(): Phase | null {
-  const snap = persist.load();
-  if (!snap) return null;
-  S.phase = snap.phase;
-  S.editor = snap.editor;
-  S.raceTrack = snap.raceTrack;
-  S.game = snap.game;
-  // Backfill defaults: the snapshot may have been written by an older
-  // version without newer rules fields (e.g. turnLimitMs) — otherwise
-  // they'd come out undefined. This is the same fix net.ts applies to
-  // server state on deserialization.
-  S.rules = normalizeRules(snap.rules);
-  S.playersReturn = snap.playersReturn;
-  S.lastLocalRace = snap.lastLocalRace;
-  // The nav field isn't serialized — rebuild it from the track (needed by
-  // bots and the standings strip). Bot-ness of seats travels inside
-  // game.players (Player.bot) — not restored separately.
-  if (S.game) S.raceNav = buildNavField(S.game.track);
-  return snap.phase;
-}
-
 // Mobile swipe-to-reload, the back gesture/button, closing or backgrounding
 // the tab: pagehide catches unload and entering bfcache, visibilitychange
 // catches backgrounding (the most reliable on phones, where a tab can be
 // unloaded from the background without pagehide).
+const saveState = (): void => persist.saveAppState(S, session.active());
 window.addEventListener('pagehide', saveState);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') saveState();
@@ -803,7 +723,7 @@ new ResizeObserver(resize).observe(wrap);
 // the local game saved before the last page unload.
 const joinParam = new URLSearchParams(location.search).get('join');
 const joining = !!joinParam && onlineAvailable();
-if (!joining && restoreState() === 'race') {
+if (!joining && persist.restoreAppState(S) === 'race') {
   refreshCands(); // bring back move candidates for the restored race
   scheduleBotMove(); // resume bot moves if this was a game with bots
 }

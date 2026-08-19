@@ -6,7 +6,8 @@
 import { AppState, Phase, LastLocalRace } from './app-state';
 import { EditorState, EditorStep, stepPrompt } from './model/editor';
 import { Track } from './model/track';
-import { GameState, Rules } from './model/game';
+import { GameState, Rules, normalizeRules } from './model/game';
+import { buildNavField } from './model/nav';
 import {
   SerializedTrack,
   SerializedState,
@@ -178,4 +179,44 @@ function sanitizeEditor(e: EditorState): EditorState {
     dragEdge: null,
     dragIndex: null,
   };
+}
+
+/**
+ * Save, or deliberately don't: an online session lives on the server and is
+ * restored its own way, so being in one means clearing whatever local snapshot
+ * is on disk rather than writing over it. `online` arrives as a flag so this
+ * module doesn't have to know the online layer exists.
+ */
+export function saveAppState(state: AppState, online: boolean): void {
+  if (online) {
+    clear();
+    return;
+  }
+  save(state);
+}
+
+/**
+ * Restore local state in place from a snapshot, and report which phase it came
+ * back into (null when there was nothing saved). The other half of the round
+ * trip `save` starts — kept here with the snapshot format it has to know about.
+ */
+export function restoreAppState(state: AppState): Phase | null {
+  const snap = load();
+  if (!snap) return null;
+  state.phase = snap.phase;
+  state.editor = snap.editor;
+  state.raceTrack = snap.raceTrack;
+  state.game = snap.game;
+  // Backfill defaults: the snapshot may have been written by an older
+  // version without newer rules fields (e.g. turnLimitMs) — otherwise
+  // they'd come out undefined. This is the same fix net.ts applies to
+  // server state on deserialization.
+  state.rules = normalizeRules(snap.rules);
+  state.playersReturn = snap.playersReturn;
+  state.lastLocalRace = snap.lastLocalRace;
+  // The nav field isn't serialized — rebuild it from the track (needed by
+  // bots and the standings strip). Bot-ness of seats travels inside
+  // game.players (Player.bot) — not restored separately.
+  if (state.game) state.raceNav = buildNavField(state.game.track);
+  return snap.phase;
 }
