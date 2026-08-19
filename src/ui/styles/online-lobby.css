@@ -87,6 +87,17 @@ body.is-lobby .zoom-ctl {
     right: auto;
     width: calc(min(400px, 42vw) - 44px);
   }
+  /* The thumbnail earns its place only on a phone, where the panel covers the
+     board. Beside the panel the board shows the very same track at full size,
+     so the row (label included) would be a second copy of what's already there.
+     drawPreview() needs no guard of its own: a hidden canvas has clientWidth 0
+     and it returns early — don't add the check back.
+     The :not([hidden]) wrapper is not decoration: the base .pr-row declares its
+     display under the same guard, and a bare .pr-lobby__track would lose to it
+     on specificity and hide nothing. */
+  .pr-lobby__track:not([hidden]) {
+    display: none;
+  }
   /* Inside the panel the card *is* the panel — drop the doubled surface. */
   .pr-lobby__card {
     background: none;

@@ -91,7 +91,9 @@ function build(): void {
   const roomPane = tabbar.panes.room;
 
   // The track first: what you're here for, before the plumbing of the room.
-  const trackRow = el('div', 'pr-row', roomPane);
+  // The row carries its own class because the whole thing — label included —
+  // steps aside on a wide screen, where the board behind shows the same track.
+  const trackRow = el('div', 'pr-row pr-lobby__track', roomPane);
   el('span', 'pr-label', trackRow).textContent = strings.online.trackLabel;
   const previewBox = el('div', 'pr-preview pr-lobby__preview', trackRow);
   preview = el('canvas', 'pr-preview__canvas', previewBox);
