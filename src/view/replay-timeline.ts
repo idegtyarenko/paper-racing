@@ -8,7 +8,7 @@
 // gravel are gaps in a car's stamps, and a gap is a car standing still.
 //
 // Pure, and tested as such: no canvas, no DOM, no clock. The clock lives in
-// main.ts, which asks for a frame at time t.
+// replay-player.ts, which asks for a frame at time t.
 
 import { Vec, lerp } from '../geometry';
 import { GameState, TrailSeg } from '../model/game';

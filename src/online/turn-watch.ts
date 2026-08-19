@@ -136,7 +136,7 @@ export function armTurnWatch(): void {
   const prevStart = turnStartAt;
   clearTurnWatch();
   const game = deps.state.game;
-  // Mode gate (same idea as scheduleAiMove): a presence event in the lobby calls
+  // Mode gate (same idea as scheduleBotMove): a presence event in the lobby calls
   // armTurnWatch, but a previous race might still be sitting in state.game with phase
   // 'race' (creating a new lobby doesn't clear it) — without this check we'd show a
   // turn-timer button for someone else's/our own turn while in the lobby.

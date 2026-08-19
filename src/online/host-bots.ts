@@ -21,7 +21,7 @@ import { Difficulty, chooseMove } from '../model/ai';
 import type { LobbyView, RosterPlayer } from '../app-state';
 import { strings } from '../i18n';
 import { SKIP_RETRY_MS } from '../config';
-import { botMoveDelayMs } from '../bot-pacing';
+import { botMoveDelayMs } from '../bots/pacing';
 import * as session from './online';
 import type { OnlineDeps } from './online-controller';
 

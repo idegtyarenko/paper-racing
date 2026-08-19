@@ -1,8 +1,8 @@
 // Pacing of bot moves — pure, shared by both schedulers: the local one
-// (main.ts) and the host's online one (online/host-bots.ts). Lives outside
-// config.ts, which holds tunable constants only.
+// (bots/scheduler.ts) and the host's online one (online/host-bots.ts). Lives
+// outside config.ts, which holds tunable constants only.
 
-import { AI_MOVE_DELAY_MS, AI_MOVE_DELAY_MIN_MS, AI_STREAK_DECAY } from './config';
+import { AI_MOVE_DELAY_MS, AI_MOVE_DELAY_MIN_MS, AI_STREAK_DECAY } from '../config';
 
 /**
  * Pause before a bot's move, given how many bots have already moved in this

@@ -11,13 +11,22 @@
 // wide-screen rail live in wizard-nav.ts, which spans all six. The editor only
 // hands that rail its coach card (the instruction for the current step).
 
+import { Vec } from '../geometry';
 import { EditorState, canStepBack } from '../model/editor';
 import { Phase } from '../app-state';
 import { strings } from '../i18n';
 import { showErrorToast } from './dialogs';
 import { bindTap, shownEl } from './dom';
 import { button, el, icon } from './pr-chrome';
-import { CoachPlacement, Rect } from '../view/coach-placement';
+import {
+  CoachPlacement,
+  Rect,
+  coachAnchors,
+  coachAvoid,
+  coachFeature,
+  placeCoach,
+} from '../view/coach-placement';
+import { Camera, worldToScreen } from '../view/camera';
 import { wizardNavFoot } from './wizard-nav';
 import { ARROW_SVG, GLOBE_SVG, PENCIL_SVG, UNDO_SVG } from './icons';
 
@@ -103,7 +112,7 @@ export function initEditorChrome(h: EditorChromeHandlers): void {
  * (null) send it back to the CSS position for the drawing step. The caller owns
  * the geometry — it has the camera and the track; this only applies the result.
  */
-export function setCoachFloat(p: CoachPlacement | null): void {
+function setCoachFloat(p: CoachPlacement | null): void {
   if (!built) return;
   coachEl.classList.toggle('pr-coach--nose', p !== null);
   if (!p) {
@@ -119,7 +128,7 @@ export function setCoachFloat(p: CoachPlacement | null): void {
 }
 
 /** Size of the coach card as rendered, and the chrome it must not cover. */
-export function coachMetrics(): { card: { w: number; h: number }; keepOut: Rect[] } {
+function coachMetrics(): { card: { w: number; h: number }; keepOut: Rect[] } {
   const box = coachEl.getBoundingClientRect();
   const board = document.querySelector('.app__board')!.getBoundingClientRect();
   // Board-local rectangles: the coach is positioned inside .app__board, so
@@ -139,6 +148,60 @@ export function coachMetrics(): { card: { w: number; h: number }; keepOut: Rect[
     local(shownEl('.pr-nav__top')),
   ].filter((r): r is Rect => r !== null);
   return { card: { w: box.width, h: box.height }, keepOut };
+}
+
+/** Gap between the coach-mark's pointer and the feature it points at, in px. */
+const COACH_GAP = 16;
+
+/**
+ * Pin the coach-mark to the part of the track its instruction is about. Called
+ * from the app's redraw, so it follows pan, zoom and resize the same way the
+ * race's floating button does. `anchored` is false outside the editor — the
+ * card then goes back to its resting place.
+ *
+ * The geometry is view/coach-placement.ts's; what this adds is the half only
+ * the chrome knows — how big the card came out and which panels it must dodge.
+ */
+export function updateCoachPlacement(o: {
+  editor: EditorState;
+  cam: Camera;
+  view: { w: number; h: number };
+  /** False outside the drawing steps — there is no track part to point at. */
+  anchored: boolean;
+}): void {
+  if (!built) return;
+  const { editor, cam, view } = o;
+  const world = o.anchored ? coachAnchors(editor) : [];
+  const { card, keepOut } = coachMetrics();
+  // Panned or zoomed until a feature is off screen — or slid under the top
+  // strip / action bar, which hides it just as well: it's no longer something
+  // to point at. With none left the card drops the pointer and goes back to its
+  // resting place, instead of huddling against chrome it can't get clear of.
+  const onScreen = (p: Vec): boolean =>
+    p.x >= 0 && p.y >= 0 && p.x <= view.w && p.y <= view.h;
+  const underChrome = (p: Vec): boolean =>
+    keepOut.some((k) => p.x >= k.x && p.x <= k.x + k.w && p.y >= k.y && p.y <= k.y + k.h);
+  const anchors = world
+    .map((p) => worldToScreen(cam, p))
+    .filter((p) => onScreen(p) && !underChrome(p));
+  if (!anchors.length) {
+    setCoachFloat(null);
+    return;
+  }
+  const avoid = coachAvoid(editor).map((p) => worldToScreen(cam, p));
+  const feature = coachFeature(editor).map((p) => worldToScreen(cam, p));
+  setCoachFloat(
+    placeCoach({
+      anchors,
+      card,
+      view,
+      keepOut,
+      avoid,
+      feature,
+      gap: COACH_GAP,
+      margin: 12,
+    }),
+  );
 }
 
 /** Hide online entry points if the backend isn't configured (local play only). */

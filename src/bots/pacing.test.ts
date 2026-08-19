@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { botMoveDelayMs } from './bot-pacing';
-import { AI_MOVE_DELAY_MS, AI_MOVE_DELAY_MIN_MS } from './config';
+import { botMoveDelayMs } from './pacing';
+import { AI_MOVE_DELAY_MS, AI_MOVE_DELAY_MIN_MS } from '../config';
 
 describe('botMoveDelayMs', () => {
   it('gives the first bot of a run the full pause', () => {

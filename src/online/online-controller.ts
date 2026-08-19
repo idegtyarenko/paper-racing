@@ -195,7 +195,7 @@ async function confirmFirst(
  * Online counterpart to the local commit(): recompute candidates → panel → canvas →
  * re-arm turn watching (armTurnWatch). Call this after setGame has made our own or an
  * incoming state current. Differs from main.commit in that it finishes with
- * armTurnWatch instead of scheduleAiMove (online-specific: turn timer, auto-skip, host
+ * armTurnWatch instead of scheduleBotMove (online-specific: turn timer, auto-skip, host
  * running bot moves). onGameState doesn't use this — it needs a special order there
  * (armTurnWatch before updateUI, so skipVisible resets for the new turn). Shared with turn-watch/host-bots.
  */

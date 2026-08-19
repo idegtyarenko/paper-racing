@@ -1,11 +1,16 @@
-// Orchestration: app state, switching between editor/race phases, and wiring
-// up input/online/button dependencies. Actual pointer gestures live in
-// input.ts. All game state lives in one object `S` (app-state.ts); online and
-// input read and mutate it by reference through deps.state — there are no
-// separate get/set adapters per field anymore.
+// The composition root: app state, switching between editor/race phases, and
+// wiring up input/online/button dependencies. All game state lives in one
+// object `S` (app-state.ts); online and input read and mutate it by reference
+// through deps.state — there are no separate get/set adapters per field.
+//
+// What this file deliberately does NOT own (it used to, and grew into a
+// god-module for it): pointer gestures (view/input.ts), the post-move tween
+// (view/move-tween.ts), the replay (view/replay-player.ts + ui/race-replay.ts
+// for its chrome), the bots' clock in a local game (bots/scheduler.ts), the
+// coach-mark's placement (ui/editor-chrome.ts) and the build label
+// (pwa.ts). Each of those arrives wired through an init* call below.
 
 import './ui/styles/index.css';
-import { Vec, lerp } from './geometry';
 import { newAppState, Phase } from './app-state';
 import { finalizeTrack } from './model/track';
 import {
@@ -24,23 +29,17 @@ import {
   humansAllDone,
   hasLiveBots,
 } from './model/game';
-import { candidatesForSeat, applyMove, coastMove, retireSeat } from './model/turns';
-import { Difficulty, chooseMove } from './model/ai';
+import { candidatesForSeat, applyMove, retireSeat } from './model/turns';
+import { Difficulty } from './model/ai';
 import { buildNavField } from './model/nav';
-import { strings, localeTag, dateLocale } from './i18n';
-import { botMoveDelayMs } from './bot-pacing';
-import { AI_GESTURE_MAX_DEFER_MS } from './config';
+import { initBotScheduler, scheduleBotMove, cancelBotMoves } from './bots/scheduler';
+import { strings, localeTag } from './i18n';
 import { render, AppView, MotionFrame } from './view/render';
-import { startAnim, stopAnim, easeOutCubic, prefersReducedMotion } from './view/anim';
-import { buildTimeline, sampleTimeline } from './view/replay-timeline';
-import { Bounds, polylineBounds, worldToScreen } from './view/camera';
+import { stopAnim } from './view/anim';
+import { initReplay, enterReplay, isReplaying } from './view/replay-player';
+import { initMoveTween, noteMoves } from './view/move-tween';
+import { Bounds, polylineBounds } from './view/camera';
 import { boardInsets } from './ui/board-insets';
-import {
-  coachAnchors,
-  coachAvoid,
-  coachFeature,
-  placeCoach,
-} from './view/coach-placement';
 import * as vp from './view/viewport';
 import {
   actZoneHeight,
@@ -59,8 +58,7 @@ import { showReplayChrome, hideReplayChrome } from './ui/race-replay';
 import {
   initEditorChrome,
   renderEditorChrome,
-  setCoachFloat,
-  coachMetrics,
+  updateCoachPlacement,
   setOnlineEnabled,
 } from './ui/editor-chrome';
 import { initWizardNav, renderWizardNav, wizardSteps } from './ui/wizard-nav';
@@ -89,8 +87,7 @@ import {
 import { bindOverlayClose, closeOverlay } from './ui/dom';
 import { describeSetupChanges } from './ui/rules-summary';
 import type { SettingChange } from './ui/rules-summary';
-import { initPwa } from './pwa';
-import { toggleSwDebug } from './sw-debug';
+import { initPwa, initBuildInfo } from './pwa';
 import { initAppHeight } from './ui/app-height';
 import * as persist from './persist';
 
@@ -105,18 +102,6 @@ const wrap = document.querySelector('.app__board')!;
 /** Single shared app state (see app-state.ts). Online/input get it by
  *  reference and read/write its fields directly. */
 const S = newAppState();
-/** Timer for the delayed bot move — not state, just a handle: stays private
- *  to main.ts, we don't put it in S. Cleared on any exit from the race. */
-let aiTimer: number | null = null;
-/** How many bots have already moved in the current unbroken run — the pause
- *  shrinks with each one (botMoveDelayMs). Reset the moment the turn is back
- *  with a human, and on any exit from the race. */
-let aiStreak = 0;
-/** Timer that lets a bot move through even though the field is still under a
- *  finger — the way out of a gesture whose end never arrived (see
- *  AI_GESTURE_MAX_DEFER_MS). Null whenever nothing is being held back. */
-let aiDeferTimer: number | null = null;
-
 /** Is this seat a bot (and at what difficulty)? Bot-ness lives in state (Player.bot). */
 function isBotSeat(i: number): boolean {
   return !!S.game?.players[i]?.bot;
@@ -137,144 +122,22 @@ function resize(): void {
   redraw();
 }
 
-/**
- * How long a car takes to slide into the point it just moved to (ms). Short
- * enough that it's over before anyone can act on the next turn — the move
- * itself is applied instantly, this is only the picture catching up.
- */
-const TWEEN_MS = 220;
-
-/** Current animated frame (post-move tween or replay), or null when still. */
+/** Current animated frame (post-move tween or replay), or null when still.
+ *  The one frame slot on the board: the tween and the replay both write it
+ *  through showFrame, and redraw() is the only reader. */
 let motion: MotionFrame | null = null;
-/** Trail length per seat as of the last screen update — how a new move is spotted. */
-let seenSegs: number[] = [];
 
-/**
- * Spot the move that just happened and slide the car into it. Called from
- * updateUI, which is the one place every path funnels through — our own move,
- * a bot's, and an opponent's arriving over the network — so no mover is missed
- * and none is animated twice.
- *
- * Deliberately cosmetic: the state has already moved on, and nothing waits for
- * the animation. Queueing the next turn behind it would mean holding back bot
- * moves and incoming online state for 220ms, which is a race condition bought
- * at the price of a smaller one.
- */
-function noteMoves(): void {
-  const g = S.game;
-  if (!g) {
-    seenSegs = [];
-    return;
-  }
-  const now = g.players.map((p) => p.trail.length);
-  const seat = now.findIndex((n, i) => n > (seenSegs[i] ?? n));
-  seenSegs = now;
-  if (seat < 0 || replaying()) return;
-  const seg = g.players[seat].trail[now[seat] - 1];
-  // The teleport out of the gravel isn't a drive — it has no in-between.
-  if (seg.jump || prefersReducedMotion()) return;
-
-  const nil = g.players.map(() => null);
-  const segsShown = g.players.map(() => null as number | null);
-  const crashesShown = g.players.map(() => null as number | null);
-  segsShown[seat] = now[seat] - 1;
-  // A crash mark belongs to the moment of impact, not to the move that ends in
-  // it: hold the newest one back until the car gets there.
-  const crashes = g.players[seat].crashes;
-  const crashed =
-    crashes.length > 0 &&
-    crashes[crashes.length - 1].x === seg.to.x &&
-    crashes[crashes.length - 1].y === seg.to.y;
-  if (crashed) crashesShown[seat] = crashes.length - 1;
-
-  startAnim(
-    (ms) => {
-      const u = Math.min(1, ms / TWEEN_MS);
-      const at = lerp(seg.from, seg.to, easeOutCubic(u));
-      const pos = [...nil] as (Vec | null)[];
-      const partialTo = [...nil] as (Vec | null)[];
-      pos[seat] = at;
-      partialTo[seat] = at;
-      motion = { pos, segsShown, partialTo, crashesShown, trailDim: 0 };
-      redraw();
-      return u < 1;
-    },
-    () => {
-      motion = null;
-      redraw();
-    },
-  );
+/** Put an animated frame on the board (or clear it and go back to the still
+ *  picture). Handed to whoever animates — see view/move-tween.ts and
+ *  view/replay-player.ts. */
+function showFrame(m: MotionFrame | null): void {
+  motion = m;
+  redraw();
 }
-
 /** Drop any running animation and the frame it was drawing (leaving a race). */
 function stopMotion(): void {
   stopAnim();
   motion = null;
-}
-
-/**
- * How long one round of the replay takes (ms) — one move by every car. Slow
- * enough to follow six cars at once, fast enough that a long race doesn't turn
- * into a sitting; a race long enough to exceed REPLAY_MAX_MS is played at a
- * proportionally shorter beat rather than being cut off.
- */
-const REPLAY_BEAT_MS = 320;
-const REPLAY_MAX_MS = 30000;
-/** A beat on the starting grid before anyone moves, so the eye can find its car. */
-const REPLAY_LEAD_MS = 500;
-
-/** The race being replayed, or null — also the "is the replay up" flag. */
-let replay: { view: vp.ViewState } | null = null;
-
-function replaying(): boolean {
-  return replay !== null;
-}
-
-/**
- * Watch the finished race drive itself: the cars run their real trajectories at
- * their real relative speeds, the trails they've already drawn dimmed behind
- * them, and the whole track held in frame (nothing to aim at, so nothing to
- * follow). Nothing about the game state is touched — this is the same board,
- * drawn from a schedule.
- */
-function enterReplay(): void {
-  const g = S.game;
-  if (!g || replay) return;
-  const tl = buildTimeline(g);
-  if (tl.rounds === 0) return; // nobody drove: nothing to watch
-
-  replay = { view: vp.viewState() };
-  // Chrome up before the fit — the framing works around whatever panels are on
-  // screen, so it has to see the replay's own chrome, not the one it replaced.
-  showReplayChrome(exitReplay);
-  vp.fitToContent();
-  const beat = Math.min(REPLAY_BEAT_MS, REPLAY_MAX_MS / tl.rounds);
-  startAnim(
-    (ms) => {
-      const t = Math.min(tl.rounds, Math.max(0, (ms - REPLAY_LEAD_MS) / beat));
-      motion = sampleTimeline(tl, g, t);
-      redraw();
-      return t < tl.rounds;
-    },
-    () => {
-      // Over the line: the trails come back to full strength and the board is
-      // the one behind the result screen again. It stays up until it's closed —
-      // dropping the player back mid-glance would be its own kind of rude.
-      motion = null;
-      redraw();
-    },
-  );
-}
-
-function exitReplay(): void {
-  if (!replay) return;
-  const { view } = replay;
-  replay = null;
-  stopMotion();
-  hideReplayChrome();
-  vp.restoreView(view);
-  updateUI();
-  redraw();
 }
 
 function redraw(): void {
@@ -285,7 +148,7 @@ function redraw(): void {
     editor: S.editor,
     game: S.game,
     // The replay is watched, not played: no fan, no aim line, no pending pick.
-    cands: replaying() ? null : S.cands,
+    cands: isReplaying() ? null : S.cands,
     hover: input.getHover(),
     selected: input.getSelected(),
     pending: S.pending,
@@ -299,51 +162,13 @@ function redraw(): void {
   // candidates are on screen, so they follow every camera change — and a
   // camera change is exactly what a redraw is for.
   if (viewMode === 'race') input.updateConfirmPlacement();
-  else updateCoachPlacement();
-}
-
-/** Gap between the coach-mark's pointer and the feature it points at, in px. */
-const COACH_GAP = 16;
-
-/**
- * Pin the editor's coach-mark to the part of the track its instruction is
- * about. Called from redraw(), so it follows pan, zoom and resize the same way
- * the race's floating button does.
- */
-function updateCoachPlacement(): void {
-  const world = S.phase === 'edit' ? coachAnchors(S.editor) : [];
-  const cam = vp.camera();
-  const view = vp.viewSize();
-  const { card, keepOut } = coachMetrics();
-  // Panned or zoomed until a feature is off screen — or slid under the top
-  // strip / action bar, which hides it just as well: it's no longer something
-  // to point at. With none left the card drops the pointer and goes back to its
-  // resting place, instead of huddling against chrome it can't get clear of.
-  const onScreen = (p: Vec): boolean =>
-    p.x >= 0 && p.y >= 0 && p.x <= view.w && p.y <= view.h;
-  const underChrome = (p: Vec): boolean =>
-    keepOut.some((k) => p.x >= k.x && p.x <= k.x + k.w && p.y >= k.y && p.y <= k.y + k.h);
-  const anchors = world
-    .map((p) => worldToScreen(cam, p))
-    .filter((p) => onScreen(p) && !underChrome(p));
-  if (!anchors.length) {
-    setCoachFloat(null);
-    return;
-  }
-  const avoid = coachAvoid(S.editor).map((p) => worldToScreen(cam, p));
-  const feature = coachFeature(S.editor).map((p) => worldToScreen(cam, p));
-  setCoachFloat(
-    placeCoach({
-      anchors,
-      card,
-      view,
-      keepOut,
-      avoid,
-      feature,
-      gap: COACH_GAP,
-      margin: 12,
-    }),
-  );
+  else
+    updateCoachPlacement({
+      editor: S.editor,
+      cam: vp.camera(),
+      view: vp.viewSize(),
+      anchored: S.phase === 'edit',
+    });
 }
 
 /**
@@ -482,92 +307,13 @@ function myTurn(): boolean {
   return S.game !== null && session.mySeat() === S.game.current;
 }
 
-function cancelAiMove(): void {
-  clearAiTimers();
-  aiStreak = 0;
-}
-
-/** Drop both ways into the next bot move — the pause and the gesture safety
- *  net — without touching the run counter. */
-function clearAiTimers(): void {
-  if (aiTimer !== null) {
-    clearTimeout(aiTimer);
-    aiTimer = null;
-  }
-  if (aiDeferTimer !== null) {
-    clearTimeout(aiDeferTimer);
-    aiDeferTimer = null;
-  }
-}
-
-/**
- * Play one bot move: plan it, apply it, bring the screen up to date. Split out
- * of the timer below because the move has two ways in — the pause running out,
- * and the safety timer that lets it through when a gesture won't end. Whichever
- * gets here first drops the other, or a hand let go a moment before the safety
- * timer would fire buys two moves back to back with no pause between them.
- * Either way commit() schedules the next one properly.
- */
-function runBotMove(): void {
-  clearAiTimers();
-  if (!S.game || S.game.phase !== 'race' || !isBotSeat(S.game.current) || !S.raceNav)
-    return;
-  aiStreak++; // counted here, not when the pause was set: a move held back by a gesture hasn't been made yet
-  const cand = chooseMove(S.game, S.raceNav, S.game.players[S.game.current].bot!);
-  if (cand) applyMove(S.game, cand);
-  else coastMove(S.game); // all candidates are taken by opponents — coast instead
-  commit();
-}
-
-/**
- * Bot-move loop for a LOCAL game: if it's currently a bot's turn, make its
- * move after a short pause (giving the human time to follow along), and keep
- * going until the turn returns to a human or the race ends. The pause shrinks
- * with every next bot in the run (botMoveDelayMs) — with 4–5 bots a full pause
- * each would leave the human waiting through five of them in a row. Doesn't run in
- * online games — there, bot moves are computed and committed by the host
- * through online-controller (otherwise the local applyMove would diverge
- * from the server). The pause is cleared on any exit from the race
- * (cancelAiMove).
- */
-function scheduleAiMove(): void {
-  if (aiTimer !== null || session.active()) return;
-  // Mode gate: bots only move during an actually open race. While the setup
-  // screen is open (mode !== 'race'), bots are paused even if game is still
-  // in phase 'race'. Without this check, commit() from menu transitions
-  // would trigger a bot move behind the setup screen.
-  if (
-    S.phase !== 'race' ||
-    !S.game ||
-    S.game.phase !== 'race' ||
-    !isBotSeat(S.game.current)
-  ) {
-    aiStreak = 0; // the run is over (or never started) — the next bot waits the full pause
-    return;
-  }
-  const delay = botMoveDelayMs(aiStreak);
-  aiTimer = window.setTimeout(() => {
-    aiTimer = null;
-    // The map is under a finger: planning the move would own the thread for
-    // long enough to tear the drag, so the bot waits its turn out. Once the
-    // hand comes off, gestureEnded schedules it again.
-    if (input.isGesturing()) {
-      if (aiDeferTimer === null) {
-        aiDeferTimer = window.setTimeout(runBotMove, AI_GESTURE_MAX_DEFER_MS);
-      }
-      return;
-    }
-    runBotMove();
-  }, delay);
-}
-
 /**
  * The player's hand is off the field — anything held back while it was on can
  * run now: the bot's move locally, the deferred board sync online. Each half is
  * a no-op where it doesn't apply, so both are simply called.
  */
 function gestureEnded(): void {
-  scheduleAiMove();
+  scheduleBotMove();
   online.syncAfterGesture();
 }
 
@@ -575,7 +321,7 @@ function gestureEnded(): void {
  * Single point for "state changed — bring the screen up to date":
  * recompute candidates → panel → canvas → (for a local game with bots) the
  * next bot move. Call this after any local state mutation instead of the
- * manual refreshCands/updateUI/redraw/scheduleAiMove sequence — that way a
+ * manual refreshCands/updateUI/redraw/scheduleBotMove sequence — that way a
  * step can't be forgotten or reordered. `fit` additionally fits the content
  * into frame (used when starting a race). Online drives its own redraw
  * through commitOnline (which needs armTurnWatch).
@@ -590,7 +336,7 @@ function commit(opts: { fit?: boolean } = {}): void {
   // threw the whole track off to the right.
   if (opts.fit) vp.fitToContent();
   redraw();
-  scheduleAiMove();
+  scheduleBotMove();
 }
 
 /**
@@ -698,7 +444,7 @@ function goToMode(from: 'edit' | 'race'): void {
     S.raceTrack = S.game.track;
   }
   S.playersReturn = from;
-  cancelAiMove(); // a game with bots is paused while setup screens are open
+  cancelBotMoves(); // a game with bots is paused while setup screens are open
   stopMotion();
   S.phase = 'modeSelect';
   commit();
@@ -707,7 +453,7 @@ function goToMode(from: 'edit' | 'race'): void {
 /** Go back from the setup step (mode/players): to the editor or back to the current race. */
 function backFromSetup(): void {
   if (S.playersReturn === 'race') {
-    S.phase = 'race'; // commit() below resumes bot moves (mode gate in scheduleAiMove)
+    S.phase = 'race'; // commit() below resumes bot moves (mode gate in scheduleBotMove)
   } else {
     S.phase = 'edit';
     stepBack(S.editor); // ready → direction
@@ -760,7 +506,7 @@ function goToWizardStep(target: number): void {
  */
 function startRace(humans: number, bots: number, difficulty: Difficulty): void {
   if (!S.raceTrack) return;
-  cancelAiMove();
+  cancelBotMoves();
   stopMotion();
   S.pending = null;
   S.game = newGame(S.raceTrack, humans + bots, S.rules, shuffledIndices(humans + bots));
@@ -770,7 +516,7 @@ function startRace(humans: number, bots: number, difficulty: Difficulty): void {
   S.raceNav = buildNavField(S.raceTrack); // needed by bots (chooseMove) and the standings strip
   S.lastLocalRace = { humans, bots, difficulty };
   S.phase = 'race';
-  commit({ fit: true }); // fit puts the track in frame; scheduleAiMove kicks in if a bot moves first
+  commit({ fit: true }); // fit puts the track in frame; scheduleBotMove kicks in if a bot moves first
 }
 
 /** Reset everything back to a clean editor (new track / leaving an online session). */
@@ -780,7 +526,7 @@ function resetToEdit(): void {
   // otherwise an incoming opponent move via onGameState would revive the
   // race and yank us out of the editor.
   if (session.active()) session.leave();
-  cancelAiMove();
+  cancelBotMoves();
   stopMotion();
   // This is a real exit, not a rematch — without this, an abandoned race
   // would come back on the next reload (persist.load() picks up any
@@ -846,7 +592,7 @@ online.initOnline({
     // An online race replaces the local one: stop the local bot loop (in
     // online games, the host drives bots through online-controller). Bot-ness
     // of the seats themselves lives in state g (Player.bot).
-    cancelAiMove();
+    cancelBotMoves();
     stopMotion();
     S.game = g;
     S.raceNav = g ? buildNavField(g.track) : null; // needed by bots (chooseMove) and the standings strip
@@ -932,6 +678,31 @@ initRaceChrome({
     else online.retryMove(); // desktop: no stored selection — retry the last move instead
   },
   onSkip: () => online.skip(),
+});
+
+// The car sliding into the move it just made (view/move-tween.ts) — spotted
+// from updateUI, drawn through the same frame slot as the replay.
+initMoveTween({ game: () => S.game, showFrame });
+
+// The bots' clock in a local game (bots/scheduler.ts): it needs to read the
+// state, know whether a finger is on the board and whether this is an online
+// game (where the host moves the bots instead).
+initBotScheduler({
+  state: S,
+  isBotSeat,
+  isGesturing: input.isGesturing,
+  onlineActive: session.active,
+  commit: () => commit(),
+});
+
+// Watching the finished race drive itself: the playback lives in
+// view/replay-player.ts, the way out (a close button) in ui/race-replay.ts.
+initReplay({
+  game: () => S.game,
+  showFrame,
+  showChrome: showReplayChrome,
+  hideChrome: hideReplayChrome,
+  refreshUI: updateUI,
 });
 
 // The result screen: outcome, final classification and the three ways on.
@@ -1074,46 +845,9 @@ document.addEventListener('visibilitychange', () => {
 // The document language follows the active locale (markup defaults to lang="en").
 document.documentElement.lang = localeTag;
 
-// Build label at the foot of the burger drawer — an honest indicator of which
-// code is actually running (the string is compiled into the bundle): commit +
-// build time. Time is formatted in the local hour so "just now" matches the
-// wall clock.
-const buildLabel = new Date(__BUILD_TIME__).toLocaleString(dateLocale, {
-  day: '2-digit',
-  month: '2-digit',
-  year: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-});
-// Hidden activation of SW debug from inside the app: a standalone PWA has
-// its own localStorage bucket (the `?swdebug` flag from Safari doesn't carry
-// over) and no address bar — toggle the overlay with 5 quick taps on the
-// build label in the burger drawer.
-setVersionLabel(`${__COMMIT__} · ${buildLabel}`, () => {
-  const on = toggleSwDebug();
-  showToast(on ? 'SW debug ON' : 'SW debug OFF', 1500);
-  setTimeout(() => location.reload(), 400);
-});
-
-// If the commit changed since the last run, the app was updated: show a toast.
-// We compare the compiled-in commit to the saved one, without relying on SW mechanics.
-//
-// The key is per-app, not per-origin: production and the staging preview are two
-// builds on one GitHub Pages origin, so a single key made them overwrite each
-// other's last-seen commit — moving between them announced an "update" that never
-// happened, and a real update could go unannounced. Which makes the toast useless
-// as evidence when the actual question is whether the service worker picked up a
-// new version.
-try {
-  const BUILD_KEY = `pr-build:${import.meta.env.BASE_URL}`;
-  const seen = localStorage.getItem(BUILD_KEY);
-  if (seen && seen !== __COMMIT__) {
-    showToast(strings.race.updated, 3000);
-  }
-  localStorage.setItem(BUILD_KEY, __COMMIT__);
-} catch {
-  // private browsing / localStorage unavailable — fail silently
-}
+// Which build is running, and a heads-up when it changed (pwa.ts owns the
+// question of what version the player has).
+initBuildInfo({ toast: showToast, setLabel: setVersionLabel });
 
 // Only show online entry points if the backend is configured (otherwise, local play only).
 setOnlineEnabled(onlineAvailable());
@@ -1135,7 +869,7 @@ const joinParam = new URLSearchParams(location.search).get('join');
 const joining = !!joinParam && onlineAvailable();
 if (!joining && restoreState() === 'race') {
   refreshCands(); // bring back move candidates for the restored race
-  scheduleAiMove(); // resume bot moves if this was a game with bots
+  scheduleBotMove(); // resume bot moves if this was a game with bots
 }
 
 updateUI();
@@ -1173,7 +907,7 @@ if (import.meta.env.DEV) {
       updateUI,
       redraw,
       candOwner,
-      cancelAiMove,
+      cancelBotMoves,
       commitMove,
       myTurn,
     }),

@@ -35,7 +35,7 @@ export interface DevHelperDeps {
   updateUI: () => void;
   redraw: () => void;
   candOwner: () => number;
-  cancelAiMove: () => void;
+  cancelBotMoves: () => void;
   commitMove: (cand: Candidate) => void;
   myTurn: () => boolean;
 }
@@ -49,7 +49,7 @@ export function installDevHelpers(deps: DevHelperDeps): void {
     updateUI,
     redraw,
     candOwner,
-    cancelAiMove,
+    cancelBotMoves,
     commitMove,
     myTurn,
   } = deps;
@@ -263,7 +263,7 @@ export function installDevHelpers(deps: DevHelperDeps): void {
     toEdit() {
       S.editor = editorFromTrack(devTrack());
       S.phase = 'edit';
-      cancelAiMove();
+      cancelBotMoves();
       updateUI();
       redraw();
       return snap();
@@ -272,7 +272,7 @@ export function installDevHelpers(deps: DevHelperDeps): void {
     toMode() {
       S.raceTrack = devTrack();
       S.playersReturn = 'edit';
-      cancelAiMove();
+      cancelBotMoves();
       S.phase = 'modeSelect';
       updateUI();
       redraw();
@@ -288,7 +288,7 @@ export function installDevHelpers(deps: DevHelperDeps): void {
     autoFinish(maxTurns = 800) {
       const g = S.game;
       if (!g || !S.raceNav) return { finished: false, turns: 0, ...snap() };
-      cancelAiMove(); // the bot loop must not be moving cars underneath us
+      cancelBotMoves(); // the bot loop must not be moving cars underneath us
       let turns = 0;
       while (g.phase === 'race' && turns < maxTurns) {
         const cand = chooseMove(g, S.raceNav, g.players[g.current].bot ?? 'medium');

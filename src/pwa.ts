@@ -31,7 +31,8 @@
 // the `?swdebug` flag — see `sw-debug.ts`.
 
 import { registerSW } from 'virtual:pwa-register';
-import { initSwDebug } from './sw-debug';
+import { initSwDebug, toggleSwDebug } from './sw-debug';
+import { strings, dateLocale } from './i18n';
 
 /** Don't re-fetch sw.js more often than this — resume signals overlap. */
 const MIN_CHECK_INTERVAL_MS = 10_000;
@@ -177,5 +178,60 @@ export function initPwa(isSafeToReload: () => boolean): void {
     }
     dbg.log('applying update: SKIP_WAITING + reload');
     void updateSW();
+  }
+}
+
+/**
+ * The build the player is actually running: the label at the foot of the burger
+ * drawer, the hidden way into SW diagnostics, and the "we updated" toast.
+ *
+ * Here rather than in the composition root because it answers this module's own
+ * question — which version of the code is live and when it changes. The label is
+ * the honest answer (the strings are compiled into the bundle), and the toast
+ * reads the very same __COMMIT__ the update machinery above works with.
+ */
+export function initBuildInfo(deps: {
+  toast: (msg: string, ms?: number) => void;
+  setLabel: (text: string, onSecret: () => void) => void;
+}): void {
+  // Build label at the foot of the burger drawer — an honest indicator of which
+  // code is actually running (the string is compiled into the bundle): commit +
+  // build time. Time is formatted in the local hour so "just now" matches the
+  // wall clock.
+  const buildLabel = new Date(__BUILD_TIME__).toLocaleString(dateLocale, {
+    day: '2-digit',
+    month: '2-digit',
+    year: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  // Hidden activation of SW debug from inside the app: a standalone PWA has
+  // its own localStorage bucket (the `?swdebug` flag from Safari doesn't carry
+  // over) and no address bar — toggle the overlay with 5 quick taps on the
+  // build label in the burger drawer.
+  deps.setLabel(`${__COMMIT__} · ${buildLabel}`, () => {
+    const on = toggleSwDebug();
+    deps.toast(on ? 'SW debug ON' : 'SW debug OFF', 1500);
+    setTimeout(() => location.reload(), 400);
+  });
+
+  // If the commit changed since the last run, the app was updated: show a toast.
+  // We compare the compiled-in commit to the saved one, without relying on SW mechanics.
+  //
+  // The key is per-app, not per-origin: production and the staging preview are two
+  // builds on one GitHub Pages origin, so a single key made them overwrite each
+  // other's last-seen commit — moving between them announced an "update" that never
+  // happened, and a real update could go unannounced. Which makes the toast useless
+  // as evidence when the actual question is whether the service worker picked up a
+  // new version.
+  try {
+    const BUILD_KEY = `pr-build:${import.meta.env.BASE_URL}`;
+    const seen = localStorage.getItem(BUILD_KEY);
+    if (seen && seen !== __COMMIT__) {
+      deps.toast(strings.race.updated, 3000);
+    }
+    localStorage.setItem(BUILD_KEY, __COMMIT__);
+  } catch {
+    // private browsing / localStorage unavailable — fail silently
   }
 }
