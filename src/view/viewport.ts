@@ -10,6 +10,8 @@ import { WORLD_SIZE, SCALE_DEFAULT, FIT_MARGIN } from '../config';
 import {
   Camera,
   Bounds,
+  Insets,
+  NO_INSETS,
   screenToWorld,
   fitBounds,
   zoomAt as camZoomAt,
@@ -20,6 +22,8 @@ let canvas: HTMLCanvasElement;
 let wrap: Element;
 /** Bounds of the current content in world coordinates (or null for an empty field). */
 let boundsProvider: () => Bounds | null = () => null;
+/** Board edges the current screen's chrome covers — the framing works around them. */
+let insetsProvider: () => Insets = () => NO_INSETS;
 
 /** Camera: the single world↔screen transform. Initialized in resize() before the first frame. */
 let cam: Camera = { scale: SCALE_DEFAULT, ox: 0, oy: 0 };
@@ -31,10 +35,12 @@ export function initViewport(
   canvasEl: HTMLCanvasElement,
   wrapEl: Element,
   bounds: () => Bounds | null,
+  insets: () => Insets = () => NO_INSETS,
 ): void {
   canvas = canvasEl;
   wrap = wrapEl;
   boundsProvider = bounds;
+  insetsProvider = insets;
 }
 
 /** Current camera (for redraw()/render and worldToScreen). */
@@ -62,11 +68,16 @@ function defaultCamera(w: number, h: number): Camera {
   };
 }
 
-/** Fit the content centered (or the default view, if there's no content). */
+/**
+ * Fit the content centered in the space the chrome leaves free (or the default
+ * view, if there's no content). Insets are read at call time, so this has to
+ * run after the screen's chrome is up — fit first and the panel about to
+ * appear claims nothing.
+ */
 export function fitToContent(): void {
   const { w, h } = viewSize();
   const bb = boundsProvider();
-  cam = bb ? fitBounds(bb, w, h, FIT_MARGIN) : defaultCamera(w, h);
+  cam = bb ? fitBounds(bb, w, h, FIT_MARGIN, insetsProvider()) : defaultCamera(w, h);
   userAdjustedView = false;
 }
 
@@ -75,7 +86,7 @@ export function clamp(): void {
   const bb = boundsProvider();
   if (!bb) return;
   const { w, h } = viewSize();
-  cam = clampToBounds(cam, bb, w, h);
+  cam = clampToBounds(cam, bb, w, h, insetsProvider());
 }
 
 export function toScreen(e: PointerEvent): Vec {
@@ -106,9 +117,10 @@ export function resize(): void {
   // track gets fit centered. If the user has manually zoomed/panned, we keep
   // their scale and just re-clamp the offset for the new size.
   const bb = boundsProvider();
+  const insets = insetsProvider();
   if (!bb) cam = defaultCamera(r.width, r.height);
-  else if (userAdjustedView) cam = clampToBounds(cam, bb, r.width, r.height);
-  else cam = fitBounds(bb, r.width, r.height, FIT_MARGIN);
+  else if (userAdjustedView) cam = clampToBounds(cam, bb, r.width, r.height, insets);
+  else cam = fitBounds(bb, r.width, r.height, FIT_MARGIN, insets);
 }
 
 /** Zoom relative to a screen point: mark the view as user-adjusted + clamp it. */

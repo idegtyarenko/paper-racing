@@ -1,9 +1,20 @@
 // Shared low-level UI primitives: pointer type detection, reliable button
-// activation, and the sheet overlay. Knows nothing about game state — used by
-// dialogs and the confirmation sheet.
+// activation, element visibility and the sheet overlay. Knows nothing about
+// game state — used by dialogs and the confirmation sheet.
 
 /** Primary input is touch (phone/tablet). */
 export const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+
+/**
+ * The matching element, but only while it's actually on screen. Chrome that
+ * swaps by width (the phone strip vs the wide-screen rail) or by phase is
+ * always in the DOM, so "does it exist" answers the wrong question — anything
+ * measuring the layout has to ask "is it displayed".
+ */
+export function shownEl(sel: string): Element | null {
+  const el = document.querySelector(sel);
+  return el && getComputedStyle(el).display !== 'none' ? el : null;
+}
 
 const overlay = document.getElementById('overlay')!;
 

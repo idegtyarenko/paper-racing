@@ -15,7 +15,7 @@ import { EditorState, canStepBack } from '../model/editor';
 import { Phase } from '../app-state';
 import { strings } from '../i18n';
 import { showErrorToast } from './dialogs';
-import { bindTap } from './dom';
+import { bindTap, shownEl } from './dom';
 import { button, el, icon } from './pr-chrome';
 import { CoachPlacement, Rect } from '../view/coach-placement';
 import { wizardNavFoot } from './wizard-nav';
@@ -139,12 +139,6 @@ export function coachMetrics(): { card: { w: number; h: number }; keepOut: Rect[
     local(shownEl('.pr-nav__top')),
   ].filter((r): r is Rect => r !== null);
   return { card: { w: box.width, h: box.height }, keepOut };
-}
-
-/** The element, but only while the layout actually shows it. */
-function shownEl(sel: string): Element | null {
-  const el = document.querySelector(sel);
-  return el && getComputedStyle(el).display !== 'none' ? el : null;
 }
 
 /** Hide online entry points if the backend isn't configured (local play only). */

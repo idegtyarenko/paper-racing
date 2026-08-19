@@ -34,6 +34,7 @@ import { render, AppView, MotionFrame } from './view/render';
 import { startAnim, stopAnim, easeOutCubic, prefersReducedMotion } from './view/anim';
 import { buildTimeline, sampleTimeline } from './view/replay-timeline';
 import { Bounds, polylineBounds, worldToScreen } from './view/camera';
+import { boardInsets } from './ui/board-insets';
 import {
   coachAnchors,
   coachAvoid,
@@ -243,8 +244,10 @@ function enterReplay(): void {
   if (tl.rounds === 0) return; // nobody drove: nothing to watch
 
   replay = { view: vp.viewState() };
-  vp.fitToContent();
+  // Chrome up before the fit — the framing works around whatever panels are on
+  // screen, so it has to see the replay's own chrome, not the one it replaced.
   showReplayChrome(exitReplay);
+  vp.fitToContent();
   const beat = Math.min(REPLAY_BEAT_MS, REPLAY_MAX_MS / tl.rounds);
   startAnim(
     (ms) => {
@@ -578,9 +581,14 @@ function gestureEnded(): void {
  * through commitOnline (which needs armTurnWatch).
  */
 function commit(opts: { fit?: boolean } = {}): void {
-  if (opts.fit) vp.fitToContent();
   refreshCands();
   updateUI();
+  // Fit after updateUI, not before: the framing measures the side panels that
+  // are actually on screen, and the screen we're leaving still has its panel up
+  // until updateUI() takes it down. Fitting first frames the track into the
+  // space beside a panel that's already on its way out — at a race start that
+  // threw the whole track off to the right.
+  if (opts.fit) vp.fitToContent();
   redraw();
   scheduleAiMove();
 }
@@ -1111,8 +1119,10 @@ try {
 setOnlineEnabled(onlineAvailable());
 setSetupOnlineEnabled(onlineAvailable());
 
-// Camera: wire the viewport to the canvas/wrapper and the content bounds provider.
-vp.initViewport(canvas, wrap, contentBounds);
+// Camera: wire the viewport to the canvas/wrapper, the content bounds provider
+// and the chrome insets — the framing has to work around the screen's side
+// panel, and only ui/ knows which panel that is.
+vp.initViewport(canvas, wrap, contentBounds, boardInsets);
 
 // ResizeObserver instead of window.resize: the wrapper also changes size on
 // layout changes (portrait/landscape on mobile), not just the window.

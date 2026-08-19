@@ -700,10 +700,13 @@ function joinOnline(code: string, name: string, inJoinDialog: boolean): Promise<
       // Back in our own room as its host: refresh the row's copy of the setup (see
       // republishSetup). In a race it's the state that carries the rules — nothing to do.
       if (deps.state.phase === 'lobby') republishSetup();
-      deps.fitToContent(); // center the host's track
-      deps.redraw();
+      // Chrome first, then the framing: fitToContent sizes the track to the
+      // space the lobby's side panel leaves, and a panel that hasn't been shown
+      // yet still measures zero — fitting first would centre the track under it.
       deps.updateUI();
       if (deps.state.phase === 'lobby') deps.updateUI();
+      deps.fitToContent(); // center the host's track in what's left of the board
+      deps.redraw();
     } catch (e) {
       if (inJoinDialog) {
         deps.ui.joinError(joinErrorText(e));
