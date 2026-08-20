@@ -4,10 +4,10 @@
 // model/ because they're presenters: they read the i18n strings and speak in the
 // same words the settings screen uses.
 
-import { Drive, Rules } from '../model/game';
-import { Difficulty } from '../model/ai';
-import { CRASH_EXPONENT_STRICT, DRIVE_PRESETS } from '../config';
-import { strings } from '../i18n';
+import { Drive, Rules } from '../../model/game';
+import { Difficulty } from '../../model/ai';
+import { CRASH_EXPONENT_STRICT, DRIVE_PRESETS } from '../../config';
+import { strings } from '../../i18n';
 
 type DrivePreset = keyof typeof DRIVE_PRESETS;
 export type DriveMode = DrivePreset | 'custom';

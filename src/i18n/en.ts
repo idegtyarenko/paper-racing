@@ -66,7 +66,7 @@ export const en = {
   },
 
   // The step navigation shared by track drawing and race preparation
-  // (ui/wizard-nav.ts): the desktop rail's heading, short labels for the two
+  // (ui/components/wizard-nav.ts): the desktop rail's heading, short labels for the two
   // steps that aren't editor steps, and the warning for a back-jump that would
   // throw the drawing away.
   wizard: {

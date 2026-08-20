@@ -1,17 +1,17 @@
 // The classification: standings order plus the row renderer, shared by the two
-// screens that show it — the live race HUD (ui/race-chrome.ts) and the result
-// layer (ui/race-result.ts). It lives here rather than in either of them so a
+// screens that show it — the live race HUD (ui/screens/race-chrome.ts) and the result
+// layer (ui/screens/race-result.ts). It lives here rather than in either of them so a
 // racer reads the same way mid-race and at the flag, and so the "who's ahead"
 // ordering has one owner.
 
-import { KMH_PER_CELL } from '../config';
-import { GameState, Player } from '../model/game';
-import { NavField } from '../model/nav';
-import { computeStandings, turnsTaken } from '../model/standings';
-import { len } from '../geometry';
-import { strings } from '../i18n';
-import { el, icon } from './pr-chrome';
-import { BOT_SVG, CLOCK_SVG, CRASH_SVG } from './icons';
+import { KMH_PER_CELL } from '../../config';
+import { GameState, Player } from '../../model/game';
+import { NavField } from '../../model/nav';
+import { computeStandings, turnsTaken } from '../../model/standings';
+import { len } from '../../geometry';
+import { strings } from '../../i18n';
+import { el, icon } from '../primitives/pr-chrome';
+import { BOT_SVG, CLOCK_SVG, CRASH_SVG } from '../primitives/icons';
 
 // ── Standings order ──────────────────────────────────────────────────────────
 // Frozen at lap boundaries: mid-lap, different cars have made different numbers

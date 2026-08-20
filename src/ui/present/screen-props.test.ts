@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { GameState } from '../model/game';
-import { ringTrack, gameOn } from '../model/test-fixtures';
-import { newAppState, AppState } from '../app-state';
+import { GameState } from '../../model/game';
+import { ringTrack, gameOn } from '../../model/test-fixtures';
+import { newAppState, AppState } from '../../app-state';
 import { ScreenInput, raceChromeProps, raceResultProps } from './screen-props';
 
 const track = ringTrack();

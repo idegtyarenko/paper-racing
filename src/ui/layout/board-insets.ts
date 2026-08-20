@@ -6,9 +6,9 @@
 // breakpoint, so the layout stays the single source of truth for its own size.
 // The rule for turning the measurements into an inset lives in left-inset.ts.
 
-import { Insets, NO_INSETS } from '../view/camera';
+import { Insets, NO_INSETS } from '../../view/camera';
 import { leftInset, Span } from './left-inset';
-import { shownEl } from './dom';
+import { shownEl } from '../primitives/dom';
 
 /**
  * Panels that become a side panel on a wide screen. Only opaque chrome belongs

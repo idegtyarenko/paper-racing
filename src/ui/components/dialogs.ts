@@ -5,10 +5,10 @@
 // their name into their own roster row, so nothing stands between "play online"
 // and a room.
 
-import { bindTap, closeOverlay, openSheet } from './dom';
-import { button, buildSheet, el, icon } from './pr-chrome';
-import { strings } from '../i18n';
-import { WARN_SVG } from './icons';
+import { bindTap, closeOverlay, openSheet } from '../primitives/dom';
+import { button, buildSheet, el, icon } from '../primitives/pr-chrome';
+import { strings } from '../../i18n';
+import { WARN_SVG } from '../primitives/icons';
 
 const toast = document.getElementById('toast')!;
 // The failure skin's warning mark. It lives in markup rather than a CSS
@@ -30,7 +30,7 @@ function buildRules(): HTMLElement {
   close.textContent = strings.buttons.toWheel;
   bindTap(close, closeOverlay);
   // The build stamp is NOT repeated here: it lives once, at the foot of the
-  // burger drawer (src/ui/menu.ts), which is reachable from every screen.
+  // burger drawer (src/ui/components/menu.ts), which is reachable from every screen.
   return sheet;
 }
 

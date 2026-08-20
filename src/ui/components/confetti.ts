@@ -31,9 +31,9 @@
 // The colours are the cars' own — the field that just raced, not a generic
 // party palette.
 
-import { el, icon } from './pr-chrome';
-import { prefersReducedMotion } from '../view/anim';
-import { CHAMPAGNE_SVG, CHEQUER_SVG, TROPHY_SVG, WHEEL_SVG } from './icons';
+import { el, icon } from '../primitives/pr-chrome';
+import { prefersReducedMotion } from '../../view/anim';
+import { CHAMPAGNE_SVG, CHEQUER_SVG, TROPHY_SVG, WHEEL_SVG } from '../primitives/icons';
 
 const SHAPES = [TROPHY_SVG, CHEQUER_SVG, WHEEL_SVG, CHAMPAGNE_SVG];
 const PIECES = 68;

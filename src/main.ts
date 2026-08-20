@@ -5,9 +5,9 @@
 //
 // What this file deliberately does NOT own (it used to, and grew into a
 // god-module for it): pointer gestures (view/input.ts), the post-move tween
-// (view/move-tween.ts), the replay (view/replay-player.ts + ui/race-replay.ts
+// (view/move-tween.ts), the replay (view/replay-player.ts + ui/screens/race-replay.ts
 // for its chrome), the bots' clock in a local game (bots/scheduler.ts), the
-// coach-mark's placement (ui/editor-chrome.ts) and the build label
+// coach-mark's placement (ui/screens/editor-chrome.ts) and the build label
 // (pwa.ts). Each of those arrives wired through an init* call below.
 
 import './ui/styles/index.css';
@@ -32,7 +32,7 @@ import { stopAnim } from './view/anim';
 import { initReplay, enterReplay, isReplaying } from './view/replay-player';
 import { initMoveTween, noteMoves } from './view/move-tween';
 import { Bounds, polylineBounds } from './view/camera';
-import { boardInsets } from './ui/board-insets';
+import { boardInsets } from './ui/layout/board-insets';
 import * as vp from './view/viewport';
 import {
   actZoneHeight,
@@ -45,30 +45,30 @@ import {
   setMoveSendState,
   setTurnCountdown,
   showConfirmMove,
-} from './ui/race-chrome';
-import { initRaceResult, renderRaceResult } from './ui/race-result';
-import { ScreenInput, raceChromeProps, raceResultProps } from './ui/screen-props';
-import { showReplayChrome, hideReplayChrome } from './ui/race-replay';
+} from './ui/screens/race-chrome';
+import { initRaceResult, renderRaceResult } from './ui/screens/race-result';
+import { ScreenInput, raceChromeProps, raceResultProps } from './ui/present/screen-props';
+import { showReplayChrome, hideReplayChrome } from './ui/screens/race-replay';
 import {
   initEditorChrome,
   renderEditorChrome,
   updateCoachPlacement,
   setOnlineEnabled,
-} from './ui/editor-chrome';
-import { initWizardNav, renderWizardNav, wizardSteps } from './ui/wizard-nav';
-import { openConfirm, openNotice, closeNoticeIfOpen } from './ui/confirm';
-import { initMenu, setVersionLabel } from './ui/menu';
+} from './ui/screens/editor-chrome';
+import { initWizardNav, renderWizardNav, wizardSteps } from './ui/components/wizard-nav';
+import { openConfirm, openNotice, closeNoticeIfOpen } from './ui/components/confirm';
+import { initMenu, setVersionLabel } from './ui/components/menu';
 import {
   initSetupChrome,
   renderSetupChrome,
   setSetupOnlineEnabled,
-} from './ui/setup-chrome';
-import { initOnlineLobby, renderOnlineLobby } from './ui/online-lobby';
+} from './ui/screens/setup-chrome';
+import { initOnlineLobby, renderOnlineLobby } from './ui/screens/online-lobby';
 import { onlineAvailable } from './online/net';
 import * as session from './online/online';
 import * as online from './online/online-controller';
 import * as input from './view/input';
-import { initInstallPrompt } from './ui/install-prompt';
+import { initInstallPrompt } from './ui/components/install-prompt';
 import {
   openJoinDialog,
   openRules,
@@ -77,16 +77,16 @@ import {
   showErrorToast,
   showJoinError,
   showToast,
-} from './ui/dialogs';
-import { bindOverlayClose, closeOverlay } from './ui/dom';
-import { describeSetupChanges } from './ui/rules-summary';
-import type { SettingChange } from './ui/rules-summary';
+} from './ui/components/dialogs';
+import { bindOverlayClose, closeOverlay } from './ui/primitives/dom';
+import { describeSetupChanges } from './ui/present/rules-summary';
+import type { SettingChange } from './ui/present/rules-summary';
 import { initPwa, initBuildInfo } from './pwa';
-import { initAppHeight } from './ui/app-height';
+import { initAppHeight } from './ui/layout/app-height';
 import * as persist from './persist';
 
 // Before anything measures the board: fixes the too-short viewport iOS hands a
-// standalone PWA at launch (see ui/app-height.ts).
+// standalone PWA at launch (see ui/layout/app-height.ts).
 initAppHeight();
 
 const canvas = document.getElementById('board') as HTMLCanvasElement;
@@ -174,7 +174,7 @@ function redraw(): void {
 }
 
 /** Everything the online layer knows that the screens need — fetched here so
- *  the presenters (ui/screen-props.ts) can stay pure. */
+ *  the presenters (ui/present/screen-props.ts) can stay pure. */
 function screenInput(): ScreenInput {
   return {
     state: S,
@@ -588,7 +588,7 @@ initBotScheduler({
 });
 
 // Watching the finished race drive itself: the playback lives in
-// view/replay-player.ts, the way out (a close button) in ui/race-replay.ts.
+// view/replay-player.ts, the way out (a close button) in ui/screens/race-replay.ts.
 initReplay({
   game: () => S.game,
   showFrame,
@@ -647,7 +647,7 @@ initMenu({
 // The screens own the lineup (humans/bots/difficulty) and edit the race rules
 // in place — including the host's lobby, which is one of these screens.
 // The room's own actions, shared by the two lobby screens (the host's is the
-// setup screen; the guest's is ui/online-lobby.ts).
+// setup screen; the guest's is ui/screens/online-lobby.ts).
 const lobbyHandlers = {
   onLobbyStart: () => online.start(),
   onLobbyCopyCode: () => online.copy(),

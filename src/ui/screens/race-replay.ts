@@ -8,10 +8,10 @@
 // the result screen is hidden the whole time this is up, so the two never share
 // a frame.
 
-import { el, button, icon } from './pr-chrome';
-import { bindTap } from './dom';
-import { CLOSE_SVG } from './icons';
-import { strings } from '../i18n';
+import { el, button, icon } from '../primitives/pr-chrome';
+import { bindTap } from '../primitives/dom';
+import { CLOSE_SVG } from '../primitives/icons';
+import { strings } from '../../i18n';
 
 const board = document.querySelector('.app__board')!;
 

@@ -11,13 +11,13 @@
 // wide-screen rail live in wizard-nav.ts, which spans all six. The editor only
 // hands that rail its coach card (the instruction for the current step).
 
-import { Vec } from '../geometry';
-import { EditorState, canStepBack } from '../model/editor';
-import { Phase } from '../app-state';
-import { strings } from '../i18n';
-import { showErrorToast } from './dialogs';
-import { bindTap, shownEl } from './dom';
-import { button, el, icon } from './pr-chrome';
+import { Vec } from '../../geometry';
+import { EditorState, canStepBack } from '../../model/editor';
+import { Phase } from '../../app-state';
+import { strings } from '../../i18n';
+import { showErrorToast } from '../components/dialogs';
+import { bindTap, shownEl } from '../primitives/dom';
+import { button, el, icon } from '../primitives/pr-chrome';
 import {
   CoachPlacement,
   Rect,
@@ -25,10 +25,10 @@ import {
   coachAvoid,
   coachFeature,
   placeCoach,
-} from '../view/coach-placement';
-import { Camera, worldToScreen } from '../view/camera';
-import { wizardNavFoot } from './wizard-nav';
-import { ARROW_SVG, GLOBE_SVG, PENCIL_SVG, UNDO_SVG } from './icons';
+} from '../../view/coach-placement';
+import { Camera, worldToScreen } from '../../view/camera';
+import { wizardNavFoot } from '../components/wizard-nav';
+import { ARROW_SVG, GLOBE_SVG, PENCIL_SVG, UNDO_SVG } from '../primitives/icons';
 
 const board = document.querySelector('.app__board')!;
 

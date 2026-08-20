@@ -11,13 +11,16 @@
 // presenter that reached for the session itself would be untestable again.
 //
 // In ui/ rather than model/ by the project's own boundary: a pure presenter is
-// still presentation (see ui/format.ts).
+// still presentation (see ui/present/format.ts).
 
-import { AppState, NetTurn } from '../app-state';
-import { humansAllDone, isFinished } from '../model/game';
-import { SeatCtx, isBotSeat, soloHumanSeat, localHumanSeat } from '../seats';
-import { RaceCtx } from './race-chrome';
-import { ResultCtx } from './race-result';
+import { AppState, NetTurn } from '../../app-state';
+import { humansAllDone, isFinished } from '../../model/game';
+import { SeatCtx, isBotSeat, soloHumanSeat, localHumanSeat } from '../../seats';
+// Type-only on purpose: present/ sits below screens/ in the layering, and these
+// two are the one place it looks upward. `import type` is erased at build time,
+// so the arrow exists for the typechecker and not in the module graph.
+import type { RaceCtx } from '../screens/race-chrome';
+import type { ResultCtx } from '../screens/race-result';
 
 export interface ScreenInput {
   state: AppState;

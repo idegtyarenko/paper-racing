@@ -5,7 +5,7 @@
 // pointer instead of parking in a fixed zone. Pure geometry: the caller
 // (main.ts) has the camera and the DOM measurements, this only decides.
 // Same split as the floating "Go!" button in a race (view/input.ts →
-// ui/race-chrome.ts).
+// ui/screens/race-chrome.ts).
 
 import { Vec, Polyline, lerp, dist } from '../geometry';
 import { EditorState } from '../model/editor';

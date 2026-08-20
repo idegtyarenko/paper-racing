@@ -12,7 +12,7 @@
 // We don't show it if the game is already running as an installed app
 // (display-mode: standalone), or if the user recently dismissed the prompt.
 
-import { strings } from '../i18n';
+import { strings } from '../../i18n';
 
 const DISMISS_KEY = 'pr-install-dismissed';
 const DISMISS_MS = 14 * 864e5; // stay quiet for 14 days after an explicit "Close"

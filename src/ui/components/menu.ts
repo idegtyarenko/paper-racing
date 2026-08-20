@@ -7,9 +7,16 @@
 // rows (the shared .pr-item), an expandable language sublist with flags, and
 // the close × as a floating button outside the drawer, mirroring the burger.
 
-import { strings, setLocale, locale, LocaleCode } from '../i18n';
-import { el, button, icon, buildItem, buildBrand } from './pr-chrome';
-import { CHECK_SVG, CLOSE_SVG, FLAG_SVG, GLOBE_SVG, LANG_SVG, RULES_SVG } from './icons';
+import { strings, setLocale, locale, LocaleCode } from '../../i18n';
+import { el, button, icon, buildItem, buildBrand } from '../primitives/pr-chrome';
+import {
+  CHECK_SVG,
+  CLOSE_SVG,
+  FLAG_SVG,
+  GLOBE_SVG,
+  LANG_SVG,
+  RULES_SVG,
+} from '../primitives/icons';
 
 export interface MenuHandlers {
   /** Open the Rules / How-to-play sheet. */

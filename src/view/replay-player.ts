@@ -6,7 +6,7 @@
 //
 // Nothing about the game state is touched — this is the same board, drawn from
 // a schedule. The way out (a close button) is DOM chrome and lives in
-// ui/race-replay.ts: this module is in view/ and doesn't import ui/, so it gets
+// ui/screens/race-replay.ts: this module is in view/ and doesn't import ui/, so it gets
 // the chrome as callbacks.
 
 import { GameState } from '../model/game';

@@ -14,16 +14,16 @@
 // The confirm-move button and the skip button are built here too, in the action
 // zone, along with the four inputs that decide how the confirm button looks.
 
-import { Phase, NetTurn, SendState } from '../app-state';
-import { GameState } from '../model/game';
-import { NavField } from '../model/nav';
-import { upcomingSlots, canFinishThisTurn } from '../model/turns';
-import { strings } from '../i18n';
-import { msToClock } from './format';
-import { renderRows, resetStandings } from './classification';
-import { bindTap } from './dom';
-import { el, button, icon, buildStatus, StatusBanner } from './pr-chrome';
-import { openMenu } from './menu';
+import { Phase, NetTurn, SendState } from '../../app-state';
+import { GameState } from '../../model/game';
+import { NavField } from '../../model/nav';
+import { upcomingSlots, canFinishThisTurn } from '../../model/turns';
+import { strings } from '../../i18n';
+import { msToClock } from '../present/format';
+import { renderRows, resetStandings } from '../components/classification';
+import { bindTap } from '../primitives/dom';
+import { el, button, icon, buildStatus, StatusBanner } from '../primitives/pr-chrome';
+import { openMenu } from '../components/menu';
 import {
   BURGER_SVG,
   CHECK_SVG,
@@ -31,7 +31,7 @@ import {
   REMATCH_SVG,
   SHARE_SVG,
   SKIP_SVG,
-} from './icons';
+} from '../primitives/icons';
 
 /** How many upcoming turns the UP NEXT strip shows, including the current one. */
 const QUEUE_LEN = 9;

@@ -11,16 +11,16 @@
 // people still driving for second (hi-fi 5G) — until the flag, a finisher is
 // just a row in the classification that reads "Finished · 1st".
 
-import { GameState } from '../model/game';
-import { NavField } from '../model/nav';
-import { strings } from '../i18n';
-import { renderRows } from './classification';
-import { burstConfetti, clearConfetti } from './confetti';
-import { bindTap } from './dom';
+import { GameState } from '../../model/game';
+import { NavField } from '../../model/nav';
+import { strings } from '../../i18n';
+import { renderRows } from '../components/classification';
+import { burstConfetti, clearConfetti } from '../components/confetti';
+import { bindTap } from '../primitives/dom';
 import { raceActionSlot } from './race-chrome';
-import { el, button, icon } from './pr-chrome';
-import { isPodium } from './format';
-import { PLAY_SVG, PODIUM_SVG, REMATCH_SVG, TROPHY_SVG } from './icons';
+import { el, button, icon } from '../primitives/pr-chrome';
+import { isPodium } from '../present/format';
+import { PLAY_SVG, PODIUM_SVG, REMATCH_SVG, TROPHY_SVG } from '../primitives/icons';
 
 const board = document.querySelector<HTMLElement>('.app__board')!;
 
@@ -108,7 +108,7 @@ function build(h: ResultHandlers): void {
   el('span', 'pr-result__btntext', rematchBtn).textContent = strings.buttons.sameTrack;
   // bindTap, not a bare click: this screen arrives straight after a gesture on the
   // canvas, and that's exactly when iOS drops the first synthetic click on a button
-  // that just appeared — "Rematch" would need a second tap (see ui/dom.ts).
+  // that just appeared — "Rematch" would need a second tap (see ui/primitives/dom.ts).
   bindTap(rematchBtn, h.onRematch);
   sameTrackBtn = button('pr-btn pr-btn--caps', actionsEl);
   sameTrackBtn.textContent = strings.buttons.sameTrackNewMode;

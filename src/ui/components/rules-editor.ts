@@ -10,8 +10,8 @@
 // caller holds the actual rules — they arrive here as a copy, and changes are
 // sent back out via onChange.
 
-import { Rules, Drive } from '../model/game';
-import { reachableTargets, aeroFactor, forwardCap } from '../model/turns';
+import { Rules, Drive } from '../../model/game';
+import { reachableTargets, aeroFactor, forwardCap } from '../../model/turns';
 import {
   CRASH_EXPONENT_STANDARD,
   CRASH_EXPONENT_STRICT,
@@ -27,11 +27,11 @@ import {
   STATIC_TURNS_MAX,
   LAP_OPTIONS,
   DEFAULT_WIN_CROSSINGS,
-} from '../config';
-import { strings } from '../i18n';
-import { bindTap } from './dom';
-import { el, button } from './pr-chrome';
-import { DriveMode, driveModeOf } from './rules-summary';
+} from '../../config';
+import { strings } from '../../i18n';
+import { bindTap } from '../primitives/dom';
+import { el, button } from '../primitives/pr-chrome';
+import { DriveMode, driveModeOf } from '../present/rules-summary';
 
 type DrivePreset = keyof typeof DRIVE_PRESETS;
 

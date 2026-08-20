@@ -15,16 +15,16 @@
 // its own: waiting for friends is still setting a race up, so the room code and
 // the roster take the place of the seat counters in the Lineup tab and everything
 // else — tabs, rules, the Start action, the step it occupies in the wizard —
-// stays where it was. (The guest's lobby is its own screen, ui/online-lobby.ts:
+// stays where it was. (The guest's lobby is its own screen, ui/screens/online-lobby.ts:
 // a guest has nothing to set.)
 
-import { Phase } from '../app-state';
-import { Rules, MIN_PLAYERS } from '../model/game';
-import { Difficulty } from '../model/ai';
-import { strings } from '../i18n';
-import { bindTap } from './dom';
-import { openConfirm } from './confirm';
-import { mountRulesEditor, RulesEditor } from './rules-editor';
+import { Phase } from '../../app-state';
+import { Rules, MIN_PLAYERS } from '../../model/game';
+import { Difficulty } from '../../model/ai';
+import { strings } from '../../i18n';
+import { bindTap } from '../primitives/dom';
+import { openConfirm } from '../components/confirm';
+import { mountRulesEditor, RulesEditor } from '../components/rules-editor';
 import {
   el,
   button,
@@ -36,9 +36,15 @@ import {
   CodeBlock,
   Roster,
   Tabs,
-} from './pr-chrome';
-import { LobbyView } from '../app-state';
-import { ARROW_SVG, CHIP_SVG, CLOSE_SVG, GLOBE_SVG, PHONE_SVG } from './icons';
+} from '../primitives/pr-chrome';
+import { LobbyView } from '../../app-state';
+import {
+  ARROW_SVG,
+  CHIP_SVG,
+  CLOSE_SVG,
+  GLOBE_SVG,
+  PHONE_SVG,
+} from '../primitives/icons';
 
 const board = document.querySelector('.app__board')!;
 

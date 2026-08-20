@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_RULES, Rules } from '../model/game';
-import { CRASH_EXPONENT_STRICT, DRIVE_PRESETS } from '../config';
-import { strings } from '../i18n';
+import { DEFAULT_RULES, Rules } from '../../model/game';
+import { CRASH_EXPONENT_STRICT, DRIVE_PRESETS } from '../../config';
+import { strings } from '../../i18n';
 import { describeSetupChanges, driveModeLabel, driveModeOf } from './rules-summary';
 import type { BotFill, SetupSummary } from './rules-summary';
 

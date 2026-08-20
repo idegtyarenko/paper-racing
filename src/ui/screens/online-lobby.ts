@@ -12,11 +12,11 @@
 // host picked decides how the guest's car drives and what a crash costs, and
 // finding that out by driving into the gravel is a poor way to learn it.
 
-import { EditorState } from '../model/editor';
-import { strings } from '../i18n';
-import { bindTap } from './dom';
-import { render } from '../view/render';
-import { polylineBounds } from '../view/camera';
+import { EditorState } from '../../model/editor';
+import { strings } from '../../i18n';
+import { bindTap } from '../primitives/dom';
+import { render } from '../../view/render';
+import { polylineBounds } from '../../view/camera';
 import {
   el,
   button,
@@ -30,11 +30,11 @@ import {
   Roster,
   StatusBanner,
   Tabs,
-} from './pr-chrome';
-import { LobbyView } from '../app-state';
-import { mountRulesEditor, RulesEditor } from './rules-editor';
-import { openMenu } from './menu';
-import { BURGER_SVG, CLOSE_SVG } from './icons';
+} from '../primitives/pr-chrome';
+import { LobbyView } from '../../app-state';
+import { mountRulesEditor, RulesEditor } from '../components/rules-editor';
+import { openMenu } from '../components/menu';
+import { BURGER_SVG, CLOSE_SVG } from '../primitives/icons';
 
 const board = document.querySelector('.app__board')!;
 

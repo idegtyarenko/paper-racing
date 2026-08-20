@@ -2,9 +2,9 @@
 // DOM: builds a shared .pr-sheet and mounts it into #overlay on first call —
 // there's no markup for it in index.html (we keep index.html lean, see roadmap).
 
-import { bindTap, openSheet, closeOverlay, sheetOpen } from './dom';
-import { button, buildSheet } from './pr-chrome';
-import { strings } from '../i18n';
+import { bindTap, openSheet, closeOverlay, sheetOpen } from '../primitives/dom';
+import { button, buildSheet } from '../primitives/pr-chrome';
+import { strings } from '../../i18n';
 
 let sheet: HTMLElement | null = null;
 let titleEl: HTMLElement;

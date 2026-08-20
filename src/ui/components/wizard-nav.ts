@@ -11,12 +11,12 @@
 // already-passed rows back to main.ts (which walks back through the same
 // stepBack/backFromSetup transitions the Back button uses).
 
-import { Phase } from '../app-state';
-import { EditorStep } from '../model/editor';
-import { strings } from '../i18n';
-import { el, button, icon, buildTopbar, buildBrand } from './pr-chrome';
+import { Phase } from '../../app-state';
+import { EditorStep } from '../../model/editor';
+import { strings } from '../../i18n';
+import { el, button, icon, buildTopbar, buildBrand } from '../primitives/pr-chrome';
 import { openMenu } from './menu';
-import { BURGER_SVG } from './icons';
+import { BURGER_SVG } from '../primitives/icons';
 
 const board = document.querySelector('.app__board')!;
 

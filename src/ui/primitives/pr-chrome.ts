@@ -5,8 +5,8 @@
 // each screen's owner module (editor-chrome.ts, setup-chrome.ts) stays about its
 // own layout and state.
 
-import { Difficulty } from '../model/ai';
-import { RosterPlayer } from '../app-state';
+import { Difficulty } from '../../model/ai';
+import { RosterPlayer } from '../../app-state';
 import { bindTap } from './dom';
 import { CHECK_SVG, CHEVRON_SVG, COPY_SVG, SHARE_SVG } from './icons';
 
@@ -323,7 +323,7 @@ export function buildStatus(parent: HTMLElement): StatusBanner {
  * A modal sheet, mounted into #overlay and hidden until its owner opens it.
  * The surface is the shared solid card, so a sheet reads as the same material
  * as the menu drawer and the coach-mark. Callers append their own content and
- * buttons; `openSheet`/`closeOverlay` (ui/dom.ts) do the showing.
+ * buttons; `openSheet`/`closeOverlay` (ui/primitives/dom.ts) do the showing.
  */
 export function buildSheet(title: string): HTMLElement {
   const overlay = document.getElementById('overlay')!;
