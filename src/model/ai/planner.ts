@@ -143,7 +143,7 @@ export function scoreByPlan(
       }
     }
   });
-  if (win) return { best: win, terminal: true, scored: [] };
+  if (win) return { best: win, bestTies: [win], terminal: true, scored: [] };
 
   // Raster-based safety invariant: from state (pos, vel) the car can brake to a full
   // stop without ever crashing (within cap moves; at the recursion limit we
@@ -204,7 +204,7 @@ export function scoreByPlan(
         best = c;
       }
     });
-    return { best, terminal: true, scored: [] };
+    return { best, bestTies: [best], terminal: true, scored: [] };
   }
 
   const overspeed = (from: Vec, to: Vec): number => {
@@ -292,10 +292,13 @@ export function scoreByPlan(
     }
   }
 
-  // The optimal root is the one with the minimal exact plan length (ties broken by
-  // lower index, for determinism). If no plan reached the finish within budget, fall
-  // back to the frontier branch with the smallest f.
+  // The optimal root is the one with the minimal exact plan length. If no plan reached
+  // the finish within budget, fall back to the frontier branch with the smallest f.
+  // Roots that tie on that length are collected too: they're equally good by the very
+  // measure being optimized, and the caller picks among them at random so that a
+  // difficulty level with no epsilon (hard) doesn't drive the same race every time.
   let bestFirst = fallbackFirst;
+  let tied: number[] = [];
   if (rootPlan.size > 0) {
     let bestLen = Infinity;
     rootPlan.forEach((len, i) => {
@@ -304,7 +307,13 @@ export function scoreByPlan(
         bestFirst = i;
       }
     });
+    // Plan lengths are move counts, but the overspeed penalty makes them fractional
+    // for the capped levels — hence a tolerance instead of a strict equality.
+    rootPlan.forEach((len, i) => {
+      if (len <= bestLen + 1e-9) tied.push(i);
+    });
   }
+  if (tied.length === 0) tied = [bestFirst];
 
   // Pool used for jostling among near-ties: a root with an exact plan gets its
   // length; a root without one (its branches merged into `closed` or never reached
@@ -319,5 +328,10 @@ export function scoreByPlan(
     if (pl !== undefined) return { c, score: pl };
     return { c, score: 1 + navAt(nav, c.target) / plan.vref };
   });
-  return { best: open[bestFirst], terminal: false, scored };
+  return {
+    best: open[bestFirst],
+    bestTies: tied.map((i) => open[i]),
+    terminal: false,
+    scored,
+  };
 }

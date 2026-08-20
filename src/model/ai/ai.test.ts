@@ -307,10 +307,12 @@ describe('chooseMove', () => {
     expect(chosen.skipTurns).toBe(minSkip);
   });
 
-  it('hard bot is deterministic', () => {
+  // All of the bot's randomness goes through the injected rng — nothing reads
+  // Math.random behind our back. That's what keeps tests and replays reproducible.
+  it('hard bot repeats itself given the same rng', () => {
     const state = gameOn(track, 3);
-    const a = chooseMove(state, nav, 'hard')!;
-    const b = chooseMove(state, nav, 'hard')!;
+    const a = chooseMove(state, nav, 'hard', mulberry32(4))!;
+    const b = chooseMove(state, nav, 'hard', mulberry32(4))!;
     expect(a.target).toEqual(b.target);
   });
 
@@ -450,24 +452,33 @@ function hairpinTrack(): Track {
   return res.track;
 }
 
-/** A solo bot run (opponent removed): moves to finish, crash count, whether it finished. */
+/** A solo bot run (opponent removed): moves to finish, crash count, whether it
+ *  finished, and the sequence of targets — the run's fingerprint. */
 function soloFinish(
   t: Track,
   n: ReturnType<typeof buildNavField>,
   difficulty: Difficulty,
   rng: () => number,
   rules?: Rules,
-): { moves: number; crashes: number; won: boolean } {
+): { moves: number; crashes: number; won: boolean; trace: string } {
   const state = gameOn(t, 2, rules);
   state.players[1].retired = true;
+  const trace: string[] = [];
   let moves = 0;
   for (let i = 0; i < 1200 && state.winner === null; i++) {
     const cand = chooseMove(state, n, difficulty, rng);
-    if (cand) applyMove(state, cand);
-    else coastMove(state);
+    if (cand) {
+      trace.push(`${cand.target.x},${cand.target.y}`);
+      applyMove(state, cand);
+    } else coastMove(state);
     moves += 1;
   }
-  return { moves, crashes: state.players[0].crashes.length, won: state.winner === 0 };
+  return {
+    moves,
+    crashes: state.players[0].crashes.length,
+    won: state.winner === 0,
+    trace: trace.join('|'),
+  };
 }
 
 describe('difficulty levels (unified A*)', () => {
@@ -488,6 +499,27 @@ describe('difficulty levels (unified A*)', () => {
     expect(m.moves - h.moves).toBeGreaterThanOrEqual(4);
     expect(e.moves - m.moves).toBeGreaterThanOrEqual(4);
   });
+
+  // hard has no epsilon, and the plan is fully determined by the track and the starting
+  // slots — so before equally optimal roots were picked at random, every race on a track
+  // played out move for move the same and a rematch replayed a race already seen. The
+  // variety must not cost pace: ties are equal by the very measure hard optimizes, so a
+  // seeded run is never slower than the old lowest-index choice (measured 53-54 moves
+  // against a baseline of 54).
+  it('hard drives a different race on each run, without losing pace', () => {
+    const t = bigTrack();
+    const n = buildNavField(t);
+    const BASELINE = 54; // the pre-change deterministic run on this track
+    const runs = [1, 2, 3, 4, 5].map((seed) =>
+      soloFinish(t, n, 'hard', mulberry32(seed * 7919)),
+    );
+    expect(runs.every((r) => r.won && r.crashes === 0)).toBe(true);
+    // Variety: most runs take a line of their own.
+    expect(new Set(runs.map((r) => r.trace)).size).toBeGreaterThanOrEqual(3);
+    // Pace: no run is slower than the old deterministic one by more than a rounding move.
+    expect(Math.max(...runs.map((r) => r.moves))).toBeLessThanOrEqual(BASELINE + 1);
+    expect(Math.min(...runs.map((r) => r.moves))).toBeLessThanOrEqual(BASELINE);
+  }, 15000);
 
   // easy drives on the edge (enforceStop=false) and occasionally fails to brake in
   // time — the "liveliness" of the weak level. What matters: the crash is rare and does

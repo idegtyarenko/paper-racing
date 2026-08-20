@@ -14,6 +14,10 @@ export const EPS_MARGIN = 3;
 export interface Ranking {
   /** The strategy's optimal move — always returned except under epsilon variety. */
   best: Candidate;
+  /** Every root whose complete plan is exactly as long as best's — moves the strategy
+   *  rates identically. Always contains best; a single element means the optimum is
+   *  unique (or unproven, when no plan reached the finish within budget). */
+  bestTies: Candidate[];
   /** Finish/unavoidable-crash case — return best exactly, no epsilon substitution. */
   terminal: boolean;
   /** All root moves with a "cost" (lower is better): used for easy/medium epsilon
@@ -24,7 +28,15 @@ export interface Ranking {
 /**
  * Picks a move from the ranked root moves: the best one (the strategy's optimum),
  * except for easy/medium, where with probability epsilon a random near-optimal move
- * is picked instead — variety without jitter. There's deliberately no pack
+ * is picked instead — variety without jitter.
+ *
+ * Among equally optimal roots the choice is random. Without it hard (epsilon: 0) drove
+ * every race on a track identically — the plan is fully determined by the track and the
+ * starting slots, so a rematch replayed a race already seen. Ties are broken by the very
+ * measure the bot optimizes (moves to the finish), so nothing is given up: the previous
+ * "lowest index wins" was arbitrary, not a quality signal.
+ *
+ * There's deliberately no pack
  * repulsion: opponents get routed around by the A* search itself (blocked moves are
  * filtered out in candidates, and the plan routes around them), whereas an artificial
  * proximity penalty made the bot yield the racing line to any opponent and cost it
@@ -37,8 +49,12 @@ export function pickMove(
   P: DifficultyParams,
   rng: () => number,
 ): Candidate {
-  const { best, terminal, scored } = rank;
+  const { best, bestTies, terminal, scored } = rank;
   if (terminal) return best;
+  const optimum =
+    bestTies.length > 1
+      ? bestTies[Math.min(bestTies.length - 1, Math.floor(rng() * bestTies.length))]
+      : best;
   if (P.epsilon > 0 && scored.length > 1) {
     let poolBest = scored[0].score;
     for (const s of scored) if (s.score < poolBest) poolBest = s.score;
@@ -47,5 +63,5 @@ export function pickMove(
       return near[Math.min(near.length - 1, Math.floor(rng() * near.length))].c;
     }
   }
-  return best;
+  return optimum;
 }

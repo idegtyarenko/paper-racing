@@ -22,7 +22,8 @@ export interface DifficultyParams {
   stopCap: number;
   /** Soft speed cap: exceeding it is penalized, not forbidden. */
   maxSpeed: number;
-  /** Probability of picking a random near-best move (variety without jitter). */
+  /** Probability of picking a random NEAR-best move (variety without jitter). Equally
+   *  optimal moves are always picked at random, on every level — see pickMove. */
   epsilon: number;
   /** Whether to enforce the safety invariant (prefer roots we can brake from). false
    *  for easy — it drives on the edge and sometimes fails to brake in time
