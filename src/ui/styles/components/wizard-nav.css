@@ -1,5 +1,5 @@
 /* Wizard step navigation (Blueprint redesign): the phone's top strip and the
-   wide-screen left rail, owned/built by ui/wizard-nav.ts. Both moved here from
+   wide-screen left rail, owned/built by ui/components/wizard-nav.ts. Both moved here from
    the editor chrome unchanged in look — they now carry all six steps (drawing,
    mode, race setup) instead of the editor's four. The bar, its icon button and
    the title come from the shared .pr-topbar in pr-controls.css. */

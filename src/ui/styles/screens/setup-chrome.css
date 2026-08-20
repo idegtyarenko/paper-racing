@@ -1,5 +1,5 @@
 /* Mode select + race setup (Blueprint redesign): steps 5 and 6 of the wizard,
-   floating over the board, owned/built by ui/setup-chrome.ts. The shared pieces
+   floating over the board, owned/built by ui/screens/setup-chrome.ts. The shared pieces
    (cards, buttons, segmented options, rules editor) come from pr-controls.css,
    the step strip/rail from wizard-nav.css — only these screens' layout lives
    here. Both align every full-width element to --pr-gutter, like the strip. */

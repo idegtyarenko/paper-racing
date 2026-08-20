@@ -1,4 +1,6 @@
-/* Style aggregator: ordered from base styles to components. */
+/* Style aggregator: ordered from base styles to components.
+   This order IS the cascade — the files sit in screens/ and components/ to mirror the .ts
+   layout, but their precedence lives here. Reorder only on purpose. */
 /* Self-hosted fonts (bundled, no CDN — keeps the PWA offline-capable). The
    Blueprint hi-fi's Archivo + Spline Sans Mono lack Cyrillic, so RU/BE would
    break; these are the closest Cyrillic-capable substitutes (variable = one file
@@ -9,13 +11,13 @@
 @import './layout.css';
 /* Blueprint layer: shared components first, then the screens that compose them. */
 @import './pr-controls.css';
-@import './menu.css';
-@import './wizard-nav.css';
-@import './editor-chrome.css';
-@import './race-chrome.css';
-@import './race-result.css';
-@import './setup-chrome.css';
-@import './online-lobby.css';
+@import './components/menu.css';
+@import './components/wizard-nav.css';
+@import './screens/editor-chrome.css';
+@import './screens/race-chrome.css';
+@import './screens/race-result.css';
+@import './screens/setup-chrome.css';
+@import './screens/online-lobby.css';
 /* Floating globals, not owned by any one screen. */
-@import './install-prompt.css';
-@import './conn-banner.css';
+@import './components/install-prompt.css';
+@import './components/conn-banner.css';

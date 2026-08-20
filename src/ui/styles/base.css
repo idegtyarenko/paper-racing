@@ -122,7 +122,7 @@ body {
   height: 100vh; /* fallback for browsers without dvh */
   height: 100dvh;
   /* iOS standalone launches with a viewport one status bar too short and never
-     recomputes it — `ui/app-height.ts` measures the real screen height and
+     recomputes it — `ui/layout/app-height.ts` measures the real screen height and
      publishes it here. Unset everywhere else, so `100dvh` stands. */
   height: var(--pr-app-h, 100dvh);
   /* Set on body rather than on .app: the overlay, the menu, the toast and the

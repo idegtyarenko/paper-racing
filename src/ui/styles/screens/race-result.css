@@ -1,5 +1,5 @@
 /* Result screen (Blueprint, hi-fi 5H·A/B/C): the full-bleed layer that takes
-   over once every car has finished or retired. Built by ui/race-result.ts.
+   over once every car has finished or retired. Built by ui/screens/race-result.ts.
    Shares the classification row styles with the live HUD (race-chrome.css) —
    this file only adds the scrim, the outcome block and the action stack. */
 
@@ -208,7 +208,7 @@ body.is-result .zoom-ctl {
 
 /* ── Arrival ───────────────────────────────────────────────────────────────── */
 /* The flag has fallen. `--enter` is added on the edge into the full screen and
-   taken off again after ~0.9s (ui/race-result.ts), so a later re-render — an
+   taken off again after ~0.9s (ui/screens/race-result.ts), so a later re-render — an
    online guest's rematch wait ticking over — doesn't replay the whole thing.
    The blocks come in one after another, top down, the way the race resolved:
    outcome, then the classification, then what to do next. */
@@ -282,7 +282,7 @@ body.is-result .zoom-ctl {
 
 /* ── Confetti ──────────────────────────────────────────────────────────────── */
 /* Two party poppers in the bottom corners, in the cars' own colours. Built by
-   ui/confetti.ts, which sets the per-piece variables and sweeps the nodes up
+   ui/components/confetti.ts, which sets the per-piece variables and sweeps the nodes up
    once they've landed. A layer of its own over the board, not a child of the
    result screen: the burst goes off the moment the winner crosses the line,
    while the race — and its HUD — are still up.

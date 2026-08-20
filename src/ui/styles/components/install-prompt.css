@@ -1,5 +1,5 @@
 /* "Install on your phone" popup: a card at the bottom edge of the screen.
-   Built by ui/install-prompt.ts. The surface is the shared solid card and the
+   Built by ui/components/install-prompt.ts. The surface is the shared solid card and the
    action is the shared primary button — only the slide-in and this card's own
    three-column layout live here. */
 .pr-install {

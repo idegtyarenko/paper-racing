@@ -1,5 +1,5 @@
 /* Full-bleed editor chrome (Blueprint redesign). Floats over the board while
-   drawing a track; owned/built by ui/editor-chrome.ts. The shared pieces (top
+   drawing a track; owned/built by ui/screens/editor-chrome.ts. The shared pieces (top
    bar, buttons, card, label) come from pr-controls.css — only the editor's own
    layout and extras live here. Scoped to .pr-* so it doesn't touch the
    still-cream race panel. */

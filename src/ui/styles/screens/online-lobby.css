@@ -1,4 +1,4 @@
-/* The guest's online lobby (ui/online-lobby.ts): one card between the top bar
+/* The guest's online lobby (ui/screens/online-lobby.ts): one card between the top bar
    and the pinned footer. Same skeleton as the setup screen — gutter-aligned
    column, card in the middle, actions at the bottom — but with no tabs and
    nothing to configure, so the card is the content itself. Shared pieces (code

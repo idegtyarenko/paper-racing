@@ -460,7 +460,7 @@ body.is-lobby .pr-conn {
   height: 16px;
 }
 
-/* ── Tabs: a strip over a stack of panes, inside a card (ui/pr-chrome.ts
+/* ── Tabs: a strip over a stack of panes, inside a card (ui/primitives/pr-chrome.ts
       buildTabs) — the race-setup card and the guest lobby's ─────────────────── */
 .pr-tabs {
   flex: 0 0 auto;
@@ -908,7 +908,7 @@ body.is-lobby .pr-conn {
    Not a .pr-layer child — the overlay is fixed to the viewport rather than to
    the board, so it carries its own font. The sheet is a .pr-card--solid that
    slides up from the bottom edge on a phone and centres on a wide screen.
-   Owners: ui/dialogs.ts (rules, join), ui/confirm.ts (confirmations). */
+   Owners: ui/components/dialogs.ts (rules, join), ui/components/confirm.ts (confirmations). */
 .pr-overlay:not([hidden]) {
   position: fixed;
   inset: 0;
@@ -1105,7 +1105,7 @@ body.is-lobby .pr-conn {
   color: var(--pr-ink-soft);
 }
 
-/* ── Rules editor (ui/rules-editor.ts): handling + rules control stacks ─────── */
+/* ── Rules editor (ui/components/rules-editor.ts): handling + rules control stacks ─────── */
 .pr-rules {
   display: flex;
   flex-direction: column;

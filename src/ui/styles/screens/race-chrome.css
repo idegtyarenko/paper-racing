@@ -1,5 +1,5 @@
 /* Race chrome (Blueprint): the floating HUD over the board while racing.
-   Built by ui/race-chrome.ts. One layout at every width — the burger top left,
+   Built by ui/screens/race-chrome.ts. One layout at every width — the burger top left,
    the classification card floating over the board, the action zone at the
    bottom. The card used to become a left rail from 700px; the rail took a whole
    240px column away from the track (and the fit doesn't know about it, so the
