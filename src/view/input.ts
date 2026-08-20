@@ -9,6 +9,7 @@
 
 import { Vec, dist } from '../geometry';
 import { pointerDown, pointerMove, pointerUp, pointerCancel } from '../model/editor';
+import { pickEdge } from '../model/centerline';
 import { Candidate } from '../model/game';
 import { AppState } from '../app-state';
 import { worldToScreen, screenToWorld, clampScale } from './camera';
@@ -199,7 +200,7 @@ function resetGestureState(opts: { keepPick?: boolean } = {}): void {
   activeId = null;
   loupe = null;
   hover = null;
-  canvas.classList.remove('grabbing');
+  canvas.classList.remove('grabbing', 'over-edge');
   if (opts.keepPick) return;
   selected = null;
   syncConfirmMove();
@@ -580,11 +581,28 @@ function movePan(scr: Vec): void {
   });
 }
 
+/** How close (in world units) a mouse press has to be to count as hitting an
+ *  editor target. Hover and press share it, or the cursor would promise a grab
+ *  the press then misses. */
+const EDIT_TOL = 1.2;
+
+/**
+ * Adjust step, mouse only: the cursor promises what a press would do — a hand
+ * over a draggable road edge, the crosshair everywhere else, where a press pans
+ * the map instead. CSS scopes the class to the step, so a stale one is inert.
+ */
+function updateEdgeHover(w: Vec): void {
+  const editor = deps.state.editor;
+  const over =
+    editor.step === 'adjust' && !!editor.width && !!pickEdge(editor.width, w, EDIT_TOL);
+  canvas.classList.toggle('over-edge', over);
+}
+
 /** Classify a touch-down in the editor: drawing/edge-tuning/finish/arrow, or a pan. */
 function handleEditDown(e: PointerEvent, scr: Vec, touch: boolean): void {
   const editor = deps.state.editor;
   const w = vp.toWorld(e, drawLift(e));
-  const tol = touch ? Math.max(1.2, TOUCH_TOL_PX / vp.scale()) : 1.2;
+  const tol = touch ? Math.max(EDIT_TOL, TOUCH_TOL_PX / vp.scale()) : EDIT_TOL;
   const step = editor.step;
   switch (step) {
     case 'center':
@@ -597,6 +615,7 @@ function handleEditDown(e: PointerEvent, scr: Vec, touch: boolean): void {
       if (editor.dragEdge) {
         gesture = { kind: 'edge' };
         activeId = e.pointerId;
+        canvas.classList.add('grabbing'); // the open hand closes on the edge
       } else {
         beginPan(scr.x, scr.y, e.pointerId);
       }
@@ -837,7 +856,8 @@ export function initInput(d: InputDeps): void {
       deps.redraw();
       return;
     }
-    // No active gesture: only mouse hover over race candidates.
+    // No active gesture: mouse hover only — race candidates, or the draggable
+    // road edge in the editor (cursor feedback, nothing to redraw).
     const game = deps.state.game;
     if (!touch && deps.state.phase === 'race' && game && game.phase === 'race') {
       const c = findCandidate(vp.toWorld(e));
@@ -845,6 +865,8 @@ export function initInput(d: InputDeps): void {
         hover = c;
         deps.redraw();
       }
+    } else if (!touch && deps.state.phase === 'edit') {
+      updateEdgeHover(vp.toWorld(e));
     }
   });
 
@@ -897,6 +919,7 @@ export function initInput(d: InputDeps): void {
   canvas.addEventListener('pointerleave', (e) => {
     if (e.pointerType === 'touch' || activeId !== null) return;
     lastMouseScreen = null;
+    canvas.classList.remove('over-edge');
     if (hover) {
       hover = null;
       deps.redraw();

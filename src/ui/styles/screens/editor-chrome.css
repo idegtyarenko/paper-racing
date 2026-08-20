@@ -159,6 +159,18 @@ body[data-edit-step='center'] #board.grabbing {
   cursor: grabbing;
 }
 
+/* ── Adjust step: the cursor says what a press would do. Only the road edge is
+   draggable, so it gets the open hand (view/input.ts toggles .over-edge on
+   hover); everywhere else a press pans, and the base crosshair stays. Both
+   rules below have equal specificity, so .grabbing comes second on purpose —
+   during a drag the element carries both classes and the closed hand must win. */
+body[data-edit-step='adjust'] #board.over-edge {
+  cursor: grab;
+}
+body[data-edit-step='adjust'] #board.grabbing {
+  cursor: grabbing;
+}
+
 /* ── The coach card the editor mounts into the rail's bottom slot (wide screens
    only — the phone keeps the floating .pr-coach above). ─────────────────────── */
 /* Scoped to :not([hidden]) so the flex display never overrides the hidden
