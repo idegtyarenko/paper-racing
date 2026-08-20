@@ -6,6 +6,7 @@ import { RealtimeChannel } from '@supabase/supabase-js';
 import { Track } from '../model/track';
 import { GameState, Rules, normalizeRules, seatName } from '../model/game';
 import { Difficulty } from '../model/ai';
+import { NEVER_SEEN_GRACE_MS } from '../config';
 import {
   GameRow,
   RosterEntry,
@@ -65,6 +66,12 @@ let handlers: OnlineHandlers | null = null;
 let present = new Set<string>();
 /** When a clientId dropped out of presence (ms) — marks the start of the auto-skip grace period. */
 let leftAt = new Map<string, number>();
+/** When a clientId first turned up in the roster without ever having been in presence (ms).
+ *  A seat that has never shown up is not the same as one that left: the roster row arrives on
+ *  a row update, the presence message a moment later. */
+let firstSeen = new Map<string, number>();
+/** Pending repaint for a grace period running out (the lobby has no tick of its own). */
+let firstSeenTimer: number | null = null;
 /** Whether the realtime channel is currently connected (drives the "no connection" banner). */
 let connected = true;
 /** When the current turn began, per the client that wrote the move (null if unknown),
@@ -146,6 +153,21 @@ export function isPresent(seat: number): boolean {
 }
 
 /**
+ * Whether this seat should be drawn as offline. Differs from `!isPresent` in that a seat
+ * we have never yet seen online reads as an ordinary one for a short while — its roster
+ * row arrives ahead of its presence message, and marking it offline in that gap makes a
+ * player who is right there blink "offline". Presentation only: `isPresent` stays strict,
+ * so auto-skip and pruning are unaffected.
+ */
+export function showsOffline(seat: number): boolean {
+  if (isPresent(seat)) return false;
+  const id = seatClientId(seat);
+  if (id === null) return false;
+  const since = firstSeen.get(id);
+  return since === undefined || Date.now() - since >= NEVER_SEEN_GRACE_MS;
+}
+
+/**
  * When the current turn began (ms, wall clock), as stamped by whoever wrote the move —
  * null if that row predates the stamp or the clocks disagree. Shared so that a client
  * arriving mid-turn sees the same countdown as everyone else, instead of a fresh one.
@@ -177,7 +199,11 @@ function handlePresence(next: Set<string>): void {
   present.forEach((id) => {
     if (!next.has(id)) leftAt.set(id, Date.now());
   });
-  next.forEach((id) => leftAt.delete(id));
+  next.forEach((id) => {
+    leftAt.delete(id);
+    // Seen at last — from here on `leftAt` tells their story, not the grace period.
+    firstSeen.delete(id);
+  });
   present = next;
   handlers?.onPresence();
 }
@@ -241,6 +267,47 @@ function applySetup(row: GameRow): void {
   if (before && !hostFlag) handlers?.onSetupChanged(before, next);
 }
 
+/**
+ * Start the grace period for roster seats we have never seen in presence, and drop the
+ * bookkeeping for seats that are gone. If any grace is now running, arm a repaint for when
+ * it expires: a seat whose presence never arrives has to settle into "offline" on its own,
+ * and the lobby has no tick to do it (turn-watch's only runs during a race).
+ */
+function noteUnseen(): void {
+  const ids = new Set(roster.map((r) => r.clientId));
+  firstSeen.forEach((_, id) => {
+    if (!ids.has(id)) firstSeen.delete(id);
+  });
+  ids.forEach((id) => {
+    if (!present.has(id) && !leftAt.has(id) && !firstSeen.has(id))
+      firstSeen.set(id, Date.now());
+  });
+  armUnseenTimer();
+}
+
+/**
+ * Arm the repaint for the first grace period still running (entries whose grace has already
+ * expired keep their timestamp — re-adding them in `noteUnseen` would hand a long-gone seat a
+ * fresh grace). No timer when nothing is pending, so this never loops.
+ */
+function armUnseenTimer(): void {
+  if (firstSeenTimer !== null) return;
+  const now = Date.now();
+  let earliest = Infinity;
+  firstSeen.forEach((at) => {
+    if (at + NEVER_SEEN_GRACE_MS > now) earliest = Math.min(earliest, at);
+  });
+  if (earliest === Infinity) return;
+  firstSeenTimer = window.setTimeout(
+    () => {
+      firstSeenTimer = null;
+      armUnseenTimer();
+      handlers?.onPresence();
+    },
+    earliest + NEVER_SEEN_GRACE_MS - now,
+  );
+}
+
 /** Handle an incoming game row (from realtime, or the initial fetch). */
 function applyRow(row: GameRow | null): void {
   if (!row) {
@@ -250,6 +317,7 @@ function applyRow(row: GameRow | null): void {
   }
   const before = roster;
   roster = row.lobby ?? [];
+  noteUnseen();
   announceDepartures(before, roster);
   applySetup(row);
   if (row.state && track) {
@@ -420,6 +488,9 @@ function close(): void {
   track = null;
   present = new Set();
   leftAt = new Map();
+  firstSeen = new Map();
+  if (firstSeenTimer !== null) clearTimeout(firstSeenTimer);
+  firstSeenTimer = null;
   connected = true;
   turnStart = null;
   turnStartFor = -1;

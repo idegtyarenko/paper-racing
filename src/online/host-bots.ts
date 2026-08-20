@@ -209,7 +209,7 @@ export function lobbyView(): LobbyView | null {
     color: seatColor(i),
     you: i === mine,
     host: r.clientId === session.hostId(),
-    offline: !session.isPresent(i),
+    offline: session.showsOffline(i),
   }));
   // A guest's roster shows the bots too, in the seats they'll take at the start —
   // otherwise the free seats read as free when the host has already filled them.

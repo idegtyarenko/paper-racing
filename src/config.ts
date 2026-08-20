@@ -150,6 +150,11 @@ export const TURN_TIMEOUT_MS = 60_000;
 /** How long after a player leaves presence before we remove their abandoned
  *  seat from the lobby, ms. */
 export const LOBBY_PRUNE_MS = 10_000;
+/** How long we wait for a seat's first presence message before marking it offline,
+ *  ms. A new player's roster row arrives on a row update, while their presence comes
+ *  as a separate message a moment later — without this pause the guest blinks
+ *  "offline" right after joining. */
+export const NEVER_SEEN_GRACE_MS = 3_000;
 /** Timeout for a Supabase (REST) network request, ms: past this we treat the
  *  request as failed and release the await, so the UI never hangs on an
  *  unresolved promise. */
