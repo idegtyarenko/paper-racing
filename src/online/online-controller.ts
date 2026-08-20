@@ -577,7 +577,7 @@ const handlers: OnlineHandlers = {
     deps.updateUI();
     announceSetupChange(before, after);
   },
-  onConnection: (ok) => {
+  onLinkHealth: (ok) => {
     deps.ui.connBanner(!ok);
     deps.updateUI();
   },

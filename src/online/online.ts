@@ -6,7 +6,7 @@ import { RealtimeChannel } from '@supabase/supabase-js';
 import { Track } from '../model/track';
 import { GameState, Rules, normalizeRules, seatName } from '../model/game';
 import { Difficulty } from '../model/ai';
-import { NEVER_SEEN_GRACE_MS } from '../config';
+import { NEVER_SEEN_GRACE_MS, REST_PROBE_MS } from '../config';
 import {
   GameRow,
   RosterEntry,
@@ -26,6 +26,7 @@ import {
   deserializeTrack,
   deserializeState,
   turnStartedAt as readTurnStartedAt,
+  watchRest,
 } from './net';
 
 export interface OnlineHandlers {
@@ -44,8 +45,13 @@ export interface OnlineHandlers {
   onSetupChanged: (before: LobbySetup, after: LobbySetup) => void;
   /** Presence changed (someone went online/offline) — recompute the timer/skip/labels. */
   onPresence: () => void;
-  /** The realtime channel's connection state changed — show/hide the connection banner. */
-  onConnection: (connected: boolean) => void;
+  /**
+   * The link to the server changed — show/hide the connection banner. "Link" is both
+   * halves: the realtime channel that brings other people's moves, and the requests
+   * that carry ours out. Either one down is a stalled race, so either one down is a
+   * banner (see reportLink).
+   */
+  onLinkHealth: (ok: boolean) => void;
 }
 
 /** The host's setup as this client knows it: rules normalized, bots as chosen. */
@@ -72,8 +78,14 @@ let leftAt = new Map<string, number>();
 let firstSeen = new Map<string, number>();
 /** Pending repaint for a grace period running out (the lobby has no tick of its own). */
 let firstSeenTimer: number | null = null;
-/** Whether the realtime channel is currently connected (drives the "no connection" banner). */
+/** Whether the realtime channel is currently connected — one half of the link. */
 let connected = true;
+/** Whether requests are getting through — the other half, fed by watchRest (see noteRest). */
+let restOk = true;
+/** Last health we told the handler about, so it only hears about actual changes. */
+let lastLinkOk = true;
+/** Pending retry while the link is down (see probeLater). */
+let restProbeTimer: number | null = null;
 /** When the current turn began, per the client that wrote the move (null if unknown),
  *  together with the turn number it belongs to — a stamp only counts for its own turn. */
 let turnStart: number | null = null;
@@ -87,9 +99,9 @@ export function active(): boolean {
   return code !== null;
 }
 
-/** Whether the realtime channel is currently connected. */
-export function isConnected(): boolean {
-  return connected;
+/** Whether the link to the server is whole — socket and requests both (see onLinkHealth). */
+export function linkOk(): boolean {
+  return connected && restOk;
 }
 
 export function getCode(): string | null {
@@ -209,22 +221,67 @@ function handlePresence(next: Set<string>): void {
 }
 
 /**
- * Handle a realtime channel status change. On (re)connect — resync: fetch the current
- * game row (this covers updates missed during the outage and the gap between the
- * initial fetch and the subscription going live). If the game was deleted in the
- * meantime, fetchGame returns null → applyRow(null) → the normal onClosed path. The
- * banner only fires on an actual state change.
+ * Fetch the current game row and apply it: covers updates missed during an outage and
+ * the gap between the initial fetch and the subscription going live. If the game was
+ * deleted in the meantime, fetchGame returns null → applyRow(null) → the normal
+ * onClosed path.
+ */
+function resync(): void {
+  if (!code) return;
+  fetchGame(code)
+    .then(applyRow)
+    .catch(() => {});
+}
+
+/** Tell the handler how the link is doing — but only when the answer has changed. */
+function reportLink(): void {
+  const ok = linkOk();
+  if (lastLinkOk === ok) return;
+  lastLinkOk = ok;
+  handlers?.onLinkHealth(ok);
+}
+
+function clearProbe(): void {
+  if (restProbeTimer !== null) clearTimeout(restProbeTimer);
+  restProbeTimer = null;
+}
+
+/**
+ * Reach for the server again in a while. Nothing else will: the failed request was
+ * someone's move or rename, and if the player stops trying, no news would ever arrive
+ * to take the banner down. The attempt is the ordinary resync, whose own request runs
+ * through watchRest — so success clears the banner and catches us up in one go.
+ */
+function probeLater(): void {
+  if (restProbeTimer !== null) return; // one in flight is enough
+  restProbeTimer = window.setTimeout(() => {
+    restProbeTimer = null;
+    if (!code || restOk) return;
+    resync();
+    probeLater(); // in case this one fails too
+  }, REST_PROBE_MS);
+}
+
+/** A request settled (or didn't) — see watchRest in net.ts for what that proves. */
+function noteRest(ok: boolean): void {
+  // Before a session exists (creating a game, entering a code) there is no banner to
+  // raise, and those screens report their own failures.
+  if (!code) return;
+  restOk = ok;
+  if (ok) clearProbe();
+  else probeLater();
+  reportLink();
+}
+
+/**
+ * Handle a realtime channel status change. On (re)connect, resync so we catch up on
+ * what the outage hid.
  */
 function handleStatus(ok: boolean): void {
   if (!code) return; // after close(), events from the dead channel are no-ops
-  if (ok)
-    fetchGame(code)
-      .then(applyRow)
-      .catch(() => {});
-  if (connected !== ok) {
-    connected = ok;
-    handlers?.onConnection(ok);
-  }
+  if (ok) resync();
+  connected = ok;
+  reportLink();
 }
 
 /** The host can start once at least one other player has joined. */
@@ -362,7 +419,7 @@ export async function host(
   hostFlag = true;
   hostClient = row.host_id;
   track = t;
-  connected = true;
+  openLink();
   channel = subscribeGame(code, applyRow, handlePresence, handleStatus);
   applyRow(row);
   return code;
@@ -395,7 +452,7 @@ export async function join(
   hostFlag = row.host_id === clientId();
   hostClient = row.host_id;
   track = deserializeTrack(row.track);
-  connected = true;
+  openLink();
   channel = subscribeGame(code, applyRow, handlePresence, handleStatus);
   applyRow(row);
 }
@@ -481,6 +538,14 @@ export async function leave(): Promise<void> {
   }
 }
 
+/** Start a session's link as whole, and start listening to what requests report. */
+function openLink(): void {
+  connected = true;
+  restOk = true;
+  lastLinkOk = true;
+  watchRest(noteRest);
+}
+
 /** Close the session locally (unsubscribe + reset state). */
 function close(): void {
   // Clear code/handlers first, then unsubscribe: the CLOSED status that arrives from
@@ -498,7 +563,11 @@ function close(): void {
   firstSeen = new Map();
   if (firstSeenTimer !== null) clearTimeout(firstSeenTimer);
   firstSeenTimer = null;
+  watchRest(null);
+  clearProbe();
   connected = true;
+  restOk = true;
+  lastLinkOk = true;
   turnStart = null;
   turnStartFor = -1;
   lobbySetup = null;

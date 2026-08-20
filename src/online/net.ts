@@ -271,6 +271,36 @@ function db(): SupabaseClient {
   return client;
 }
 
+let restWatcher: ((ok: boolean) => void) | null = null;
+
+/**
+ * Listen in on whether requests are reaching the server. Every REST operation here
+ * goes through `withTimeout`, so that one place sees them all — no need to instrument
+ * the dozen call sites that each handle their own failure.
+ */
+export function watchRest(cb: ((ok: boolean) => void) | null): void {
+  restWatcher = cb;
+}
+
+/**
+ * Did this response come from the server at all?
+ *
+ * Rejecting is NOT how a postgrest builder reports a dead network: unless you ask for
+ * `.throwOnError()` (we don't), it catches the fetch failure and RESOLVES with an
+ * error object instead — so a resolved promise proves nothing on its own. What it does
+ * leave behind is `status: 0`, which a real reply never has: every answer PostgREST
+ * gets to send carries an HTTP status, refusals (RLS, a unique clash, no such row)
+ * included. Those are the server talking, and they mean the link is fine.
+ */
+function reachedServer(v: unknown): boolean {
+  return !(
+    typeof v === 'object' &&
+    v !== null &&
+    'status' in v &&
+    (v as { status: unknown }).status === 0
+  );
+}
+
 // ── Operations ─────────────────────────────────────────────────────────────────────
 
 /**
@@ -282,14 +312,32 @@ function db(): SupabaseClient {
  */
 function withTimeout<T>(p: PromiseLike<T>, ms = NET_TIMEOUT_MS): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error('net-timeout')), ms);
+    // A request is worth exactly one verdict. Timing out doesn't cancel the request,
+    // so a black-holed one can still settle minutes later; without this, that late
+    // answer would overturn a verdict the player has already been shown.
+    let reported = false;
+    const report = (ok: boolean): void => {
+      if (reported) return;
+      reported = true;
+      restWatcher?.(ok);
+    };
+    const t = setTimeout(() => {
+      // The hung request — nothing came back at all, which is the very case the
+      // banner exists for. It reaches none of the handlers below, so report here.
+      report(false);
+      reject(new Error('net-timeout'));
+    }, ms);
     p.then(
       (v) => {
         clearTimeout(t);
+        report(reachedServer(v));
         resolve(v);
       },
       (e) => {
+        // The builder itself rejected — rare, since it turns fetch failures into
+        // resolved error objects instead (see reachedServer).
         clearTimeout(t);
+        report(false);
         reject(e);
       },
     );

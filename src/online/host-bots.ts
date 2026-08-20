@@ -238,7 +238,7 @@ export function lobbyView(): LobbyView | null {
     botCount: lobbyBots,
     maxBots,
     botDifficulty: lobbyBotDifficulty,
-    connected: session.isConnected(),
+    connected: session.linkOk(),
     starting,
   };
 }

@@ -180,7 +180,7 @@ function screenInput(): ScreenInput {
     state: S,
     mySeat: mySeat(),
     net: online.netTurn(S.game),
-    connected: session.isConnected(),
+    connected: session.linkOk(),
     hostGone: session.hostGone(),
     onlineCanRematch: online.canRematch(),
   };

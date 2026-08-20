@@ -496,9 +496,9 @@ export function renderRaceChrome(ctx: RaceCtx): void {
   renderSkip(game!, net);
   renderChip(game!, net, aiTurn, soloSeat);
 
-  // Realtime is down: the banner replaces the status chip rather than stacking
-  // with it — the chip would only say whose turn it is, which is exactly the
-  // thing we've stopped being able to keep up to date.
+  // The link is down — the socket, the writes, or both: the banner replaces the
+  // status chip rather than stacking with it, since the chip would only say whose
+  // turn it is, which is exactly the thing we've stopped being able to keep up to date.
   const lost = !!net && !connected;
   connEl.hidden = !lost;
   if (lost) connCodeText.textContent = strings.online.raceCode(net!.code);

@@ -159,6 +159,10 @@ export const NEVER_SEEN_GRACE_MS = 3_000;
  *  request as failed and release the await, so the UI never hangs on an
  *  unresolved promise. */
 export const NET_TIMEOUT_MS = 10_000;
+/** How often we reach for the server again while the connection banner is up, ms.
+ *  The attempt is the ordinary row refetch, so a success both clears the banner and
+ *  catches us up on what was missed. */
+export const REST_PROBE_MS = 5_000;
 /** Delay before a silent retry of auto-skip after a failed write, ms. */
 export const SKIP_RETRY_MS = 5_000;
 /** Least time the creator's tab may be offline before we tell the others that the
