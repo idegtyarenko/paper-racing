@@ -272,13 +272,20 @@ function applySetup(row: GameRow): void {
  * bookkeeping for seats that are gone. If any grace is now running, arm a repaint for when
  * it expires: a seat whose presence never arrives has to settle into "offline" on its own,
  * and the lobby has no tick to do it (turn-watch's only runs during a race).
+ *
+ * A row that is back after being away is a fresh join, not a return from the dead: reloading
+ * the page in the lobby frees the seat and rejoins under the same clientId (see the pagehide
+ * handler in online-controller), so the stale "they left" stamp has to go — otherwise the
+ * rejoining player gets no grace and blinks offline exactly as before.
  */
-function noteUnseen(): void {
+function noteUnseen(previous: RosterEntry[]): void {
   const ids = new Set(roster.map((r) => r.clientId));
+  const wasThere = new Set(previous.map((r) => r.clientId));
   firstSeen.forEach((_, id) => {
     if (!ids.has(id)) firstSeen.delete(id);
   });
   ids.forEach((id) => {
+    if (!wasThere.has(id)) leftAt.delete(id);
     if (!present.has(id) && !leftAt.has(id) && !firstSeen.has(id))
       firstSeen.set(id, Date.now());
   });
@@ -317,7 +324,7 @@ function applyRow(row: GameRow | null): void {
   }
   const before = roster;
   roster = row.lobby ?? [];
-  noteUnseen();
+  noteUnseen(before);
   announceDepartures(before, roster);
   applySetup(row);
   if (row.state && track) {
