@@ -15,9 +15,10 @@ import {
   deserializeTrack,
   serializeState,
   deserializeState,
+  isObj,
   isSerializedTrack,
   isSerializedState,
-} from './online/net';
+} from './model/serialize';
 
 const KEY = 'pr-local-state';
 // v3: which seats are bots moved into the state itself (Player.bot) — there's
@@ -81,20 +82,19 @@ export function save(snap: AppState): void {
  *  string would flow into state and produce a white screen. This is a shape
  *  check, not a migration; normalization is deserialize's job. */
 function isStored(v: unknown): v is Stored {
-  if (typeof v !== 'object' || v === null) return false;
-  const s = v as Record<string, unknown>;
-  if (typeof s.v !== 'number') return false;
+  if (!isObj(v)) return false;
+  if (typeof v.v !== 'number') return false;
   // The screen field was renamed mode→phase within v3 itself — we read older
   // snapshots via the legacy `mode` key so an in-progress race doesn't get
   // reset on update.
-  if (typeof (s.phase ?? s.mode) !== 'string') return false;
-  if (typeof s.editor !== 'object' || s.editor === null) return false;
-  if (typeof s.rules !== 'object' || s.rules === null) return false;
-  if (s.raceTrack !== null && !isSerializedTrack(s.raceTrack)) return false;
-  if (s.game !== null) {
-    if (typeof s.game !== 'object' || s.game === null) return false;
-    const g = s.game as Record<string, unknown>;
-    if (!isSerializedTrack(g.track) || !isSerializedState(g.state)) return false;
+  if (typeof (v.phase ?? v.mode) !== 'string') return false;
+  if (!isObj(v.editor)) return false;
+  if (!isObj(v.rules)) return false;
+  if (v.raceTrack !== null && !isSerializedTrack(v.raceTrack)) return false;
+  if (v.game !== null) {
+    if (!isObj(v.game)) return false;
+    if (!isSerializedTrack(v.game.track) || !isSerializedState(v.game.state))
+      return false;
   }
   return true;
 }

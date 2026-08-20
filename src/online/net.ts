@@ -1,36 +1,44 @@
-// Network layer for online mode: the Supabase client, track/state serialization, and
-// operations on the game row. No DOM here — just transport and (de)serialization.
+// Network layer for online mode: the Supabase client and the operations on the game
+// row. No DOM here — just transport. How a track and a race state turn into JSON is the
+// model's business (`model/serialize.ts`); this file adds only what the wire needs.
 //
 // Model is "shared state, mover writes it": the active player applies their move
 // locally and writes the game row; everyone else picks up the change via the realtime subscription.
 
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
-import { Vec } from '../geometry';
 import { Track } from '../model/track';
-import { GameState, Rules, normalizeRules } from '../model/game';
+import { GameState, Rules } from '../model/game';
+import {
+  SerializedState,
+  SerializedTrack,
+  serializeState,
+  serializeTrack,
+  isObj,
+  isSerializedState,
+  isSerializedTrack,
+} from '../model/serialize';
 import { Difficulty } from '../model/ai';
 import { CLOCK_SANITY_MS, NET_TIMEOUT_MS } from '../config';
 
-// ── Serialization ────────────────────────────────────────────────────────────────
-
-/** Track in JSON form: the `inside` Set is expanded into an array. */
-export interface SerializedTrack {
-  outer: Vec[];
-  inner: Vec[];
-  finish: { a: Vec; b: Vec };
-  forward: Vec;
-  inside: number[];
-  startPoints: Vec[];
-}
+// ── The wire format ─────────────────────────────────────────────────────────────
+//
+// The shared part — how a track and a race state become JSON — belongs to the model
+// (`model/serialize.ts`), because the local snapshot serializes the same things. What
+// is added here is what only the wire needs.
 
 /**
- * Race state without the `track` field (the track is stored separately on the row and
- * is immutable), plus the wall-clock moment the row was written — which, since a row is
- * written exactly when a move lands, is the moment the turn on it began. It rides the
- * wire rather than `GameState` on purpose: the model stays free of clocks, and a client
- * arriving mid-turn (a reload, a reopened tab) can still tell how much of it is left.
+ * A race state on the wire: the model's snapshot plus the wall-clock moment the row was
+ * written — which, since a row is written exactly when a move lands, is the moment the
+ * turn on it began. It rides the wire rather than `GameState` on purpose: the model
+ * stays free of clocks, and a client arriving mid-turn (a reload, a reopened tab) can
+ * still tell how much of it is left.
  */
-export type SerializedState = Omit<GameState, 'track'> & { turnStartedAt?: number };
+export type NetState = SerializedState & { turnStartedAt?: number };
+
+/** Serialize for the wire: the model's snapshot, stamped with our clock. */
+export function stampState(g: GameState): NetState {
+  return { ...serializeState(g), turnStartedAt: Date.now() };
+}
 
 /**
  * The host's pre-race setup as it travels on the row: the rules, and the bot fill
@@ -59,44 +67,12 @@ export interface RosterEntry {
 export interface GameRow {
   id: string;
   track: SerializedTrack;
-  state: SerializedState | null;
+  state: NetState | null;
   lobby: RosterEntry[];
   /** The host's setup (see SerializedSetup). Absent on rows written before it travelled. */
   setup?: SerializedSetup | null;
   host_id: string;
   status: 'lobby' | 'race' | 'over';
-}
-
-export function serializeTrack(t: Track): SerializedTrack {
-  return {
-    outer: t.outer,
-    inner: t.inner,
-    finish: t.finish,
-    forward: t.forward,
-    inside: [...t.inside],
-    startPoints: t.startPoints,
-  };
-}
-
-/**
- * Reconstructs the track. Framing is derived from the track's bbox (fit-to-track),
- * so it's the same on every device. Old JSON rows may still carry dead
- * `worldW`/`worldH` fields (once the host's world dimensions) — we simply ignore them.
- */
-export function deserializeTrack(s: SerializedTrack): Track {
-  return {
-    outer: s.outer,
-    inner: s.inner,
-    finish: s.finish,
-    forward: s.forward,
-    inside: new Set(s.inside),
-    startPoints: s.startPoints,
-  };
-}
-
-export function serializeState(g: GameState): SerializedState {
-  const { track: _track, ...rest } = g;
-  return { ...rest, turnStartedAt: Date.now() };
 }
 
 /**
@@ -106,85 +82,18 @@ export function serializeState(g: GameState): SerializedState {
  * is kept, so the turn reads as expired rather than starting over). Callers fall back
  * to their own clock, which is what every client did before this travelled.
  */
-export function turnStartedAt(s: SerializedState): number | null {
+export function turnStartedAt(s: NetState): number | null {
   const at = s.turnStartedAt;
   if (typeof at !== 'number') return null;
   const elapsed = Date.now() - at;
   return elapsed < 0 || elapsed > CLOCK_SANITY_MS ? null : at;
 }
 
-export function deserializeState(s: SerializedState, track: Track): GameState {
-  // Rules and the turn counter travel inside the state; old rows without them
-  // get a default (turn 0 — a safe starting point for the rotation).
-  const { turnStartedAt: _at, ...rest } = s; // wire-only, read separately — see turnStartedAt
-  return {
-    ...rest,
-    // Normalize rules: backfill defaults (so new fields aren't undefined on old
-    // rows) plus migrate legacy physics → drive.
-    rules: normalizeRules(s.rules),
-    turn: s.turn ?? 0,
-    // Start-grid turn order: old snapshots without this field get the identity
-    // permutation (previous behavior — turn order by seat index).
-    startGridOrder:
-      s.startGridOrder ?? Array.from({ length: s.players.length }, (_, i) => i),
-    // Gravel turns served and turns given up standing still: absent on rows written
-    // before those counters existed — such races just under-report a crash or a
-    // passed turn, which is exactly the old behavior, so zero is the right backfill.
-    players: s.players.map((p) => ({
-      ...p,
-      penaltyTurns: p.penaltyTurns ?? 0,
-      stationaryTurns: p.stationaryTurns ?? 0,
-      // When the car cut the finish line: absent on rows written before places
-      // were decided by it. Null there means the round falls back to overshoot
-      // depth — the old behavior, and the only one such a row has data for.
-      finishCrossAt: p.finishCrossAt ?? null,
-    })),
-    track,
-  };
-}
-
-// ── Validating incoming data ────────────────────────────────────────────────────
+// ── Validating incoming rows ────────────────────────────────────────────────────
 //
-// Data from the network (a realtime row, an RPC/query response) arrives as
-// `unknown`. It used to be cast with `as` — a promise, not a check. Here we do a
-// lightweight SHAPE check (not a full schema): make sure the skeleton is present and
-// of the right type, so we can safely normalize afterward (deserializeState) instead
-// of running into a broken state after future format changes. We don't migrate
-// values here — only shape.
-
-function isObj(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null;
-}
-
-function isVec(v: unknown): v is Vec {
-  return isObj(v) && typeof v.x === 'number' && typeof v.y === 'number';
-}
-
-function isVecArray(v: unknown): v is Vec[] {
-  return Array.isArray(v) && v.every(isVec);
-}
-
-/** Shape of a serialized track: base fields are present and of the right type. */
-export function isSerializedTrack(v: unknown): v is SerializedTrack {
-  if (!isObj(v)) return false;
-  const f = v.finish;
-  return (
-    isVecArray(v.outer) &&
-    isVecArray(v.inner) &&
-    isObj(f) &&
-    isVec(f.a) &&
-    isVec(f.b) &&
-    isVec(v.forward) &&
-    Array.isArray(v.inside) &&
-    isVecArray(v.startPoints)
-  );
-}
-
-/** Shape of a serialized race state (without track — that's stored separately on the
- *  row). Not full validation — just the skeleton needed to safely normalize afterward. */
-export function isSerializedState(v: unknown): v is SerializedState {
-  return isObj(v) && Array.isArray(v.players) && typeof v.current === 'number';
-}
+// A row from the network arrives as `unknown`. The track and the state inside it are
+// shape-checked by the model's guards (`model/serialize.ts`); what is checked here is
+// the envelope around them — the fields a row has because it is a row.
 
 /**
  * Shape of the host's setup. A malformed one doesn't invalidate the row (the race
@@ -432,7 +341,7 @@ export async function pushState(code: string, state: GameState): Promise<void> {
     db()
       .from('games')
       .update({
-        state: serializeState(state),
+        state: stampState(state),
         status,
         updated_at: new Date().toISOString(),
       })

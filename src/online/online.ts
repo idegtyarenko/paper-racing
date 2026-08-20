@@ -23,11 +23,10 @@ import {
   renamePlayer,
   subscribeGame,
   unsubscribe,
-  deserializeTrack,
-  deserializeState,
   turnStartedAt as readTurnStartedAt,
   watchRest,
 } from './net';
+import { deserializeTrack, deserializeState } from '../model/serialize';
 
 export interface OnlineHandlers {
   /** Lobby roster/status changed (someone joined/left) — refresh the lobby screen. */
