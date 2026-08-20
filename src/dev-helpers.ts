@@ -256,6 +256,27 @@ export function installDevHelpers(deps: DevHelperDeps): void {
       redraw();
       return snap();
     },
+    /** Result screen after a dead heat: `tied` cars (seat 0 among them) share
+     *  first place, so `winner` becomes `'draw'`. The one finish `resultAt`
+     *  can't reach — it hands out distinct places and always names a winner.
+     *  Places follow the same "1224" scoring as `resolveRound`: two tied for
+     *  first are followed by a third, not a second. */
+    resultDraw(tied = 2, total = 4, humans = 1) {
+      S.raceTrack = devTrack();
+      const humanCount = Math.min(Math.max(1, humans), Math.max(1, total));
+      startRace(humanCount, Math.max(0, total - humanCount), 'medium');
+      const players = S.game!.players;
+      const share = Math.min(Math.max(2, tied), players.length);
+      players.forEach((p, i) => {
+        p.place = i < share ? 1 : share + (i - share) + 1;
+        p.crossings = S.game!.rules.winCrossings;
+      });
+      S.game!.winner = 'draw';
+      S.game!.phase = 'over';
+      updateUI();
+      redraw();
+      return snap();
+    },
     /** Ready-made track → editor at the final `ready` step (skipping the
      *  drawing phase): the same shared canvas surface used in-race, plus the
      *  editor overlay. For visually checking the ribbon/edges in edit mode
