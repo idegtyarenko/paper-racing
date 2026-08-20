@@ -11,11 +11,13 @@
 ## Features
 
 - ✏️ **Custom tracks** — draw any layout instead of picking from presets.
-- 🧠 **Two physics models** — "simple" (classic grid-based ±1 inertia rules) and "realistic" ("traction circle": you can't brake hard and turn hard at the same time — real racing lines with an apex emerge).
+- 🧠 **Cars that handle differently** — pick a preset (Classic, Sports, GT, F1) or move the sliders yourself: acceleration, braking, grip and downforce. Classic is the pen-and-paper ±1 inertia rule; the rest share one traction limit — brake hard and turn hard at once and you run out of grip, so real racing lines with an apex emerge.
 - 🌐 **Online multiplayer** — play together via a [Supabase](https://supabase.com) backend.
 - 🤖 **Single-player with bots**.
 - 📱 **PWA** — installable on the home screen and works like an app, including offline (local play).
-- ⚙️ **Race settings** — crash penalty (static or speed-based), physics model, turn order.
+- ⚙️ **Race settings** — laps, off-track penalty (a fixed number of turns or scaled by how fast you flew off), and a time limit per turn for online games.
+- 🎬 **Replay** — watch the whole race play back once it is over.
+- 🌍 **Three languages** — English, Russian and Belarusian.
 
 ## Tech stack
 
@@ -40,7 +42,7 @@ npm run typecheck   # type checking only (tsc --noEmit)
 
 npm run format      # format everything (prettier)
 npm run format:check # check formatting without changes
-npm run typo        # insert non-breaking spaces in UI strings (src/strings.ts)
+npm run typo        # insert non-breaking spaces in UI strings (src/i18n/{en,ru,be}.ts)
 npm run typo:check  # check non-breaking spaces without changes
 ```
 

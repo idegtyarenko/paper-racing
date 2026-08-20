@@ -415,8 +415,9 @@ export const en = {
       'Your car rolls with momentum\u00A0— it keeps drifting the same way on its own. Each turn you can only nudge it a little: pick one of the highlighted cells. You can’t swerve or stop on a dime, so brake and set up your corners early.\n\n' +
       'Fly off the track and you’re stuck in the gravel. The faster you were going, the longer it takes to dig out\u00A0— and once you’re free, you start from a standstill.\n\n' +
       'You can’t drive through or onto another car: rivals hold their ground, just like in a real race.\n\n' +
-      'First to complete every lap wins. And if several cars finish on the same turn, whoever crossed the line first comes out ahead.\n\n' +
-      'Car handling and off-track penalties can be tuned to taste\u00A0— check the settings.',
+      'First to complete all laps wins. If several racers finish on the same turn, the one whose car crosses the line earlier in the turn comes out ahead.\n\n' +
+      'Had enough? You can retire from the race at any point and watch the rest of it from the side.\n\n' +
+      'Car handling and race rules can be tuned once the track is drawn\u00A0— look out for the Behaviour and Rules tabs.',
   },
 
   install: {
