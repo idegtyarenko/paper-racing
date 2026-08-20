@@ -8,7 +8,11 @@
   /* The layer is a modal screen, not floating chrome: it takes every pointer
      event so the board underneath can't be aimed at any more. */
   pointer-events: auto;
+  /* Scrolls only when a long protocol really doesn't fit a short screen;
+     `contain` keeps the swipe from rubber-banding the layer or reaching the
+     page behind it, so a result that fits stays put under a finger. */
   overflow-y: auto;
+  overscroll-behavior: contain;
   font-family: var(--pr-mono);
 }
 .pr-result:not([hidden]) {
