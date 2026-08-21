@@ -7,6 +7,7 @@ import {
   shuffledIndices,
   cloneState,
   returnFromPenalty,
+  nearestFreeInsidePoint,
   isFinished,
   humansAllDone,
   hasLiveBots,
@@ -163,6 +164,50 @@ describe('computeOutcome — the crash tolerance band and where impact lands', (
   it('forgives a move that runs along the band without getting deeper than the tolerance', () => {
     const o = outcome(SINK_IN_BAND[0], { x: 14, y: -0.04 });
     expect(o.crash).toBe(false);
+  });
+});
+
+describe('nearestFreeInsidePoint — the tie-break between equidistant cells', () => {
+  // Which cell the gravel spits a car back onto has to be a function of the game
+  // state alone: the replay re-runs the race from the same moves, and online both
+  // sides compute the return independently. A tie broken by whatever order
+  // track.inside happens to iterate in would desync both. The rule is lowest y,
+  // then lowest x — the cases below are the ones that tell it apart from "first
+  // cell found" and from an x-first ordering.
+  const gameWithCarsAt = (...at: Vec[]): GameState => {
+    const g = newGame(ringTrack(), at.length + 1);
+    at.forEach((pos, i) => (g.players[i + 1].pos = { ...pos }));
+    return g;
+  };
+
+  it('answers the same whichever order track.inside is walked in', () => {
+    // The rule only earns its keep if it survives a reordering: walk the same
+    // cells back to front and the tie must still resolve to (10,1). The query
+    // point sits in the gravel past the wall y=0, halfway between (10,1) and
+    // (11,1).
+    const g = gameWithCarsAt();
+    const reversed = gameWithCarsAt();
+    reversed.track = {
+      ...reversed.track,
+      inside: new Set([...reversed.track.inside].reverse()),
+    };
+
+    const q = { x: 10.5, y: -0.05 };
+    expect(nearestFreeInsidePoint(g, q, 0)).toEqual({ x: 10, y: 1 });
+    expect(nearestFreeInsidePoint(reversed, q, 0)).toEqual({ x: 10, y: 1 });
+  });
+
+  it('lets y outrank x: the lower row wins even when its cell is further along x', () => {
+    // (10.5, 1.5) sits at the centre of the square (10,1)-(11,2) — all four
+    // corners tie. With (10,1) and (11,2) taken, the choice is between (11,1)
+    // and (10,2): an x-first rule would answer (10,2).
+    const g = gameWithCarsAt({ x: 10, y: 1 }, { x: 11, y: 2 });
+    expect(nearestFreeInsidePoint(g, { x: 10.5, y: 1.5 }, 0)).toEqual({ x: 11, y: 1 });
+  });
+
+  it('skips cells held by other cars and breaks the tie among what is left', () => {
+    const g = gameWithCarsAt({ x: 10, y: 1 });
+    expect(nearestFreeInsidePoint(g, { x: 10.5, y: -0.05 }, 0)).toEqual({ x: 11, y: 1 });
   });
 });
 
