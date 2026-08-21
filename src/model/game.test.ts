@@ -12,12 +12,13 @@ import {
   hasLiveBots,
   lapStartIndex,
   computeOutcome,
+  offRoadDepth,
   applyOutcome,
   resolveRound,
   GameState,
 } from './game';
 import { Vec } from '../geometry';
-import { CRASH_PENALTY_MAX } from '../config';
+import { CRASH_PENALTY_MAX, OFFROAD_FORGIVE } from '../config';
 import { ringTrack } from './test-fixtures';
 
 describe('shuffledIndices', () => {
@@ -86,6 +87,82 @@ describe('crashPenalty', () => {
     expect(crashPenalty(dyn(1.5), 2)).toBe(3);
     expect(crashPenalty(dyn(1.5), 3)).toBe(5);
     expect(crashPenalty(dyn(1.5), 4)).toBe(CRASH_PENALTY_MAX); // 4^1.5 = 8
+  });
+});
+
+describe('computeOutcome — the crash tolerance band and where impact lands', () => {
+  // The fixture's road is the band between the outer rect (0,0)-(40,24) and the
+  // inner one (8,8)-(32,16), so the inner corner (8,8) is an apex to cut and the
+  // outer wall y=0 is a straight edge to drift past. A crash is "depth past the
+  // edge > OFFROAD_FORGIVE" anywhere along the move — neither "the move ends off
+  // the road" nor "the move crosses a wall". The first two cases are the ones
+  // those cheaper criteria get wrong; the rest are the grazes forgiveness owes.
+  const track = ringTrack();
+  const outcome = (from: Vec, to: Vec) => computeOutcome(track, DEFAULT_RULES, from, to);
+
+  // Across the inner corner: both ends on the road, the middle deep in the grass.
+  const APEX_CUT: [Vec, Vec] = [
+    { x: 6, y: 10 },
+    { x: 12, y: 6 },
+  ];
+  // Starting where a previous crash left the car — inside the band past y=0 —
+  // and sinking deeper on the same side, so no wall is ever crossed.
+  const SINK_IN_BAND: [Vec, Vec] = [
+    { x: 10, y: -0.03 },
+    { x: 10, y: -1 },
+  ];
+
+  it('cutting the apex crashes even though both ends of the move are on the road', () => {
+    const [from, to] = APEX_CUT;
+    expect(offRoadDepth(track, from)).toBe(0);
+    expect(offRoadDepth(track, to)).toBe(0); // an endpoint check alone would see nothing
+
+    const o = outcome(from, to);
+    expect(o.crash).toBe(true);
+    expect(o.end).not.toEqual(to);
+    // Impact on the way in, at the inner wall x=8 — one tolerance past it.
+    expect(o.end.x).toBeCloseTo(8 + OFFROAD_FORGIVE, 6);
+  });
+
+  it('going deeper from inside the tolerance band crashes, though the move never crosses a wall', () => {
+    const [from, to] = SINK_IN_BAND;
+    expect(offRoadDepth(track, from)).toBeGreaterThan(0);
+    expect(offRoadDepth(track, to)).toBeGreaterThan(0); // both ends past the wall: no crossing to find
+
+    const o = outcome(from, to);
+    expect(o.crash).toBe(true);
+    expect(o.end.y).toBeCloseTo(-OFFROAD_FORGIVE, 6);
+  });
+
+  it('puts the crash point on the tolerance isoline, whichever wall it was', () => {
+    const straightThroughTheWall: [Vec, Vec] = [
+      { x: 10, y: 1 },
+      { x: 10, y: -3 },
+    ];
+    for (const [from, to] of [APEX_CUT, SINK_IN_BAND, straightThroughTheWall]) {
+      const o = outcome(from, to);
+      expect(o.crashAt).not.toBeNull();
+      expect(offRoadDepth(track, o.crashAt!)).toBeCloseTo(OFFROAD_FORGIVE, 6);
+    }
+  });
+
+  it('forgives a graze that stays shallower than the tolerance', () => {
+    const to = { x: 10, y: -OFFROAD_FORGIVE + 0.01 };
+    const o = outcome({ x: 10, y: 1 }, to);
+    expect(o.crash).toBe(false);
+    expect(o.end).toEqual(to);
+  });
+
+  it('forgives a move that starts inside the band and comes back onto the road', () => {
+    const to = { x: 10, y: 2 };
+    const o = outcome(SINK_IN_BAND[0], to);
+    expect(o.crash).toBe(false);
+    expect(o.end).toEqual(to);
+  });
+
+  it('forgives a move that runs along the band without getting deeper than the tolerance', () => {
+    const o = outcome(SINK_IN_BAND[0], { x: 14, y: -0.04 });
+    expect(o.crash).toBe(false);
   });
 });
 
