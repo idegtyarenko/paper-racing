@@ -51,6 +51,14 @@ body.is-setup .zoom-ctl {
 }
 
 /* ── Mode select: a card per way to play ───────────────────────────────────── */
+/* A column of fixed-height cards, and on a short screen it outgrew the body and
+   slid under the pinned action row, burying the back button — an iPhone SE in
+   landscape is 568×320, narrow enough for this layout and far too short for it.
+   Scrolling here gives the action row its space back. The race-setup step needs
+   no such rule: its card already scrolls its own panes. */
+.pr-setup__screen--mode {
+  overflow-y: auto;
+}
 .pr-setup__modes {
   display: flex;
   flex-direction: column;

@@ -57,6 +57,13 @@
   background: var(--pr-panel);
   border-right: 1px solid var(--pr-border-dim);
   backdrop-filter: blur(6px);
+  /* Wide doesn't mean tall: a phone in landscape is ~390px high, and the six
+     steps plus padding want ~340px of that — a longer locale's labels wrapping,
+     or an even shorter screen, and the tail would be cut off with no way to
+     reach it (the rail is top:0/bottom:0). The editor gives its docked card up
+     below that height, which is what buys the fit; this is the backstop for the
+     rest. Nothing to scroll at a normal height, so no scrollbar appears. */
+  overflow-y: auto;
 }
 .pr-nav__rail-head {
   display: flex;

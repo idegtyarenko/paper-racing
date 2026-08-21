@@ -172,7 +172,8 @@ body[data-edit-step='adjust'] #board.grabbing {
 }
 
 /* ── The coach card the editor mounts into the rail's bottom slot (wide screens
-   only — the phone keeps the floating .pr-coach above). ─────────────────────── */
+   only — the phone keeps the floating .pr-coach above, and so does a screen too
+   short to seat the card: see the max-height block at the end). ────────────── */
 /* Scoped to :not([hidden]) so the flex display never overrides the hidden
    attribute that takes the card away past the drawing steps. */
 .pr-edit__rail-coach:not([hidden]) {
@@ -204,5 +205,23 @@ body[data-edit-step='adjust'] #board.grabbing {
   }
   .pr-edit__join:not([hidden]) {
     flex-basis: auto;
+  }
+}
+
+/* Wide but short — a phone in landscape, ~844×390. The rail has the width it
+   wants and not the height: head, six steps and the docked card measure ~416px,
+   and since it is top:0/bottom:0 with nothing to scroll, the card was simply cut
+   off (at 330px it fell off the screen entirely). The steps alone need ~340px
+   and fit, so the fix is to give the slot up rather than the rail: the hint goes
+   back to floating over the board, exactly as it does on a phone. Same selector
+   as the block above, so this has to stay after it.
+   The 500px cut is well clear of both families it separates: a phone in
+   landscape is 320–430px tall, the shortest iPad in landscape is 768. */
+@media (min-width: 700px) and (max-height: 499px) {
+  .pr-edit[data-step='center'] .pr-coach {
+    display: flex;
+  }
+  .pr-edit__rail-coach:not([hidden]) {
+    display: none;
   }
 }
